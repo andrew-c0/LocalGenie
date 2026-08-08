@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Button, Spinner, Tooltip, MessageBar, MessageBarBody } from "@fluentui/react-components";
+import { Button, Spinner, MessageBar, MessageBarBody } from "@fluentui/react-components";
 import {
   PlugConnectedRegular,
   PlugDisconnectedRegular,
@@ -127,23 +127,21 @@ export default function ModelSelector() {
         {serverLoading ? (
           <Spinner size="tiny" />
         ) : serverStatus.running ? (
-          <Tooltip content="Stop server" relationship="label">
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<StopRegular />}
-              onClick={handleStopServer}
-            />
-          </Tooltip>
+          <Button
+            appearance="subtle"
+            size="small"
+            icon={<StopRegular />}
+            title="Stop server"
+            onClick={handleStopServer}
+          />
         ) : (
-          <Tooltip content="Start server" relationship="label">
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<PlayRegular />}
-              onClick={handleStartServer}
-            />
-          </Tooltip>
+          <Button
+            appearance="subtle"
+            size="small"
+            icon={<PlayRegular />}
+            title="Start server"
+            onClick={handleStartServer}
+          />
         )}
       </div>
 

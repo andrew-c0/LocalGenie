@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   Button,
-  Tooltip,
   Dialog,
   DialogSurface,
   DialogBody,
@@ -48,7 +47,16 @@ export default function Sidebar({ onOpenModelBrowser, onOpenAppSettings }: Sideb
     <div className="sidebar">
       {/* ── Header ────────────────────────────────── */}
       <div className="sidebar-header">
-        <div className="sidebar-logo">
+        <div
+          className="sidebar-logo sidebar-logo-clickable"
+          title="Go home"
+          onClick={() => setActiveSession(null)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") setActiveSession(null);
+          }}
+        >
           <div className="sidebar-logo-icon">GX</div>
           <div>
             <h1>LocalGenie</h1>
@@ -102,17 +110,16 @@ export default function Sidebar({ onOpenModelBrowser, onOpenAppSettings }: Sideb
             <ChatRegular className="chat-history-item-icon" />
             <span className="chat-history-item-text">{session.title}</span>
             <span className="chat-history-item-actions">
-              <Tooltip content="Delete chat" relationship="label">
-                <Button
-                  appearance="transparent"
-                  size="small"
-                  icon={<DeleteRegular />}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeleteTarget(session.id);
-                  }}
-                />
-              </Tooltip>
+              <Button
+                appearance="transparent"
+                size="small"
+                icon={<DeleteRegular />}
+                title="Delete chat"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleteTarget(session.id);
+                }}
+              />
             </span>
           </div>
         ))}

@@ -1,4 +1,4 @@
-import { Badge, Button, Tooltip } from "@fluentui/react-components";
+import { Badge, Button } from "@fluentui/react-components";
 import { ArrowLeftRegular } from "@fluentui/react-icons";
 import { useModelStore } from "../stores/modelStore";
 
@@ -34,9 +34,12 @@ export default function Header({ onOpenModelSettings }: HeaderProps) {
       </div>
 
       <div className="main-header-right">
-        <Tooltip content="Model settings" relationship="label">
-          <Button appearance="subtle" icon={<ArrowLeftRegular />} onClick={onOpenModelSettings} />
-        </Tooltip>
+        <Button
+          appearance="subtle"
+          icon={<ArrowLeftRegular />}
+          title="Model settings"
+          onClick={onOpenModelSettings}
+        />
       </div>
     </div>
   );

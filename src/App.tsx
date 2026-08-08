@@ -47,6 +47,8 @@ export default function App() {
   const setModels = useModelStore((s) => s.setModels);
   const setServerStatus = useModelStore((s) => s.setServerStatus);
   const setServerPort = useModelStore((s) => s.setServerPort);
+  const setCliInstalled = useModelStore((s) => s.setCliInstalled);
+  const cliInstalled = useModelStore((s) => s.cliInstalled);
 
   const [showModelBrowser, setShowModelBrowser] = React.useState(false);
   const [settingsTab, setSettingsTab] = React.useState<"app" | "model" | null>(null);
@@ -55,9 +57,15 @@ export default function App() {
   const tokenCountRef = useRef(0);
   const firstTokenTimeRef = useRef(0);
 
-  // ── Initialise: load sessions & models ────────────────────────
+  // ── Initialise: check CLI, load sessions & models ────────────
   useEffect(() => {
     (async () => {
+      try {
+        const installed = await geniex.checkGeniexInstalled();
+        setCliInstalled(installed);
+      } catch {
+        setCliInstalled(false);
+      }
       try {
         const saved = await db.loadSessions();
         console.log(`[init] Loaded ${saved.length} sessions from DB`);
@@ -231,6 +239,14 @@ export default function App() {
         onOpenAppSettings={() => setSettingsTab("app")}
       />
       <div className="main-area">
+        {!cliInstalled && (
+          <div className="cli-missing-banner">
+            <span className="cli-missing-banner-icon">⚠️</span>
+            <span>
+              GenieX CLI not found on PATH. Install it to use model management and chatting.
+            </span>
+          </div>
+        )}
         <Header onOpenModelSettings={() => setSettingsTab("model")} />
         {activeSession ? <ChatArea /> : <WelcomeScreen />}
         {activeSession && <ChatInput />}

@@ -10,6 +10,7 @@ import type {
 const DEFAULT_PORT = 18181;
 
 interface ModelState {
+  cliInstalled: boolean;
   models: ModelInfo[];
   serverStatus: ServerStatus;
   serverPort: number;
@@ -19,6 +20,7 @@ interface ModelState {
   /** The model currently loaded on the server — single source of truth. */
   activeModelId: string | null;
 
+  setCliInstalled: (v: boolean) => void;
   setModels: (models: ModelInfo[]) => void;
   setServerStatus: (status: ServerStatus) => void;
   setServerPort: (port: number) => void;
@@ -30,6 +32,7 @@ interface ModelState {
 }
 
 export const useModelStore = create<ModelState>((set) => ({
+  cliInstalled: false,
   models: [],
   serverStatus: { running: false, port: DEFAULT_PORT, models: [] },
   serverPort: DEFAULT_PORT,
@@ -38,6 +41,7 @@ export const useModelStore = create<ModelState>((set) => ({
   isSearching: false,
   activeModelId: null,
 
+  setCliInstalled: (v) => set({ cliInstalled: v }),
   setModels: (models) => set({ models }),
   setServerStatus: (status) =>
     set((state) => {

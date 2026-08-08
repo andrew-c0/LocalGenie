@@ -4,7 +4,6 @@ import {
   Input,
   Spinner,
   Badge,
-  Tooltip,
   MessageBar,
   MessageBarBody,
   Dialog,
@@ -84,9 +83,13 @@ function InstalledModelsTab({ models, onRemove }: InstalledModelsTabProps) {
             <span>{model.size}</span>
           </div>
           <div className="model-card-actions">
-            <Tooltip content="Remove model" relationship="label">
-              <Button appearance="subtle" size="small" icon={<DeleteRegular />} onClick={() => onRemove(model.name)} />
-            </Tooltip>
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<DeleteRegular />}
+              title="Remove model"
+              onClick={() => onRemove(model.name)}
+            />
           </div>
         </div>
       ))}

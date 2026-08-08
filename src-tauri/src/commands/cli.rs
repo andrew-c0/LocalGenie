@@ -2,6 +2,26 @@ use std::process::Stdio;
 use tauri::Emitter;
 use tokio::process::Command;
 
+/// Check whether the `geniex` CLI is installed and reachable on PATH.
+///
+/// Returns `true` if the binary can be spawned, `false` if not found.
+#[tauri::command]
+pub async fn check_geniex_installed() -> Result<bool, String> {
+    match Command::new("geniex")
+        .args(["version"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(mut child) => {
+            let _ = child.wait().await;
+            Ok(true)
+        }
+        Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(format!("Failed to check for geniex CLI: {e}")),
+    }
+}
+
 /// Return the installed `geniex` CLI version string.
 #[tauri::command]
 pub async fn get_geniex_version() -> Result<String, String> {

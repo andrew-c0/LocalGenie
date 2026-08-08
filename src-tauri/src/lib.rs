@@ -47,6 +47,7 @@ pub fn run() {
             chat::load_model,
             chat::unload_all_models,
             // CLI utilities
+            cli::check_geniex_installed,
             cli::get_geniex_version,
             cli::config_get,
             cli::config_set,

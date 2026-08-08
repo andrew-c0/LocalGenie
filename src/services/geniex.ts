@@ -103,7 +103,9 @@ export async function chatCompletion(
 }
 
 // ─── CLI Utilities ──────────────────────────────────────────────
-
+export async function checkGeniexInstalled(): Promise<boolean> {
+  return invoke("check_geniex_installed");
+}
 export async function getGeniexVersion(): Promise<string> {
   return invoke("get_geniex_version");
 }
