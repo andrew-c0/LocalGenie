@@ -1,5 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { GenerationSettings, ModelInfo, SearchModel, ServerStatus } from "../types";
+import type {
+  GenerationSettings,
+  ModelInfo,
+  SearchModel,
+  ServerStatus,
+  ConfigEntry,
+  ServerStartOptions,
+} from "../types";
 
 /** Shape sent to the OpenAI-compatible chat completions endpoint. */
 interface ChatMessage {
@@ -17,12 +24,31 @@ export async function pullModel(
   model: string,
   precision?: string,
   modelHub?: string,
+  modelType?: string,
+  localPath?: string,
 ): Promise<void> {
-  return invoke("pull_model", { model, precision, modelHub });
+  return invoke("pull_model", {
+    model,
+    precision,
+    modelHub,
+    modelType,
+    localPath,
+  });
 }
 
 export async function removeModel(model: string): Promise<void> {
   return invoke("remove_model", { model });
+}
+
+export async function cleanModels(): Promise<void> {
+  return invoke("clean_models");
+}
+
+export async function setModelType(
+  model: string,
+  modelType: string,
+): Promise<void> {
+  return invoke("set_model_type", { model, modelType });
 }
 
 export async function searchModels(query: string): Promise<SearchModel[]> {
@@ -31,8 +57,17 @@ export async function searchModels(query: string): Promise<SearchModel[]> {
 
 // ─── Server Management ───────────────────────────────────────────
 
-export async function startServer(port?: number): Promise<ServerStatus> {
-  return invoke("start_server", { port });
+export async function startServer(
+  options?: ServerStartOptions,
+): Promise<ServerStatus> {
+  return invoke("start_server", {
+    port: options?.port,
+    compute: options?.compute,
+    nctx: options?.nctx,
+    ngl: options?.ngl,
+    origins: options?.origins,
+    keepalive: options?.keepalive,
+  });
 }
 
 export async function stopServer(port?: number): Promise<ServerStatus> {
@@ -45,7 +80,10 @@ export async function getServerStatus(port?: number): Promise<ServerStatus> {
 
 // ─── Model Loading ──────────────────────────────────────────────
 
-export async function loadModel(model: string, baseUrl?: string): Promise<ServerStatus> {
+export async function loadModel(
+  model: string,
+  baseUrl?: string,
+): Promise<ServerStatus> {
   return invoke("load_model", { model, baseUrl });
 }
 
@@ -62,4 +100,29 @@ export async function chatCompletion(
   baseUrl?: string,
 ): Promise<void> {
   return invoke("chat_completion", { messages, settings, model, baseUrl });
+}
+
+// ─── CLI Utilities ──────────────────────────────────────────────
+
+export async function getGeniexVersion(): Promise<string> {
+  return invoke("get_geniex_version");
+}
+
+export async function configGet(key: string): Promise<string | null> {
+  return invoke("config_get", { key });
+}
+
+export async function configSet(
+  key: string,
+  value?: string,
+): Promise<void> {
+  return invoke("config_set", { key, value });
+}
+
+export async function configList(): Promise<ConfigEntry[]> {
+  return invoke("config_list");
+}
+
+export async function updateGeniex(): Promise<string> {
+  return invoke("update_geniex");
 }

@@ -27,6 +27,11 @@ pub async fn start_server(
     app: AppHandle,
     state: State<'_, AppState>,
     port: Option<u16>,
+    compute: Option<String>,
+    nctx: Option<i32>,
+    ngl: Option<i32>,
+    origins: Option<String>,
+    keepalive: Option<i32>,
 ) -> Result<ServerStatus, String> {
     let serve_port = port.unwrap_or(super::constants::DEFAULT_PORT);
 
@@ -47,7 +52,28 @@ pub async fn start_server(
     }
 
     let host = format!("127.0.0.1:{serve_port}");
-    let args = vec!["serve".to_string(), "--host".into(), host];
+    let mut args = vec!["serve".to_string(), "--host".into(), host];
+
+    if let Some(ref c) = compute {
+        args.push("--compute".into());
+        args.push(c.clone());
+    }
+    if let Some(n) = nctx {
+        args.push("--nctx".into());
+        args.push(n.to_string());
+    }
+    if let Some(n) = ngl {
+        args.push("--ngl".into());
+        args.push(n.to_string());
+    }
+    if let Some(ref o) = origins {
+        args.push("--origins".into());
+        args.push(o.clone());
+    }
+    if let Some(k) = keepalive {
+        args.push("--keepalive".into());
+        args.push(k.to_string());
+    }
 
     let child = Command::new("geniex")
         .args(&args)

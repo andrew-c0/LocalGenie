@@ -16,6 +16,8 @@ pub struct GenerationSettings {
     pub top_k: Option<u32>,
     pub min_p: Option<f64>,
     pub repetition_penalty: Option<f64>,
+    pub presence_penalty: Option<f64>,
+    pub frequency_penalty: Option<f64>,
     pub max_tokens: Option<u32>,
     pub nctx: Option<u32>,
     pub system_prompt: Option<String>,
@@ -93,6 +95,12 @@ pub fn build_chat_body(
     }
     if let Some(rp) = settings.repetition_penalty {
         body["repetition_penalty"] = serde_json::json!(rp);
+    }
+    if let Some(pp) = settings.presence_penalty {
+        body["presence_penalty"] = serde_json::json!(pp);
+    }
+    if let Some(fp) = settings.frequency_penalty {
+        body["frequency_penalty"] = serde_json::json!(fp);
     }
     if let Some(mt) = settings.max_tokens {
         body["max_tokens"] = serde_json::json!(mt);

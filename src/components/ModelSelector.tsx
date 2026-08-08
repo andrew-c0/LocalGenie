@@ -37,7 +37,7 @@ export default function ModelSelector() {
     setServerLoading(true);
     setError(null);
     try {
-      const status = await geniex.startServer(serverPort);
+      const status = await geniex.startServer({ port: serverPort });
       setServerStatus(status);
       if (!status.running) {
         setError("Server started but is not responding yet. Try again in a moment.");
@@ -98,7 +98,7 @@ export default function ModelSelector() {
     setServerLoading(true);
     setError(null);
     try {
-      const status = await geniex.startServer(serverPort);
+      const status = await geniex.startServer({ port: serverPort });
       setServerStatus(status);
       if (!status.running) {
         setError(

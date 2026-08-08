@@ -56,6 +56,8 @@ export interface GenerationSettings {
   topK?: number;
   minP?: number;
   repetitionPenalty?: number;
+  presencePenalty?: number;
+  frequencyPenalty?: number;
   maxTokens?: number;
   nctx?: number;
   systemPrompt?: string;
@@ -66,4 +68,26 @@ export interface DownloadProgress {
   model: string;
   message: string;
   status: "downloading" | "complete" | "error";
+}
+
+export interface ConfigEntry {
+  key: string;
+  value: string;
+}
+
+export interface ServerStartOptions {
+  port?: number;
+  compute?: string;
+  nctx?: number;
+  ngl?: number;
+  origins?: string;
+  keepalive?: number;
+}
+
+export interface PullModelOptions {
+  model: string;
+  precision?: string;
+  modelHub?: string;
+  modelType?: string;
+  localPath?: string;
 }

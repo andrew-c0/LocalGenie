@@ -99,6 +99,44 @@ pub async fn list_models() -> Result<Vec<ModelInfo>, String> {
     Ok(models)
 }
 
+/// Remove ALL cached models, freeing up local storage.
+#[tauri::command]
+pub async fn clean_models() -> Result<(), String> {
+    let output = Command::new("geniex")
+        .args(["clean", "-y"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run `geniex clean`: {e}"))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("`geniex clean` failed: {stderr}"))
+    }
+}
+
+/// Override the model type (llm or vlm) for a cached model.
+#[tauri::command]
+pub async fn set_model_type(model: String, model_type: String) -> Result<(), String> {
+    let output = Command::new("geniex")
+        .args(["model", "set-type", &model, &model_type])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run `geniex model set-type`: {e}"))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("`geniex model set-type` failed: {stderr}"))
+    }
+}
+
 /// Pull (download) a model.
 /// Emits `model-pull-progress` events as the download progresses.
 #[tauri::command]
@@ -107,6 +145,8 @@ pub async fn pull_model(
     model: String,
     precision: Option<String>,
     model_hub: Option<String>,
+    model_type: Option<String>,
+    local_path: Option<String>,
 ) -> Result<(), String> {
     let target = match precision {
         Some(p) => format!("{model}:{p}"),
@@ -117,6 +157,14 @@ pub async fn pull_model(
     if let Some(hub) = model_hub {
         args.push("--model-hub".into());
         args.push(hub);
+    }
+    if let Some(mt) = model_type {
+        args.push("--model-type".into());
+        args.push(mt);
+    }
+    if let Some(lp) = local_path {
+        args.push("--local-path".into());
+        args.push(lp);
     }
 
     let mut child = Command::new("geniex")

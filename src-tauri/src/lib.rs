@@ -8,6 +8,7 @@ use commands::models;
 use commands::server;
 use commands::chat;
 use commands::database;
+use commands::cli;
 
 pub fn run() {
     tauri::Builder::default()
@@ -35,6 +36,8 @@ pub fn run() {
             models::pull_model,
             models::remove_model,
             models::search_models,
+            models::clean_models,
+            models::set_model_type,
             // Server management
             server::start_server,
             server::stop_server,
@@ -43,6 +46,12 @@ pub fn run() {
             chat::chat_completion,
             chat::load_model,
             chat::unload_all_models,
+            // CLI utilities
+            cli::get_geniex_version,
+            cli::config_get,
+            cli::config_set,
+            cli::config_list,
+            cli::update_geniex,
             // Database
             database::load_sessions,
             database::save_session,
