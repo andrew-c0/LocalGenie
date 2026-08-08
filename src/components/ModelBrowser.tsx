@@ -44,7 +44,7 @@ interface SearchModelsTabProps {
 }
 
 interface RemoveConfirmDialogProps {
-  target: string;
+  target: string | null;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -300,7 +300,7 @@ export default function ModelBrowser({ onClose }: ModelBrowserProps) {
 
       {/* ── Remove Confirmation ────────────────────── */}
       <RemoveConfirmDialog
-        target={removeTarget ?? ""}
+        target={removeTarget}
         onConfirm={() => removeTarget && handleRemove(removeTarget)}
         onCancel={() => setRemoveTarget(null)}
       />
