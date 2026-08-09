@@ -6,6 +6,7 @@ import type {
   ServerStatus,
   ConfigEntry,
   ServerStartOptions,
+  UpdateInfo,
 } from "../types";
 
 /** Shape sent to the OpenAI-compatible chat completions endpoint. */
@@ -108,6 +109,10 @@ export async function checkGeniexInstalled(): Promise<boolean> {
 }
 export async function getGeniexVersion(): Promise<string> {
   return invoke("get_geniex_version");
+}
+
+export async function checkForCliUpdate(): Promise<UpdateInfo> {
+  return invoke("check_for_cli_update");
 }
 
 export async function configGet(key: string): Promise<string | null> {

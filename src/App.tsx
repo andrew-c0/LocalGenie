@@ -49,6 +49,8 @@ export default function App() {
   const setServerPort = useModelStore((s) => s.setServerPort);
   const setCliInstalled = useModelStore((s) => s.setCliInstalled);
   const cliInstalled = useModelStore((s) => s.cliInstalled);
+  const setUpdateInfo = useModelStore((s) => s.setUpdateInfo);
+  const updateInfo = useModelStore((s) => s.updateInfo);
 
   const [showModelBrowser, setShowModelBrowser] = React.useState(false);
   const [settingsTab, setSettingsTab] = React.useState<"app" | "model" | null>(null);
@@ -63,6 +65,16 @@ export default function App() {
       try {
         const installed = await geniex.checkGeniexInstalled();
         setCliInstalled(installed);
+
+        // Check for CLI updates once we know the CLI is installed.
+        if (installed) {
+          try {
+            const info = await geniex.checkForCliUpdate();
+            setUpdateInfo(info);
+          } catch {
+            // Network error or parse failure — silently ignore.
+          }
+        }
       } catch {
         setCliInstalled(false);
       }
@@ -237,6 +249,8 @@ export default function App() {
       <Sidebar
         onOpenModelBrowser={() => setShowModelBrowser(true)}
         onOpenAppSettings={() => setSettingsTab("app")}
+        updateInfo={updateInfo}
+        onDismissUpdate={() => setUpdateInfo(null)}
       />
       <div className="main-area">
         {!cliInstalled && (

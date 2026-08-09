@@ -134,8 +134,69 @@ body,
   padding: 12px 16px;
   border-top: 1px solid #2a2a4a;
   display: flex;
+  flex-direction: column;
   gap: 8px;
 }
+/* --- Sidebar Footer -------------------------------------------- */
+
+.sidebar-divider {
+  border: none;
+  border-top: 1px solid #2a2a4a;
+  margin: 4px 0;
+}
+
+.sidebar-notification {
+  background: #181838;
+  border: 1px solid #2e3a5a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.sidebar-notification-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-notification-title {
+  font-weight: 600;
+  color: #7eaaff;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.notification-dismiss-btn {
+  color: #5858a0 !important;
+  min-width: 24px;
+  padding: 0 !important;
+  height: 24px !important;
+}
+
+.notification-dismiss-btn:hover {
+  color: #b0b0c8 !important;
+}
+
+.sidebar-notification-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sidebar-notification-detail {
+  color: #9090b0;
+  font-size: 12px;
+}
+
+.notification-update-btn {
+  flex-shrink: 0;
+}
+
 
 /* ─── Chat History Items ───────────────────────────────────────── */
 

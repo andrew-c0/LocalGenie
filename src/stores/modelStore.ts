@@ -5,6 +5,7 @@ import type {
   SearchModel,
   ServerStatus,
   DownloadProgress,
+  UpdateInfo,
 } from "../types";
 
 const DEFAULT_PORT = 18181;
@@ -19,6 +20,8 @@ interface ModelState {
   isSearching: boolean;
   /** The model currently loaded on the server — single source of truth. */
   activeModelId: string | null;
+  /** Result of the latest CLI update check. */
+  updateInfo: UpdateInfo | null;
 
   setCliInstalled: (v: boolean) => void;
   setModels: (models: ModelInfo[]) => void;
@@ -29,6 +32,7 @@ interface ModelState {
   removeDownload: (model: string) => void;
   setSearchResults: (results: SearchModel[]) => void;
   setIsSearching: (v: boolean) => void;
+  setUpdateInfo: (info: UpdateInfo | null) => void;
 }
 
 export const useModelStore = create<ModelState>((set) => ({
@@ -40,6 +44,7 @@ export const useModelStore = create<ModelState>((set) => ({
   searchResults: [],
   isSearching: false,
   activeModelId: null,
+  updateInfo: null,
 
   setCliInstalled: (v) => set({ cliInstalled: v }),
   setModels: (models) => set({ models }),
@@ -70,6 +75,7 @@ export const useModelStore = create<ModelState>((set) => ({
     })),
   setSearchResults: (results) => set({ searchResults: results }),
   setIsSearching: (v) => set({ isSearching: v }),
+  setUpdateInfo: (info) => set({ updateInfo: info }),
 }));
 
 /** Default generation settings per model. */
