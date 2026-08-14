@@ -75,7 +75,7 @@ pub async fn start_server(
         args.push(k.to_string());
     }
 
-    let child = Command::new("geniex")
+    let child = Command::new(super::cli::get_geniex_executable())
         .args(&args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())

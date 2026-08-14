@@ -1,6 +1,14 @@
 import React, { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { Toaster } from "@fluentui/react-components";
+import {
+  Button,
+  Spinner,
+  Toast,
+  ToastBody,
+  ToastTitle,
+  Toaster,
+  useToastController,
+} from "@fluentui/react-components";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import ChatArea from "./components/ChatArea";
@@ -54,6 +62,9 @@ export default function App() {
 
   const [showModelBrowser, setShowModelBrowser] = React.useState(false);
   const [settingsTab, setSettingsTab] = React.useState<"app" | "model" | null>(null);
+  const [installingCli, setInstallingCli] = React.useState(false);
+  const [installStatus, setInstallStatus] = React.useState<string | null>(null);
+  const { dispatchToast } = useToastController("app-toaster");
 
   // Track token count for stats
   const tokenCountRef = useRef(0);
@@ -256,9 +267,57 @@ export default function App() {
         {!cliInstalled && (
           <div className="cli-missing-banner">
             <span className="cli-missing-banner-icon">⚠️</span>
-            <span>
-              GenieX CLI not found on PATH. Install it to use model management and chatting.
-            </span>
+            <div className="cli-missing-banner-message">
+              <span>GenieX CLI not found. Install it to use model management and chatting.</span>
+              {installStatus && <span className="cli-missing-banner-detail">{installStatus}</span>}
+            </div>
+            <Button
+              appearance="primary"
+              size="small"
+              onClick={async () => {
+                setInstallingCli(true);
+                setInstallStatus("Downloading GenieX CLI...");
+                try {
+                  const result = await geniex.installGeniex();
+                  setInstallStatus(result);
+                  dispatchToast(
+                    <Toast>
+                      <ToastTitle>GenieX CLI Installer</ToastTitle>
+                      <ToastBody>{result}</ToastBody>
+                    </Toast>,
+                    { intent: "success" },
+                  );
+                  const installed = await geniex.checkGeniexInstalled();
+                  setCliInstalled(installed);
+                  if (!installed) {
+                    dispatchToast(
+                      <Toast>
+                        <ToastTitle>Installation started</ToastTitle>
+                        <ToastBody>
+                          The GenieX installer launched. Complete the installation and restart the app if needed.
+                        </ToastBody>
+                      </Toast>,
+                      { intent: "warning" },
+                    );
+                  }
+                } catch (err) {
+                  const message = err instanceof Error ? err.message : String(err);
+                  setInstallStatus(`Install failed: ${message}`);
+                  dispatchToast(
+                    <Toast>
+                      <ToastTitle>Install failed</ToastTitle>
+                      <ToastBody>{message}</ToastBody>
+                    </Toast>,
+                    { intent: "error" },
+                  );
+                } finally {
+                  setInstallingCli(false);
+                }
+              }}
+              disabled={installingCli}
+            >
+              {installingCli ? <Spinner size="tiny" /> : "Install CLI"}
+            </Button>
           </div>
         )}
         <Header onOpenModelSettings={() => setSettingsTab("model")} />

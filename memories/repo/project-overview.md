@@ -1,13 +1,23 @@
-# LocalGenie — Project Quick Reference
+# LocalGenie project overview
 
-- **Stack**: Tauri 2 + React 19 + TypeScript + Fluent UI v9 + Zustand 5 + SQLite (sea-orm)
-- **Rust backend**: src-tauri/src/commands/ (chat.rs, server.rs, models.rs, database.rs)
-- **Entities**: src/entities/ (chat_session, message, model_setting, user_preference) — sea-orm models
-- **Migrations**: src/migrations/ — versioned with up/down support, tracked via `seaql_migrations`
-- **Frontend services**: src/services/ (geniex.ts = IPC wrappers, database.ts = IPC wrappers for DB)
-- **Stores**: src/stores/ (chatStore.ts, modelStore.ts)
-- **Components**: src/components/ (Sidebar, Header, ChatArea, ChatInput, MessageBubble, ModelBrowser, ModelSelector, SettingsDrawer, AppSettings, ModelSettings, WelcomeScreen)
-- **DB**: sea-orm 1.1 with `sqlx-sqlite` + `runtime-tokio`; state type is `DatabaseConnection`
-- **Port**: Configurable via Settings ? App tab, stored in user_preferences table, default 18181
-- **Fluent UI imports**: Use `@fluentui/react-components` for all components. Toast API: `dispatchToast(<Toast><ToastTitle>...</ToastTitle></Toast>, { intent })` — NOT the `toast()` helper
-- **Frontend ? DB flow**: database.ts uses `invoke()` to call Rust commands in database.rs
+## What it is
+LocalGenie is a Tauri 2 desktop client for Qualcomm GenieX local inference. It wraps a local GenieX server and gives users a desktop UI for browsing models, starting a server, loading models, and chatting with them.
+
+## Stack
+- Frontend: React 19, TypeScript, Fluent UI v9, Zustand
+- Backend: Rust + Tauri 2
+- Persistence: SQLite via sea-orm
+- Runtime: local GenieX CLI process with an OpenAI-compatible HTTP API
+
+## Core flow
+1. User starts or configures the local GenieX server.
+2. User browses available models and pulls/removes them.
+3. User loads a model through the server.
+4. User chats with streaming responses.
+5. Session and settings data are persisted locally.
+
+## Current state
+- Most app shell and session flows work.
+- Model loading and chat completion are currently blocked by the GenieX warmup/server response issue.
+- The server port defaults to `18181` and is stored in `user_preferences`.
+- Legacy `geniex` naming is still used where required by the external CLI.

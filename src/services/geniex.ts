@@ -133,3 +133,7 @@ export async function configList(): Promise<ConfigEntry[]> {
 export async function updateGeniex(): Promise<string> {
   return invoke("update_geniex");
 }
+
+export async function installGeniex(): Promise<string> {
+  return invoke("install_geniex");
+}

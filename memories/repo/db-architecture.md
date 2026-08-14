@@ -1,34 +1,22 @@
-# LocalGenie — Database Architecture
+# Database architecture
 
-## Stack
-- **sea-orm 1.1** ORM with `sqlx-sqlite` + `runtime-tokio` features
-- **sea-orm-migration** for versioned migrations with up/down support
-- **SQLite** database at `%APPDATA%/com.geniex.ui/geniex.db`
+## Summary
+- SQLite database is managed with sea-orm and migrations.
+- Startup runs pending migrations automatically.
+- Database access is through Tauri command handlers and typed service wrappers.
 
-## Database Layer
-- Entities in `src/entities/` (chat_session, message, model_setting, user_preference)
-- Migrations in `src/migrations/` (use `DeriveMigrationName` + `MigrationTrait`)
-- sea-orm uses `seaql_migrations` table to track applied migrations
-- At startup: `Migrator::up(&db, None)` runs all pending migrations
-- State type: `DatabaseConnection` (not `SqlitePool`)
-- Upserts use `OnConflict::column().update_columns()` pattern
-- PRAGMA foreign_keys enabled per-connection after connect
+## Primary tables
+- `chat_sessions`: session metadata
+- `messages`: chat messages tied to a session
+- `model_settings`: per-model generation parameters
+- `user_preferences`: key-value app settings such as `server_port`
 
-## Tables
-| Table | Purpose |
-|---|---|
-| `chat_sessions` | Chat session metadata (id, title, created_at, updated_at, model, context_chars) |
-| `messages` | Messages per session (id, session_id FK, role, content, timestamp) — CASCADE on delete |
-| `model_settings` | Per-model generation params stored as JSON (model_name PK, settings_json, updated_at) |
-| `user_preferences` | Key-value store for app settings (key PK, value, type) — currently stores `server_port` |
+## Patterns
+- Use `MigrationTrait` for versioned schema changes.
+- Keep entities in `src-tauri/src/entities/`.
+- Use `INSERT ... ON CONFLICT ... DO UPDATE` for idempotent upserts.
+- Respect foreign-key relationships and avoid destructive cascade behavior when updating sessions.
 
-## Adding a New Migration
-1. Create `src-tauri/src/migrations/m{YYYYMMDD}_{name}.rs`
-2. Implement `MigrationTrait` with `up()` and `down()` methods
-3. Register in `src/migrations/mod.rs` in the `Migrator::migrations()` vec
-
-## Key Patterns
-- Tauri commands accept `tauri::State<'_, DatabaseConnection>`
-- Frontend calls via `invoke()` from `@tauri-apps/api/core`
-- serde flatten on `ChatSessionWithMessages` spreads session fields
-- Tauri 2 auto-applies `rename_all = "camelCase"` to top-level command params
+## Notes
+- Default port is `18181`.
+- The app stores user preference keys in a simple value-type table.

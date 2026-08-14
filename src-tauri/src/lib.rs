@@ -53,6 +53,7 @@ pub fn run() {
             cli::config_set,
             cli::config_list,
             cli::check_for_cli_update,
+            cli::install_geniex,
             cli::update_geniex,
             // Database
             database::load_sessions,

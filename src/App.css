@@ -275,6 +275,24 @@ body,
   flex-shrink: 0;
 }
 
+.cli-missing-banner-message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #fce8b7;
+  font-size: 13px;
+  flex: 1;
+}
+
+.cli-missing-banner-detail {
+  color: #f7f1d6;
+  font-size: 12px;
+}
+
+.cli-missing-banner button {
+  margin-left: 12px;
+}
+
 /* ─── Header ───────────────────────────────────────────────────── */
 
 .main-header {
