@@ -1,23 +1,87 @@
 import { useState, useEffect, useCallback } from "react";
-import { Button, Spinner, Toast, ToastTitle, useToastController } from "@fluentui/react-components";
-import { SaveRegular } from "@fluentui/react-icons";
+import {
+  Button,
+  Spinner,
+  Toast,
+  ToastTitle,
+  ToastBody,
+  useToastController,
+} from "@fluentui/react-components";
+import { SaveRegular, ArrowUpRegular } from "@fluentui/react-icons";
+import { listen } from "@tauri-apps/api/event";
 import { useModelStore } from "../stores/modelStore";
 import * as db from "../services/database";
 import * as geniex from "../services/geniex";
+import type { UpdateInfo } from "../types";
 
 const PORT_VALID_RANGE = { min: 1024, max: 65535 };
 
-export default function AppSettings() {
+interface AppSettingsProps {
+  updateInfo: UpdateInfo | null;
+}
+
+export default function AppSettings({ updateInfo }: AppSettingsProps) {
   const { dispatchToast } = useToastController("app-toaster");
   const serverPort = useModelStore((s) => s.serverPort);
   const setServerPort = useModelStore((s) => s.setServerPort);
   const setServerStatus = useModelStore((s) => s.setServerStatus);
+  const setUpdateInfo = useModelStore((s) => s.setUpdateInfo);
 
   const [portValue, setPortValue] = useState(String(serverPort));
   const [portError, setPortError] = useState<string | null>(null);
   const [portInUse, setPortInUse] = useState(false);
   const [portChecking, setPortChecking] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const [updating, setUpdating] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+
+  // Listen for progress events while updating
+  useEffect(() => {
+    if (!updating) return;
+    const unlisten = listen<{ message: string }>("geniex-update-progress", (event) => {
+      setUpdateStatus(event.payload.message);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [updating]);
+
+  const handleUpdate = async () => {
+    setUpdating(true);
+    setUpdateStatus("Starting update...");
+    try {
+      await geniex.updateGeniex();
+
+      // Re-check version after update to confirm it took effect.
+      const info = await geniex.checkForCliUpdate();
+      setUpdateInfo(info);
+      if (!info.update_available) {
+        dispatchToast(
+          <Toast><ToastTitle>Update complete</ToastTitle><ToastBody>Updated to CLI {info.latest_version}.</ToastBody></Toast>,
+          { intent: "success" },
+        );
+      } else {
+        dispatchToast(
+          <Toast>
+            <ToastTitle>Update downloaded</ToastTitle>
+            <ToastBody>Restart the app to finish updating to {info.latest_version}.</ToastBody>
+          </Toast>,
+          { intent: "warning" },
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[settings] Update failed:", msg);
+      dispatchToast(
+        <Toast><ToastTitle>Update failed</ToastTitle><ToastBody>{msg}</ToastBody></Toast>,
+        { intent: "error" },
+      );
+    } finally {
+      setUpdating(false);
+      setUpdateStatus(null);
+    }
+  };
 
   const isPortChanged = Number(portValue) !== serverPort;
 
@@ -141,6 +205,47 @@ export default function AppSettings() {
       >
         {saving ? "Saving…" : "Save"}
       </Button>
+
+      {/* ── CLI Update ───────────────────────────── */}
+      <div className="settings-section">
+        <div className="settings-section-title">GenieX CLI</div>
+
+        {updateInfo ? (
+          <div className="cli-update-card">
+            <div className="cli-update-version">
+              <span className="cli-update-label">Installed</span>
+              <span className="cli-update-value">v{updateInfo.current_version}</span>
+            </div>
+            {updateInfo.update_available && (
+              <>
+                <div className="cli-update-version">
+                  <span className="cli-update-label">Latest</span>
+                  <span className="cli-update-value">v{updateInfo.latest_version}</span>
+                </div>
+                <div className="cli-update-detail">
+                  {updating && updateStatus
+                    ? updateStatus
+                    : `A newer version is available.`}
+                </div>
+                <Button
+                  appearance="primary"
+                  icon={updating ? undefined : <ArrowUpRegular />}
+                  onClick={handleUpdate}
+                  disabled={updating}
+                  className="cli-update-btn"
+                >
+                  {updating ? <Spinner size="tiny" /> : "Update Now"}
+                </Button>
+              </>
+            )}
+            {!updateInfo.update_available && (
+              <div className="cli-update-detail">You're on the latest version.</div>
+            )}
+          </div>
+        ) : (
+          <div className="cli-update-detail">Checking for updates…</div>
+        )}
+      </div>
     </div>
   );
 }

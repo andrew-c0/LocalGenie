@@ -64,7 +64,7 @@ fn derive_source(name: &str) -> &str {
 /// List all locally downloaded models using `geniex list --format json`.
 #[tauri::command]
 pub async fn list_models() -> Result<Vec<ModelInfo>, String> {
-    let output = Command::new(super::cli::get_geniex_executable())
+    let output = Command::new(super::cli::resolve_geniex_executable())
         .args(["list", "--format", "json"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -102,7 +102,7 @@ pub async fn list_models() -> Result<Vec<ModelInfo>, String> {
 /// Remove ALL cached models, freeing up local storage.
 #[tauri::command]
 pub async fn clean_models() -> Result<(), String> {
-    let output = Command::new(super::cli::get_geniex_executable())
+    let output = Command::new(super::cli::resolve_geniex_executable())
         .args(["clean", "-y"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -121,7 +121,7 @@ pub async fn clean_models() -> Result<(), String> {
 /// Override the model type (llm or vlm) for a cached model.
 #[tauri::command]
 pub async fn set_model_type(model: String, model_type: String) -> Result<(), String> {
-    let output = Command::new(super::cli::get_geniex_executable())
+    let output = Command::new(super::cli::resolve_geniex_executable())
         .args(["model", "set-type", &model, &model_type])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -167,7 +167,7 @@ pub async fn pull_model(
         args.push(lp);
     }
 
-    let mut child = Command::new(super::cli::get_geniex_executable())
+    let mut child = Command::new(super::cli::resolve_geniex_executable())
         .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -217,7 +217,7 @@ pub async fn pull_model(
 /// Remove a locally downloaded model.
 #[tauri::command]
 pub async fn remove_model(model: String) -> Result<(), String> {
-    let output = Command::new(super::cli::get_geniex_executable())
+    let output = Command::new(super::cli::resolve_geniex_executable())
         .args(["remove", &model, "-y"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

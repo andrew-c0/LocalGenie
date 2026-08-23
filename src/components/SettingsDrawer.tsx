@@ -8,13 +8,19 @@ import {
 import { DismissRegular } from "@fluentui/react-icons";
 import AppSettings from "./AppSettings";
 import ModelSettings from "./ModelSettings";
+import type { UpdateInfo } from "../types";
 
 interface SettingsDrawerProps {
   defaultTab?: "app" | "model";
   onClose: () => void;
+  updateInfo: UpdateInfo | null;
 }
 
-export default function SettingsDrawer({ defaultTab = "app", onClose }: SettingsDrawerProps) {
+export default function SettingsDrawer({
+  defaultTab = "app",
+  onClose,
+  updateInfo,
+}: SettingsDrawerProps) {
   return (
     <Drawer
       open
@@ -33,7 +39,7 @@ export default function SettingsDrawer({ defaultTab = "app", onClose }: Settings
       </DrawerHeader>
       <DrawerBody className="drawer-body-no-padding">
         <div className="drawer-content-wrap">
-          {defaultTab === "app" && <AppSettings />}
+          {defaultTab === "app" && <AppSettings updateInfo={updateInfo} />}
           {defaultTab === "model" && <ModelSettings />}
         </div>
       </DrawerBody>

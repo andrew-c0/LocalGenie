@@ -1,10 +1,17 @@
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
+use tauri::{Emitter, Manager};
 use tokio::process::Command;
 use tokio::time::timeout;
+
+/// GitHub API endpoint for the latest GenieX release.
+const GITHUB_RELEASES_URL: &str =
+    "https://api.github.com/repos/qualcomm/GenieX/releases/latest";
+/// Fallback release page when the API response is missing a URL.
+const RELEASE_BASE_URL: &str = "https://github.com/qualcomm/GenieX/releases";
 
 // GenieX is supported only on Windows on ARM64 for this project.
 fn platform_supported() -> bool {
@@ -46,7 +53,6 @@ fn find_local_geniex_binary() -> Option<PathBuf> {
 /// Search PATH for geniex.exe on Windows or geniex elsewhere.
 fn find_in_path() -> Option<PathBuf> {
     if let Some(paths) = env::var_os("PATH") {
-        let split = if cfg!(windows) { ";" } else { ":" };
         for p in env::split_paths(&paths) {
             let candidate = if cfg!(windows) { p.join("geniex.exe") } else { p.join("geniex") };
             if candidate.exists() {
@@ -59,7 +65,7 @@ fn find_in_path() -> Option<PathBuf> {
 
 /// Determine an executable path to try. Prefer local install root, then PATH,
 /// then a default name which will likely fail fast.
-fn resolve_geniex_executable() -> PathBuf {
+pub fn resolve_geniex_executable() -> PathBuf {
     if let Some(bin) = find_local_geniex_binary() {
         return bin;
     }
@@ -212,14 +218,210 @@ pub async fn config_list() -> Result<Vec<ConfigEntry>, String> {
     }
 }
 
-#[tauri::command]
-pub async fn check_for_cli_update() -> Result<crate::commands::cli::UpdateInfo, String> {
-    Err("CLI update checks are disabled in this build. Please visit https://github.com/qualcomm/GenieX/releases for updates.".to_string())
+/// Query the GitHub API for the latest GenieX release tag (e.g. "0.5.0").
+async fn fetch_latest_release() -> Result<(String, String), String> {
+    let client = reqwest::Client::builder()
+        .user_agent("LocalGenie/0.1")
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+
+    let resp = client
+        .get(GITHUB_RELEASES_URL)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to reach GitHub releases: {e}"))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("GitHub API returned HTTP {}", resp.status()));
+    }
+
+    let json: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse GitHub release: {e}"))?;
+
+    let tag = json
+        .get("tag_name")
+        .and_then(|t| t.as_str())
+        .unwrap_or_default()
+        .trim_start_matches('v')
+        .to_string();
+    let url = json
+        .get("html_url")
+        .and_then(|u| u.as_str())
+        .unwrap_or(RELEASE_BASE_URL)
+        .to_string();
+
+    if tag.is_empty() {
+        return Err("GitHub release response missing tag_name".to_string());
+    }
+    Ok((tag, url))
+}
+
+/// Find the Windows ARM64 CLI installer asset URL in a release's assets list.
+/// Returns the download URL and the suggested local file name.
+fn find_arm64_installer(json: &serde_json::Value) -> Option<(String, String)> {
+    let assets = json
+        .get("assets")
+        .and_then(|a| a.as_array())
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    for asset in assets.iter() {
+        let name = asset.get("name").and_then(|n| n.as_str()).unwrap_or_default();
+        let url = asset.get("browser_download_url").and_then(|u| u.as_str()).unwrap_or_default();
+        // Match the Windows ARM64 setup executable, e.g.
+        // "geniex-cli-setup-windows-arm64-v0.5.0.exe"
+        if name.contains("cli-setup") && name.contains("windows-arm64") && name.ends_with(".exe") {
+            return Some((url.to_string(), name.to_string()));
+        }
+    }
+    None
+}
+
+/// Download the latest Windows arm64 GenieX CLI installer to the app data dir.
+async fn download_installer(app: tauri::AppHandle, url: &str, file_name: &str) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .expect("failed to resolve app data dir");
+    std::fs::create_dir_all(&dir).ok();
+    let dest = dir.join(file_name);
+
+    let client = reqwest::Client::builder()
+        .user_agent("LocalGenie/0.1")
+        .timeout(Duration::from_secs(300))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+
+    let resp = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to download installer: {e}"))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Download failed with HTTP {}", resp.status()));
+    }
+
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read installer body: {e}"))?;
+
+    std::fs::write(&dest, bytes).map_err(|e| format!("Failed to write installer: {e}"))?;
+
+    Ok(dest)
+}
+
+/// Launch the installer so the user can complete the update.
+async fn launch_installer(path: &PathBuf) -> Result<(), String> {
+    Command::new(path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Failed to launch installer: {e}"))
 }
 
 #[tauri::command]
-pub async fn update_geniex(_app: tauri::AppHandle) -> Result<String, String> {
-    Err("Automatic update is not supported in this build. Please update GenieX manually from https://github.com/qualcomm/GenieX/releases".to_string())
+pub async fn update_geniex(app: tauri::AppHandle) -> Result<String, String> {
+    let emit = |msg: String| {
+        let _ = app.emit("geniex-update-progress", serde_json::json!({ "message": msg }));
+    };
+
+    // 1. Resolve the latest release and its Windows arm64 installer.
+    emit("Checking for the latest release...".to_string());
+    let client = reqwest::Client::builder()
+        .user_agent("LocalGenie/0.1")
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+    let resp = client
+        .get(GITHUB_RELEASES_URL)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to reach GitHub releases: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!("GitHub API returned HTTP {}", resp.status()));
+    }
+    let json: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse GitHub release: {e}"))?;
+
+    let latest = json
+        .get("tag_name")
+        .and_then(|t| t.as_str())
+        .unwrap_or_default()
+        .trim_start_matches('v')
+        .to_string();
+    if latest.is_empty() {
+        return Err("GitHub release response missing tag_name".to_string());
+    }
+
+    let (installer_url, installer_name) = find_arm64_installer(&json)
+        .ok_or_else(|| "No Windows ARM64 CLI installer found in the latest release.".to_string())?;
+
+    // 2. Download the installer.
+    emit(format!("Downloading GenieX CLI v{latest}..."));
+    let installer_path = download_installer(app.clone(), &installer_url, &installer_name).await?;
+    emit("Download complete. Launching the installer...".to_string());
+
+    // 3. Launch the installer for the user to complete.
+    launch_installer(&installer_path).await?;
+    emit("Follow the installer steps to finish updating. Waiting for the version to change...".to_string());
+
+    // 4. Poll the installed version until it reaches the latest release,
+    //    expiring after 5 minutes (300s / 3s per check = 100 attempts).
+    for _ in 0..100 {
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        let v = get_installed_version_timeout(3).await;
+        if v == Some(latest.clone()) {
+            emit(format!("Updated to v{latest}"));
+            return Ok(format!("Updated to v{latest}"));
+        }
+    }
+
+    Err(format!(
+        "The update did not complete within 5 minutes. Please run the installer manually from {}",
+        RELEASE_BASE_URL
+    ))
+}
+
+/// Compare two dotted version strings. Returns `true` if `a < b`.
+fn version_less_than(a: &str, b: &str) -> bool {
+    let parse = |s: &str| -> Vec<u64> {
+        s.split('.')
+            .filter_map(|p| p.parse::<u64>().ok())
+            .collect()
+    };
+    let (pa, pb) = (parse(a), parse(b));
+    let len = pa.len().max(pb.len());
+    for i in 0..len {
+        let x = pa.get(i).copied().unwrap_or(0);
+        let y = pb.get(i).copied().unwrap_or(0);
+        if x != y {
+            return x < y;
+        }
+    }
+    false
+}
+
+#[tauri::command]
+pub async fn check_for_cli_update() -> Result<crate::commands::cli::UpdateInfo, String> {
+    let current = get_installed_version_timeout(5)
+        .await
+        .ok_or_else(|| "GenieX CLI not found or did not respond in time.".to_string())?;
+
+    let (latest, release_url) = fetch_latest_release().await?;
+
+    let update_available = version_less_than(&current, &latest);
+
+    Ok(crate::commands::cli::UpdateInfo {
+        current_version: current,
+        latest_version: latest,
+        update_available,
+        release_url,
+    })
 }
 
 // Minimal UpdateInfo re-export for compatibility with other modules that refer to it.

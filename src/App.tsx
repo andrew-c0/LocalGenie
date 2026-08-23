@@ -261,7 +261,6 @@ export default function App() {
         onOpenModelBrowser={() => setShowModelBrowser(true)}
         onOpenAppSettings={() => setSettingsTab("app")}
         updateInfo={updateInfo}
-        onDismissUpdate={() => setUpdateInfo(null)}
       />
       <div className="main-area">
         {!cliInstalled && (
@@ -327,7 +326,11 @@ export default function App() {
 
       {showModelBrowser && <ModelBrowser onClose={() => setShowModelBrowser(false)} />}
       {settingsTab && (
-        <SettingsDrawer defaultTab={settingsTab} onClose={() => setSettingsTab(null)} />
+        <SettingsDrawer
+          defaultTab={settingsTab}
+          onClose={() => setSettingsTab(null)}
+          updateInfo={updateInfo}
+        />
       )}
       <Toaster toasterId="app-toaster" />
     </div>

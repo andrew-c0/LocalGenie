@@ -68,18 +68,55 @@ body,
   border-bottom: 1px solid #2a2a4a;
 }
 
+.sidebar-logo-row {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-content: center;
+}
+
 .sidebar-logo {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 16px;
+  flex-grow: 1;
+}
+
+.sidebar-settings-btn {
+  position: relative;
+  padding: 0;
+  flex-shrink: 0;
+  min-width: auto !important;
+  height: auto;
+}
+
+.sidebar-settings-btn .fui-Button__icon {
+  margin-right: 0;
+}
+
+.sidebar-settings-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sidebar-settings-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e74c3c;
+  border: 1.5px solid #1a1a2e;
+  pointer-events: none;
 }
 
 .sidebar-logo-clickable {
   cursor: pointer;
   border-radius: 8px;
   padding: 4px;
-  margin: -4px 0 12px -4px;
+  margin: -4px 0 0 -4px;
   transition: background 0.15s ease;
 }
 
@@ -1209,6 +1246,44 @@ body,
 .settings-save-btn {
   width: 100%;
   margin-top: 12px;
+}
+
+/* ─── CLI Update (App Settings) ───────────────────────────────── */
+
+.cli-update-card {
+  background: #181838;
+  border: 1px solid #2e3a5a;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cli-update-version {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cli-update-label {
+  font-size: 12px;
+  color: #9090b0;
+}
+
+.cli-update-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e8e8f0;
+}
+
+.cli-update-detail {
+  font-size: 12px;
+  color: #9090b0;
+}
+
+.cli-update-btn {
+  width: 100%;
 }
 
 /* ─── Welcome Screen ───────────────────────────────────────────── */
