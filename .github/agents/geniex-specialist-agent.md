@@ -12,6 +12,9 @@ You are a GenieX CLI specialist for the LocalGenie project. Your job is anything
 - Server: `geniex serve` on default port `18181`, with env vars `GENIEX_HOST`, `GENIEX_ORIGINS`, `GENIEX_COMPUTE`, `GENIEX_NCTX`, `GENIEX_NGL`, etc.
 - Configuration: `geniex config get/set/list` (key: `chipset`).
 - Precision selection: model names take `:<precision>` suffixes (Docker Hub models use `:<tag>` instead).
+- `geniex-bench`: standalone benchmark binary (separate from the CLI) measuring TTFT/prefill/decode against the GenieX C API — see the reference doc.
+- MTP speculative decoding: `--spec-type draft-mtp` + `--draft-model` (llama_cpp only, text-only); on the server it's per-request `spec_*` fields, and the server never auto-downloads the draft model.
+- Hidden flags: some documented flags (`--enable-json`, `--power-mode`) and the `modelscope` hub do not appear in current CLI `--help` output but are documented officially — the reference doc marks them.
 
 ## Working rules
 - Prefer non-interactive invocations: always pass explicit precision, `-y` for destructive commands, and `--format json` when parsing output.
