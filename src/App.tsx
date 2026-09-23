@@ -1,25 +1,28 @@
-import React, { useEffect, useRef } from "react";
-import { listen } from "@tauri-apps/api/event";
 import {
   Button,
   Spinner,
   Toast,
   ToastBody,
-  ToastTitle,
   Toaster,
+  ToastTitle,
   useToastController,
 } from "@fluentui/react-components";
-import Sidebar from "./components/Sidebar";
-import Header from "./components/Header";
-import ChatArea from "./components/ChatArea";
-import ChatInput from "./components/ChatInput";
-import WelcomeScreen from "./components/WelcomeScreen";
-import ModelBrowser from "./components/ModelBrowser";
-import SettingsDrawer from "./components/SettingsDrawer";
-import { useChatStore } from "./stores/chatStore";
-import { useModelStore } from "./stores/modelStore";
+import { listen } from "@tauri-apps/api/event";
+import React, { useEffect, useRef } from "react";
+import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
+import Header from "./components/shell/Header";
+import Sidebar from "./components/shell/Sidebar";
+import BenchmarkPlayground from "./pages/benchmark/BenchmarkPlayground";
+import PerformanceDashboard from "./pages/benchmark/PerformanceDashboard";
+import ChatPage from "./pages/ChatPage";
+import ModelLibraryPage from "./pages/ModelLibraryPage";
+import OverviewPage from "./pages/OverviewPage";
+import PromptBenchmarkPage from "./pages/PromptBenchmarkPage";
+import SettingsPage from "./pages/SettingsPage";
 import * as db from "./services/database";
 import * as geniex from "./services/geniex";
+import { useChatStore } from "./stores/chatStore";
+import { useModelStore } from "./stores/modelStore";
 import type { Message } from "./types";
 
 /** Debounce a callback — cancels the previous pending call when invoked again. */
@@ -44,9 +47,97 @@ function useDebouncedCallback<T extends (...args: never[]) => void>(
   }) as T;
 }
 
+/** App shell content — uses router hooks for the active view. */
+function Shell() {
+  const updateInfo = useModelStore((s) => s.updateInfo);
+  const cliInstalled = useModelStore((s) => s.cliInstalled);
+  const setCliInstalled = useModelStore((s) => s.setCliInstalled);
+  const [installingCli, setInstallingCli] = React.useState(false);
+  const [installStatus, setInstallStatus] = React.useState<string | null>(null);
+  const { dispatchToast } = useToastController("app-toaster");
+
+  return (
+    <div className="lx-shell">
+      <Sidebar />
+      <div className="lx-main">
+        {!cliInstalled && (
+          <div className="cli-missing-banner">
+            <span className="cli-missing-banner-icon">⚠️</span>
+            <div className="cli-missing-banner-message">
+              <span>GenieX CLI not found. Install it to use model management and chatting.</span>
+              {installStatus && <span className="cli-missing-banner-detail">{installStatus}</span>}
+            </div>
+            <Button
+              appearance="primary"
+              size="small"
+              onClick={async () => {
+                setInstallingCli(true);
+                setInstallStatus("Downloading GenieX CLI...");
+                try {
+                  const result = await geniex.installGeniex();
+                  setInstallStatus(result);
+                  dispatchToast(
+                    <Toast>
+                      <ToastTitle>GenieX CLI Installer</ToastTitle>
+                      <ToastBody>{result}</ToastBody>
+                    </Toast>,
+                    { intent: "success" },
+                  );
+                  const installed = await geniex.checkGeniexInstalled();
+                  setCliInstalled(installed);
+                  if (!installed) {
+                    dispatchToast(
+                      <Toast>
+                        <ToastTitle>Installation started</ToastTitle>
+                        <ToastBody>
+                          The GenieX installer launched. Complete the installation and restart the
+                          app if needed.
+                        </ToastBody>
+                      </Toast>,
+                      { intent: "warning" },
+                    );
+                  }
+                } catch (err) {
+                  const message = err instanceof Error ? err.message : String(err);
+                  setInstallStatus(`Install failed: ${message}`);
+                  dispatchToast(
+                    <Toast>
+                      <ToastTitle>Install failed</ToastTitle>
+                      <ToastBody>{message}</ToastBody>
+                    </Toast>,
+                    { intent: "error" },
+                  );
+                } finally {
+                  setInstallingCli(false);
+                }
+              }}
+              disabled={installingCli}
+            >
+              {installingCli ? <Spinner size="tiny" /> : "Install CLI"}
+            </Button>
+          </div>
+        )}
+        <Header />
+        <Routes>
+          <Route path="/" element={<OverviewPage />} />
+          <Route path="/models" element={<ModelLibraryPage />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/benchmark" element={<Navigate to="/prompt-benchmark" replace />} />
+          <Route path="/prompt-benchmark" element={<PromptBenchmarkPage />}>
+            <Route index element={<Navigate to="playground" replace />} />
+            <Route path="playground" element={<BenchmarkPlayground />} />
+            <Route path="dashboard" element={<PerformanceDashboard />} />
+          </Route>
+          <Route path="/settings" element={<SettingsPage updateInfo={updateInfo} />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+      <Toaster toasterId="app-toaster" />
+    </div>
+  );
+}
+
 export default function App() {
-  const sessions = useChatStore((s) => s.sessions);
-  const activeSessionId = useChatStore((s) => s.activeSessionId);
   const loadSessions = useChatStore((s) => s.loadSessions);
   const updateLastAssistantMessage = useChatStore((s) => s.updateLastAssistantMessage);
   const setStreaming = useChatStore((s) => s.setStreaming);
@@ -56,15 +147,7 @@ export default function App() {
   const setServerStatus = useModelStore((s) => s.setServerStatus);
   const setServerPort = useModelStore((s) => s.setServerPort);
   const setCliInstalled = useModelStore((s) => s.setCliInstalled);
-  const cliInstalled = useModelStore((s) => s.cliInstalled);
   const setUpdateInfo = useModelStore((s) => s.setUpdateInfo);
-  const updateInfo = useModelStore((s) => s.updateInfo);
-
-  const [showModelBrowser, setShowModelBrowser] = React.useState(false);
-  const [settingsTab, setSettingsTab] = React.useState<"app" | "model" | null>(null);
-  const [installingCli, setInstallingCli] = React.useState(false);
-  const [installStatus, setInstallStatus] = React.useState<string | null>(null);
-  const { dispatchToast } = useToastController("app-toaster");
 
   // Track token count for stats
   const tokenCountRef = useRef(0);
@@ -117,7 +200,7 @@ export default function App() {
         // ignore
       }
     })();
-  }, []);
+  }, [loadSessions, setModels, setUpdateInfo, setServerStatus, setCliInstalled, setServerPort]);
 
   // ── Listen for server crash (process exited unexpectedly) ──────
   useEffect(() => {
@@ -128,7 +211,7 @@ export default function App() {
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, []);
+  }, [setServerStatus]);
 
   // ── Persist active session to DB (debounced) ──────────────────
   const persistSession = useDebouncedCallback(() => {
@@ -142,14 +225,15 @@ export default function App() {
 
   useEffect(() => {
     persistSession();
-  }, [sessions, activeSessionId, persistSession]);
+  }, [persistSession]);
 
   // ── Listen for streaming chat chunks from Rust backend ────────
   useEffect(() => {
     const unlisten = listen<{ content: string }>("chat-chunk", (event) => {
-      if (!activeSessionId) return;
+      const activeId = useChatStore.getState().activeSessionId;
+      if (!activeId) return;
       const store = useChatStore.getState();
-      const session = store.sessions.find((s) => s.id === activeSessionId);
+      const session = store.sessions.find((s) => s.id === activeId);
       if (!session) return;
 
       tokenCountRef.current += 1;
@@ -157,7 +241,7 @@ export default function App() {
       const lastMsg = session.messages[session.messages.length - 1];
       if (lastMsg && lastMsg.role === "assistant") {
         // Append to existing assistant message
-        updateLastAssistantMessage(activeSessionId, lastMsg.content + event.payload.content);
+        updateLastAssistantMessage(activeId, lastMsg.content + event.payload.content);
       } else {
         // First chunk of a new response — reset per-response counters
         tokenCountRef.current = 1;
@@ -169,24 +253,25 @@ export default function App() {
           timestamp: Date.now(),
           modelId: session.modelId ?? undefined,
         };
-        store.addMessage(activeSessionId, assistantMsg);
+        store.addMessage(activeId, assistantMsg);
         // Persist immediately so the message survives app restarts mid-stream
-        db.saveMessage(activeSessionId, assistantMsg).catch(() => {});
+        db.saveMessage(activeId, assistantMsg).catch(() => {});
       }
     });
 
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [activeSessionId]);
+  }, [updateLastAssistantMessage]);
 
   useEffect(() => {
     const unlisten = listen("chat-done", () => {
       setStreaming(false);
 
-      if (!activeSessionId) return;
+      const activeId = useChatStore.getState().activeSessionId;
+      if (!activeId) return;
       const store = useChatStore.getState();
-      const session = store.sessions.find((s) => s.id === activeSessionId);
+      const session = store.sessions.find((s) => s.id === activeId);
       if (!session) return;
 
       const lastMsg = session.messages[session.messages.length - 1];
@@ -211,20 +296,20 @@ export default function App() {
       }
 
       if (lastMsg.role === "assistant" && lastMsg.content) {
-        store.updateMessageStats(activeSessionId, lastMsg.id, {
+        store.updateMessageStats(activeId, lastMsg.id, {
           timeToFirstToken,
           totalTime,
           tokenCount,
           promptChars,
         });
-        db.saveMessage(activeSessionId, lastMsg).catch(() => {});
+        db.saveMessage(activeId, lastMsg).catch(() => {});
       }
     });
 
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [activeSessionId, lastSendTime]);
+  }, [lastSendTime, setStreaming]);
 
   // ── Listen for pull progress ──────────────────────────────────
   useEffect(() => {
@@ -253,86 +338,9 @@ export default function App() {
     };
   }, []);
 
-  const activeSession = sessions.find((s) => s.id === activeSessionId);
-
   return (
-    <div className="app-layout">
-      <Sidebar
-        onOpenModelBrowser={() => setShowModelBrowser(true)}
-        onOpenAppSettings={() => setSettingsTab("app")}
-        updateInfo={updateInfo}
-      />
-      <div className="main-area">
-        {!cliInstalled && (
-          <div className="cli-missing-banner">
-            <span className="cli-missing-banner-icon">⚠️</span>
-            <div className="cli-missing-banner-message">
-              <span>GenieX CLI not found. Install it to use model management and chatting.</span>
-              {installStatus && <span className="cli-missing-banner-detail">{installStatus}</span>}
-            </div>
-            <Button
-              appearance="primary"
-              size="small"
-              onClick={async () => {
-                setInstallingCli(true);
-                setInstallStatus("Downloading GenieX CLI...");
-                try {
-                  const result = await geniex.installGeniex();
-                  setInstallStatus(result);
-                  dispatchToast(
-                    <Toast>
-                      <ToastTitle>GenieX CLI Installer</ToastTitle>
-                      <ToastBody>{result}</ToastBody>
-                    </Toast>,
-                    { intent: "success" },
-                  );
-                  const installed = await geniex.checkGeniexInstalled();
-                  setCliInstalled(installed);
-                  if (!installed) {
-                    dispatchToast(
-                      <Toast>
-                        <ToastTitle>Installation started</ToastTitle>
-                        <ToastBody>
-                          The GenieX installer launched. Complete the installation and restart the app if needed.
-                        </ToastBody>
-                      </Toast>,
-                      { intent: "warning" },
-                    );
-                  }
-                } catch (err) {
-                  const message = err instanceof Error ? err.message : String(err);
-                  setInstallStatus(`Install failed: ${message}`);
-                  dispatchToast(
-                    <Toast>
-                      <ToastTitle>Install failed</ToastTitle>
-                      <ToastBody>{message}</ToastBody>
-                    </Toast>,
-                    { intent: "error" },
-                  );
-                } finally {
-                  setInstallingCli(false);
-                }
-              }}
-              disabled={installingCli}
-            >
-              {installingCli ? <Spinner size="tiny" /> : "Install CLI"}
-            </Button>
-          </div>
-        )}
-        <Header onOpenModelSettings={() => setSettingsTab("model")} />
-        {activeSession ? <ChatArea /> : <WelcomeScreen />}
-        {activeSession && <ChatInput />}
-      </div>
-
-      {showModelBrowser && <ModelBrowser onClose={() => setShowModelBrowser(false)} />}
-      {settingsTab && (
-        <SettingsDrawer
-          defaultTab={settingsTab}
-          onClose={() => setSettingsTab(null)}
-          updateInfo={updateInfo}
-        />
-      )}
-      <Toaster toasterId="app-toaster" />
-    </div>
+    <MemoryRouter initialEntries={["/"]}>
+      <Shell />
+    </MemoryRouter>
   );
 }

@@ -1,10 +1,10 @@
 import { create } from "zustand";
 import type {
+  DownloadProgress,
   GenerationSettings,
   ModelInfo,
   SearchModel,
   ServerStatus,
-  DownloadProgress,
   UpdateInfo,
 } from "../types";
 

@@ -98,3 +98,45 @@ export interface UpdateInfo {
   update_available: boolean;
   release_url: string;
 }
+
+/** Top-level pages of the Stitch-designed workspace shell. */
+export type AppView = "overview" | "models" | "chat" | "prompt-benchmark" | "settings";
+
+export type ComputeTarget = "npu" | "gpu" | "cpu";
+
+export type BenchmarkStatus = "idle" | "running" | "completed" | "error";
+
+/** One throughput sample for the live benchmark chart. */
+export interface BenchmarkSample {
+  /** ms offset from run start */
+  t: number;
+  npu?: number;
+  gpu?: number;
+  cpu?: number;
+}
+
+export interface BenchmarkKpis {
+  ttftMs: number | null;
+  tokensPerSec: number | null;
+  memoryBandwidthGbps: number | null;
+  tempC: number | null;
+}
+
+export interface BenchmarkRankingEntry {
+  model: string;
+  quantization?: string;
+  tokensPerSec: number;
+}
+
+export interface BenchmarkRunSummary {
+  id: string;
+  startedAt: number;
+  target: ComputeTarget;
+  ttftMs: number | null;
+  tokensPerSec: number | null;
+  totalTokens: number;
+  promptChars: number;
+}
+
+/** Model installation state used by the model library UI. */
+export type ModelInstallState = "loaded" | "ready" | "downloading" | "not-installed" | "error";

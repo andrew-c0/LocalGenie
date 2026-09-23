@@ -27,7 +27,18 @@ Run through these checks manually after building or deploying the app. Automated
 ## General build sanity
 
 - [ ] `npm run check` passes (TypeScript, no errors).
-- [ ] `npm run lint` passes (Biome).
+- [ ] `npm run lint` passes (Biome — 0 errors, 0 warnings as of 2026-09-18).
 - [ ] `cargo check` passes in `src-tauri/` (no warnings introduced).
 - [ ] `npm run build` produces MSI + NSIS bundles under `src-tauri/target/release/bundle/`.
 - [ ] App launches from the built bundle and the server connects on the configured port (default `18181`).
+
+## Stitch UI regression (after the 2026-09-18 frontend rebuild)
+
+- [ ] All 6 views render and switch via the sidebar: Overview, Models, Chat & Playground, Benchmarks, Prompt Bench, Settings — without losing active session or server status.
+- [ ] Chat: streaming updates in place, `chat-done` records generation stats, retry removes later messages in both Zustand and SQLite.
+- [ ] Models: search → pull → progress → completion refresh; Load & Chat sets active model; remove confirmation works; repo filter chips behave.
+- [ ] Settings: port save/probe persists; CLI update card reflects `updateInfo` (badge on sidebar settings entry is currently gone — settings moved to a page, verify update badge UX still acceptable).
+- [ ] Prompt Benchmark: `Ctrl+Enter` executes a real streaming run against the local server; TTFT/throughput values change between runs; recent runs list updates.
+- [ ] Benchmark page: ranking populated from real chat stats only (no fabricated numbers); bandwidth/thermal cards show "—/N/A".
+- [ ] Responsive: sidebar collapses to icon rail ≤860px; model grid 3→2→1 columns; settings rows stack; chat session list hides on narrow widths.
+- [ ] Keyboard: Escape closes model-remove dialog; nav items are real buttons (focusable); sliders are labelled via `aria-labelledby`.

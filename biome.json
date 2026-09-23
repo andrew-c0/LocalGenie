@@ -25,13 +25,16 @@
     "rules": {
       "preset": "recommended",
       "nursery": {
-        "noUnusedClasses": "warn"
+        "noUnusedClasses": "off"
       },
       "correctness": {
         "noUnusedImports": "warn",
         "noUnusedVariables": "warn",
         "useHookAtTopLevel": "error",
         "useExhaustiveDependencies": "warn"
+      },
+      "complexity": {
+        "noImportantStyles": "off"
       },
       "style": {
         "noNonNullAssertion": "warn",

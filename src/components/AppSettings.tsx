@@ -1,17 +1,17 @@
-import { useState, useEffect, useCallback } from "react";
 import {
   Button,
   Spinner,
   Toast,
-  ToastTitle,
   ToastBody,
+  ToastTitle,
   useToastController,
 } from "@fluentui/react-components";
-import { SaveRegular, ArrowUpRegular } from "@fluentui/react-icons";
+import { ArrowUpRegular, SaveRegular } from "@fluentui/react-icons";
 import { listen } from "@tauri-apps/api/event";
-import { useModelStore } from "../stores/modelStore";
+import { useCallback, useEffect, useState } from "react";
 import * as db from "../services/database";
 import * as geniex from "../services/geniex";
+import { useModelStore } from "../stores/modelStore";
 import type { UpdateInfo } from "../types";
 
 const PORT_VALID_RANGE = { min: 1024, max: 65535 };
@@ -58,7 +58,10 @@ export default function AppSettings({ updateInfo }: AppSettingsProps) {
       setUpdateInfo(info);
       if (!info.update_available) {
         dispatchToast(
-          <Toast><ToastTitle>Update complete</ToastTitle><ToastBody>Updated to CLI {info.latest_version}.</ToastBody></Toast>,
+          <Toast>
+            <ToastTitle>Update complete</ToastTitle>
+            <ToastBody>Updated to CLI {info.latest_version}.</ToastBody>
+          </Toast>,
           { intent: "success" },
         );
       } else {
@@ -74,7 +77,10 @@ export default function AppSettings({ updateInfo }: AppSettingsProps) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[settings] Update failed:", msg);
       dispatchToast(
-        <Toast><ToastTitle>Update failed</ToastTitle><ToastBody>{msg}</ToastBody></Toast>,
+        <Toast>
+          <ToastTitle>Update failed</ToastTitle>
+          <ToastBody>{msg}</ToastBody>
+        </Toast>,
         { intent: "error" },
       );
     } finally {
@@ -223,9 +229,7 @@ export default function AppSettings({ updateInfo }: AppSettingsProps) {
                   <span className="cli-update-value">v{updateInfo.latest_version}</span>
                 </div>
                 <div className="cli-update-detail">
-                  {updating && updateStatus
-                    ? updateStatus
-                    : `A newer version is available.`}
+                  {updating && updateStatus ? updateStatus : `A newer version is available.`}
                 </div>
                 <Button
                   appearance="primary"

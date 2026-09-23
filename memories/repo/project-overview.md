@@ -23,3 +23,28 @@ LocalGenie is a Tauri 2 desktop client for Qualcomm GenieX local inference. It w
 - The server port defaults to `18181` and is stored in `user_preferences`.
 - Legacy `geniex` naming is still used where required by the external CLI.
 - CLI update flow is installer-based (GitHub releases → app data dir → launch → poll); see `cli-update.md` and `manual-checklist.md`.
+
+## Stitch UI conversion (2026-09-18)
+
+The frontend was rebuilt to match the Stitch designs in `memories/ui/stitch_localgenie_design/` (NeuralStudio-style dark workspace, token source: `fluent_runtime/DESIGN.md`).
+
+### Architecture
+- `src/App.tsx` routes views with React Router (`MemoryRouter`); `AppView` in `src/types/index.ts` is now informational only. All Tauri listeners (`chat-chunk`, `chat-done`, `server-stopped`, `model-pull-progress/complete`) are mounted once here. Listeners read the active session via `useChatStore.getState()` inside callbacks (not closures) so dep arrays only contain stable store setters.
+- `src/components/shell/` — `Sidebar.tsx` (nav with active route, model-count badge, chat history, hardware footer; props `{ activeView, onNavigate }`), `Header.tsx` (title/telemetry bar with model trigger + status chips).
+- `src/pages/` — `OverviewPage`, `ModelLibraryPage` (list/grid, search, pull/remove/load), `ChatPage` (session sidebar + context header reusing `ChatArea`/`ChatInput`), `SettingsPage` (composes `AppSettings` + `ModelSettings` as sections), `PromptBenchmarkPage` (Benchmark Suite layout, nested routes). Benchmark subpages live in `src/pages/benchmark/`: `BenchmarkPlayground` (ex-`PromptBenchmarkPage` body) and `PerformanceDashboard` (ex-`BenchmarkPage`).
+- `src/components/ui/primitives.tsx` — shared `SurfaceCard`, `MetricCard`, `StatusBadge`, `ProgressBar`, `StateBlock`.
+- `src/stores/benchmarkStore.ts` + `src/components/benchmark/ThroughputChart.tsx` (dependency-free SVG chart; `PAD` is a module-level const for stable `useMemo` deps).
+- Design tokens: `--lx-*` CSS custom properties in `src/App.css` (`#131313` bg, `#0078D4` blue, `#00B7C3` cyan, `#8764B8` purple, 4/8px rhythm, responsive breakpoints at 1100/860/560px).
+
+### Deleted legacy components
+`WelcomeScreen`, `ModelBrowser`, `SettingsDrawer`, old `components/Sidebar`/`Header`, `ModelSelector`. Their CSS sections remain in `App.css` unused (cleanup optional).
+
+### Data honesty
+- `PromptBenchmarkPage` measures real TTFT/throughput via raw streaming fetch to `/v1/chat/completions` (route `/prompt-benchmark/playground`).
+- `PerformanceDashboard` "Run Benchmark" is visual-only (no backend benchmark command exists).
+
+### Benchmark Suite (2026-09-23)
+- Single nav entry `Benchmarks` → `/prompt-benchmark`. Nested routes: `playground` (index redirects here) and `dashboard`, rendered via `<Outlet />` in `PromptBenchmarkPage` (Settings-style sub-menu layout).
+- `/benchmark` redirects to `/prompt-benchmark`. Subpages reach each other via `navigate()`; the dashboard header has a "Back to Prompt Benchmark" button.
+- `src/pages/BenchmarkPage.tsx` was deleted; its body became `src/pages/benchmark/PerformanceDashboard.tsx`.
+- NPU/VRAM/thermals/bandwidth telemetry has no backend source — UI shows explicit "unavailable" states rather than fabricated values.

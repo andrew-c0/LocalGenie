@@ -1,11 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  ConfigEntry,
   GenerationSettings,
   ModelInfo,
   SearchModel,
-  ServerStatus,
-  ConfigEntry,
   ServerStartOptions,
+  ServerStatus,
   UpdateInfo,
 } from "../types";
 
@@ -45,10 +45,7 @@ export async function cleanModels(): Promise<void> {
   return invoke("clean_models");
 }
 
-export async function setModelType(
-  model: string,
-  modelType: string,
-): Promise<void> {
+export async function setModelType(model: string, modelType: string): Promise<void> {
   return invoke("set_model_type", { model, modelType });
 }
 
@@ -58,9 +55,7 @@ export async function searchModels(query: string): Promise<SearchModel[]> {
 
 // ─── Server Management ───────────────────────────────────────────
 
-export async function startServer(
-  options?: ServerStartOptions,
-): Promise<ServerStatus> {
+export async function startServer(options?: ServerStartOptions): Promise<ServerStatus> {
   return invoke("start_server", {
     port: options?.port,
     compute: options?.compute,
@@ -81,10 +76,7 @@ export async function getServerStatus(port?: number): Promise<ServerStatus> {
 
 // ─── Model Loading ──────────────────────────────────────────────
 
-export async function loadModel(
-  model: string,
-  baseUrl?: string,
-): Promise<ServerStatus> {
+export async function loadModel(model: string, baseUrl?: string): Promise<ServerStatus> {
   return invoke("load_model", { model, baseUrl });
 }
 
@@ -119,10 +111,7 @@ export async function configGet(key: string): Promise<string | null> {
   return invoke("config_get", { key });
 }
 
-export async function configSet(
-  key: string,
-  value?: string,
-): Promise<void> {
+export async function configSet(key: string, value?: string): Promise<void> {
   return invoke("config_set", { key, value });
 }
 

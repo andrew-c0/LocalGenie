@@ -1,9 +1,9 @@
-import { useState, useRef, useCallback, useEffect } from "react";
 import { SendRegular } from "@fluentui/react-icons";
-import { useChatStore } from "../stores/chatStore";
-import { useModelStore, defaultSettings } from "../stores/modelStore";
-import * as geniex from "../services/geniex";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as db from "../services/database";
+import * as geniex from "../services/geniex";
+import { useChatStore } from "../stores/chatStore";
+import { defaultSettings, useModelStore } from "../stores/modelStore";
 import type { Message } from "../types";
 
 const MAX_CONTEXT_CHARS = 8192;

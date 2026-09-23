@@ -1,19 +1,19 @@
-import { useState, useEffect, useCallback } from "react";
 import {
   Button,
-  Slider,
-  Switch,
-  Spinner,
   Divider,
   Dropdown,
   Option,
+  Slider,
+  Spinner,
+  Switch,
   Toast,
   ToastTitle,
   useToastController,
 } from "@fluentui/react-components";
 import { SaveRegular } from "@fluentui/react-icons";
-import { useModelStore, defaultSettings } from "../stores/modelStore";
+import { useCallback, useEffect, useState } from "react";
 import * as db from "../services/database";
+import { defaultSettings, useModelStore } from "../stores/modelStore";
 import type { GenerationSettings } from "../types";
 
 export default function ModelSettings() {
@@ -30,7 +30,7 @@ export default function ModelSettings() {
     if (activeModelId && !selectedModel) {
       setSelectedModel(activeModelId);
     }
-  }, [activeModelId]);
+  }, [activeModelId, selectedModel]);
 
   const [settings, setSettings] = useState<GenerationSettings>({
     ...defaultSettings,

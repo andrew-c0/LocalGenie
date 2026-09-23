@@ -1,6 +1,6 @@
+import { ArrowReplyRegular } from "@fluentui/react-icons";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ArrowReplyRegular } from "@fluentui/react-icons";
 import { useChatStore } from "../stores/chatStore";
 import type { Message } from "../types";
 

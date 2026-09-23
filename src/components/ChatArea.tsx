@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useChatStore } from "../stores/chatStore";
 import MessageBubble from "./MessageBubble";
 
@@ -11,6 +11,7 @@ export default function ChatArea() {
   const session = sessions.find((s) => s.id === activeSessionId);
 
   // Auto-scroll to bottom on new messages
+  // biome-ignore lint/correctness/useExhaustiveDependencies: message length is the intended trigger, not array identity
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [session?.messages.length, isStreaming]);

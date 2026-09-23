@@ -1,8 +1,8 @@
+import { FluentProvider } from "@fluentui/react-components";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { FluentProvider } from "@fluentui/react-components";
-import { ErrorBoundary } from "./components/ErrorBoundary";
 import App from "./App";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { localGenieTheme } from "./theme";
 import "./App.css";
 
