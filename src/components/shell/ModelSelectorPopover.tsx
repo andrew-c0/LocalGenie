@@ -1,6 +1,7 @@
 import { Button, Spinner } from "@fluentui/react-components";
 import {
   ArrowRightRegular,
+  ArrowUploadRegular,
   CheckmarkRegular,
   DismissRegular,
   SearchRegular,
@@ -29,6 +30,8 @@ export default function ModelSelectorPopover({ open, onClose }: ModelSelectorPop
   const navigate = useNavigate();
   const models = useModelStore((s) => s.models);
   const serverStatus = useModelStore((s) => s.serverStatus);
+  const serverPort = useModelStore((s) => s.serverPort);
+  const setServerStatus = useModelStore((s) => s.setServerStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
   const setActiveModel = useModelStore((s) => s.setActiveModel);
 
@@ -91,11 +94,33 @@ export default function ModelSelectorPopover({ open, onClose }: ModelSelectorPop
     setLoading(name);
     setError(null);
     try {
-      await geniex.loadModel(name);
+      // Ensure the GenieX server is running before attempting to load.
+      if (!serverStatus.running) {
+        const started = await geniex.startServer({ port: serverPort });
+        setServerStatus(started);
+      }
+      // load_model returns the refreshed server status (with the new model listed).
+      const status = await geniex.loadModel(name);
+      setServerStatus(status);
       setActiveModel(name);
       const activeId = useChatStore.getState().activeSessionId;
       if (activeId) useChatStore.getState().setSessionModel(activeId, name);
       onClose();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  /** Unload all models from the server (stops the server, the only unload mechanism). */
+  const handleUnload = async () => {
+    setLoading("__unload__");
+    setError(null);
+    try {
+      const status = await geniex.unloadAllModels();
+      setServerStatus(status);
+      setActiveModel(null);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -198,6 +223,18 @@ export default function ModelSelectorPopover({ open, onClose }: ModelSelectorPop
       <div className="lx-popover-divider" />
 
       <div className="lx-popover-footer">
+        {serverStatus.running && serverStatus.models.length > 0 && (
+          <button
+            type="button"
+            className="lx-popover-link muted"
+            title="unload"
+            disabled={loading !== null}
+            onClick={() => handleUnload()}
+          >
+            {loading === "__unload__" ? <Spinner size="tiny" /> : <ArrowUploadRegular />}
+            <span>Unload</span>
+          </button>
+        )}
         <button
           type="button"
           className="lx-popover-link"

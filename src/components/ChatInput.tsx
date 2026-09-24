@@ -6,8 +6,6 @@ import { useChatStore } from "../stores/chatStore";
 import { defaultSettings, useModelStore } from "../stores/modelStore";
 import type { Message } from "../types";
 
-const MAX_CONTEXT_CHARS = 8192;
-
 export default function ChatInput() {
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -24,7 +22,6 @@ export default function ChatInput() {
   const activeSession = useChatStore((s) =>
     s.sessions.find((sess) => sess.id === s.activeSessionId),
   );
-  const contextChars = activeSession?.contextChars ?? 0;
 
   /** Core send logic — uses activeModelId from the model store. */
   const doSend = useCallback(
@@ -152,33 +149,8 @@ export default function ChatInput() {
 
   const isDisabled = !text.trim() || isStreaming || !serverStatus.running;
 
-  const contextPct = Math.min(100, Math.round((contextChars / MAX_CONTEXT_CHARS) * 100));
-  const contextColor = contextPct > 90 ? "#e74c3c" : contextPct > 70 ? "#f39c12" : "#2ecc71";
-
   return (
     <div className="chat-input-area">
-      {activeSession && contextChars > 0 && (
-        <div className="context-bar">
-          <div className="context-bar-track">
-            <div
-              className="context-bar-fill"
-              style={
-                {
-                  "--ctx-pct": `${contextPct}%`,
-                  "--ctx-color": contextColor,
-                } as React.CSSProperties
-              }
-            />
-          </div>
-          <span
-            className="context-bar-label"
-            style={{ "--ctx-color": contextColor } as React.CSSProperties}
-          >
-            {contextChars.toLocaleString()} / {MAX_CONTEXT_CHARS.toLocaleString()} chars
-          </span>
-        </div>
-      )}
-
       <div className="chat-input-wrapper">
         <textarea
           ref={textareaRef}
