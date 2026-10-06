@@ -3,6 +3,7 @@ import { useDebouncedCallback, useTauriEvent } from "../hooks";
 import * as db from "../services/database";
 import * as geniex from "../services/geniex";
 import { useChatStore } from "../stores/chatStore";
+import { useDownloadStore } from "../stores/downloadStore";
 import { useModelStore } from "../stores/modelStore";
 import type { Message } from "../types";
 
@@ -170,6 +171,11 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
   });
 
   // ── Listen for pull progress ──────────────────────────────────
+  useTauriEvent<{ model: string }>("model-pull-start", (payload) => {
+    // Register CLI pulls in the downloads drawer as soon as they start.
+    useDownloadStore.getState().upsert({ id: payload.model, label: payload.model });
+  });
+
   useTauriEvent<{ model: string; message: string }>("model-pull-progress", (payload) => {
     useModelStore.getState().addDownload({
       model: payload.model,
@@ -180,6 +186,7 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
 
   useTauriEvent<{ model: string }>("model-pull-complete", async (payload) => {
     useModelStore.getState().removeDownload(payload.model);
+    useDownloadStore.getState().setStatus(payload.model, "complete");
     // Refresh model list
     try {
       const models = await geniex.listModels();
@@ -187,6 +194,32 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
+  });
+
+  // ── Listen for asset download progress (drawer) ──────────────
+  useTauriEvent<{
+    file: string;
+    received?: number;
+    total?: number | null;
+    speed?: number;
+    complete?: boolean;
+    cancelled?: boolean;
+  }>("asset-download-progress", (payload) => {
+    const store = useDownloadStore.getState();
+    if (payload.cancelled) {
+      store.setStatus(payload.file, "cancelled");
+      return;
+    }
+    if (payload.complete) {
+      store.setStatus(payload.file, "complete");
+      return;
+    }
+    store.patchProgress(
+      payload.file,
+      payload.received ?? 0,
+      payload.total ?? null,
+      payload.speed ?? 0,
+    );
   });
 
   return <>{children}</>;

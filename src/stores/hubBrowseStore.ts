@@ -27,6 +27,9 @@ interface HubBrowseState {
   sort: HubSort;
   ascending: boolean;
   filters: HubFilter[];
+  /** Show only GGUF models (library:gguf) — on by default for the All HF area. */
+  ggufOnly: boolean;
+  setGgufOnly: (v: boolean) => void;
   models: HubModel[];
   nextCursor: string | null;
   isLoading: boolean;
@@ -63,17 +66,30 @@ async function fetchPage(state: {
   sort: HubSort;
   ascending: boolean;
   filters: HubFilter[];
+  ggufOnly: boolean;
   cursor?: string;
 }): Promise<{ models: HubModel[]; nextCursor: string | null }> {
   const query = {
     search: state.search || undefined,
     sort: state.sort,
     ascending: state.ascending,
-    filters: state.filters,
+    filters: effectiveFilters(state),
     limit: state.area === "qualcomm" ? QUALCOMM_PAGE_SIZE : ALL_PAGE_SIZE,
     cursor: state.cursor,
   };
   return state.area === "qualcomm" ? listQualcommModels(query) : listHubModels(query);
+}
+
+/** Effective filters sent to the API — appends the gguf-only library filter. */
+function effectiveFilters(s: {
+  area: HubArea;
+  filters: HubFilter[];
+  ggufOnly: boolean;
+}): HubFilter[] {
+  if (s.area === "all" && s.ggufOnly) {
+    return [...s.filters, { type: "library", value: "gguf" }];
+  }
+  return s.filters;
 }
 
 /** Stable cache key for a first-page query. */
@@ -83,8 +99,9 @@ function cacheKey(s: {
   sort: HubSort;
   ascending: boolean;
   filters: HubFilter[];
+  ggufOnly: boolean;
 }): string {
-  const f = [...s.filters]
+  const f = effectiveFilters(s)
     .map((x) => `${x.type}:${x.value}`)
     .sort()
     .join("|");
@@ -111,6 +128,7 @@ export const useHubBrowseStore = create<HubBrowseState>((set, get) => ({
   sort: "downloads",
   ascending: false,
   filters: [],
+  ggufOnly: true,
   models: [],
   nextCursor: null,
   isLoading: false,
@@ -150,6 +168,10 @@ export const useHubBrowseStore = create<HubBrowseState>((set, get) => ({
   },
   clearFilters: () => {
     set({ filters: [], models: [], nextCursor: null });
+    void get().refresh();
+  },
+  setGgufOnly: (v) => {
+    set({ ggufOnly: v, models: [], nextCursor: null });
     void get().refresh();
   },
   refresh: () => {

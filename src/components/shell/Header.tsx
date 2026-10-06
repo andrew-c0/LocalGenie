@@ -1,14 +1,20 @@
-import { Badge } from "@fluentui/react-components";
-import { ChevronDownRegular } from "@fluentui/react-icons";
+import { Badge, Button } from "@fluentui/react-components";
+import { ArrowDownloadRegular, ChevronDownRegular } from "@fluentui/react-icons";
 import { useState } from "react";
+import { useDownloadStore } from "../../stores/downloadStore";
 import { useModelStore } from "../../stores/modelStore";
+import DownloadDrawer from "./DownloadDrawer";
 import ModelSelectorPopover from "./ModelSelectorPopover";
 
 export default function Header() {
   const serverStatus = useModelStore((s) => s.serverStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
   const downloads = useModelStore((s) => s.downloads);
+  const activeDownloads = useDownloadStore(
+    (s) => s.downloads.filter((d) => d.status === "downloading").length,
+  );
   const [selectorOpen, setSelectorOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const activeLabel = activeModelId
     ? activeModelId.split("/").pop()
@@ -65,6 +71,20 @@ export default function Header() {
       )}
 
       <div className="lx-titlebar-spacer" />
+
+      <Button
+        appearance="transparent"
+        size="small"
+        icon={<ArrowDownloadRegular />}
+        title="Downloads"
+        aria-label="Downloads"
+        onClick={() => setDrawerOpen(true)}
+        style={activeDownloads > 0 ? { color: "var(--lx-primary)" } : undefined}
+      >
+        {activeDownloads > 0 ? `${activeDownloads}` : undefined}
+      </Button>
+
+      <DownloadDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
   );
 }

@@ -12,6 +12,7 @@ import PromptBenchmarkPage from "./pages/PromptBenchmarkPage";
 import SettingsPage from "./pages/SettingsPage";
 import { deleteFile, downloadFile } from "./services/download";
 import * as geniex from "./services/geniex";
+import { useDownloadStore } from "./stores/downloadStore";
 import type { ReleaseAsset } from "./types";
 import { makeToast } from "./utils/toast";
 
@@ -31,10 +32,14 @@ function HubModelDetailRoute() {
   const handleDownload = useCallback(
     (repoId: string) => {
       setDownloading((prev) => new Set(prev).add(repoId));
+      useDownloadStore.getState().upsert({ id: repoId, label: repoId });
       geniex
         .pullModel(repoId)
         .then(() => dispatchToast(makeToast("Download started", repoId), { intent: "success" }))
-        .catch((err) => dispatchToast(makeToast("Pull failed", String(err)), { intent: "error" }))
+        .catch((err) => {
+          useDownloadStore.getState().setStatus(repoId, "error", String(err));
+          dispatchToast(makeToast("Pull failed", String(err)), { intent: "error" });
+        })
         .finally(() => finishDownload(repoId));
     },
     [dispatchToast, finishDownload],
@@ -84,8 +89,11 @@ function HubModelDetailRoute() {
 
       const fileName = asset.download_url.split("/").pop() || "model.zip";
       let zipPath: string | null = null;
+      const dlStore = useDownloadStore.getState();
+      dlStore.upsert({ id: fileName, label: fileName, url: asset.download_url });
       downloadFile(asset.download_url, fileName)
         .then((localPath) => {
+          dlStore.setStatus(fileName, "complete");
           zipPath = localPath;
           return geniex.pullModel(repoId, precision, "localfs", undefined, localPath);
         })
@@ -95,7 +103,12 @@ function HubModelDetailRoute() {
           if (zipPath) deleteFile(zipPath).catch(() => undefined);
           dispatchToast(makeToast("Download complete", repoId), { intent: "success" });
         })
-        .catch((err) => dispatchToast(makeToast("Pull failed", String(err)), { intent: "error" }))
+        .catch((err) => {
+          const msg = String(err);
+          if (msg.includes("cancelled")) dlStore.setStatus(fileName, "cancelled");
+          else dlStore.setStatus(fileName, "error", msg);
+          dispatchToast(makeToast("Pull failed", msg), { intent: "error" });
+        })
         .finally(() => finishDownload(repoId));
     },
     [dispatchToast, finishDownload],

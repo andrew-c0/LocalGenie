@@ -120,6 +120,17 @@ export default function HubBrowse({ area, onDownload, downloading }: Props) {
         >
           {s.ascending ? "Asc" : "Desc"}
         </Button>
+        {area === "all" && (
+          <button
+            type="button"
+            className={`lx-chip${s.ggufOnly ? " active" : ""}`}
+            onClick={() => s.setGgufOnly(!s.ggufOnly)}
+            aria-pressed={s.ggufOnly}
+            title="Show only models with GGUF weights (runnable by GenieX)"
+          >
+            GGUF only
+          </button>
+        )}
       </div>
 
       {/* Filter chips (collapsible, collapsed by default) */}

@@ -29,6 +29,7 @@ pub fn run() {
             Ok(())
         })
         .manage(commands::AppState::default())
+        .manage(commands::download::DownloadRegistry::default())
         .invoke_handler(tauri::generate_handler![
             // Model management
             models::list_models,
@@ -50,6 +51,7 @@ pub fn run() {
             cli::check_geniex_installed,
             cli::get_geniex_version,
             commands::download::download_file,
+            commands::download::cancel_download,
             commands::download::delete_file,
             cli::config_get,
             cli::config_set,

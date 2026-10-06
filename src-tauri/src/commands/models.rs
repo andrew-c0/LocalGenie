@@ -204,6 +204,18 @@ pub async fn pull_model(
         serde_json::json!({ "model": model }),
     );
 
+    // Drain stderr concurrently — if it fills its pipe buffer the child
+    // blocks and the pull never finishes.
+    let stderr_stream = child.stderr.take();
+    let stderr_handle = tokio::spawn(async move {
+        let mut buf = String::new();
+        if let Some(mut stderr) = stderr_stream {
+            use tokio::io::AsyncReadExt;
+            let _ = stderr.read_to_string(&mut buf).await;
+        }
+        buf
+    });
+
     // Read output line by line and emit progress
     if let Some(stdout) = child.stdout.take() {
         use tokio::io::{AsyncBufReadExt, BufReader};
@@ -222,6 +234,8 @@ pub async fn pull_model(
         .await
         .map_err(|e| format!("`geniex pull` error: {e}"))?;
 
+    let stderr = stderr_handle.await.unwrap_or_default();
+
     if status.success() {
         let _ = app.emit(
             "model-pull-complete",
@@ -229,11 +243,6 @@ pub async fn pull_model(
         );
         Ok(())
     } else {
-        let mut stderr = String::new();
-        if let Some(mut stderr_stream) = child.stderr.take() {
-            use tokio::io::AsyncReadExt;
-            let _ = stderr_stream.read_to_string(&mut stderr).await;
-        }
         Err(format!("`geniex pull` failed: {stderr}"))
     }
 }
