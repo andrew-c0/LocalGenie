@@ -1,26 +1,31 @@
-import { Button, Spinner } from "@fluentui/react-components";
-import {
-  ArrowDownloadRegular,
-  ChatRegular,
-  DeleteRegular,
-  FolderOpenRegular,
-  SearchRegular,
-} from "@fluentui/react-icons";
+﻿import { Button, Spinner } from "@fluentui/react-components";
+import { FolderOpenRegular, SearchRegular } from "@fluentui/react-icons";
 import { useCallback, useMemo, useState } from "react";
-import { ProgressBar, StateBlock, StatusBadge } from "../components/ui/primitives";
+import HubBrowse from "../components/models/HubBrowse";
+import { ChipRow } from "../components/ui/ChipRow/ChipRow";
+import { ConfirmDialog } from "../components/ui/ConfirmDialog/ConfirmDialog";
+import { ErrorBanner } from "../components/ui/ErrorBanner/ErrorBanner";
+import { ModelCard, type ModelCardData } from "../components/ui/ModelCard/ModelCard";
+import { PageHeader } from "../components/ui/PageHeader/PageHeader";
+import { ProgressBar, StateBlock } from "../components/ui/primitives";
 import * as geniex from "../services/geniex";
 import { useChatStore } from "../stores/chatStore";
+import { type ModelTab, useHubBrowseStore } from "../stores/hubBrowseStore";
 import { useModelStore } from "../stores/modelStore";
 
 type RepoFilter = "all" | "hf" | "aihub";
-type Variant = "grid" | "list";
 
-function formatSize(n?: number): string {
-  if (!n) return "—";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
+const SOURCE_TABS: [ModelTab, string][] = [
+  ["local", "Local Models"],
+  ["qualcomm", "Qualcomm AI Hub"],
+  ["all", "All Hugging Face"],
+];
+
+const REPO_FILTERS: [RepoFilter, string][] = [
+  ["all", "All Models"],
+  ["hf", "Hugging Face"],
+  ["aihub", "Qualcomm AI Hub"],
+];
 
 /** Full-page model library (list + grid variants). */
 export default function ModelLibraryPage() {
@@ -32,11 +37,27 @@ export default function ModelLibraryPage() {
   const downloads = useModelStore((s) => s.downloads);
   const serverStatus = useModelStore((s) => s.serverStatus);
 
-  const [variant] = useState<Variant>("grid");
+  const tab = useHubBrowseStore((s) => s.activeTab);
+  const setTab = useHubBrowseStore((s) => s.setActiveTab);
   const [query, setQuery] = useState("");
   const [repoFilter, setRepoFilter] = useState<RepoFilter>("all");
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [hubDownloading, setHubDownloading] = useState<Set<string>>(new Set());
+
+  const handleHubDownload = useCallback((repoId: string) => {
+    setHubDownloading((prev) => new Set(prev).add(repoId));
+    geniex
+      .pullModel(repoId)
+      .catch((err) => setError(`Pull failed: ${err}`))
+      .finally(() =>
+        setHubDownloading((prev) => {
+          const next = new Set(prev);
+          next.delete(repoId);
+          return next;
+        }),
+      );
+  }, []);
 
   const handleSearch = useCallback(async () => {
     if (!query.trim()) return;
@@ -82,18 +103,8 @@ export default function ModelLibraryPage() {
   }, []);
 
   /** Normalized card model combining installed + search results. */
-  const cards = useMemo(() => {
-    type Card = {
-      name: string;
-      installed: boolean;
-      size?: string;
-      source?: string;
-      precisions?: string[];
-      downloads?: number;
-      likes?: number;
-      pipelineTag?: string;
-    };
-    const list: Card[] = models.map((m) => ({
+  const cards = useMemo((): ModelCardData[] => {
+    const list: ModelCardData[] = models.map((m) => ({
       name: m.name,
       installed: true,
       size: m.size,
@@ -124,15 +135,11 @@ export default function ModelLibraryPage() {
   return (
     <div className="lx-page">
       <div className="lx-page-inner">
-        <div className="lx-page-headrow">
-          <div>
-            <span className="lx-page-eyebrow">● MODEL LIBRARY</span>
-            <h1 className="lx-page-title">Models</h1>
-            <p className="lx-page-subtitle">
-              Search, download, and manage local weights from Hugging Face and Qualcomm AI Hub.
-            </p>
-          </div>
-          <div className="lx-page-actions">
+        <PageHeader
+          eyebrow="● MODEL LIBRARY"
+          title="Models"
+          subtitle="Search, download, and manage local weights from Hugging Face and Qualcomm AI Hub."
+          actions={
             <Button
               appearance="subtle"
               icon={<FolderOpenRegular />}
@@ -140,221 +147,109 @@ export default function ModelLibraryPage() {
             >
               Clean Cache
             </Button>
-          </div>
-        </div>
+          }
+        />
 
-        {/* ── Hardware banner ──────────────────────── */}
-        <div className="lx-hw-banner">
-          <span>
-            <strong>{serverStatus.running ? "Server Online" : "Server Offline"}</strong>
-          </span>
-          <span className="lx-titlebar-spacer" />
-          <span className="lx-mono">
-            {serverStatus.models.length > 0
-              ? `${serverStatus.models.length} model(s) loaded on :${serverStatus.port}`
-              : `endpoint 127.0.0.1:${serverStatus.port}`}
-          </span>
-        </div>
+        {/* -- Top tabs -- */}
+        <ChipRow options={SOURCE_TABS} value={tab} onChange={setTab} ariaLabel="Model source" />
 
-        {/* ── Search + filters ─────────────────────── */}
-        <div className="lx-model-toolbar">
-          <div className="lx-search">
-            <SearchRegular style={{ color: "var(--lx-text-muted)" }} />
-            <input
-              placeholder="Search models, quantized weights, architectures…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSearch();
-              }}
-              aria-label="Search models"
-            />
-            <Button
-              size="small"
-              appearance="primary"
-              onClick={handleSearch}
-              disabled={isSearching || !query.trim()}
-            >
-              {isSearching ? <Spinner size="tiny" /> : "Search"}
-            </Button>
-          </div>
-        </div>
+        {error && <ErrorBanner message={error} />}
 
-        <div className="lx-chiprow" role="tablist" aria-label="Repository filter">
-          {(
-            [
-              ["all", "All Models"],
-              ["hf", "Hugging Face"],
-              ["aihub", "Qualcomm AI Hub"],
-            ] as [RepoFilter, string][]
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              className={`lx-chip${repoFilter === id ? " active" : ""}`}
-              onClick={() => setRepoFilter(id)}
-            >
-              {label}
-            </button>
-          ))}
-          {searchResults.length > 0 && (
-            <button type="button" className="lx-chip" onClick={() => setSearchResults([])}>
-              Clear search results
-            </button>
-          )}
-        </div>
-
-        {error && (
-          <div className="lx-hw-banner" style={{ borderColor: "var(--lx-error)" }}>
-            ⚠ {error}
-          </div>
+        {/* -- Hub browse tabs -- */}
+        {tab !== "local" && (
+          <HubBrowse area={tab} onDownload={handleHubDownload} downloading={hubDownloading} />
         )}
 
-        {/* ── Active downloads ─────────────────────── */}
-        {downloads.map((d) => (
-          <div
-            key={d.model}
-            className="lx-card"
-            style={{ display: "flex", flexDirection: "column", gap: 6 }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
-              <span className="lx-mono">{d.model}</span>
-              <span style={{ color: "var(--lx-text-muted)" }}>{d.message}</span>
+        {/* -- Local models tab -- */}
+        {tab === "local" && (
+          <>
+            <div className="lx-model-toolbar">
+              <div className="lx-search">
+                <SearchRegular style={{ color: "var(--lx-text-muted)" }} />
+                <input
+                  placeholder="Search models, quantized weights, architectures…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSearch();
+                  }}
+                  aria-label="Search models"
+                />
+                <Button
+                  size="small"
+                  appearance="primary"
+                  onClick={handleSearch}
+                  disabled={isSearching || !query.trim()}
+                >
+                  {isSearching ? <Spinner size="tiny" /> : "Search"}
+                </Button>
+              </div>
             </div>
-            <ProgressBar value={60} />
-          </div>
-        ))}
 
-        {/* ── Model cards ──────────────────────────── */}
-        {cards.length === 0 ? (
-          <StateBlock icon="📦" message="No models found. Search Hugging Face to pull one." />
-        ) : (
-          <div
-            className={variant === "grid" ? "lx-model-grid" : "lx-model-grid"}
-            style={variant === "list" ? { gridTemplateColumns: "1fr" } : undefined}
-          >
-            {cards.map((m) => {
-              const name = m.name;
-              const isInstalled = m.installed;
-              const isLoaded = serverStatus.models.some(
-                (lm) => lm === name || lm.startsWith(`${name}:`),
-              );
-              const isDownloading = downloads.some((d) => d.model === name);
+            <ChipRow
+              options={REPO_FILTERS}
+              value={repoFilter}
+              onChange={setRepoFilter}
+              ariaLabel="Repository filter"
+            >
+              {searchResults.length > 0 && (
+                <button type="button" className="lx-chip" onClick={() => setSearchResults([])}>
+                  Clear search results
+                </button>
+              )}
+            </ChipRow>
 
-              return (
-                <div key={name} className="lx-model-card">
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 8,
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <div className="lx-model-card-name">{name}</div>
-                    {isLoaded ? (
-                      <StatusBadge tone="green">Loaded</StatusBadge>
-                    ) : isInstalled ? (
-                      <StatusBadge tone="blue">Installed</StatusBadge>
-                    ) : (
-                      <StatusBadge>Available</StatusBadge>
-                    )}
-                  </div>
-
-                  {isInstalled ? (
-                    <div className="lx-model-card-meta">
-                      <span>Size: {m.size ?? "—"}</span>
-                      <span>Source: {m.source ?? "—"}</span>
-                      {m.precisions && m.precisions.length > 0 && (
-                        <span>{m.precisions.join(" / ")}</span>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="lx-model-card-meta">
-                      <span>⬇ {formatSize(m.downloads)}</span>
-                      <span>❤ {formatSize(m.likes)}</span>
-                      {m.pipelineTag && <span>{m.pipelineTag}</span>}
-                    </div>
-                  )}
-
-                  <div className="lx-model-card-actions">
-                    {isDownloading ? (
-                      <Button size="small" disabled icon={<Spinner size="tiny" />}>
-                        Pulling…
-                      </Button>
-                    ) : isInstalled ? (
-                      <>
-                        <Button
-                          size="small"
-                          appearance="primary"
-                          icon={<ChatRegular />}
-                          onClick={() => startChat(name)}
-                          disabled={isLoaded}
-                        >
-                          {isLoaded ? "Active" : "Load & Chat"}
-                        </Button>
-                        <Button
-                          size="small"
-                          appearance="subtle"
-                          icon={<DeleteRegular />}
-                          title="Remove model"
-                          onClick={() => setConfirmRemove(name)}
-                        />
-                      </>
-                    ) : (
-                      <Button
-                        size="small"
-                        appearance="primary"
-                        icon={<ArrowDownloadRegular />}
-                        onClick={() => handlePull(name)}
-                      >
-                        Download
-                      </Button>
-                    )}
-                  </div>
+            {/* -- Active downloads -- */}
+            {downloads.map((d) => (
+              <div
+                key={d.model}
+                className="lx-card"
+                style={{ display: "flex", flexDirection: "column", gap: 6 }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                  <span className="lx-mono">{d.model}</span>
+                  <span style={{ color: "var(--lx-text-muted)" }}>{d.message}</span>
                 </div>
-              );
-            })}
-          </div>
+                <ProgressBar value={60} />
+              </div>
+            ))}
+
+            {/* -- Model cards -- */}
+            {cards.length === 0 ? (
+              <StateBlock icon="📦" message="No models found. Search Hugging Face to pull one." />
+            ) : (
+              <div className="lx-model-grid">
+                {cards.map((m) => (
+                  <ModelCard
+                    key={m.name}
+                    model={m}
+                    isLoaded={serverStatus.models.some(
+                      (lm) => lm === m.name || lm.startsWith(`${m.name}:`),
+                    )}
+                    isDownloading={downloads.some((d) => d.model === m.name)}
+                    onLoad={startChat}
+                    onDownload={handlePull}
+                    onRemove={setConfirmRemove}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
 
-        {/* ── Remove confirmation ──────────────────── */}
+        {/* -- Remove confirmation -- */}
         {confirmRemove && (
-          <div
-            role="presentation"
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.6)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              className="lx-card"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Remove model"
-              style={{ minWidth: 320 }}
-            >
-              <div className="lx-card-title" style={{ marginBottom: 8 }}>
-                Remove Model
-              </div>
-              <p style={{ fontSize: 13.5, marginBottom: 16 }}>
+          <ConfirmDialog
+            title="Remove Model"
+            message={
+              <>
                 Remove <strong>{confirmRemove}</strong> from local storage?
-              </p>
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <Button appearance="secondary" onClick={() => setConfirmRemove(null)}>
-                  Cancel
-                </Button>
-                <Button appearance="primary" onClick={() => handleRemove(confirmRemove)}>
-                  Remove
-                </Button>
-              </div>
-            </div>
-          </div>
+              </>
+            }
+            confirmLabel="Remove"
+            onConfirm={() => handleRemove(confirmRemove)}
+            onCancel={() => setConfirmRemove(null)}
+          />
         )}
       </div>
     </div>

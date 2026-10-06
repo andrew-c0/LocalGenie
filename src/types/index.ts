@@ -14,6 +14,17 @@ export interface SearchModel {
   pipeline_tag?: string;
 }
 
+/** One Qualcomm AI Hub model that GenieX can run on this chipset. */
+export interface AihubModel {
+  /** Fully-qualified HF-style id, e.g. `qualcomm/Qwen3-4B-Instruct-2507`. */
+  name: string;
+  /** `llm` | `vlm` */
+  model_type: string;
+}
+
+/** A single downloadable release asset with its direct download URL. */
+export type { ReleaseAsset } from "../services/hubApi";
+
 export interface Message {
   id: string;
   role: "user" | "assistant" | "system";

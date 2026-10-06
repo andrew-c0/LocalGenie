@@ -11,6 +11,65 @@ pub struct ServerStatus {
     pub models: Vec<String>,
 }
 
+/// Force-kill a process tree by PID (Windows: `taskkill /T`, else `kill -9`).
+/// Sync variant used from window-destroy handlers where async is unavailable.
+pub fn kill_process_sync(pid: u32) {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F", "/T"])
+            .output();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = std::process::Command::new("kill")
+            .arg("-9")
+            .arg(pid.to_string())
+            .output();
+    }
+}
+
+/// Async variant for command handlers.
+pub async fn kill_process(pid: u32) {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F", "/T"])
+            .output()
+            .await;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = Command::new("kill")
+            .arg("-9")
+            .arg(pid.to_string())
+            .output()
+            .await;
+    }
+}
+
+/// Fetch the list of loaded model ids from the server's `/v1/models` endpoint.
+pub(crate) async fn fetch_loaded_models(
+    client: &reqwest::Client,
+    base_url: &str,
+) -> Result<Vec<String>, String> {
+    let resp = client
+        .get(format!("{base_url}/v1/models"))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch models: {e}"))?;
+
+    let body: serde_json::Value = resp.json().await.unwrap_or_default();
+    Ok(body["data"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| m["id"].as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
 /// Probe the server's `/v1/models` endpoint to check if it's alive.
 async fn probe_server(client: &reqwest::Client, port: u16) -> bool {
     client
@@ -21,18 +80,27 @@ async fn probe_server(client: &reqwest::Client, port: u16) -> bool {
         .unwrap_or(false)
 }
 
+/// Optional configuration for `geniex serve`.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerStartOptions {
+    pub port: Option<u16>,
+    pub compute: Option<String>,
+    pub nctx: Option<i32>,
+    pub ngl: Option<i32>,
+    pub origins: Option<String>,
+    pub keepalive: Option<i32>,
+}
+
 /// Start the `geniex serve` process in the background.
 #[tauri::command]
 pub async fn start_server(
     app: AppHandle,
     state: State<'_, AppState>,
-    port: Option<u16>,
-    compute: Option<String>,
-    nctx: Option<i32>,
-    ngl: Option<i32>,
-    origins: Option<String>,
-    keepalive: Option<i32>,
+    options: Option<ServerStartOptions>,
 ) -> Result<ServerStatus, String> {
+    let opts = options.unwrap_or_default();
+    let port = opts.port;
     let serve_port = port.unwrap_or(super::constants::DEFAULT_PORT);
 
     // First, check if a server is already running on the port (externally or by us)
@@ -54,23 +122,23 @@ pub async fn start_server(
     let host = format!("127.0.0.1:{serve_port}");
     let mut args = vec!["serve".to_string(), "--host".into(), host];
 
-    if let Some(ref c) = compute {
+    if let Some(ref c) = opts.compute {
         args.push("--compute".into());
         args.push(c.clone());
     }
-    if let Some(n) = nctx {
+    if let Some(n) = opts.nctx {
         args.push("--nctx".into());
         args.push(n.to_string());
     }
-    if let Some(n) = ngl {
+    if let Some(n) = opts.ngl {
         args.push("--ngl".into());
         args.push(n.to_string());
     }
-    if let Some(ref o) = origins {
+    if let Some(ref o) = opts.origins {
         args.push("--origins".into());
         args.push(o.clone());
     }
-    if let Some(k) = keepalive {
+    if let Some(k) = opts.keepalive {
         args.push("--keepalive".into());
         args.push(k.to_string());
     }
@@ -153,21 +221,7 @@ pub async fn stop_server(state: State<'_, AppState>, port: Option<u16>) -> Resul
     };
 
     if let Some(pid) = pid {
-        #[cfg(target_os = "windows")]
-        {
-            let _ = Command::new("taskkill")
-                .args(["/PID", &pid.to_string(), "/F", "/T"])
-                .output()
-                .await;
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            let _ = Command::new("kill")
-                .arg("-9")
-                .arg(pid.to_string())
-                .output()
-                .await;
-        }
+        kill_process(pid).await;
     }
 
     Ok(ServerStatus {
@@ -190,16 +244,7 @@ pub async fn get_server_status(state: State<'_, AppState>, port: Option<u16>) ->
         .await
     {
         Ok(resp) if resp.status().is_success() => {
-            let body: serde_json::Value = resp.json().await.unwrap_or_default();
-            let models = body["data"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|m| m["id"].as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default();
-
+            let models = fetch_loaded_models_from_response(resp).await;
             Ok(ServerStatus {
                 running: true,
                 port: serve_port,
@@ -212,4 +257,17 @@ pub async fn get_server_status(state: State<'_, AppState>, port: Option<u16>) ->
             models: vec![],
         }),
     }
+}
+
+/// Parse an already-received `/v1/models` JSON response into model ids.
+async fn fetch_loaded_models_from_response(resp: reqwest::Response) -> Vec<String> {
+    let body: serde_json::Value = resp.json().await.unwrap_or_default();
+    body["data"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| m["id"].as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
 }

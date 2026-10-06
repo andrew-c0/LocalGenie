@@ -1,6 +1,7 @@
 import { Button, Slider, Spinner } from "@fluentui/react-components";
 import { DeleteRegular, PlayRegular, SaveRegular, StopRegular } from "@fluentui/react-icons";
 import { useCallback, useState } from "react";
+import { ErrorBanner } from "../../components/ui/ErrorBanner/ErrorBanner";
 import { StateBlock, StatusBadge, SurfaceCard } from "../../components/ui/primitives";
 import { useBenchmarkStore } from "../../stores/benchmarkStore";
 import { defaultSettings, useModelStore } from "../../stores/modelStore";
@@ -186,11 +187,7 @@ export default function BenchmarkPlayground() {
         </div>
       </div>
 
-      {error && (
-        <div className="lx-hw-banner" style={{ borderColor: "var(--lx-error)" }}>
-          ⚠ {error}
-        </div>
-      )}
+      {error && <ErrorBanner message={error} />}
 
       <div className="lx-bench-split-57">
         {/* ── Left: editor + parameters ──────────── */}

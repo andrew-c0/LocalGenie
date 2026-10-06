@@ -3,6 +3,7 @@ pub mod chat_helpers;
 pub mod cli;
 pub mod constants;
 pub mod database;
+pub mod download;
 pub mod models;
 pub mod server;
 

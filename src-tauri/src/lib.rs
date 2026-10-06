@@ -9,7 +9,6 @@ use commands::server;
 use commands::chat;
 use commands::database;
 use commands::cli;
-
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -33,6 +32,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Model management
             models::list_models,
+            models::list_aihub_models,
             models::pull_model,
             models::remove_model,
             models::search_models,
@@ -49,6 +49,8 @@ pub fn run() {
             // CLI utilities
             cli::check_geniex_installed,
             cli::get_geniex_version,
+            commands::download::download_file,
+            commands::download::delete_file,
             cli::config_get,
             cli::config_set,
             cli::config_list,
@@ -74,19 +76,7 @@ pub fn run() {
                     proc.take()
                 };
                 if let Some(pid) = pid {
-                    #[cfg(target_os = "windows")]
-                    {
-                        let _ = std::process::Command::new("taskkill")
-                            .args(["/PID", &pid.to_string(), "/F", "/T"])
-                            .output();
-                    }
-                    #[cfg(not(target_os = "windows"))]
-                    {
-                        let _ = std::process::Command::new("kill")
-                            .arg("-9")
-                            .arg(pid.to_string())
-                            .output();
-                    }
+                    server::kill_process_sync(pid);
                 }
             }
         })

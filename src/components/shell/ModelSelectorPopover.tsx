@@ -12,14 +12,11 @@ import * as geniex from "../../services/geniex";
 import { useChatStore } from "../../stores/chatStore";
 import { useModelStore } from "../../stores/modelStore";
 import type { ModelInfo } from "../../types";
+import { shortName } from "../../utils/format";
 
 interface ModelSelectorPopoverProps {
   open: boolean;
   onClose: () => void;
-}
-
-function shortName(id: string): string {
-  return id.split("/").pop() ?? id;
 }
 
 /**

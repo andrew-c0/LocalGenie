@@ -3,6 +3,24 @@ use std::process::Stdio;
 use tauri::{AppHandle, Emitter};
 use tokio::process::Command;
 
+/// Run a `geniex <args>` command to completion, returning its stdout.
+/// Maps spawn/exit failures to a descriptive error string.
+async fn run_geniex(args: &[&str], what: &str) -> Result<String, String> {
+    let output = Command::new(super::cli::resolve_geniex_executable())
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run `geniex {}`: {e}", args.join(" ")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("`geniex {}` failed: {what}: {stderr}", args.join(" ")));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
 /// Information about a single downloaded model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelInfo {
@@ -64,20 +82,8 @@ fn derive_source(name: &str) -> &str {
 /// List all locally downloaded models using `geniex list --format json`.
 #[tauri::command]
 pub async fn list_models() -> Result<Vec<ModelInfo>, String> {
-    let output = Command::new(super::cli::resolve_geniex_executable())
-        .args(["list", "--format", "json"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run `geniex list`: {e}"))?;
+    let stdout = run_geniex(&["list", "--format", "json"], "list models").await?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("`geniex list` failed: {stderr}"));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let raw: Vec<GeniexListModel> = serde_json::from_str(&stdout)
         .map_err(|e| format!("Failed to parse `geniex list` JSON: {e}"))?;
 
@@ -99,42 +105,60 @@ pub async fn list_models() -> Result<Vec<ModelInfo>, String> {
     Ok(models)
 }
 
+/// One Qualcomm AI Hub model that GenieX can run on this chipset.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AihubModel {
+    /// Fully-qualified HF-style id, e.g. `qualcomm/Qwen3-4B-Instruct-2507`.
+    pub name: String,
+    /// `llm` | `vlm`
+    pub model_type: String,
+}
+
+/// List Qualcomm AI Hub models compatible with the current chipset.
+/// Parses the table emitted by `geniex model list` (no JSON output available).
+#[tauri::command]
+pub async fn list_aihub_models() -> Result<Vec<AihubModel>, String> {
+    let stdout = run_geniex(&["model", "list"], "list AI Hub models").await?;
+
+    // Rows look like: `│ qualcomm/Falcon3-7B-Instruct            │  llm │`
+    let models = stdout
+        .lines()
+        .filter(|l| l.trim_start().starts_with('│'))
+        .filter_map(|line| {
+            let cells: Vec<&str> = line.split('│').collect();
+            if cells.len() < 3 {
+                return None;
+            }
+            let name = cells[1].trim();
+            let model_type = cells[2].trim();
+            if name.is_empty() || name == "NAME" {
+                return None;
+            }
+            Some(AihubModel {
+                name: name.to_string(),
+                model_type: model_type.to_string(),
+            })
+        })
+        .collect();
+
+    Ok(models)
+}
+
 /// Remove ALL cached models, freeing up local storage.
 #[tauri::command]
 pub async fn clean_models() -> Result<(), String> {
-    let output = Command::new(super::cli::resolve_geniex_executable())
-        .args(["clean", "-y"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run `geniex clean`: {e}"))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("`geniex clean` failed: {stderr}"))
-    }
+    run_geniex(&["clean", "-y"], "clean models").await.map(|_| ())
 }
 
 /// Override the model type (llm or vlm) for a cached model.
 #[tauri::command]
 pub async fn set_model_type(model: String, model_type: String) -> Result<(), String> {
-    let output = Command::new(super::cli::resolve_geniex_executable())
-        .args(["model", "set-type", &model, &model_type])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run `geniex model set-type`: {e}"))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("`geniex model set-type` failed: {stderr}"))
-    }
+    run_geniex(
+        &["model", "set-type", &model, &model_type],
+        "set model type",
+    )
+    .await
+    .map(|_| ())
 }
 
 /// Pull (download) a model.
@@ -217,20 +241,7 @@ pub async fn pull_model(
 /// Remove a locally downloaded model.
 #[tauri::command]
 pub async fn remove_model(model: String) -> Result<(), String> {
-    let output = Command::new(super::cli::resolve_geniex_executable())
-        .args(["remove", &model, "-y"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run `geniex remove`: {e}"))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("`geniex remove` failed: {stderr}"))
-    }
+    run_geniex(&["remove", &model, "-y"], "remove model").await.map(|_| ())
 }
 
 /// Search Hugging Face for GGUF models.

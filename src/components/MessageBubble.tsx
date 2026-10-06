@@ -3,22 +3,12 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useChatStore } from "../stores/chatStore";
 import type { Message } from "../types";
+import { formatDuration, formatTokPerSec } from "../utils/format";
 
 interface MessageBubbleProps {
   message: Message;
   isLastUserMessage?: boolean;
   isStreaming?: boolean;
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function formatTokPerSec(tokenCount: number, ms: number): string {
-  if (ms === 0 || tokenCount === 0) return "—";
-  const sec = ms / 1000;
-  return `${(tokenCount / sec).toFixed(1)}`;
 }
 
 export default function MessageBubble({

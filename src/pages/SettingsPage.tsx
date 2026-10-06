@@ -4,7 +4,6 @@ import AppSettings from "../components/AppSettings";
 import ModelSettings from "../components/ModelSettings";
 import { StatusBadge } from "../components/ui/primitives";
 import { useModelStore } from "../stores/modelStore";
-import type { UpdateInfo } from "../types";
 
 type SectionId = "app" | "inference";
 
@@ -28,15 +27,12 @@ const SECTIONS: {
   },
 ];
 
-interface SettingsPageProps {
-  updateInfo: UpdateInfo | null;
-}
-
 /** Settings page: refined left sub-menu + focused section panel (mirrors Chat layout). */
-export default function SettingsPage({ updateInfo }: SettingsPageProps) {
+export default function SettingsPage() {
   const [section, setSection] = useState<SectionId>("app");
   const serverStatus = useModelStore((s) => s.serverStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
+  const updateInfo = useModelStore((s) => s.updateInfo);
 
   const updateBadge = updateInfo?.update_available ?? false;
 

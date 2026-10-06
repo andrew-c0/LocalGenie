@@ -1,0 +1,12 @@
+.chat-context-model {
+  font-size: 13px;
+}
+
+.chat-context-usage {
+  font-size: 11px;
+  color: var(--lx-text-muted);
+}
+
+.chat-context-bar {
+  width: 90px;
+}

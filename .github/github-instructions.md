@@ -27,6 +27,12 @@
 - Rust backend: `src-tauri/src/commands/`, `src-tauri/src/entities/`, `src-tauri/src/migrations/`
 - Database: SQLite with sea-orm migrations; startup runs pending migrations automatically.
 
+## Agent routing
+Delegate work to specialized agents based on the task:
+- **React Expert** — use when the user mentions `react`, `frontend`, `ui`, `component`, `hook`, `store`, `styling`, or any UI-related work. Owns everything under `src/` (excluding `src-tauri/`).
+- **Rust Expert** — use when the user mentions `rust`, `backend`, `cli`, `tauri`, `command`, `migration`, `database`, `download`, or similar. Owns everything under `src-tauri/`.
+- Cross-boundary changes (e.g., a new Tauri command consumed by the UI) should be coordinated: the owning agent implements, and the IPC contract change is flagged to the other agent.
+
 ## Avoid token bloat
 - Keep new instructions short, factual, and project-specific.
 - Do not duplicate architecture, status, or issue notes across multiple files.

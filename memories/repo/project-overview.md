@@ -29,10 +29,15 @@ LocalGenie is a Tauri 2 desktop client for Qualcomm GenieX local inference. It w
 The frontend was rebuilt to match the Stitch designs in `memories/ui/stitch_localgenie_design/` (NeuralStudio-style dark workspace, token source: `fluent_runtime/DESIGN.md`).
 
 ### Architecture
-- `src/App.tsx` routes views with React Router (`MemoryRouter`); `AppView` in `src/types/index.ts` is now informational only. All Tauri listeners (`chat-chunk`, `chat-done`, `server-stopped`, `model-pull-progress/complete`) are mounted once here. Listeners read the active session via `useChatStore.getState()` inside callbacks (not closures) so dep arrays only contain stable store setters.
-- `src/components/shell/` — `Sidebar.tsx` (nav with active route, model-count badge, chat history, hardware footer; props `{ activeView, onNavigate }`), `Header.tsx` (title/telemetry bar with model trigger + status chips).
-- `src/pages/` — `OverviewPage`, `ModelLibraryPage` (list/grid, search, pull/remove/load), `ChatPage` (session sidebar + context header reusing `ChatArea`/`ChatInput`), `SettingsPage` (composes `AppSettings` + `ModelSettings` as sections), `PromptBenchmarkPage` (Benchmark Suite layout, nested routes). Benchmark subpages live in `src/pages/benchmark/`: `BenchmarkPlayground` (ex-`PromptBenchmarkPage` body) and `PerformanceDashboard` (ex-`BenchmarkPage`).
-- `src/components/ui/primitives.tsx` — shared `SurfaceCard`, `MetricCard`, `StatusBadge`, `ProgressBar`, `StateBlock`.
+- `src/App.tsx` is pure scaffolding: `MemoryRouter` → `AppBootstrap` → `Navigation` + `Toaster`. No logic, effects, or listeners in it.
+- `src/components/AppBootstrap.tsx` — all bootstrap logic: initial data load (CLI check, sessions, models, server status/port), global Tauri listeners (`chat-chunk`, `chat-done`, `server-stopped`, `model-pull-progress/complete`) via the `useTauriEvent` hook, and debounced session persistence. Listeners read the active session via `useChatStore.getState()` inside callbacks (not closures).
+- `src/Navigation.tsx` — single source of truth for routes, including the `HubModelDetailRoute` wrapper (download/pull + toast handling) and nested `/prompt-benchmark` routes under a shared `MainLayout` route element.
+- `src/components/shell/` — `Layouts.tsx` (`MainLayout`: Sidebar + `CliMissingBanner` + Header + `<Outlet />`), `Sidebar.tsx` (nav with active route, model-count badge, hardware footer), `Header.tsx` (titlebar with model selector trigger + status chips), `ModelSelectorPopover.tsx`.
+- `src/pages/` — `OverviewPage`, `ModelLibraryPage` (composes `PageHeader`/`ChipRow`/`ErrorBanner`/`ModelCard`/`ConfirmDialog`), `ChatPage` (composes `SessionList` + `ChatContextHeader` + `ChatArea`/`ChatInput`), `SettingsPage` (composes `AppSettings` + `ModelSettings`; reads `updateInfo` from the store, no prop drilling), `PromptBenchmarkPage` (Benchmark Suite layout, nested routes). Benchmark subpages live in `src/pages/benchmark/`.
+- `src/components/ui/` — shared components, each in its own folder with its CSS: `primitives.tsx` (`SurfaceCard`, `MetricCard`, `StatusBadge`, `ProgressBar`, `StateBlock`), `ChipRow/`, `ConfirmDialog/`, `ErrorBanner/`, `ModelCard/`, `PageHeader/`.
+- `src/components/chat/` — `SessionList/`, `ChatContextHeader/`. `src/components/benchmark/` — `SpeedList/`, `ThroughputChart.tsx`.
+- `src/hooks/index.ts` — reusable hooks: `useTauriEvent`, `useDebouncedCallback`, `useAppToast`.
+- `src/utils/format.ts` — shared `shortName`, `formatCount`, `formatBytes`, `formatDuration`, `formatTokPerSec`. `src/utils/toast.tsx` — `makeToast`.
 - `src/stores/benchmarkStore.ts` + `src/components/benchmark/ThroughputChart.tsx` (dependency-free SVG chart; `PAD` is a module-level const for stable `useMemo` deps).
 - Design tokens: `--lx-*` CSS custom properties in `src/App.css` (`#131313` bg, `#0078D4` blue, `#00B7C3` cyan, `#8764B8` purple, 4/8px rhythm, responsive breakpoints at 1100/860/560px).
 

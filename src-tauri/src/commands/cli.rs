@@ -18,6 +18,20 @@ fn platform_supported() -> bool {
     cfg!(all(target_os = "windows", target_arch = "aarch64"))
 }
 
+/// Standard error for unsupported platforms.
+fn platform_unsupported_err() -> String {
+    "GenieX CLI is only supported on Windows on ARM64 (aarch64).".to_string()
+}
+
+/// Build a reqwest client with the LocalGenie user agent.
+fn github_client(timeout_secs: u64) -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .user_agent("LocalGenie/0.1")
+        .timeout(Duration::from_secs(timeout_secs))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))
+}
+
 /// Search common local install roots (APPDATA) for a geniex binary.
 fn find_local_geniex_binary() -> Option<PathBuf> {
     if cfg!(target_os = "windows") {
@@ -126,7 +140,7 @@ pub async fn check_geniex_installed() -> Result<bool, String> {
 #[tauri::command]
 pub async fn get_geniex_version() -> Result<String, String> {
     if !platform_supported() {
-        return Err("GenieX CLI is only supported on Windows on ARM64 (aarch64).".to_string());
+        return Err(platform_unsupported_err());
     }
 
     match get_installed_version_timeout(5).await {
@@ -143,7 +157,7 @@ pub async fn install_geniex(_app: tauri::AppHandle) -> Result<String, String> {
 #[tauri::command]
 pub async fn config_get(key: String) -> Result<Option<String>, String> {
     if !platform_supported() {
-        return Err("GenieX CLI is only supported on Windows on ARM64 (aarch64).".to_string());
+        return Err(platform_unsupported_err());
     }
 
     let exe = resolve_geniex_executable();
@@ -165,7 +179,7 @@ pub async fn config_get(key: String) -> Result<Option<String>, String> {
 #[tauri::command]
 pub async fn config_set(key: String, value: Option<String>) -> Result<(), String> {
     if !platform_supported() {
-        return Err("GenieX CLI is only supported on Windows on ARM64 (aarch64).".to_string());
+        return Err(platform_unsupported_err());
     }
 
     let exe = resolve_geniex_executable();
@@ -188,7 +202,7 @@ pub struct ConfigEntry {
 #[tauri::command]
 pub async fn config_list() -> Result<Vec<ConfigEntry>, String> {
     if !platform_supported() {
-        return Err("GenieX CLI is only supported on Windows on ARM64 (aarch64).".to_string());
+        return Err(platform_unsupported_err());
     }
 
     let exe = resolve_geniex_executable();
@@ -220,11 +234,7 @@ pub async fn config_list() -> Result<Vec<ConfigEntry>, String> {
 
 /// Query the GitHub API for the latest GenieX release tag (e.g. "0.5.0").
 async fn fetch_latest_release() -> Result<(String, String), String> {
-    let client = reqwest::Client::builder()
-        .user_agent("LocalGenie/0.1")
-        .timeout(Duration::from_secs(10))
-        .build()
-        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+    let client = github_client(10)?;
 
     let resp = client
         .get(GITHUB_RELEASES_URL)
@@ -288,11 +298,7 @@ async fn download_installer(app: tauri::AppHandle, url: &str, file_name: &str) -
     std::fs::create_dir_all(&dir).ok();
     let dest = dir.join(file_name);
 
-    let client = reqwest::Client::builder()
-        .user_agent("LocalGenie/0.1")
-        .timeout(Duration::from_secs(300))
-        .build()
-        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+    let client = github_client(300)?;
 
     let resp = client
         .get(url)
@@ -330,11 +336,7 @@ pub async fn update_geniex(app: tauri::AppHandle) -> Result<String, String> {
 
     // 1. Resolve the latest release and its Windows arm64 installer.
     emit("Checking for the latest release...".to_string());
-    let client = reqwest::Client::builder()
-        .user_agent("LocalGenie/0.1")
-        .timeout(Duration::from_secs(10))
-        .build()
-        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+    let client = github_client(10)?;
     let resp = client
         .get(GITHUB_RELEASES_URL)
         .send()

@@ -19,10 +19,6 @@ export default function ChatInput() {
   const retryFromMessageId = useChatStore((s) => s.retryFromMessageId);
   const setRetryFromMessageId = useChatStore((s) => s.setRetryFromMessageId);
 
-  const activeSession = useChatStore((s) =>
-    s.sessions.find((sess) => sess.id === s.activeSessionId),
-  );
-
   /** Core send logic — uses activeModelId from the model store. */
   const doSend = useCallback(
     async (

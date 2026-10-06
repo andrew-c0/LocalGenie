@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AihubModel,
   ConfigEntry,
   GenerationSettings,
   ModelInfo,
@@ -53,17 +54,15 @@ export async function searchModels(query: string): Promise<SearchModel[]> {
   return invoke("search_models", { query });
 }
 
+/** Qualcomm AI Hub models that GenieX can run on this chipset (`geniex model list`). */
+export async function listAihubModels(): Promise<AihubModel[]> {
+  return invoke("list_aihub_models");
+}
+
 // ─── Server Management ───────────────────────────────────────────
 
 export async function startServer(options?: ServerStartOptions): Promise<ServerStatus> {
-  return invoke("start_server", {
-    port: options?.port,
-    compute: options?.compute,
-    nctx: options?.nctx,
-    ngl: options?.ngl,
-    origins: options?.origins,
-    keepalive: options?.keepalive,
-  });
+  return invoke("start_server", { options: options ?? {} });
 }
 
 export async function stopServer(port?: number): Promise<ServerStatus> {

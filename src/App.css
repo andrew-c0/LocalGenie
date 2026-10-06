@@ -2217,6 +2217,145 @@ body,
   outline-offset: 1px;
 }
 
+.lx-select {
+  padding: 8px 10px;
+  background: var(--lx-surface-base);
+  border: 1px solid var(--lx-outline);
+  border-radius: var(--lx-radius-md);
+  color: var(--lx-text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ── Rendered markdown (model card README) ─────────────── */
+.lx-files-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--lx-text);
+}
+
+.lx-files-toggle:hover {
+  color: var(--lx-primary);
+}
+
+.lx-readme {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--lx-text-secondary);
+  max-height: 520px;
+  overflow: auto;
+}
+
+.lx-readme h1,
+.lx-readme h2,
+.lx-readme h3,
+.lx-readme h4 {
+  color: var(--lx-text);
+  margin: 16px 0 8px;
+  line-height: 1.3;
+}
+
+.lx-readme h1:first-child,
+.lx-readme h2:first-child,
+.lx-readme h3:first-child {
+  margin-top: 0;
+}
+
+.lx-readme p {
+  margin: 8px 0;
+}
+
+.lx-readme a {
+  color: var(--lx-primary);
+  text-decoration: none;
+}
+
+.lx-readme a:hover {
+  text-decoration: underline;
+}
+
+.lx-readme code {
+  font-family: var(--lx-font-mono, monospace);
+  font-size: 12.5px;
+  background: var(--lx-surface-base);
+  border: 1px solid var(--lx-outline);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.lx-readme pre {
+  background: var(--lx-surface-base);
+  border: 1px solid var(--lx-outline);
+  border-radius: var(--lx-radius-md);
+  padding: 12px;
+  overflow: auto;
+}
+
+.lx-readme pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.lx-readme table {
+  border-collapse: collapse;
+  margin: 10px 0;
+  width: 100%;
+  font-size: 12.5px;
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.lx-readme table td,
+.lx-readme table th {
+  white-space: normal;
+  min-width: 80px;
+}
+
+.lx-readme th,
+.lx-readme td {
+  border: 1px solid var(--lx-outline);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.lx-readme th {
+  background: var(--lx-surface-base);
+  color: var(--lx-text);
+}
+
+.lx-readme blockquote {
+  border-left: 3px solid var(--lx-primary);
+  margin: 10px 0;
+  padding: 4px 12px;
+  color: var(--lx-text-muted);
+}
+
+.lx-readme ul,
+.lx-readme ol {
+  padding-left: 22px;
+  margin: 8px 0;
+}
+
+.lx-readme img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: var(--lx-radius-md);
+}
+
+.lx-readme hr {
+  border: none;
+  border-top: 1px solid var(--lx-outline);
+  margin: 16px 0;
+}
+
 .lx-model-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

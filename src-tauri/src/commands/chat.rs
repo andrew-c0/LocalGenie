@@ -53,22 +53,8 @@ pub async fn load_model(
     eprintln!("[load] model '{}' loaded successfully", clean_model);
 
     // Refresh server status to reflect newly loaded models
-    let status_resp = state
-        .http_client
-        .get(format!("{}/v1/models", resolved_base))
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch models: {e}"))?;
-
-    let body: serde_json::Value = status_resp.json().await.unwrap_or_default();
-    let models: Vec<String> = body["data"]
-        .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|m| m["id"].as_str().map(String::from))
-                .collect()
-        })
-        .unwrap_or_default();
+    let models =
+        super::server::fetch_loaded_models(&state.http_client, &resolved_base).await?;
 
     // Verify the model actually appears in the loaded list
     let found = models.iter().any(|m| {
