@@ -13,7 +13,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
-import { precisionInfo, estimateModelBytes, ramFitForBytes, getHubModel, listHubModelFiles, fetchHubModelReadme, hubModelPageUrl, modelTagChips, type HubFileEntry, type HubModel } from "../../services/hubApi";
+import { downloadFile } from "../../services/download";
+import { precisionInfo, estimateModelBytes, ramFitForBytes, getHubModel, listHubModelFiles, fetchHubModelReadme, fetchReleaseAssets, hubModelPageUrl, modelTagChips, type HubFileEntry, type HubModel } from "../../services/hubApi";
 import type { GGUFFile } from "../../services/hubModels";
 import type { SystemMemoryInfo } from "../../services/system";
 import { getSystemMemory } from "../../services/system";
@@ -218,13 +219,18 @@ export default function HubModelDetail({ onDownload, downloading }: Props) {
     return ramFitForBytes(neededBytes, systemMemory);
   };
 
-  const handleDownload = (group: GGUFGroup) => {
-    // Download the main GGUF file
-    onDownload(model.id, { ...group.main, shard: null });
+  const handleDownload = async (group: GGUFGroup) => {
+    const url = `https://huggingface.co/${repoId}/resolve/main/${group.main.filename}`;
+    const fileName = group.main.filename.split("/").pop() ?? group.main.filename;
 
-    // Download all sidecar files (mmproj, mtp) associated with this variant
+    // Download main GGUF
+    await downloadFile(url, fileName).catch(() => undefined);
+
+    // Download all sidecars
     for (const sidecar of group.sidecars) {
-      onDownload(model.id, { ...sidecar, shard: null });
+      const sideUrl = `https://huggingface.co/${repoId}/resolve/main/${sidecar.filename}`;
+      const sideName = sidecar.filename.split("/").pop() ?? sidecar.filename;
+      await downloadFile(sideUrl, sideName).catch(() => undefined);
     }
   };
 
