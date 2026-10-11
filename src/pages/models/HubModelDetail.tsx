@@ -305,7 +305,6 @@ export default function HubModelDetail({ onDownload, downloading }: Props) {
               <span className="lx-chip lx-model-chip">{model.id}</span>
               
               <Dropdown
-                value={selectedVariant?.main.filename}
                 selectedOptions={selectedVariant ? [selectedVariant.main.filename] : []}
                 onOptionSelect={(_, data) => {
                   const selected = ggufGroups.find((g) => g.main.filename === data.optionValue);
@@ -314,7 +313,7 @@ export default function HubModelDetail({ onDownload, downloading }: Props) {
                 className="lx-precision-select"
                 aria-label="Select GGUF precision"
               >
-                <Option value="">Select precision…</Option>
+                <Option text="Select precision…" value="">Select precision…</Option>
                 {ggufGroups.map((group) => {
                   const info = precisionInfo(group.main.precision);
                   const labelParts = [info.label];
@@ -344,7 +343,7 @@ export default function HubModelDetail({ onDownload, downloading }: Props) {
                   );
                   
                   return (
-                    <Option key={group.main.filename} value={group.main.filename}>
+                    <Option key={group.main.filename} value={group.main.filename} text={`${labelParts.join(" — ")} — ${formatBytes(group.main.size)}`}>
                       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span style={chipStyle} className="lx-chip">{labelParts.join(" — ")}</span>
                         {hasSidecar && (

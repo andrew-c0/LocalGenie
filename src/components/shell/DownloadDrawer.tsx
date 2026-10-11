@@ -143,7 +143,7 @@ export default function DownloadDrawer({ open, onClose }: Props) {
                 Active
               </div>
               {active.map((d) => {
-                const pct = d.total ? (d.received / d.total) * 100 : undefined;
+                const pct = d.total ? d.received / d.total : 0;
                 const remaining = d.total ? d.total - d.received : 0;
                 return (
                   <div
@@ -183,7 +183,7 @@ export default function DownloadDrawer({ open, onClose }: Props) {
                       </div>
                     </div>
                     <ProgressBar
-                      value={pct ?? 0}
+                      value={Math.max(0, Math.min(1, pct ?? 0))}
                       style={{ height: 4 }}
                       aria-label={`Progress for ${d.label}`}
                     />
@@ -198,7 +198,7 @@ export default function DownloadDrawer({ open, onClose }: Props) {
                       <span>
                         {formatBytes(d.received)}
                         {d.total ? ` / ${formatBytes(d.total)}` : ""}
-                        {pct != null ? ` (${pct.toFixed(0)}%)` : ""}
+                        {pct != null ? ` (${(pct * 100).toFixed(0)}%)` : ""}
                       </span>
                       <span>
                         {formatBytes(d.speed)}/s · ETA {eta(remaining, d.speed)}

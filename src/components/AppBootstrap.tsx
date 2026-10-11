@@ -224,8 +224,28 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
       return;
     }
     if (payload.complete) {
+      // Record final file size so progress bar shows 100% correctly
+      const store = useDownloadStore.getState();
+      const existing = store.downloads.find(d => d.id === payload.file);
+      if (existing && payload.total == null) {
+        const finalSize = payload.received ?? existing.received;
+        store.patchProgress(payload.file, finalSize, finalSize, 0);
+      }
       store.setStatus(payload.file, "complete");
       return;
+    }
+    // Ensure download entry exists before patching progress
+    const existing = store.downloads.find(d => d.id === payload.file);
+    if (!existing) {
+      store.upsert({
+        id: payload.file,
+        label: payload.file,
+        received: 0,
+        total: null,
+        speed: 0,
+        status: "downloading",
+        startedAt: Date.now(),
+      });
     }
     store.patchProgress(
       payload.file,
