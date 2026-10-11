@@ -1,48 +1,59 @@
 import { Button, Spinner } from "@fluentui/react-components";
 import { ArrowDownloadRegular } from "@fluentui/react-icons";
-import type { ReleaseAsset, ReleaseAssets } from "../../services/hubApi";
+import { useMemo, useState } from "react";
+import { formatBytes } from "../../utils/format";
 
-/** Runtime display label. */
-function runtimeLabel(runtime: string): string {
-  if (runtime === "geniex_qairt") return "GenieX QAIRT (NPU)";
-  if (runtime === "geniex_llamacpp") return "GenieX llama.cpp";
-  if (runtime === "genie") return "Genie (QAIRT)";
-  if (runtime === "onnx") return "ONNX";
-  return runtime;
-}
-
-/** Human-readable chipset label from a slug like `qualcomm-snapdragon-x-elite`. */
-function chipsetLabel(slug: string): string {
-  return slug
-    .replace(/^qualcomm-/, "")
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+/** One selectable GGUF variant. */
+interface GGUFVariant {
+  filename: string;
+  precision: string;
+  sizeLabel: string | null;
+  version: string;
+  size?: number;
 }
 
 interface Props {
-  modelId: string;
-  release: ReleaseAssets;
-  /** Chipset slugs to show (matched to the device CPU). */
-  chipsetSlugs: string[];
-  /** Called with the chosen asset's download URL. */
-  onSelect: (asset: ReleaseAsset, precision: string) => void;
+  repoId: string;
+  variants: GGUFVariant[];
+  onSelect: (variant: GGUFVariant) => void;
   onClose: () => void;
   isDownloading: boolean;
 }
 
-/**
- * Modal popup listing the precisions and chipset/runtime variants from
- * release_assets.json so the user can pick which version to download.
- */
+/** Human-readable label for a quantization precision. */
+function precisionLabel(precision: string): string {
+  const lower = precision.toLowerCase();
+  if (lower === "f16") return "Float16 (F16)";
+  if (lower === "bf16") return "Bfloat16 (BF16)";
+  if (lower === "f32") return "Float32 (F32)";
+  if (lower.startsWith("q2_")) return "Q2_K";
+  if (lower.startsWith("q3_")) return "Q3_K";
+  if (lower.startsWith("q4_")) return "Q4_K";
+  if (lower.startsWith("q5_")) return "Q5_K";
+  if (lower.startsWith("q6_")) return "Q6_K";
+  if (lower.startsWith("q8_")) return "Q8_0";
+  return precision;
+}
+
 export default function ReleaseVersionDialog({
-  modelId,
-  release,
-  chipsetSlugs,
+  repoId,
+  variants,
   onSelect,
   onClose,
   isDownloading,
 }: Props) {
+  const [selected, setSelected] = useState<GGUFVariant | null>(null);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, GGUFVariant[]>();
+    for (const v of variants) {
+      const key = v.precision;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(v);
+    }
+    return map;
+  }, [variants]);
+
   return (
     <div
       role="presentation"
@@ -60,7 +71,7 @@ export default function ReleaseVersionDialog({
         className="lx-card"
         role="dialog"
         aria-modal="true"
-        aria-label="Select version to download"
+        aria-label="Select GGUF variant to download"
         tabIndex={-1}
         onKeyDown={(e) => {
           if (e.key === "Escape") onClose();
@@ -81,30 +92,38 @@ export default function ReleaseVersionDialog({
           onClick={onClose}
         />
         <div className="lx-card-title" style={{ marginBottom: 4 }}>
-          Download {modelId}
+          Download {repoId}
         </div>
         <p style={{ fontSize: 12.5, color: "var(--lx-text-muted)", marginTop: 0 }}>
-          Release v{release.version} — select precision and chipset variant.
+          Select the quantization variant to download.
         </p>
 
-        {release.precisions.map((p) => (
-          <div key={p.precision} style={{ marginBottom: 16 }}>
+        {Array.from(grouped).map(([precision, items]) => (
+          <div key={precision} style={{ marginBottom: 16 }}>
             <div
               style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: "var(--lx-text)",
-                marginBottom: 6,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 4,
               }}
             >
-              Precision: {p.precision}
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--lx-text)" }}>
+                {precisionLabel(precision)}
+              </span>
+              <span className="lx-mono" style={{ fontSize: 11, color: "var(--lx-text-muted)" }}>
+                {precision}
+              </span>
+            </div>
+            <div style={{ fontSize: 11.5, color: "var(--lx-text-muted)", marginBottom: 6 }}>
+              {items.length} file{items.length > 1 ? "s" : ""} available
             </div>
 
-            {/* Universal assets (chipset-independent, e.g. GGUF) */}
-            {Object.entries(p.universal_assets).map(([runtime, assets]) =>
-              assets.map((asset) => (
+            {items.map((v) => {
+              const isSelected = selected?.filename === v.filename;
+              return (
                 <div
-                  key={`u-${runtime}`}
+                  key={v.filename}
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
@@ -112,71 +131,44 @@ export default function ReleaseVersionDialog({
                     gap: 8,
                     padding: "6px 0",
                     borderBottom: "1px solid var(--lx-outline)",
+                    background: isSelected ? "var(--lx-neutral-subtle)" : "transparent",
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: 12.5 }}>{runtimeLabel(runtime)}</div>
+                    <div style={{ fontSize: 12.5 }}>{v.filename}</div>
                     <div style={{ fontSize: 11.5, color: "var(--lx-text-muted)" }}>
-                      Universal — all devices
+                      {v.sizeLabel ? `${v.sizeLabel} · ` : ""}
+                      {v.version}
+                      {v.size ? ` · ${formatBytes(v.size)}` : ""}
                     </div>
                   </div>
                   <Button
                     size="small"
-                    appearance="primary"
+                    appearance={isSelected ? "primary" : "subtle"}
                     icon={isDownloading ? <Spinner size="tiny" /> : <ArrowDownloadRegular />}
-                    disabled={isDownloading}
-                    onClick={() => onSelect(asset, p.precision)}
+                    disabled={isDownloading || isSelected}
+                    onClick={() => setSelected(v)}
                   >
-                    Download
+                    {isDownloading ? "Pulling…" : isSelected ? "Selected" : "Download"}
                   </Button>
                 </div>
-              )),
-            )}
-
-            {/* Chipset-specific assets — only those matching the device */}
-            {Object.entries(p.chipset_assets)
-              .filter(([chipset]) => chipsetSlugs.includes(chipset))
-              .map(([chipset, assets]) =>
-                assets.map((asset) => (
-                  <div
-                    key={`c-${chipset}-${asset.runtime}`}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "6px 0",
-                      borderBottom: "1px solid var(--lx-outline)",
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 12.5 }}>
-                        {runtimeLabel(asset.runtime)} — {chipsetLabel(chipset)}
-                      </div>
-                      {asset.tool_versions?.qairt && (
-                        <div style={{ fontSize: 11.5, color: "var(--lx-text-muted)" }}>
-                          QAIRT {asset.tool_versions.qairt}
-                        </div>
-                      )}
-                    </div>
-                    <Button
-                      size="small"
-                      appearance="primary"
-                      icon={isDownloading ? <Spinner size="tiny" /> : <ArrowDownloadRegular />}
-                      disabled={isDownloading}
-                      onClick={() => onSelect(asset, p.precision)}
-                    >
-                      Download
-                    </Button>
-                  </div>
-                )),
-              )}
+              );
+            })}
           </div>
         ))}
 
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
           <Button appearance="secondary" onClick={onClose}>
             Cancel
+          </Button>
+          <Button
+            appearance="primary"
+            onClick={() => {
+              if (selected) onSelect(selected);
+            }}
+            disabled={!selected || isDownloading}
+          >
+            Continue
           </Button>
         </div>
       </div>

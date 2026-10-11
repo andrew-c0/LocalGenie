@@ -1,4 +1,4 @@
-import { SendRegular } from "@fluentui/react-icons";
+import { SendRegular, StopRegular } from "@fluentui/react-icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as db from "../services/database";
 import * as geniex from "../services/geniex";
@@ -88,6 +88,15 @@ export default function ChatInput() {
     await doSend(activeSessionId, apiMessages);
   }, [text, activeSessionId, isStreaming, serverStatus.running, addMessage, doSend]);
 
+  /** Stop the currently streaming model response. */
+  const handleStop = useCallback(async () => {
+    try {
+      await geniex.cancelChatCompletion();
+    } catch (err) {
+      console.error("Failed to stop generation:", err);
+    }
+  }, []);
+
   /** Handle retry. */
   useEffect(() => {
     if (!retryFromMessageId || !activeSessionId || isStreaming) return;
@@ -165,14 +174,25 @@ export default function ChatInput() {
           rows={1}
           disabled={isStreaming}
         />
-        <button
-          type="button"
-          className={`send-button${isDisabled ? " send-button-disabled" : ""}`}
-          onClick={handleSend}
-          disabled={isDisabled}
-        >
-          <SendRegular />
-        </button>
+        {isStreaming ? (
+          <button
+            type="button"
+            className="send-button"
+            onClick={handleStop}
+            title="Stop generation"
+          >
+            <StopRegular />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={`send-button${isDisabled ? " send-button-disabled" : ""}`}
+            onClick={handleSend}
+            disabled={isDisabled}
+          >
+            <SendRegular />
+          </button>
+        )}
       </div>
     </div>
   );

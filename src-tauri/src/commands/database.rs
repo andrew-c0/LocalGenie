@@ -7,7 +7,7 @@ use sea_orm::sea_query::{Expr, OnConflict};
 use sea_orm_migration::MigratorTrait;
 use serde::{Deserialize, Serialize};
 
-use crate::entities::{chat_session, message, model_setting, user_preference};
+use crate::entities::{chat_session, downloaded_model, message, model_setting, user_preference};
 use crate::migrations::Migrator;
 
 // ─── Types ─────────────────────────────────────────────────────────
@@ -275,6 +275,68 @@ pub async fn set_preference(
     .exec(&*db)
     .await
     .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ─── Downloaded Model Metadata ─────────────────────────────────────
+
+/// Upsert local metadata recorded when a model is pulled from a hub.
+/// `context_size` / `param_count` are tokens / parameters (pass null when
+/// the hub metadata is unavailable).
+#[tauri::command]
+pub async fn upsert_downloaded_model(
+    db: tauri::State<'_, DatabaseConnection>,
+    name: String,
+    precision: Option<String>,
+    context_size: Option<i64>,
+    param_count: Option<i64>,
+) -> Result<(), String> {
+    let now = now_millis();
+    downloaded_model::Entity::insert(downloaded_model::ActiveModel {
+        name: Set(name),
+        precision: Set(precision),
+        context_size: Set(context_size),
+        param_count: Set(param_count),
+        created_at: Set(now),
+        updated_at: Set(now),
+    })
+    .on_conflict(
+        OnConflict::column(downloaded_model::Column::Name)
+            .update_columns([
+                downloaded_model::Column::Precision,
+                downloaded_model::Column::ContextSize,
+                downloaded_model::Column::ParamCount,
+                downloaded_model::Column::UpdatedAt,
+            ])
+            .to_owned(),
+    )
+    .exec(&*db)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// All downloaded-model metadata rows.
+#[tauri::command]
+pub async fn list_downloaded_models(
+    db: tauri::State<'_, DatabaseConnection>,
+) -> Result<Vec<downloaded_model::Model>, String> {
+    downloaded_model::Entity::find()
+        .all(&*db)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Forget metadata for a removed model.
+#[tauri::command]
+pub async fn delete_downloaded_model(
+    db: tauri::State<'_, DatabaseConnection>,
+    name: String,
+) -> Result<(), String> {
+    downloaded_model::Entity::delete_by_id(&name)
+        .exec(&*db)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 

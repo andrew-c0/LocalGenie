@@ -9,9 +9,9 @@ import "./App.css";
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <FluentProvider theme={localGenieTheme} className="fluent-full-height">
+      <FluentProvider theme={localGenieTheme}>
         <App />
       </FluentProvider>
     </ErrorBoundary>
-  </React.StrictMode>,
+  </React.StrictMode>
 );

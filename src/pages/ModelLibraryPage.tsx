@@ -1,31 +1,19 @@
 ﻿import { Button, Spinner } from "@fluentui/react-components";
-import { FolderOpenRegular, SearchRegular } from "@fluentui/react-icons";
-import { useCallback, useMemo, useState } from "react";
-import HubBrowse from "../components/models/HubBrowse";
+import { SearchRegular } from "@fluentui/react-icons";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChipRow } from "../components/ui/ChipRow/ChipRow";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog/ConfirmDialog";
 import { ErrorBanner } from "../components/ui/ErrorBanner/ErrorBanner";
-import { ModelCard, type ModelCardData } from "../components/ui/ModelCard/ModelCard";
+import ReleaseVersionDialog from "../components/models/ReleaseVersionDialog";
+import { ModelCard, type GGUFFileOption, type ModelCardData } from "../components/ui/ModelCard/ModelCard";
 import { PageHeader } from "../components/ui/PageHeader/PageHeader";
 import { ProgressBar, StateBlock } from "../components/ui/primitives";
+import * as db from "../services/database";
 import * as geniex from "../services/geniex";
-import { useChatStore } from "../stores/chatStore";
-import { type ModelTab, useHubBrowseStore } from "../stores/hubBrowseStore";
+import * as hub from "../services/hubModels";
 import { useModelStore } from "../stores/modelStore";
-
-type RepoFilter = "all" | "hf" | "aihub";
-
-const SOURCE_TABS: [ModelTab, string][] = [
-  ["local", "Local Models"],
-  ["qualcomm", "Qualcomm AI Hub"],
-  ["all", "All Hugging Face"],
-];
-
-const REPO_FILTERS: [RepoFilter, string][] = [
-  ["all", "All Models"],
-  ["hf", "Hugging Face"],
-  ["aihub", "Qualcomm AI Hub"],
-];
+import { useHubBrowseStore } from "../stores/hubBrowseStore";
+import HubBrowse from "../components/models/HubBrowse";
 
 /** Full-page model library (list + grid variants). */
 export default function ModelLibraryPage() {
@@ -37,26 +25,30 @@ export default function ModelLibraryPage() {
   const downloads = useModelStore((s) => s.downloads);
   const serverStatus = useModelStore((s) => s.serverStatus);
 
-  const tab = useHubBrowseStore((s) => s.activeTab);
-  const setTab = useHubBrowseStore((s) => s.setActiveTab);
+  const activeTab = useHubBrowseStore((s) => s.activeTab);
+  const setActiveTab = useHubBrowseStore((s) => s.setActiveTab);
+
+  const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
   const [query, setQuery] = useState("");
-  const [repoFilter, setRepoFilter] = useState<RepoFilter>("all");
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  const [hubDownloading, setHubDownloading] = useState<Set<string>>(new Set());
+  const [downloadedMeta, setDownloadedMeta] = useState<Map<string, db.DbDownloadedModel>>(
+    new Map(),
+  );
+  const [showVersionDialog, setShowVersionDialog] = useState(false);
+  const [versionRepoId, setVersionRepoId] = useState("");
+  const [versionVariants, setVersionVariants] = useState<GGUFFileOption[]>([]);
 
-  const handleHubDownload = useCallback((repoId: string) => {
-    setHubDownloading((prev) => new Set(prev).add(repoId));
-    geniex
-      .pullModel(repoId)
-      .catch((err) => setError(`Pull failed: ${err}`))
-      .finally(() =>
-        setHubDownloading((prev) => {
-          const next = new Set(prev);
-          next.delete(repoId);
-          return next;
-        }),
-      );
+  // Load downloaded-model metadata once on mount.
+  useEffect(() => {
+    (async () => {
+      try {
+        const rows = await db.listDownloadedModels();
+        setDownloadedMeta(new Map(rows.map((r) => [r.name, r])));
+      } catch {
+        // ignore
+      }
+    })();
   }, []);
 
   const handleSearch = useCallback(async () => {
@@ -73,15 +65,82 @@ export default function ModelLibraryPage() {
     }
   }, [query, setIsSearching, setSearchResults]);
 
-  const handlePull = useCallback((model: string) => {
-    setError(null);
-    geniex.pullModel(model).catch((err) => setError(`Pull failed: ${err}`));
-  }, []);
+    /** Pull a single GGUF file from Hugging Face into the GenieX cache. */
+  const handleGGUFDownload = useCallback(
+    (repoId: string, variant?: GGUFFileOption) => {
+      setError(null);
+      const downloadKey = `${repoId}:${variant?.precision ?? "import"}`;
+      useModelStore
+        .getState()
+        .addDownload({ model: downloadKey, message: "Downloading GGUF weights…", status: "downloading" });
+      geniex
+        .importGGUF(repoId, variant?.filename ?? "", variant?.precision ?? "")
+        .catch((err) => {
+          useModelStore
+            .getState()
+            .addDownload({ model: downloadKey, message: `Error: ${err}`, status: "error" });
+          setError(`GGUF import failed: ${err}`);
+        })
+        .finally(() => {
+          useModelStore.getState().removeDownload(downloadKey);
+        });
+    },
+    [],
+  );
+
+  /** Open the version picker for a search result card. */
+  const handlePickGGUF = useCallback(
+    (repoId: string, gguf?: GGUFFileOption[]) => {
+      if (!gguf || gguf.length === 0) {
+        // No GGUF files — fall back to a direct import.
+        handleGGUFDownload(repoId);
+        return;
+      }
+      setVersionRepoId(repoId);
+      setVersionVariants(gguf);
+      setShowVersionDialog(true);
+    },
+    [handleGGUFDownload],
+  );
+
+  /** Lazily fetch the GGUF file list for a search result card. */
+  const [ggufCache, setGgufCache] = useState<Map<string, GGUFFileOption[]>>(new Map());
+  const ensureGGUF = useCallback(
+    async (repoId: string): Promise<GGUFFileOption[]> => {
+      const cached = ggufCache.get(repoId);
+      if (cached) return cached;
+      try {
+        const files = await hub.listGGUFFiles(repoId);
+        const opts: GGUFFileOption[] = files.map((f) => ({
+          filename: f.filename,
+          precision: f.precision,
+          sizeLabel: f.sizeLabel,
+          version: f.version,
+        }));
+        setGgufCache((prev) => {
+          const next = new Map(prev);
+          next.set(repoId, opts);
+          return next;
+        });
+        return opts;
+      } catch {
+        return [];
+      }
+    },
+    [ggufCache],
+  );
 
   const handleRemove = useCallback(async (model: string) => {
     setError(null);
     try {
       await geniex.removeModel(model);
+      // Forget the local metadata reference too.
+      await db.deleteDownloadedModel(model);
+      setDownloadedMeta((prev) => {
+        const next = new Map(prev);
+        next.delete(model);
+        return next;
+      });
       const updated = await geniex.listModels();
       useModelStore.getState().setModels(updated);
     } catch (err) {
@@ -91,26 +150,38 @@ export default function ModelLibraryPage() {
     }
   }, []);
 
-  const startChat = useCallback(async (modelName: string) => {
-    try {
-      await geniex.loadModel(modelName);
-      useModelStore.getState().setActiveModel(modelName);
-      const activeId = useChatStore.getState().activeSessionId;
-      if (activeId) useChatStore.getState().setSessionModel(activeId, modelName);
-    } catch (err) {
-      setError(String(err));
+  const openSelector = useCallback(() => {
+    setSelectorOpen(true);
+  }, [setSelectorOpen]);
+
+  // When search results appear, fetch the GGUF file list for each so the
+  // cards can show the variant picker. Best-effort — failures just leave the
+  // card with the generic "Download" button.
+  useEffect(() => {
+    if (searchResults.length === 0) return;
+    const installedNames = new Set(models.map((m) => m.name));
+    for (const r of searchResults) {
+      if (installedNames.has(r.id)) continue;
+      if (ggufCache.has(r.id)) continue;
+      void ensureGGUF(r.id);
     }
-  }, []);
+  }, [searchResults, models, ggufCache, ensureGGUF]);
 
   /** Normalized card model combining installed + search results. */
   const cards = useMemo((): ModelCardData[] => {
-    const list: ModelCardData[] = models.map((m) => ({
-      name: m.name,
-      installed: true,
-      size: m.size,
-      source: m.source,
-      precisions: m.precisions,
-    }));
+    const list: ModelCardData[] = models.map((m) => {
+      const meta = downloadedMeta.get(m.name);
+      return {
+        name: m.name,
+        installed: true,
+        size: m.size,
+        source: m.source,
+        precisions: m.precisions,
+        downloadedPrecision: meta?.precision ?? undefined,
+        contextSize: meta?.context_size ?? undefined,
+        paramCount: meta?.param_count ?? undefined,
+      };
+    });
     if (searchResults.length > 0) {
       const installedNames = new Set(models.map((m) => m.name));
       for (const r of searchResults) {
@@ -121,16 +192,13 @@ export default function ModelLibraryPage() {
             downloads: r.downloads,
             likes: r.likes,
             pipelineTag: r.pipeline_tag,
+            ggufFiles: ggufCache.get(r.id),
           });
         }
       }
     }
-    return list.filter((m) => {
-      if (repoFilter === "hf") return !m.name.includes("qualcomm");
-      if (repoFilter === "aihub") return m.name.includes("qualcomm");
-      return true;
-    });
-  }, [models, searchResults, repoFilter]);
+    return list;
+  }, [models, searchResults, ggufCache]);
 
   return (
     <div className="lx-page">
@@ -142,7 +210,6 @@ export default function ModelLibraryPage() {
           actions={
             <Button
               appearance="subtle"
-              icon={<FolderOpenRegular />}
               onClick={() => geniex.cleanModels().catch((e) => setError(String(e)))}
             >
               Clean Cache
@@ -150,19 +217,46 @@ export default function ModelLibraryPage() {
           }
         />
 
-        {/* -- Top tabs -- */}
-        <ChipRow options={SOURCE_TABS} value={tab} onChange={setTab} ariaLabel="Model source" />
-
         {error && <ErrorBanner message={error} />}
 
-        {/* -- Hub browse tabs -- */}
-        {tab !== "local" && (
-          <HubBrowse area={tab} onDownload={handleHubDownload} downloading={hubDownloading} />
-        )}
+        {/* Tab selector: Local vs. Hugging Face (all) */}
+        <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+          <button
+            type="button"
+            style={{
+              flex: 1,
+              padding: 6,
+              border: activeTab === "local" ? "1px solid var(--lx-text-accent)" : "1px solid var(--lx-border)",
+              borderRadius: 4,
+              background: activeTab === "local" ? "var(--lx-bg-subtle)" : "transparent",
+              color: activeTab === "local" ? "var(--lx-text)" : "var(--lx-text-muted)",
+              cursor: "pointer",
+              fontWeight: activeTab === "local" ? "500" : "400",
+            }}
+            onClick={() => setActiveTab("local")}
+          >
+            Local
+          </button>
+          <button
+            type="button"
+            style={{
+              flex: 1,
+              padding: 6,
+              border: activeTab === "all" ? "1px solid var(--lx-text-accent)" : "1px solid var(--lx-border)",
+              borderRadius: 4,
+              background: activeTab === "all" ? "var(--lx-bg-subtle)" : "transparent",
+              color: activeTab === "all" ? "var(--lx-text)" : "var(--lx-text-muted)",
+              cursor: "pointer",
+              fontWeight: activeTab === "all" ? "500" : "400",
+            }}
+            onClick={() => setActiveTab("all")}
+          >
+            Hugging Face
+          </button>
+        </div>
 
-        {/* -- Local models tab -- */}
-        {tab === "local" && (
-          <>
+        {activeTab === "local" ? (
+          <div>
             <div className="lx-model-toolbar">
               <div className="lx-search">
                 <SearchRegular style={{ color: "var(--lx-text-muted)" }} />
@@ -186,18 +280,14 @@ export default function ModelLibraryPage() {
               </div>
             </div>
 
-            <ChipRow
-              options={REPO_FILTERS}
-              value={repoFilter}
-              onChange={setRepoFilter}
-              ariaLabel="Repository filter"
-            >
-              {searchResults.length > 0 && (
-                <button type="button" className="lx-chip" onClick={() => setSearchResults([])}>
-                  Clear search results
-                </button>
-              )}
-            </ChipRow>
+            {searchResults.length > 0 && (
+              <ChipRow
+                options={[["clear", "Clear search results"] as const]}
+                value=""
+                onChange={() => setSearchResults([])}
+                ariaLabel="Search results"
+              />
+            )}
 
             {/* -- Active downloads -- */}
             {downloads.map((d) => (
@@ -227,17 +317,24 @@ export default function ModelLibraryPage() {
                       (lm) => lm === m.name || lm.startsWith(`${m.name}:`),
                     )}
                     isDownloading={downloads.some((d) => d.model === m.name)}
-                    onLoad={startChat}
-                    onDownload={handlePull}
+                    onOpenSelector={openSelector}
+                    onDownload={handleGGUFDownload}
+                    onPickGGUF={handlePickGGUF}
                     onRemove={setConfirmRemove}
                   />
                 ))}
               </div>
             )}
-          </>
+          </div>
+        ) : (
+          <HubBrowse
+            area="all"
+            onDownload={handleGGUFDownload}
+            downloading={new Set(downloads.map((d) => d.model))}
+          />
         )}
 
-        {/* -- Remove confirmation -- */}
+            {/* -- Remove confirmation -- */}
         {confirmRemove && (
           <ConfirmDialog
             title="Remove Model"
@@ -249,6 +346,20 @@ export default function ModelLibraryPage() {
             confirmLabel="Remove"
             onConfirm={() => handleRemove(confirmRemove)}
             onCancel={() => setConfirmRemove(null)}
+          />
+        )}
+
+        {/* -- GGUF variant picker dialog -- */}
+        {showVersionDialog && (
+          <ReleaseVersionDialog
+            repoId={versionRepoId}
+            variants={versionVariants}
+            onSelect={(v) => {
+              handleGGUFDownload(versionRepoId, v);
+              setShowVersionDialog(false);
+            }}
+            onClose={() => setShowVersionDialog(false)}
+            isDownloading={false}
           />
         )}
       </div>

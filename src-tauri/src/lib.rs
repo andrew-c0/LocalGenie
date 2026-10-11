@@ -9,6 +9,7 @@ use commands::server;
 use commands::chat;
 use commands::database;
 use commands::cli;
+use commands::system;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -45,6 +46,7 @@ pub fn run() {
             server::get_server_status,
             // Chat
             chat::chat_completion,
+            chat::cancel_chat_completion,
             chat::load_model,
             chat::unload_all_models,
             // CLI utilities
@@ -53,12 +55,15 @@ pub fn run() {
             commands::download::download_file,
             commands::download::cancel_download,
             commands::download::delete_file,
+            commands::download::import_gguf,
             cli::config_get,
             cli::config_set,
             cli::config_list,
             cli::check_for_cli_update,
             cli::install_geniex,
             cli::update_geniex,
+            // System
+            system::get_system_memory,
             // Database
             database::load_sessions,
             database::save_session,
@@ -69,6 +74,9 @@ pub fn run() {
             database::save_model_settings,
             database::get_preference,
             database::set_preference,
+            database::upsert_downloaded_model,
+            database::list_downloaded_models,
+            database::delete_downloaded_model,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

@@ -42,6 +42,15 @@ export async function removeModel(model: string): Promise<void> {
   return invoke("remove_model", { model });
 }
 
+/** Import a GGUF file from Hugging Face into the GenieX model cache. */
+export async function importGGUF(
+  repoId: string,
+  filename: string,
+  precision: string,
+): Promise<void> {
+  return invoke("import_gguf", { repoId, filename, precision });
+}
+
 export async function cleanModels(): Promise<void> {
   return invoke("clean_models");
 }
@@ -116,6 +125,11 @@ export async function configSet(key: string, value?: string): Promise<void> {
 
 export async function configList(): Promise<ConfigEntry[]> {
   return invoke("config_list");
+}
+
+/** Request the in-flight chat completion to stop at the next chunk boundary. */
+export async function cancelChatCompletion(): Promise<void> {
+  return invoke("cancel_chat_completion");
 }
 
 export async function updateGeniex(): Promise<string> {

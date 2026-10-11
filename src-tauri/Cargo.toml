@@ -28,6 +28,7 @@ futures-util = "0.3"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 urlencoding = "2"
+sysinfo = "0.33"
 
 [profile.release]
 panic = "abort"

@@ -119,3 +119,30 @@ export async function setPreference(key: string, value: unknown, type = "string"
   const strValue = typeof value === "string" ? value : JSON.stringify(value);
   await invoke("set_preference", { key, value: strValue, prefType: type });
 }
+
+// ─── Downloaded model metadata ─────────────────────────────────────
+
+/** Row returned by the Rust backend. */
+export interface DbDownloadedModel {
+  name: string;
+  precision: string | null;
+  context_size: number | null;
+  param_count: number | null;
+}
+
+export async function listDownloadedModels(): Promise<DbDownloadedModel[]> {
+  return invoke("list_downloaded_models");
+}
+
+export async function upsertDownloadedModel(
+  name: string,
+  precision: string | null,
+  contextSize: number | null,
+  paramCount: number | null,
+): Promise<void> {
+  await invoke("upsert_downloaded_model", { name, precision, contextSize, paramCount });
+}
+
+export async function deleteDownloadedModel(name: string): Promise<void> {
+  await invoke("delete_downloaded_model", { name });
+}

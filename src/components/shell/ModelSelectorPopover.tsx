@@ -10,20 +10,34 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as geniex from "../../services/geniex";
 import { useChatStore } from "../../stores/chatStore";
-import { useModelStore } from "../../stores/modelStore";
+import {
+  COMPUTE_TARGETS,
+  type ComputeChoice,
+  DEFAULT_COMPUTE,
+  useModelStore,
+} from "../../stores/modelStore";
 import type { ModelInfo } from "../../types";
 import { shortName } from "../../utils/format";
 
 interface ModelSelectorPopoverProps {
   open: boolean;
   onClose: () => void;
+  /** Callback when the popover is opened — used by the model library to open it. */
+  onOpenChange?: (open: boolean) => void;
 }
+
+/** Short label + description for each compute target. */
+const COMPUTE_META: Record<ComputeChoice, { label: string; hint: string }> = {
+  npu: { label: "NPU", hint: "Hexagon HTP — fastest, most efficient" },
+  gpu: { label: "GPU", hint: "Adreno OpenCL path" },
+  cpu: { label: "CPU", hint: "Baseline; slowest but always available" },
+};
 
 /**
  * Stitch-style active model dropdown: searchable list of installed models
  * split into loaded/active and ready-to-load, with quick actions.
  */
-export default function ModelSelectorPopover({ open, onClose }: ModelSelectorPopoverProps) {
+export default function ModelSelectorPopover({ open, onClose, onOpenChange }: ModelSelectorPopoverProps) {
   const navigate = useNavigate();
   const models = useModelStore((s) => s.models);
   const serverStatus = useModelStore((s) => s.serverStatus);
@@ -31,10 +45,16 @@ export default function ModelSelectorPopover({ open, onClose }: ModelSelectorPop
   const setServerStatus = useModelStore((s) => s.setServerStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
   const setActiveModel = useModelStore((s) => s.setActiveModel);
+  const compute = useModelStore((s) => s.compute);
+  const setCompute = useModelStore((s) => s.setCompute);
 
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Compute target the running server was started with (null = unknown/external). */
+  const activeComputeRef = useRef<ComputeChoice | null>(
+    serverStatus.running ? DEFAULT_COMPUTE : null,
+  );
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -64,6 +84,11 @@ export default function ModelSelectorPopover({ open, onClose }: ModelSelectorPop
     };
   }, [open, onClose]);
 
+  // Notify parent when open state changes
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [open, onOpenChange]);
+
   const { loadedModels, readyModels } = useMemo(() => {
     const loadedNames = new Set(serverStatus.models.map((m) => m.split(":")[0]));
     const loaded: ModelInfo[] = [];
@@ -92,9 +117,16 @@ export default function ModelSelectorPopover({ open, onClose }: ModelSelectorPop
     setError(null);
     try {
       // Ensure the GenieX server is running before attempting to load.
-      if (!serverStatus.running) {
-        const started = await geniex.startServer({ port: serverPort });
+      // Start/restart it with the selected compute target — a server spawned
+      // with a different compute must be restarted for the flag to apply.
+      const needsRestart = serverStatus.running && compute !== activeComputeRef.current;
+      if (needsRestart) {
+        await geniex.stopServer(serverPort);
+      }
+      if (needsRestart || !serverStatus.running) {
+        const started = await geniex.startServer({ port: serverPort, compute });
         setServerStatus(started);
+        activeComputeRef.current = compute;
       }
       // load_model returns the refreshed server status (with the new model listed).
       const status = await geniex.loadModel(name);
@@ -104,6 +136,27 @@ export default function ModelSelectorPopover({ open, onClose }: ModelSelectorPop
       if (activeId) useChatStore.getState().setSessionModel(activeId, name);
       onClose();
     } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  /** Switch the compute target; restarts the server when it is running. */
+  const handleComputeChange = async (next: ComputeChoice) => {
+    const prev = compute;
+    setCompute(next);
+    if (!serverStatus.running || next === prev) return;
+    setLoading("__compute__");
+    setError(null);
+    try {
+      await geniex.stopServer(serverPort);
+      activeComputeRef.current = null;
+      const started = await geniex.startServer({ port: serverPort, compute: next });
+      setServerStatus(started);
+      activeComputeRef.current = next;
+    } catch (err) {
+      setCompute(prev);
       setError(String(err));
     } finally {
       setLoading(null);
@@ -186,6 +239,36 @@ export default function ModelSelectorPopover({ open, onClose }: ModelSelectorPop
 
       {error && <div className="lx-popover-error">⚠ {error}</div>}
 
+      {/* ── Compute target selector ───────────────── */}
+      <div className="lx-compute-row">
+        <span className="lx-compute-row-label">Run on</span>
+        <div className="lx-compute-row-options">
+          {COMPUTE_TARGETS.map((t) => (
+            <label
+              key={t}
+              className={`lx-compute-pill${compute === t ? " selected" : ""}`}
+              title={COMPUTE_META[t].hint}
+            >
+              <input
+                type="radio"
+                name="compute-target"
+                value={t}
+                checked={compute === t}
+                disabled={loading !== null}
+                onChange={() => handleComputeChange(t)}
+                aria-label={`Run models on ${COMPUTE_META[t].label} — ${COMPUTE_META[t].hint}`}
+                className="lx-compute-input"
+              />
+              {loading === "__compute__" && compute === t ? (
+                <Spinner size="tiny" />
+              ) : (
+                COMPUTE_META[t].label
+              )}
+            </label>
+          ))}
+        </div>
+      </div>
+
       <div className="lx-popover-body">
         {loadedModels.length > 0 && (
           <>
@@ -193,7 +276,7 @@ export default function ModelSelectorPopover({ open, onClose }: ModelSelectorPop
               <span>Loaded & Active</span>
               <span className="lx-popover-section-status">
                 <span className="lx-popover-pulse" />
-                {serverStatus.running ? "Hexagon NPU" : "Server"}
+                {serverStatus.running ? `Compute: ${COMPUTE_META[compute].label}` : "Server"}
               </span>
             </div>
             {loadedModels.map(renderOption)}

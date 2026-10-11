@@ -1,10 +1,10 @@
-import { Button, Spinner } from "@fluentui/react-components";
-import {
-  ArrowDownloadRegular,
-  ArrowLeftRegular,
-  ChevronDownRegular,
-  ChevronRightRegular,
-  OpenRegular,
+import { Button, Spinner, Dropdown, Option } from "@fluentui/react-components";
+import { 
+  ArrowDownloadRegular, 
+  ArrowLeftRegular, 
+  ChevronDownRegular, 
+  ChevronRightRegular, 
+  OpenRegular, 
 } from "@fluentui/react-icons";
 import { open } from "@tauri-apps/plugin-shell";
 import { useEffect, useState } from "react";
@@ -13,54 +13,120 @@ import { useNavigate, useParams } from "react-router-dom";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
-import ReleaseVersionDialog from "../../components/models/ReleaseVersionDialog";
+import { precisionInfo, estimateModelBytes, ramFitForBytes, getHubModel, listHubModelFiles, fetchHubModelReadme, hubModelPageUrl, modelTagChips, type HubFileEntry, type HubModel } from "../../services/hubApi";
+import type { GGUFFile } from "../../services/hubModels";
+import type { SystemMemoryInfo } from "../../services/system";
+import { getSystemMemory } from "../../services/system";
 import { StateBlock, StatusBadge } from "../../components/ui/primitives";
-import * as geniex from "../../services/geniex";
-import {
-  assetCompatibility,
-  fetchHubModelReadme,
-  fetchReleaseAssets,
-  getHubModel,
-  type HubFileEntry,
-  type HubModel,
-  hubModelPageUrl,
-  listHubModelFiles,
-  matchChipsetSlugs,
-  modelTagChips,
-  type ReleaseAsset,
-  type ReleaseAssets,
-  singleDownloadOption,
-} from "../../services/hubApi";
-import { useHubBrowseStore } from "../../stores/hubBrowseStore";
+import { parseGGUFFilename } from "../../utils/gguf";
 import { formatBytes, formatCount } from "../../utils/format";
 
 interface Props {
   /** Called when the user downloads the model from the detail page. */
-  onDownload: (repoId: string) => void;
-  /** Called when the user picks a specific release asset to download. */
-  onDownloadAsset: (repoId: string, asset: ReleaseAsset, precision: string) => void;
+  onDownload: (repoId: string, variant?: GGUFFile) => void;
+  /** RepoIds for which a download is in progress. */
   downloading: Set<string>;
 }
 
-/**
- * Model detail subpage (`/models/:repoId`) — loads the model page from
- * Hugging Face: metadata, tags, file tree and README.
- */
-export default function HubModelDetail({ onDownload, onDownloadAsset, downloading }: Props) {
+/** Grouped GGUF files: main file + its associated sidecars (mmproj, mtp, etc.) */
+interface GGUFGroup {
+  main: GGUFFile;
+  sidecars: GGUFFile[];
+}
+
+const convertToGGUFFiles = (entries: HubFileEntry[]): GGUFFile[] => {
+  const result: GGUFFile[] = [];
+  for (const e of entries) {
+    if (e.type !== "file") continue;
+    const parsed = parseGGUFFilename(e.path);
+    if (!parsed) continue;
+    result.push({
+      filename: e.path,
+      precision: parsed.encoding ?? "unknown",
+      sizeLabel: parsed.sizeLabel,
+      version: parsed.version,
+      shard: parsed.shard,
+      size: e.size,
+    });
+  }
+  return result;
+};
+
+/** Group GGUF files: each non-sidecar file is its own group, sidecars are attached to their matching main file */
+const groupGGUFFiles = (files: GGUFFile[]): GGUFGroup[] => {
+  const mainFiles: GGUFFile[] = [];
+  const sidecarFiles: GGUFFile[] = [];
+
+  /** Check if filename indicates a sidecar (mmproj/mtp) anywhere in the name */
+  const isSidecarFilename = (filename: string): boolean => {
+    const name = filename.replace(/\.gguf$/i, '');
+    return name.includes('-mmproj-') || name.includes('-mtp-');
+  };
+
+  /** Normalize fineTune for matching by stripping -mmproj / -mtp segments */
+  const normalizeFineTune = (fineTune: string | null): string => {
+    if (!fineTune) return '';
+    return fineTune.replace(/-mmproj/g, '').replace(/-mtp/g, '');
+  };
+
+  for (const f of files) {
+    const parsed = parseGGUFFilename(f.filename);
+    if (!parsed) continue;
+    // Sidecar if: regex detected prefix sidecar, OR filename contains -mmproj-/-mtp- (middle pattern)
+    if (parsed.sidecar !== null || isSidecarFilename(f.filename)) {
+      sidecarFiles.push(f);
+    } else {
+      mainFiles.push(f);
+    }
+  }
+
+  // Sort main files by size, ascending
+  mainFiles.sort((a, b) => (a.size ?? 0) - (b.size ?? 0));
+
+  // Each main file gets its own group
+  const groups: GGUFGroup[] = mainFiles.map((main) => ({ main, sidecars: [] }));
+
+  // Attach sidecars to the matching main file (same baseName + normalized fineTune + version + encoding)
+  for (const sidecar of sidecarFiles) {
+    const parsed = parseGGUFFilename(sidecar.filename);
+    if (!parsed) continue;
+    const match = groups.find((g) => {
+      const mainParsed = parseGGUFFilename(g.main.filename);
+      if (!mainParsed) return false;
+      return (
+        mainParsed.baseName === parsed.baseName &&
+        normalizeFineTune(mainParsed.fineTune) === normalizeFineTune(parsed.fineTune) &&
+        mainParsed.version === parsed.version &&
+        mainParsed.encoding === parsed.encoding
+      );
+    });
+    if (match) {
+      match.sidecars.push(sidecar);
+    }
+  }
+
+  return groups;
+};
+
+const getChipStyle = (bits: number) => ({
+  backgroundColor: bits <= 4 ? "#4caf50" : bits <= 6 ? "#ff9800" : bits <= 8 ? "#2196f3" : "#9c27b0",
+  color: "#fff",
+  padding: "2px 6px",
+  borderRadius: "3px",
+  fontSize: "11px",
+  fontWeight: 600,
+  marginRight: "6px",
+});
+
+export default function HubModelDetail({ onDownload, downloading }: Props) {
   const { repoId = "" } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
-  const compatibleNames = useHubBrowseStore((s) => s.compatibleNames);
-  const setAssetCompat = useHubBrowseStore((s) => s.setAssetCompat);
   const [model, setModel] = useState<HubModel | null>(null);
   const [files, setFiles] = useState<HubFileEntry[]>([]);
   const [readme, setReadme] = useState<string | null>(null);
-  const [release, setRelease] = useState<ReleaseAssets | null>(null);
-  const [showVersionDialog, setShowVersionDialog] = useState(false);
-  const [chipsetSlugs, setChipsetSlugs] = useState<string[]>([]);
-  const [singleOption, setSingleOption] = useState<{
-    asset: ReleaseAsset;
-    precision: string;
-  } | null>(null);
+  const [selectedVariant, setSelectedVariant] = useState<GGUFGroup | null>(null);
+  const [ggufGroups, setGgufGroups] = useState<GGUFGroup[]>([]);
+  const [systemMemory, setSystemMemory] = useState<SystemMemoryInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
@@ -72,44 +138,24 @@ export default function HubModelDetail({ onDownload, onDownloadAsset, downloadin
     setModel(null);
     setFiles([]);
     setReadme(null);
-    setRelease(null);
-    setShowVersionDialog(false);
-    setSingleOption(null);
+    setSelectedVariant(null);
+    setGgufGroups([]);
     (async () => {
       try {
         const m = await getHubModel(repoId);
         if (cancelled) return;
         setModel(m);
-        // Non-blocking extras: file tree + README.
         listHubModelFiles(repoId)
           .then((f) => !cancelled && setFiles(f))
           .catch(() => undefined);
         fetchHubModelReadme(repoId)
           .then((r) => !cancelled && setReadme(r))
           .catch(() => undefined);
-        fetchReleaseAssets(repoId)
-          .then((r) => {
-            if (cancelled || !r) return;
-            setRelease(r);
-            // Match the device chipset (from `geniex config get chipset`)
-            // against the asset chipset slugs to pre-filter the dialog.
-            const slugs = r.precisions.flatMap((p) => Object.keys(p.chipset_assets));
-            geniex
-              .configGet("chipset")
-              .then((device) => {
-                const matched = matchChipsetSlugs(device, slugs);
-                setChipsetSlugs(matched);
-                // Share the learned compatibility with the browse tiles.
-                setAssetCompat(repoId, assetCompatibility(r, matched));
-                // Single precision/variant → skip the dialog entirely.
-                setSingleOption(singleDownloadOption(r, matched));
-              })
-              .catch(() => {
-                const matched = matchChipsetSlugs(null, slugs);
-                setChipsetSlugs(matched);
-                setAssetCompat(repoId, assetCompatibility(r, matched));
-                setSingleOption(singleDownloadOption(r, matched));
-              });
+        listHubModelFiles(repoId)
+          .then((all) => {
+            if (cancelled) return;
+            const ggufFiles = convertToGGUFFiles(all);
+            setGgufGroups(groupGGUFFiles(ggufFiles));
           })
           .catch(() => undefined);
       } catch (err) {
@@ -118,10 +164,17 @@ export default function HubModelDetail({ onDownload, onDownloadAsset, downloadin
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [repoId, setAssetCompat]);
+    return () => { cancelled = true; };
+  }, [repoId]);
+
+  // Load system memory info once
+  useEffect(() => {
+    let cancelled = false;
+    getSystemMemory()
+      .then((mem) => !cancelled && setSystemMemory(mem))
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
 
   if (loading) {
     return (
@@ -151,6 +204,29 @@ export default function HubModelDetail({ onDownload, onDownloadAsset, downloadin
   }
 
   const isDownloading = downloading.has(model.id);
+  const paramsCount = model?.safetensors?.parameters ?? null;
+  // GGUF files have actual size — compute RAM fit directly from file size (with overhead for KV cache/activations)
+  const estimateRamFitFromFileSize = (fileSize: number) => {
+    if (!fileSize || !systemMemory) return null;
+    const neededBytes = Math.round(fileSize * 1.15);
+    return ramFitForBytes(neededBytes, systemMemory);
+  };
+  const estimateMemoryRequirement = (bits: number | null) => {
+    if (paramsCount == null || bits == null) return null;
+    const neededBytes = estimateModelBytes(paramsCount, bits);
+    if (!neededBytes || !systemMemory) return null;
+    return ramFitForBytes(neededBytes, systemMemory);
+  };
+
+  const handleDownload = (group: GGUFGroup) => {
+    // Download the main GGUF file
+    onDownload(model.id, { ...group.main, shard: null });
+
+    // Download all sidecar files (mmproj, mtp) associated with this variant
+    for (const sidecar of group.sidecars) {
+      onDownload(model.id, { ...sidecar, shard: null });
+    }
+  };
 
   return (
     <div className="lx-page">
@@ -172,45 +248,22 @@ export default function HubModelDetail({ onDownload, onDownloadAsset, downloadin
             <p className="lx-page-subtitle">
               ⬇ {formatCount(model.downloads)} downloads · ❤ {formatCount(model.likes)} likes
               {model.lastModified &&
-                ` · Updated ${new Date(model.lastModified).toLocaleDateString()}`}
+                ` · Updated ${new Date(model.lastModified).toLocaleDateString()}`} 
               {model.gated ? " · 🔒 gated" : ""}
             </p>
-            {compatibleNames && (
+            {model.pipeline_tag && (
               <div style={{ marginTop: 6 }}>
-                {compatibleNames.has(model.id) ? (
-                  <StatusBadge tone="green">NPU ready — direct pull</StatusBadge>
-                ) : (
-                  <StatusBadge>Not in GenieX list — check release assets</StatusBadge>
-                )}
+                <StatusBadge>{model.pipeline_tag}</StatusBadge>
               </div>
             )}
           </div>
           <div className="lx-page-actions">
             <Button
-              appearance="primary"
-              icon={isDownloading ? <Spinner size="tiny" /> : <ArrowDownloadRegular />}
-              disabled={isDownloading}
-              onClick={() => {
-                // NPU-ready models pull directly via the CLI — no version
-                // dialog needed even if release assets exist.
-                if (compatibleNames?.has(model.id) || !release) {
-                  onDownload(model.id);
-                } else if (singleOption) {
-                  // Only one precision/variant — download it right away.
-                  onDownloadAsset(model.id, singleOption.asset, singleOption.precision);
-                } else {
-                  setShowVersionDialog(true);
-                }
-              }}
-            >
-              {isDownloading ? "Pulling…" : "Download"}
-            </Button>
-            <Button
               appearance="subtle"
               icon={<OpenRegular />}
-              onClick={() =>
-                open(hubModelPageUrl(model.id)).catch((err) =>
-                  console.error("Failed to open browser:", err),
+              onClick={() => 
+                open(hubModelPageUrl(model.id)).catch((err) => 
+                  console.error("Failed to open browser:", err), 
                 )
               }
             >
@@ -227,6 +280,96 @@ export default function HubModelDetail({ onDownload, onDownloadAsset, downloadin
                 {tag}
               </span>
             ))}
+          </div>
+        )}
+
+        {/* ── Model name + Precision dropdown ────────────────────── */}
+        {ggufGroups.length > 0 && (
+          <div className="lx-precision-dropdown" style={{ marginTop: 12 }}>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                alignItems: "center",
+              }}
+              role="group"
+              aria-label="Select GGUF variant"
+            >
+              <span className="lx-chip lx-model-chip">{model.id}</span>
+              
+              <Dropdown
+                value={selectedVariant?.main.filename}
+                selectedOptions={selectedVariant ? [selectedVariant.main.filename] : []}
+                onOptionSelect={(_, data) => {
+                  const selected = ggufGroups.find((g) => g.main.filename === data.optionValue);
+                  setSelectedVariant(selected ?? null);
+                }}
+                className="lx-precision-select"
+                aria-label="Select GGUF precision"
+              >
+                <Option value="">Select precision…</Option>
+                {ggufGroups.map((group) => {
+                  const info = precisionInfo(group.main.precision);
+                  const labelParts = [info.label];
+                  if (group.main.sizeLabel) labelParts.push(group.main.sizeLabel);
+                  else if (group.main.version) labelParts.push(group.main.version);
+                  const bits = info.bitsPerWeight ?? 4;
+                  const chipStyle = getChipStyle(bits);
+                  const hasSidecar = group.sidecars.length > 0;
+                  const ramFit = estimateRamFitFromFileSize(group.main.size) ?? estimateMemoryRequirement(bits);
+
+                  // RAM fit chip only when we have enough info to calculate it
+                  const ramChip = ramFit ? (
+                    <span className="lx-chip" style={{
+                      backgroundColor: ramFit.level === "fits" ? "#4caf50" : ramFit.level === "tight" ? "#ff9800" : "#f44336",
+                      color: "#fff",
+                      padding: "2px 6px",
+                      borderRadius: "3px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                    }}>
+                      {ramFit.level === "fits" ? "✓" : ramFit.level === "tight" ? "⚠" : "✗"} {ramFit.label}
+                    </span>
+                  ) : (
+                    <span className="lx-chip" style={{ backgroundColor: "#999", color: "#666", padding: "2px 6px", borderRadius: "3px", fontSize: "11px", fontWeight: 600 }}>
+                      N/A
+                    </span>
+                  );
+                  
+                  return (
+                    <Option key={group.main.filename} value={group.main.filename}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={chipStyle} className="lx-chip">{labelParts.join(" — ")}</span>
+                        {hasSidecar && (
+                          <span className="lx-chip" style={{
+                            backgroundColor: "#6366f1",
+                            color: "#fff",
+                            padding: "2px 6px",
+                            borderRadius: "3px",
+                            fontSize: "11px",
+                            fontWeight: 600,
+                          }}>
+                            +{group.sidecars.length} sidecar
+                          </span>
+                        )}
+                        {ramChip}
+                        <span style={{ marginLeft: 8 }}>— {formatBytes(group.main.size)}</span>
+                      </span>
+                    </Option>
+                  );
+                })}
+              </Dropdown>
+              
+              <Button
+                appearance="primary"
+                icon={isDownloading ? ( <Spinner size="tiny" /> ) : <ArrowDownloadRegular />}
+                disabled={!selectedVariant || isDownloading}
+                onClick={() => selectedVariant && handleDownload(selectedVariant)}
+              >
+                {isDownloading ? "Pulling…" : "Download"}
+              </Button>
+            </div>
           </div>
         )}
 
@@ -247,12 +390,7 @@ export default function HubModelDetail({ onDownload, onDownloadAsset, downloadin
                 {files.map((f) => (
                   <div
                     key={f.path}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontSize: 12.5,
-                      padding: "2px 0",
-                    }}
+                    style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "2px 0" }}
                   >
                     <span className="lx-mono">
                       {f.type === "directory" ? "📁" : "📄"} {f.path}
@@ -273,9 +411,7 @@ export default function HubModelDetail({ onDownload, onDownloadAsset, downloadin
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeRaw, rehypeHighlight]}
-                components={{
-                  a: (props) => <a {...props} target="_blank" rel="noopener noreferrer" />,
-                }}
+                components={{ a: (props) => <a {...props} target="_blank" rel="noopener noreferrer" /> }}
               >
                 {readme}
               </ReactMarkdown>
@@ -286,21 +422,6 @@ export default function HubModelDetail({ onDownload, onDownloadAsset, downloadin
             </p>
           )}
         </div>
-
-        {/* ── Version selection popup ──────────────── */}
-        {showVersionDialog && release && (
-          <ReleaseVersionDialog
-            modelId={model.id}
-            release={release}
-            chipsetSlugs={chipsetSlugs}
-            isDownloading={isDownloading}
-            onSelect={(asset, precision) => {
-              setShowVersionDialog(false);
-              onDownloadAsset(model.id, asset, precision);
-            }}
-            onClose={() => setShowVersionDialog(false)}
-          />
-        )}
       </div>
     </div>
   );

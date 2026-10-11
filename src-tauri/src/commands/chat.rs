@@ -4,6 +4,34 @@ use super::chat_helpers::{
     build_chat_body, fetch_first_loaded_model, resolve_model_for_server, strip_precision,
     ChatMessage, GenerationSettings,
 };
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex as StdMutex};
+
+/// Cancel flag shared between the cancel command and a streaming loop.
+type CancelFlag = Arc<AtomicBool>;
+
+/// Registry entry: stream id → its cancel flag.
+type CancelEntry = (uuid::Uuid, CancelFlag);
+
+/// Per-request cancel flags. `chat_completion` registers a flag before
+/// streaming and removes it when done; `cancel_chat_completion` flips all
+/// registered flags, and each streaming loop aborts on the next chunk.
+static CANCEL_FLAGS: std::sync::LazyLock<StdMutex<Vec<CancelEntry>>> =
+    std::sync::LazyLock::new(|| StdMutex::new(Vec::new()));
+
+/// Request the in-flight chat completion to stop at the next chunk boundary.
+#[tauri::command]
+pub async fn cancel_chat_completion() -> Result<(), String> {
+    let flags = CANCEL_FLAGS.lock().expect("cancel flags mutex poisoned");
+    let mut requested = 0;
+    for (_, flag) in flags.iter() {
+        flag.store(true, Ordering::SeqCst);
+        requested += 1;
+    }
+    eprintln!("[chat] cancel requested for {requested} in-flight stream(s)");
+    Ok(())
+}
+
 
 /// Load a model into the GenieX server by sending a minimal chat request.
 /// The server loads models on-demand; this warmup triggers that loading.
@@ -163,6 +191,14 @@ pub async fn chat_completion(
 
     // Stream the SSE response
     use futures_util::StreamExt;
+    use std::sync::Arc;
+
+    let stream_id = uuid::Uuid::new_v4();
+    let cancel_flag: CancelFlag = Arc::new(AtomicBool::new(false));
+    CANCEL_FLAGS
+        .lock()
+        .expect("cancel flags mutex poisoned")
+        .push((stream_id, Arc::clone(&cancel_flag)));
 
     let mut stream = response.bytes_stream();
     let mut buffer = String::new();
@@ -183,10 +219,24 @@ pub async fn chat_completion(
                 continue;
             }
 
+            if cancel_flag.load(Ordering::SeqCst) {
+                eprintln!("[chat] stream {stream_id} cancelled by user");
+                CANCEL_FLAGS
+                    .lock()
+                    .expect("cancel flags mutex poisoned")
+                    .retain(|(id, _)| *id != stream_id);
+                let _ = app.emit("chat-done", ());
+                return Ok(());
+            }
+
             if let Some(data) = trimmed.strip_prefix("data:") {
                 let data = data.trim();
                 if data == "[DONE]" {
                     eprintln!("[chat] stream complete: {chunk_count} chunks");
+                    CANCEL_FLAGS
+                        .lock()
+                        .expect("cancel flags mutex poisoned")
+                        .retain(|(id, _)| *id != stream_id);
                     let _ = app.emit("chat-done", ());
                     return Ok(());
                 }
@@ -210,10 +260,25 @@ pub async fn chat_completion(
                 }
             }
         }
+
+        // Cancel checked between network chunks too — a user stop should not
+        // wait for more tokens to arrive over the wire.
+        if cancel_flag.load(Ordering::SeqCst) {
+            eprintln!("[chat] stream {stream_id} cancelled by user");
+            CANCEL_FLAGS
+                .lock()
+                .expect("cancel flags mutex poisoned")
+                .retain(|(id, _)| *id != stream_id);
+            let _ = app.emit("chat-done", ());
+            return Ok(());
+        }
     }
 
-    // If we get here without [DONE], still emit done
-    eprintln!("[chat] stream ended without [DONE]: {chunk_count} chunks");
+    // Stream done or cancelled — deregister the cancel flag.
+    CANCEL_FLAGS
+        .lock()
+        .expect("cancel flags mutex poisoned")
+        .retain(|(id, _)| *id != stream_id);
     let _ = app.emit("chat-done", ());
 
     Ok(())

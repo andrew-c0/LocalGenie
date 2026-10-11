@@ -5,7 +5,7 @@ import * as geniex from "../services/geniex";
 import { useChatStore } from "../stores/chatStore";
 import { useDownloadStore } from "../stores/downloadStore";
 import { useModelStore } from "../stores/modelStore";
-import type { Message } from "../types";
+import type { DownloadedModelMeta, Message } from "../types";
 
 /**
  * Global app bootstrap: initial data load (CLI check, sessions, models,
@@ -194,6 +194,19 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
+    // Persist downloaded-model metadata (precision + context size) so the
+    // model card can show real values instead of defaults. Best-effort.
+    try {
+      const meta = await fetchDownloadedModelMeta(payload.model);
+      await db.upsertDownloadedModel(
+        payload.model,
+        meta.precision ?? null,
+        meta.contextSize ?? null,
+        meta.paramCount ?? null,
+      );
+    } catch {
+      // ignore — metadata is a nice-to-have
+    }
   });
 
   // ── Listen for asset download progress (drawer) ──────────────
@@ -223,4 +236,42 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
   });
 
   return <>{children}</>;
+}
+
+/**
+ * Fetch downloaded-model metadata from the local DB, falling back to the HF
+ * config.json (real context size) and safetensors metadata (param count) when
+ * the DB has nothing yet.
+ */
+export async function fetchDownloadedModelMeta(repoId: string): Promise<DownloadedModelMeta> {
+  const rows = await db.listDownloadedModels();
+  const row = rows.find((r) => r.name === repoId);
+  if (row) {
+    return {
+      precision: row.precision ?? undefined,
+      contextSize: row.context_size ?? undefined,
+      paramCount: row.param_count ?? undefined,
+    };
+  }
+
+  // Fallback: read config.json from the HF repo to get the real context size.
+  try {
+    const res = await fetch(`https://huggingface.co/${repoId}/resolve/main/config.json`, {
+      headers: { Accept: "application/json" },
+    });
+    if (res.ok) {
+      const cfg = await res.json();
+      const ctx =
+        cfg.context_length ??
+        cfg.max_position_embeddings ??
+        cfg.max_sequence_length ??
+        cfg.model_type === "llama"
+          ? cfg.max_position_embeddings
+          : undefined;
+      return { contextSize: ctx };
+    }
+  } catch {
+    // ignore
+  }
+  return {};
 }

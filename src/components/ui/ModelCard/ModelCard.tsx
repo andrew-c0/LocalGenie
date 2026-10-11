@@ -4,6 +4,13 @@ import { formatCount } from "../../../utils/format";
 import { StatusBadge } from "../primitives";
 import "./ModelCard.css";
 
+export interface GGUFFileOption {
+  filename: string;
+  precision: string;
+  sizeLabel: string | null;
+  version: string;
+}
+
 export interface ModelCardData {
   name: string;
   installed: boolean;
@@ -13,6 +20,14 @@ export interface ModelCardData {
   downloads?: number;
   likes?: number;
   pipelineTag?: string;
+  /** Precision actually downloaded (e.g. Q4_0), from the local DB. */
+  downloadedPrecision?: string;
+  /** Native context length reported by the model's config (tokens), from the local DB. */
+  contextSize?: number;
+  /** Total parameter count from HF safetensors metadata, from the local DB. */
+  paramCount?: number;
+  /** GGUF variants available on Hugging Face (only set for search results). */
+  ggufFiles?: GGUFFileOption[];
 }
 
 interface ModelCardProps {
@@ -20,8 +35,11 @@ interface ModelCardProps {
   /** Model is loaded on the server. */
   isLoaded: boolean;
   isDownloading: boolean;
-  onLoad: (name: string) => void;
-  onDownload: (name: string) => void;
+  /** Open the header model selector (which loads + binds to the active chat). */
+  onOpenSelector: () => void;
+  onDownload: (name: string, gguf?: GGUFFileOption) => void;
+  /** Open the GGUF variant picker (for HF search results with .gguf files). */
+  onPickGGUF?: (name: string, ggufFiles?: GGUFFileOption[]) => void;
   onRemove?: (name: string) => void;
 }
 
@@ -30,11 +48,14 @@ export function ModelCard({
   model,
   isLoaded,
   isDownloading,
-  onLoad,
+  onOpenSelector,
   onDownload,
+  onPickGGUF,
   onRemove,
 }: ModelCardProps) {
   const fmt = (n?: number) => (n == null ? "—" : formatCount(n));
+  const ggufFiles = model.ggufFiles ?? [];
+  const hasGGUF = !model.installed && ggufFiles.length > 0;
 
   return (
     <div className="lx-model-card">
@@ -56,6 +77,21 @@ export function ModelCard({
           {model.precisions && model.precisions.length > 0 && (
             <span>{model.precisions.join(" / ")}</span>
           )}
+          {model.downloadedPrecision && (
+            <span>
+              Precision: <strong>{model.downloadedPrecision}</strong>
+            </span>
+          )}
+          {model.contextSize && (
+            <span>
+              Context: <strong>{model.contextSize.toLocaleString()}</strong>
+            </span>
+          )}
+          {model.paramCount && (
+            <span>
+              Params: <strong>{(model.paramCount / 1e9).toFixed(1)}B</strong>
+            </span>
+          )}
         </div>
       ) : (
         <div className="lx-model-card-meta">
@@ -76,7 +112,7 @@ export function ModelCard({
               size="small"
               appearance="primary"
               icon={<ChatRegular />}
-              onClick={() => onLoad(model.name)}
+              onClick={onOpenSelector}
               disabled={isLoaded}
             >
               {isLoaded ? "Active" : "Load & Chat"}
@@ -91,6 +127,17 @@ export function ModelCard({
               />
             )}
           </>
+        ) : hasGGUF ? (
+          <div className="lx-gguf-picker" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <Button
+              size="small"
+              appearance="primary"
+              icon={<ArrowDownloadRegular />}
+              onClick={() => onPickGGUF?.(model.name, ggufFiles)}
+            >
+              Download
+            </Button>
+          </div>
         ) : (
           <Button
             size="small"

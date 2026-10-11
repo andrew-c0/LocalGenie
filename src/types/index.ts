@@ -151,3 +151,10 @@ export interface BenchmarkRunSummary {
 
 /** Model installation state used by the model library UI. */
 export type ModelInstallState = "loaded" | "ready" | "downloading" | "not-installed" | "error";
+
+/** Extra metadata for a downloaded model, persisted in the local DB. */
+export interface DownloadedModelMeta {
+  precision?: string;
+  contextSize?: number;
+  paramCount?: number;
+}

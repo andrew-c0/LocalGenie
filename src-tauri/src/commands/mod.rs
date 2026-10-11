@@ -6,6 +6,7 @@ pub mod database;
 pub mod download;
 pub mod models;
 pub mod server;
+pub mod system;
 
 use std::sync::Mutex;
 

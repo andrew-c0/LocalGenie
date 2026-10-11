@@ -25,6 +25,8 @@ export interface HubModel {
   lastModified?: string;
   gated?: boolean | string;
   private?: boolean;
+  /** Present on GET /api/models/{id} — total parameter count of the repo. */
+  safetensors?: { total?: number; parameters?: number };
 }
 
 /** One active filter chip. Encoded as `filter=<type>:<value>` on the wire. */
@@ -372,4 +374,132 @@ export function modelTagChips(model: HubModel): string[] {
     }
   }
   return [...new Set(chips)].slice(0, 5);
+}
+
+// ─── Precision metadata & System RAM fit ─────────────────────────
+
+/** Human-readable metadata for a precision key (e.g. `q4_0`). */
+export interface PrecisionInfo {
+  label: string;
+  description: string;
+  /** Effective bits per weight; null when unknown (no size estimate). */
+  bitsPerWeight: number | null;
+}
+
+/** Ordered precision table — first match wins, most specific first. */
+const PRECISION_DEFS: { pattern: RegExp; label: string; description: string; bits: number | null }[] =
+  [
+    {
+      pattern: /^f32$|^fp32$|^float32$/,
+      label: "FP32",
+      description: "Full 32-bit float — highest accuracy, 4× the memory",
+      bits: 32,
+    },
+    {
+      pattern: /^bf16$|^bfloat16$/,
+      label: "BF16",
+      description: "16-bit brain float — near-FP16 accuracy",
+      bits: 16,
+    },
+    {
+      pattern: /^f16$|^fp16$|^float16$|^half$/,
+      label: "FP16",
+      description: "16-bit float — baseline quality, largest footprint",
+      bits: 16,
+    },
+    {
+      pattern: /^q8_1$|^q8_0$|^q8$|^int8$|^w8a8$|^w8a16$|^w8$/,
+      label: "Q8 / 8-bit",
+      description: "8-bit — near-lossless, about half of FP16 memory",
+      bits: 8,
+    },
+    { pattern: /^q6_k$|^q6$/, label: "Q6_K", description: "6-bit — very high quality", bits: 6 },
+    {
+      pattern: /^q5_k_m$|^q5_k_s$|^q5_k$|^q5_1$|^q5_0$|^q5$/,
+      label: "Q5 / 5-bit",
+      description: "5-bit — high quality",
+      bits: 5,
+    },
+    {
+      pattern: /^w4a16$|^w4a8$|^int4$|^q4_k_m$|^q4_k_s$|^q4_k$|^q4_1$|^q4_0$|^q4$|^w4$/,
+      label: "Q4 / 4-bit",
+      description: "4-bit — best Hexagon NPU support, recommended",
+      bits: 4.5,
+    },
+    {
+      pattern: /^w3|^q3/,
+      label: "3-bit",
+      description: "3-bit — smallest, reduced quality",
+      bits: 3,
+    },
+    {
+      pattern: /^w2|^q2/,
+      label: "2-bit",
+      description: "2-bit — smallest, significant quality trade-offs",
+      bits: 2,
+    },
+  ];
+
+/** Look up label/description/bits-per-weight for a precision key. */
+export function precisionInfo(key: string): PrecisionInfo {
+  const hit = PRECISION_DEFS.find((d) => d.pattern.test(key.toLowerCase()));
+  if (hit) return { label: hit.label, description: hit.description, bitsPerWeight: hit.bits };
+  // Generic "N-bit" keys (e.g. "4-bit", "8-bit") still give a size estimate.
+  const generic = key.match(/(\d+(?:\.\d+)?)\s*bit/i);
+  if (generic) {
+    const bits = Number.parseFloat(generic[1]);
+    return {
+      label: key.toUpperCase(),
+      description: `${generic[1]}-bit quantization`,
+      bitsPerWeight: Number.isFinite(bits) ? bits : null,
+    };
+  }
+  return { label: key.toUpperCase(), description: "Custom precision", bitsPerWeight: null };
+}
+
+/**
+ * Parse a parameter count out of a repo id, e.g. `Qwen3-4B` → 4e9.
+ * Returns null when no `NB`/`N.NB` token is present.
+ */
+export function parseParamCount(repoId: string): number | null {
+  const m = repoId.match(/[-_ .](\d+(?:\.\d+)?)[bB](?![a-zA-Z0-9])/);
+  if (!m) return null;
+  const b = Number.parseFloat(m[1]);
+  return Number.isFinite(b) && b > 0 ? b * 1e9 : null;
+}
+
+/**
+ * Rough resident-memory estimate for a model:
+ * bits/param × param count × 1.15 (weights + KV cache + activations).
+ */
+export function estimateModelBytes(
+  paramsCount: number | null,
+  bitsPerWeight: number | null,
+): number | null {
+  if (paramsCount == null || bitsPerWeight == null) return null;
+  return Math.round((paramsCount * bitsPerWeight * 1.15) / 8);
+}
+
+/** Verdict of a precision footprint against System RAM. */
+export interface RamFit {
+  level: "fits" | "tight" | "no";
+  label: string;
+}
+
+/** Compare an estimated model footprint against total/available RAM. */
+export function ramFitForBytes(
+  bytes: number,
+  memory: { totalBytes: number; availableBytes: number },
+): RamFit {
+  const gb = (b: number) => `${(b / 2 ** 30).toFixed(1)} GB`;
+  if (bytes <= memory.availableBytes * 0.9) {
+    return { level: "fits", label: `Fits — ${gb(bytes)} of ${gb(memory.availableBytes)} free` };
+  }
+  if (bytes <= memory.totalBytes * 0.85) {
+    return {
+      level: "tight",
+      label: `Tight — needs ${gb(bytes)}, ${gb(memory.availableBytes)} free`,
+    };
+  }
+  return { level: "no", label: `May not fit — ${gb(bytes)} vs ${gb(memory.totalBytes)} RAM` };
 }

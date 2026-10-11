@@ -9,11 +9,12 @@ import ModelSelectorPopover from "./ModelSelectorPopover";
 export default function Header() {
   const serverStatus = useModelStore((s) => s.serverStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
+  const selectorOpen = useModelStore((s) => s.selectorOpen);
+  const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
   const downloads = useModelStore((s) => s.downloads);
   const activeDownloads = useDownloadStore(
     (s) => s.downloads.filter((d) => d.status === "downloading").length,
   );
-  const [selectorOpen, setSelectorOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const activeLabel = activeModelId
@@ -28,7 +29,7 @@ export default function Header() {
         <button
           type="button"
           className={`lx-titlebar-model${selectorOpen ? " open" : ""}`}
-          onClick={() => setSelectorOpen((v) => !v)}
+          onClick={() => setSelectorOpen(!selectorOpen)}
           aria-expanded={selectorOpen}
           aria-haspopup="dialog"
           title="Switch active model"
@@ -47,7 +48,11 @@ export default function Header() {
           />
         </button>
 
-        <ModelSelectorPopover open={selectorOpen} onClose={() => setSelectorOpen(false)} />
+        <ModelSelectorPopover
+          open={selectorOpen}
+          onClose={() => setSelectorOpen(false)}
+          onOpenChange={setSelectorOpen}
+        />
       </div>
 
       <span
