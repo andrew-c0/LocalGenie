@@ -1,19 +1,24 @@
 ﻿import { Button, Spinner } from "@fluentui/react-components";
 import { SearchRegular } from "@fluentui/react-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import HubBrowse from "../components/models/HubBrowse";
+import ReleaseVersionDialog from "../components/models/ReleaseVersionDialog";
 import { ChipRow } from "../components/ui/ChipRow/ChipRow";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog/ConfirmDialog";
 import { ErrorBanner } from "../components/ui/ErrorBanner/ErrorBanner";
-import ReleaseVersionDialog from "../components/models/ReleaseVersionDialog";
-import { ModelCard, type GGUFFileOption, type ModelCardData } from "../components/ui/ModelCard/ModelCard";
+import {
+  type GGUFFileOption,
+  ModelCard,
+  type ModelCardData,
+} from "../components/ui/ModelCard/ModelCard";
 import { PageHeader } from "../components/ui/PageHeader/PageHeader";
 import { ProgressBar, StateBlock } from "../components/ui/primitives";
 import * as db from "../services/database";
+import { cleanupDownloadedFile, downloadFile, importGGUF } from "../services/download";
 import * as geniex from "../services/geniex";
 import * as hub from "../services/hubModels";
-import { useModelStore } from "../stores/modelStore";
 import { useHubBrowseStore } from "../stores/hubBrowseStore";
-import HubBrowse from "../components/models/HubBrowse";
+import { useModelStore } from "../stores/modelStore";
 
 /** Full-page model library (list + grid variants). */
 export default function ModelLibraryPage() {
@@ -65,16 +70,35 @@ export default function ModelLibraryPage() {
     }
   }, [query, setIsSearching, setSearchResults]);
 
-    /** Pull a single GGUF file from Hugging Face into the GenieX cache. */
+  /** Pull a single GGUF file from Hugging Face into the GenieX cache. */
   const handleGGUFDownload = useCallback(
     (repoId: string, variant?: GGUFFileOption) => {
       setError(null);
       const downloadKey = `${repoId}:${variant?.precision ?? "import"}`;
-      useModelStore
-        .getState()
-        .addDownload({ model: downloadKey, message: "Downloading GGUF weights…", status: "downloading" });
-      geniex
-        .importGGUF(repoId, variant?.filename ?? "", variant?.precision ?? "")
+      useModelStore.getState().addDownload({
+        model: downloadKey,
+        message: "Downloading GGUF weights…",
+        status: "downloading",
+      });
+      if (!variant) return;
+      const url = `https://huggingface.co/${repoId}/resolve/main/${variant.filename}`;
+      downloadFile(url, variant.filename, variant.precision ?? undefined)
+        .then((downloadedPath) => {
+          // Import into GenieX cache
+          return importGGUF(downloadedPath, repoId, variant.filename, variant.precision)
+            .then(() => {
+              // Success - cleanup the downloaded file
+              return cleanupDownloadedFile(downloadedPath);
+            })
+            .then(() => {
+              // Success notification
+              useModelStore.getState().addDownload({
+                model: downloadKey,
+                message: "Downloaded successfully",
+                status: "complete",
+              });
+            });
+        })
         .catch((err) => {
           useModelStore
             .getState()
@@ -85,7 +109,7 @@ export default function ModelLibraryPage() {
           useModelStore.getState().removeDownload(downloadKey);
         });
     },
-    [],
+    [downloadFile, importGGUF, cleanupDownloadedFile],
   );
 
   /** Open the version picker for a search result card. */
@@ -198,7 +222,7 @@ export default function ModelLibraryPage() {
       }
     }
     return list;
-  }, [models, searchResults, ggufCache]);
+  }, [models, searchResults, ggufCache, downloadedMeta]);
 
   return (
     <div className="lx-page">
@@ -210,7 +234,7 @@ export default function ModelLibraryPage() {
           actions={
             <Button
               appearance="subtle"
-              onClick={() => geniex.cleanModels().catch((e) => setError(String(e)))}
+              onClick={() => geniex.cleanModels().catch((err: Error) => setError(String(err)))}
             >
               Clean Cache
             </Button>
@@ -226,7 +250,10 @@ export default function ModelLibraryPage() {
             style={{
               flex: 1,
               padding: 6,
-              border: activeTab === "local" ? "1px solid var(--lx-text-accent)" : "1px solid var(--lx-border)",
+              border:
+                activeTab === "local"
+                  ? "1px solid var(--lx-text-accent)"
+                  : "1px solid var(--lx-border)",
               borderRadius: 4,
               background: activeTab === "local" ? "var(--lx-bg-subtle)" : "transparent",
               color: activeTab === "local" ? "var(--lx-text)" : "var(--lx-text-muted)",
@@ -242,7 +269,10 @@ export default function ModelLibraryPage() {
             style={{
               flex: 1,
               padding: 6,
-              border: activeTab === "all" ? "1px solid var(--lx-text-accent)" : "1px solid var(--lx-border)",
+              border:
+                activeTab === "all"
+                  ? "1px solid var(--lx-text-accent)"
+                  : "1px solid var(--lx-border)",
               borderRadius: 4,
               background: activeTab === "all" ? "var(--lx-bg-subtle)" : "transparent",
               color: activeTab === "all" ? "var(--lx-text)" : "var(--lx-text-muted)",
@@ -334,7 +364,7 @@ export default function ModelLibraryPage() {
           />
         )}
 
-            {/* -- Remove confirmation -- */}
+        {/* -- Remove confirmation -- */}
         {confirmRemove && (
           <ConfirmDialog
             title="Remove Model"

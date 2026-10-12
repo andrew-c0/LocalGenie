@@ -8,7 +8,7 @@ import type {
   ServerStartOptions,
   ServerStatus,
   UpdateInfo,
-} from "../types";
+} from "../types/index";
 
 /** Shape sent to the OpenAI-compatible chat completions endpoint. */
 interface ChatMessage {
@@ -22,13 +22,16 @@ export async function listModels(): Promise<ModelInfo[]> {
   return invoke("list_models");
 }
 
-export async function pullModel(
-  model: string,
-  precision?: string,
-  modelHub?: string,
-  modelType?: string,
-  localPath?: string,
-): Promise<void> {
+interface PullModelOptions {
+  model: string;
+  precision?: string;
+  modelHub?: string;
+  modelType?: string;
+  localPath?: string;
+}
+
+export async function pullModel(options: PullModelOptions): Promise<void> {
+  const { model, precision, modelHub, modelType, localPath } = options;
   return invoke("pull_model", {
     model,
     precision,
@@ -40,15 +43,6 @@ export async function pullModel(
 
 export async function removeModel(model: string): Promise<void> {
   return invoke("remove_model", { model });
-}
-
-/** Import a GGUF file from Hugging Face into the GenieX model cache. */
-export async function importGGUF(
-  repoId: string,
-  filename: string,
-  precision: string,
-): Promise<void> {
-  return invoke("import_gguf", { repoId, filename, precision });
 }
 
 export async function cleanModels(): Promise<void> {

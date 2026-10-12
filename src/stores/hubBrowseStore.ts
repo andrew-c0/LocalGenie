@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import * as geniex from "../services/geniex";
+import * as geniex from "../services/geniex.ts";
 import {
   type AssetCompat,
   type HubFilter,
@@ -7,7 +7,7 @@ import {
   type HubSort,
   listHubModels,
   listQualcommModels,
-} from "../services/hubApi";
+} from "../services/hubApi.ts";
 
 const ALL_PAGE_SIZE = 30;
 /** Qualcomm AI Hub has few chipset-compatible models, so fetch large pages to intersect against. */
@@ -103,7 +103,7 @@ function cacheKey(s: {
 }): string {
   const f = effectiveFilters(s)
     .map((x) => `${x.type}:${x.value}`)
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
     .join("|");
   return `${s.area}::${s.search}::${s.sort}::${s.ascending ? "1" : "0"}::${f}`;
 }

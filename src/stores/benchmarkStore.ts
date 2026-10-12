@@ -5,7 +5,7 @@ import type {
   BenchmarkSample,
   BenchmarkStatus,
   ComputeTarget,
-} from "../types";
+} from "../types/index.js";
 
 interface BenchmarkState {
   status: BenchmarkStatus;

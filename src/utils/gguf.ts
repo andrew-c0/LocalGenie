@@ -22,7 +22,8 @@ export interface GGUFParseResult {
 }
 
 /** The GGUF naming-convention regex with an optional version. */
-const GGUF_REGEX = /^(?:(?<Sidecar>mmproj|mtp)-)?(?<BaseName>[A-Za-z0-9\s._-]+?)(?:-(?<SizeLabel>(?:\d+x)?(?:\d+\.)?\d+[A-Za-z](?:-[A-Za-z]+(?:\d+\.)?\d+[A-Za-z]+)?))?(?:-(?<FineTune>[A-Za-z0-9\s._-]+?))?(?:-(?<Version>v\d+(?:\.\d+)*))?(?:-(?<Encoding>(?!LoRA|vocab)[\w_]+))?(?:-(?<Type>LoRA|vocab))?(?:-(?<Shard>\d{5}-of-\d{5}))?\.gguf$/;
+const GGUF_REGEX =
+  /^(?:(?<Sidecar>mmproj|mtp)-)?(?<BaseName>[A-Za-z0-9\s._-]+?)(?:-(?<SizeLabel>(?:\d+x)?(?:\d+\.)?\d+[A-Za-z](?:-[A-Za-z]+(?:\d+\.)?\d+[A-Za-z]+)?))?(?:-(?<FineTune>[A-Za-z0-9\s._-]+?))?(?:-(?<Version>v\d+(?:\.\d+)*))?(?:-(?<Encoding>(?!LoRA|vocab)[\w_]+))?(?:-(?<Type>LoRA|vocab))?(?:-(?<Shard>\d{5}-of-\d{5}))?\.gguf$/;
 
 /**
  * Parse a GGUF filename using the naming convention.
@@ -37,8 +38,8 @@ export function parseGGUFFilename(filename: string): GGUFParseResult | null {
   const m = GGUF_REGEX.exec(filename);
   if (!m) return null;
 
-  // biome-ignore lint/style/noNonNullAssertion: we would always return null if the regex didn't match, so groups is guaranteed to exist
-  const groups = m.groups!;
+  const groups = m.groups;
+  if (!groups) return null;
 
   const result: GGUFParseResult = {
     sidecar: (groups.Sidecar as "mmproj" | "mtp" | undefined) ?? null,
@@ -60,8 +61,8 @@ export function parseGGUFFilename(filename: string): GGUFParseResult | null {
   // This handles cases like "Q4_K_M-GGUF" where GGUF may be a version tag
   else if (result.fineTune?.includes("-")) {
     const dashIdx = result.fineTune.indexOf("-");
-    const firstPart = result.fineTune.substring(0, dashIdx);
-    const rest = result.fineTune.substring(dashIdx + 1);
+    const firstPart = result.fineTune.slice(0, dashIdx);
+    const rest = result.fineTune.slice(dashIdx + 1);
     if (isQuantEncoding(firstPart)) {
       result.encoding = firstPart;
       result.fineTune = rest || null;

@@ -13,7 +13,8 @@
     "lint:fix": "biome check --write src/",
     "format": "biome format --write src/",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test": "vitest"
   },
   "dependencies": {
     "@fluentui/react-components": "^9.62.0",
@@ -36,6 +37,10 @@
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.5.2",
     "typescript": "^5.8.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^5.0.4"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true
   }
 }

@@ -1,5 +1,5 @@
-import { listHubModelFiles, type HubFileEntry } from "./hubApi";
-import { isGGUF, parseGGUFFilename } from "../utils/gguf";
+import { isGGUF, parseGGUFFilename } from "../utils/gguf.ts";
+import { type HubFileEntry, listHubModelFiles } from "./hubApi.ts";
 
 /** One parsed GGUF file from a Hugging Face repo. */
 export interface GGUFFile {

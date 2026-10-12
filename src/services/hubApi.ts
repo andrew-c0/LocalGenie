@@ -260,14 +260,14 @@ function normalizeAsset(runtime: string, raw?: RawReleaseAsset): ReleaseAsset | 
 function parseReleaseAssets(raw: RawReleaseAssets): ReleaseAssets {
   const precisions: ReleasePrecision[] = [];
   for (const [precision, entry] of Object.entries(raw.precisions ?? {})) {
-    const chipset_assets: Record<string, ReleaseAsset[]> = {};
+    const chipset_assets = {} as Record<string, ReleaseAsset[]>;
     for (const [chipset, runtimes] of Object.entries(entry.chipset_assets ?? {})) {
       const assets = Object.entries(runtimes ?? {})
         .map(([runtime, a]) => normalizeAsset(runtime, a))
         .filter((a): a is ReleaseAsset => a !== null);
       if (assets.length > 0) chipset_assets[chipset] = assets;
     }
-    const universal_assets: Record<string, ReleaseAsset[]> = {};
+    const universal_assets = {} as Record<string, ReleaseAsset[]>;
     for (const [runtime, a] of Object.entries(entry.universal_assets ?? {})) {
       const asset = normalizeAsset(runtime, a);
       if (asset) universal_assets[runtime] = [asset];
@@ -387,58 +387,62 @@ export interface PrecisionInfo {
 }
 
 /** Ordered precision table — first match wins, most specific first. */
-const PRECISION_DEFS: { pattern: RegExp; label: string; description: string; bits: number | null }[] =
-  [
-    {
-      pattern: /^f32$|^fp32$|^float32$/,
-      label: "FP32",
-      description: "Full 32-bit float — highest accuracy, 4× the memory",
-      bits: 32,
-    },
-    {
-      pattern: /^bf16$|^bfloat16$/,
-      label: "BF16",
-      description: "16-bit brain float — near-FP16 accuracy",
-      bits: 16,
-    },
-    {
-      pattern: /^f16$|^fp16$|^float16$|^half$/,
-      label: "FP16",
-      description: "16-bit float — baseline quality, largest footprint",
-      bits: 16,
-    },
-    {
-      pattern: /^q8_1$|^q8_0$|^q8$|^int8$|^w8a8$|^w8a16$|^w8$/,
-      label: "Q8 / 8-bit",
-      description: "8-bit — near-lossless, about half of FP16 memory",
-      bits: 8,
-    },
-    { pattern: /^q6_k$|^q6$/, label: "Q6_K", description: "6-bit — very high quality", bits: 6 },
-    {
-      pattern: /^q5_k_m$|^q5_k_s$|^q5_k$|^q5_1$|^q5_0$|^q5$/,
-      label: "Q5 / 5-bit",
-      description: "5-bit — high quality",
-      bits: 5,
-    },
-    {
-      pattern: /^w4a16$|^w4a8$|^int4$|^q4_k_m$|^q4_k_s$|^q4_k$|^q4_1$|^q4_0$|^q4$|^w4$/,
-      label: "Q4 / 4-bit",
-      description: "4-bit — best Hexagon NPU support, recommended",
-      bits: 4.5,
-    },
-    {
-      pattern: /^w3|^q3/,
-      label: "3-bit",
-      description: "3-bit — smallest, reduced quality",
-      bits: 3,
-    },
-    {
-      pattern: /^w2|^q2/,
-      label: "2-bit",
-      description: "2-bit — smallest, significant quality trade-offs",
-      bits: 2,
-    },
-  ];
+const PRECISION_DEFS: {
+  pattern: RegExp;
+  label: string;
+  description: string;
+  bits: number | null;
+}[] = [
+  {
+    pattern: /^f32$|^fp32$|^float32$/,
+    label: "FP32",
+    description: "Full 32-bit float — highest accuracy, 4× the memory",
+    bits: 32,
+  },
+  {
+    pattern: /^bf16$|^bfloat16$/,
+    label: "BF16",
+    description: "16-bit brain float — near-FP16 accuracy",
+    bits: 16,
+  },
+  {
+    pattern: /^f16$|^fp16$|^float16$|^half$/,
+    label: "FP16",
+    description: "16-bit float — baseline quality, largest footprint",
+    bits: 16,
+  },
+  {
+    pattern: /^q8_1$|^q8_0$|^q8$|^int8$|^w8a8$|^w8a16$|^w8$/,
+    label: "Q8 / 8-bit",
+    description: "8-bit — near-lossless, about half of FP16 memory",
+    bits: 8,
+  },
+  { pattern: /^q6_k$|^q6$/, label: "Q6_K", description: "6-bit — very high quality", bits: 6 },
+  {
+    pattern: /^q5_k_m$|^q5_k_s$|^q5_k$|^q5_1$|^q5_0$|^q5$/,
+    label: "Q5 / 5-bit",
+    description: "5-bit — high quality",
+    bits: 5,
+  },
+  {
+    pattern: /^w4a16$|^w4a8$|^int4$|^q4_k_m$|^q4_k_s$|^q4_k$|^q4_1$|^q4_0$|^q4$|^w4$/,
+    label: "Q4 / 4-bit",
+    description: "4-bit — best Hexagon NPU support, recommended",
+    bits: 4.5,
+  },
+  {
+    pattern: /^w3|^q3/,
+    label: "3-bit",
+    description: "3-bit — smallest, reduced quality",
+    bits: 3,
+  },
+  {
+    pattern: /^w2|^q2/,
+    label: "2-bit",
+    description: "2-bit — smallest, significant quality trade-offs",
+    bits: 2,
+  },
+];
 
 /** Look up label/description/bits-per-weight for a precision key. */
 export function precisionInfo(key: string): PrecisionInfo {

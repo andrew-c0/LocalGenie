@@ -37,7 +37,11 @@ const COMPUTE_META: Record<ComputeChoice, { label: string; hint: string }> = {
  * Stitch-style active model dropdown: searchable list of installed models
  * split into loaded/active and ready-to-load, with quick actions.
  */
-export default function ModelSelectorPopover({ open, onClose, onOpenChange }: ModelSelectorPopoverProps) {
+export default function ModelSelectorPopover({
+  open,
+  onClose,
+  onOpenChange,
+}: ModelSelectorPopoverProps) {
   const navigate = useNavigate();
   const models = useModelStore((s) => s.models);
   const serverStatus = useModelStore((s) => s.serverStatus);

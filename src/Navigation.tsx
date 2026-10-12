@@ -1,7 +1,6 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { MainLayout } from "./components/shell/Layouts";
-import { useAppToast } from "./hooks";
 import BenchmarkPlayground from "./pages/benchmark/BenchmarkPlayground";
 import PerformanceDashboard from "./pages/benchmark/PerformanceDashboard";
 import ChatPage from "./pages/ChatPage";
@@ -10,46 +9,12 @@ import HubModelDetail from "./pages/models/HubModelDetail";
 import OverviewPage from "./pages/OverviewPage";
 import PromptBenchmarkPage from "./pages/PromptBenchmarkPage";
 import SettingsPage from "./pages/SettingsPage";
-import * as geniex from "./services/geniex";
-import { useDownloadStore } from "./stores/downloadStore";
-import { makeToast } from "./utils/toast";
-import { GGUFFile } from "./services/hubModels";
 
 /** Route wrapper for the HF model detail page — shares pull handling with the library. */
 function HubModelDetailRoute() {
-  const [downloading, setDownloading] = useState<Set<string>>(new Set());
-  const { dispatchToast } = useAppToast();
+  const [downloading] = useState<Set<string>>(new Set());
 
-  const finishDownload = useCallback((repoId: string) => {
-    setDownloading((prev) => {
-      const next = new Set(prev);
-      next.delete(repoId);
-      return next;
-    });
-  }, []);
-
-  const handleDownload = useCallback(
-    (repoId: string, variant?: GGUFFile) => {
-      setDownloading((prev) => new Set(prev).add(repoId));
-      useDownloadStore.getState().upsert({ id: repoId, label: repoId });
-      geniex
-        .importGGUF(repoId, variant?.filename ?? "", variant?.precision ?? "")
-        .then(() => dispatchToast(makeToast("Download started", repoId), { intent: "success" }))
-        .catch((err) => {
-          useDownloadStore.getState().setStatus(repoId, "error", String(err));
-          dispatchToast(makeToast("Pull failed", String(err)), { intent: "error" });
-        })
-        .finally(() => finishDownload(repoId));
-    },
-    [dispatchToast, finishDownload],
-  );
-
-  return (
-    <HubModelDetail
-      onDownload={handleDownload}
-      downloading={downloading}
-    />
-  );
+  return <HubModelDetail downloading={downloading} />;
 }
 
 /**

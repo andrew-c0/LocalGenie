@@ -201,39 +201,19 @@ pub async fn delete_file(path: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to delete {path}: {e}"))
 }
 
-/// Import a single GGUF file into the GenieX model cache.
+/// Import an already-downloaded GGUF file into the GenieX model cache.
 ///
-/// Downloads the file from Hugging Face to a temp folder, then runs
-/// `geniex pull --local-path <folder> --model-hub localfs` to register it.
-/// Emits `model-pull-start` / `model-pull-progress` / `model-pull-complete`
-/// events so the downloads drawer tracks the operation.
-///
-/// The temp folder is removed on success; on failure it is left in place so
-/// the partial download can be retried.
+/// Runs `geniex pull --local-path <local_path> --model-hub localfs` to register
+/// it. The caller is responsible for downloading the file first; this function
+/// only handles the GenieX cache registration and progress emissions.
 #[tauri::command]
 pub async fn import_gguf(
     app: AppHandle,
+    local_path: String,
     repo_id: String,
-    filename: String,
+    _filename: String,
     precision: String,
 ) -> Result<(), String> {
-    let url = format!("https://huggingface.co/{repo_id}/resolve/main/{filename}");
-
-    // Per-repo temp folder so multi-file repos (mmproj + base) can coexist.
-    let safe_repo = repo_id.replace('/', "_");
-    let temp_dir = std::env::temp_dir().join(format!("localgenie-gguf-{safe_repo}"));
-    tokio::fs::create_dir_all(&temp_dir)
-        .await
-        .map_err(|e| format!("Failed to create temp dir: {e}"))?;
-    let target = temp_dir.join(&filename);
-
-    // Reuse a fully downloaded file instead of fetching again.
-    if !target.is_file() {
-        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        run_download(&app, &url, &target, &filename, &cancel).await?;
-    }
-
-    // Emit pull-start so the downloads drawer shows the import step.
     let _ = app.emit(
         "model-pull-start",
         serde_json::json!({ "model": repo_id }),
@@ -252,7 +232,7 @@ pub async fn import_gguf(
             "--model-hub",
             "localfs",
             "--local-path",
-            &temp_dir.to_string_lossy(),
+            &local_path,
         ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -264,9 +244,6 @@ pub async fn import_gguf(
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("`geniex pull` failed: {stderr}"));
     }
-
-    // Clean up the temp folder — GenieX copied the file into its cache.
-    let _ = tokio::fs::remove_dir_all(&temp_dir).await;
 
     let _ = app.emit(
         "model-pull-complete",
