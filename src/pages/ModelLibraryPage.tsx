@@ -14,7 +14,9 @@ import {
 import { PageHeader } from "../components/ui/PageHeader/PageHeader";
 import { ProgressBar, StateBlock } from "../components/ui/primitives";
 import * as db from "../services/database";
-import { cleanupDownloadedFile, downloadFile, importGGUF } from "../services/download";
+import { cleanupDownloadedModelDirectory, downloadFile, importGGUF } from "../services/download";
+import { fileToRepoMap } from "../components/AppBootstrap";
+import { useDownloadStore } from "../stores/downloadStore";
 import * as geniex from "../services/geniex";
 import * as hub from "../services/hubModels";
 import { useHubBrowseStore } from "../stores/hubBrowseStore";
@@ -74,42 +76,39 @@ export default function ModelLibraryPage() {
   const handleGGUFDownload = useCallback(
     (repoId: string, variant?: GGUFFileOption) => {
       setError(null);
-      const downloadKey = `${repoId}:${variant?.precision ?? "import"}`;
-      useModelStore.getState().addDownload({
-        model: downloadKey,
-        message: "Downloading GGUF weights…",
-        status: "downloading",
-      });
       if (!variant) return;
+      // Register file name -> repo ID mapping for unified download entry
+      fileToRepoMap.set(variant.filename, repoId);
+
+      // Create unified download entry
+      useDownloadStore.getState().upsert({ id: repoId, label: repoId });
+      useDownloadStore.getState().setStatus(repoId, "downloading");
+
       const url = `https://huggingface.co/${repoId}/resolve/main/${variant.filename}`;
       downloadFile(url, variant.filename, variant.precision ?? undefined)
         .then((downloadedPath) => {
           // Import into GenieX cache
+          useDownloadStore.getState().setStatus(repoId, "importing");
           return importGGUF(downloadedPath, repoId, variant.filename, variant.precision)
-            .then(() => {
-              // Success - cleanup the downloaded file
-              return cleanupDownloadedFile(downloadedPath);
+            .then((modelDir) => {
+              // Success - cleanup the downloaded model directory
+              return cleanupDownloadedModelDirectory(modelDir);
             })
             .then(() => {
-              // Success notification
-              useModelStore.getState().addDownload({
-                model: downloadKey,
-                message: "Downloaded successfully",
-                status: "complete",
-              });
+              // Success notification - transition to finished via downloadStore
+              useDownloadStore.getState().setStatus(repoId, "finished");
             });
         })
         .catch((err) => {
-          useModelStore
-            .getState()
-            .addDownload({ model: downloadKey, message: `Error: ${err}`, status: "error" });
+          useDownloadStore.getState().setStatus(repoId, "error", String(err));
           setError(`GGUF import failed: ${err}`);
         })
         .finally(() => {
-          useModelStore.getState().removeDownload(downloadKey);
+          // Clean up the file->repo mapping
+          fileToRepoMap.delete(variant.filename);
         });
     },
-    [downloadFile, importGGUF, cleanupDownloadedFile],
+    [downloadFile, importGGUF, cleanupDownloadedModelDirectory],
   );
 
   /** Open the version picker for a search result card. */

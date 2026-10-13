@@ -15,7 +15,10 @@ pub struct DownloadRegistry {
 impl DownloadRegistry {
     fn register(&self, file: &str) -> std::sync::Arc<AtomicBool> {
         let flag = std::sync::Arc::new(AtomicBool::new(false));
-        self.cancels.lock().unwrap().insert(file.to_string(), flag.clone());
+        self.cancels
+            .lock()
+            .unwrap()
+            .insert(file.to_string(), flag.clone());
         flag
     }
 
@@ -76,9 +79,7 @@ async fn run_download(
             .unwrap_or(0);
     }
 
-    let mut req = client
-        .get(url)
-        .header("User-Agent", "LocalGenie/0.1");
+    let mut req = client.get(url).header("User-Agent", "LocalGenie/0.1");
     if resume_from > 0 {
         req = req.header("Range", format!("bytes={resume_from}-"));
     }
@@ -97,9 +98,7 @@ async fn run_download(
         resume_from = 0;
     }
 
-    let total: Option<u64> = resp
-        .content_length()
-        .map(|len| len + resume_from);
+    let total: Option<u64> = resp.content_length().map(|len| len + resume_from);
 
     let mut file = if resume_from > 0 {
         tokio::fs::OpenOptions::new()
@@ -189,35 +188,65 @@ fn download_dir() -> Option<PathBuf> {
         .or_else(|| std::env::var_os("HOME"))
         .map(PathBuf::from)?;
     let dl = home.join("Downloads");
-    if dl.is_dir() { Some(dl) } else { None }
+    if dl.is_dir() {
+        Some(dl)
+    } else {
+        None
+    }
 }
 
-/// Delete a file after a successful model pull (the CLI copies into its
+/// Delete a directory (or file) after a successful model pull (the CLI copies into its
 /// cache, so the downloaded zip is no longer needed).
 #[tauri::command]
-pub async fn delete_file(path: String) -> Result<(), String> {
-    tokio::fs::remove_file(&path)
-        .await
-        .map_err(|e| format!("Failed to delete {path}: {e}"))
+pub async fn delete_directory(path: String) -> Result<(), String> {
+    match tokio::fs::metadata(&path).await {
+        Ok(md) if md.is_dir() => tokio::fs::remove_dir_all(&path)
+            .await
+            .map_err(|e| format!("Failed to delete directory {path}: {e}")),
+        _ => tokio::fs::remove_file(&path)
+            .await
+            .map_err(|e| format!("Failed to delete file {path}: {e}")),
+    }
 }
 
 /// Import an already-downloaded GGUF file into the GenieX model cache.
 ///
-/// Runs `geniex pull --local-path <local_path> --model-hub localfs` to register
-/// it. The caller is responsible for downloading the file first; this function
-/// only handles the GenieX cache registration and progress emissions.
+/// After downloading, the file is moved into a directory whose name is the base
+/// model name (e.g. `llama-3-8b` for `llama-3-8b.Q4_0.gguf`), then registered with
+/// GenieX via `geniex pull --model-hub localfs --local-path <dir>`. The caller is
+/// responsible for downloading the file first; this function only handles the
+/// reorganization and cache registration, plus progress emissions.
 #[tauri::command]
 pub async fn import_gguf(
     app: AppHandle,
     local_path: String,
     repo_id: String,
-    _filename: String,
+    filename: String,
     precision: String,
-) -> Result<(), String> {
-    let _ = app.emit(
-        "model-pull-start",
-        serde_json::json!({ "model": repo_id }),
-    );
+) -> Result<String, String> {
+    // Extract base model name from repo_id (e.g., "qualcomm/Qwen3-4B-Instruct" -> "Qwen3-4B-Instruct")
+    let base_model_name = repo_id.split('/').next_back().unwrap_or(&repo_id);
+
+    // Create target directory for the base model (using the downloads directory)
+    let downloads_dir = download_dir().ok_or("Could not resolve downloads directory")?;
+    let target_dir = downloads_dir.join(base_model_name);
+
+    // Ensure the target directory exists
+    tokio::fs::create_dir_all(&target_dir)
+        .await
+        .map_err(|e| format!("Failed to create target directory: {e}"))?;
+
+    // Move the downloaded file to the base model name folder,
+    // keeping the original filename (e.g. llama-3-8b.Q4_0.gguf)
+    let new_path = target_dir.join(&filename);
+
+    // Move the file (rename if in same filesystem, otherwise copy+remove)
+    tokio::fs::rename(&local_path, &new_path)
+        .await
+        .map_err(|e| format!("Failed to move file to base model folder: {e}"))?;
+
+    // Now import from the new location
+    let _ = app.emit("model-pull-start", serde_json::json!({ "model": repo_id }));
 
     let _ = app.emit(
         "model-pull-progress",
@@ -232,7 +261,7 @@ pub async fn import_gguf(
             "--model-hub",
             "localfs",
             "--local-path",
-            &local_path,
+            &target_dir.to_string_lossy(),
         ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -242,6 +271,8 @@ pub async fn import_gguf(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        // Show the full error message in console
+        eprintln!("geniex pull failed: {stderr}");
         return Err(format!("`geniex pull` failed: {stderr}"));
     }
 
@@ -249,5 +280,6 @@ pub async fn import_gguf(
         "model-pull-complete",
         serde_json::json!({ "model": repo_id }),
     );
-    Ok(())
+    // Return the target directory path for cleanup
+    Ok(target_dir.to_string_lossy().into_owned())
 }

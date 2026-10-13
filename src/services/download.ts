@@ -12,26 +12,32 @@ export async function downloadFile(
 }
 
 /** Import a GGUF file (already downloaded) into the GenieX model cache.
- *  Runs `geniex pull --model-hub localfs --local-path <path>` to register it.
+ *  After the file is downloaded, it is moved to a folder named after the base
+ *  model name, then imported via `geniex pull --model-hub localfs --local-path`.
  *  Emits `model-pull-start/progress/complete` events for the downloads drawer. */
 export async function importGGUF(
   localPath: string,
   repoId: string,
   filename: string,
   precision: string,
-): Promise<void> {
-  return invoke("import_gguf", { localPath, repoId, filename, precision });
+): Promise<string> {
+  try {
+    return (await invoke("import_gguf", { localPath, repoId, filename, precision })) as string;
+  } catch (err) {
+    console.error("GGUF import failed:", err);
+    throw err;
+  }
 }
 
-/** Remove a file from the Downloads folder after successful import. */
-export async function cleanupDownloadedFile(path: string): Promise<void> {
-  return invoke("delete_file", { path });
+/** Remove the model directory from Downloads after successful import. */
+export async function cleanupDownloadedModelDirectory(path: string): Promise<void> {
+  return invoke("delete_directory", { path });
 }
 
 export async function cancelDownload(fileName: string): Promise<void> {
   return invoke("cancel_download", { fileName });
 }
 
-export async function deleteFile(path: string): Promise<void> {
-  return invoke("delete_file", { path });
+export async function deleteDirectory(path: string): Promise<void> {
+  return invoke("delete_directory", { path });
 }

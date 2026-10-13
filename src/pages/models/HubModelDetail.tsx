@@ -14,7 +14,8 @@ import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 import { StateBlock, StatusBadge } from "../../components/ui/primitives";
-import { cleanupDownloadedFile, downloadFile, importGGUF } from "../../services/download";
+import { cleanupDownloadedModelDirectory, downloadFile, importGGUF } from "../../services/download";
+import { fileToRepoMap } from "../../components/AppBootstrap";
 import {
   estimateModelBytes,
   fetchHubModelReadme,
@@ -237,6 +238,13 @@ export default function HubModelDetail({ downloading }: Props) {
     const url = `https://huggingface.co/${repoId}/resolve/main/${group.main.filename}`;
     const fileName = group.main.filename.split("/").pop() ?? group.main.filename;
 
+    // Register file name -> repo ID mapping for unified download entry
+    fileToRepoMap.set(fileName, repoId);
+    for (const sidecar of group.sidecars) {
+      const sideName = sidecar.filename.split("/").pop() ?? sidecar.filename;
+      fileToRepoMap.set(sideName, repoId);
+    }
+
     // Download main GGUF to Downloads folder
     const downloadedPath = await downloadFile(
       url,
@@ -246,9 +254,11 @@ export default function HubModelDetail({ downloading }: Props) {
     if (downloadedPath) {
       // Import into GenieX cache
       try {
-        await importGGUF(downloadedPath, repoId, fileName, group.main.precision);
-        // Cleanup the downloaded file after successful import
-        await cleanupDownloadedFile(downloadedPath);
+        // importGGUF moves the file into <Downloads>/<baseModelName>/ and
+        // returns that directory path so we can clean it up afterwards.
+        const modelDir = await importGGUF(downloadedPath, repoId, fileName, group.main.precision);
+        // Cleanup the downloaded model directory after successful import
+        await cleanupDownloadedModelDirectory(modelDir);
       } catch (e) {
         console.error("Failed to import GGUF into GenieX cache:", e);
         // Keep the file for retry

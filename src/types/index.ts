@@ -78,7 +78,7 @@ export interface GenerationSettings {
 export interface DownloadProgress {
   model: string;
   message: string;
-  status: "downloading" | "complete" | "error";
+  status: "downloading" | "importing" | "finished" | "error";
 }
 
 export interface ConfigEntry {

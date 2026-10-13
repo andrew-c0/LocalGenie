@@ -5,6 +5,8 @@ import {
   DismissRegular,
   PauseRegular,
   PlayRegular,
+  ArrowImportRegular,
+  ArrowDownloadRegular,
 } from "@fluentui/react-icons";
 import { useEffect } from "react";
 import { cancelDownload, downloadFile } from "../../services/download";
@@ -20,9 +22,52 @@ function eta(remaining: number, speed: number): string {
   return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
 }
 
+type DownloadStatus = "downloading" | "importing" | "finished" | "error" | "cancelled";
+
 interface Props {
   open: boolean;
   onClose: () => void;
+}
+
+/** Status badge with color coding. */
+function StatusBadge({
+  status,
+  importingProgress,
+}: {
+  status: DownloadStatus;
+  importingProgress?: string;
+}) {
+  const config: Record<DownloadStatus, { icon: React.ReactNode; color: string; label: string }> = {
+    downloading: { icon: <ArrowDownloadRegular />, color: "var(--lx-brand)", label: "Downloading" },
+    importing: {
+      icon: <ArrowImportRegular />,
+      color: "var(--lx-telemetry)",
+      label: importingProgress ?? "Importing",
+    },
+    finished: { icon: <CheckmarkRegular />, color: "var(--lx-telemetry)", label: "Finished" },
+    error: {
+      icon: <span style={{ fontSize: 10 }}>⚠</span>,
+      color: "var(--lx-error)",
+      label: "Error",
+    },
+    cancelled: { icon: <PauseRegular />, color: "var(--lx-text-muted)", label: "Cancelled" },
+  };
+  const c = config[status];
+  return (
+    <span
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        color: c.color,
+        fontSize: 11,
+        fontWeight: 500,
+      }}
+    >
+      <span style={{ display: "flex" }}>{c.icon}</span>
+      <span>{c.label}</span>
+    </span>
+  );
 }
 
 /** Right-side drawer listing past, active and cancelled downloads. */
@@ -53,15 +98,18 @@ export default function DownloadDrawer({ open, onClose }: Props) {
     const store = useDownloadStore.getState();
     store.setStatus(id, "downloading");
     downloadFile(url, id)
-      .then(() => store.setStatus(id, "complete"))
+      .then(() => store.setStatus(id, "finished"))
       .catch((err) => {
         const msg = String(err);
         if (!msg.includes("cancelled")) store.setStatus(id, "error", msg);
       });
   };
 
-  const active = downloads.filter((d) => d.status === "downloading");
-  const past = downloads.filter((d) => d.status !== "downloading");
+  // Categorize downloads: active (downloading/importing), past (finished/error/cancelled)
+  const active = downloads.filter((d) => d.status === "downloading" || d.status === "importing");
+  const past = downloads.filter(
+    (d) => d.status === "finished" || d.status === "error" || d.status === "cancelled",
+  );
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: overlay dismiss target
@@ -145,6 +193,7 @@ export default function DownloadDrawer({ open, onClose }: Props) {
               {active.map((d) => {
                 const pct = d.total ? d.received / d.total : 0;
                 const remaining = d.total ? d.total - d.received : 0;
+                const isImporting = d.status === "importing";
                 return (
                   <div
                     key={d.id}
@@ -172,14 +221,19 @@ export default function DownloadDrawer({ open, onClose }: Props) {
                         {d.label}
                       </span>
                       <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-                        <Button
-                          appearance="transparent"
-                          size="small"
-                          icon={<PauseRegular />}
-                          title="Cancel download"
-                          aria-label={`Cancel ${d.label}`}
-                          onClick={() => handleCancel(d.id)}
-                        />
+                        {!isImporting && (
+                          <Button
+                            appearance="transparent"
+                            size="small"
+                            icon={<PauseRegular />}
+                            title="Cancel download"
+                            aria-label={`Cancel ${d.label}`}
+                            onClick={() => handleCancel(d.id)}
+                          />
+                        )}
+                        {isImporting && (
+                          <StatusBadge status={d.status} importingProgress={d.importingProgress} />
+                        )}
                       </div>
                     </div>
                     <ProgressBar
@@ -198,10 +252,12 @@ export default function DownloadDrawer({ open, onClose }: Props) {
                       <span>
                         {formatBytes(d.received)}
                         {d.total ? ` / ${formatBytes(d.total)}` : ""}
-                        {pct != null ? ` (${(pct * 100).toFixed(0)}%)` : ""}
+                        {pct != null && !isImporting ? ` (${(pct * 100).toFixed(0)}%)` : ""}
                       </span>
                       <span>
-                        {formatBytes(d.speed)}/s · ETA {eta(remaining, d.speed)}
+                        {isImporting
+                          ? "Importing into GenieX…"
+                          : `${formatBytes(d.speed)}/s · ETA ${eta(remaining, d.speed)}`}
                       </span>
                     </div>
                   </div>
@@ -236,13 +292,7 @@ export default function DownloadDrawer({ open, onClose }: Props) {
                   }}
                 >
                   <span style={{ flexShrink: 0 }}>
-                    {d.status === "complete" ? (
-                      <CheckmarkRegular style={{ color: "var(--lx-telemetry)" }} />
-                    ) : d.status === "error" ? (
-                      <span style={{ color: "var(--lx-error)" }}>⚠</span>
-                    ) : (
-                      <PauseRegular style={{ color: "var(--lx-text-muted)" }} />
-                    )}
+                    <StatusBadge status={d.status} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div
@@ -257,9 +307,7 @@ export default function DownloadDrawer({ open, onClose }: Props) {
                       {d.label}
                     </div>
                     <div style={{ fontSize: 11, color: "var(--lx-text-muted)" }}>
-                      {d.status === "complete" && "Completed"}
-                      {d.status === "cancelled" && "Cancelled"}
-                      {d.status === "error" && (d.error ?? "Failed")}
+                      {d.status === "error" && d.error ? d.error : ""}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>

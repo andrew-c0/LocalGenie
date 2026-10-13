@@ -13,6 +13,10 @@ import type { DownloadedModelMeta, Message } from "../types";
  * server crashes) and debounced session persistence. Renders children once
  * mounted — `App.tsx` stays pure scaffolding.
  */
+
+// Module-level map: file name (from asset-download-progress) -> repo ID (unified download ID)
+export const fileToRepoMap = new Map<string, string>();
+
 export default function AppBootstrap({ children }: { children: ReactNode }) {
   const loadSessions = useChatStore((s) => s.loadSessions);
   const updateLastAssistantMessage = useChatStore((s) => s.updateLastAssistantMessage);
@@ -173,20 +177,22 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
   // ── Listen for pull progress ──────────────────────────────────
   useTauriEvent<{ model: string }>("model-pull-start", (payload) => {
     // Register CLI pulls in the downloads drawer as soon as they start.
+    // Use repo ID as the unified key.
     useDownloadStore.getState().upsert({ id: payload.model, label: payload.model });
+    useDownloadStore.getState().setStatus(payload.model, "importing");
   });
 
   useTauriEvent<{ model: string; message: string }>("model-pull-progress", (payload) => {
-    useModelStore.getState().addDownload({
-      model: payload.model,
-      message: payload.message,
-      status: "downloading",
-    });
+    useDownloadStore.getState().setImportingProgress(payload.model, payload.message);
   });
 
   useTauriEvent<{ model: string }>("model-pull-complete", async (payload) => {
     useModelStore.getState().removeDownload(payload.model);
-    useDownloadStore.getState().setStatus(payload.model, "complete");
+    useDownloadStore.getState().setStatus(payload.model, "finished");
+    // Clean up the file->repo mapping
+    for (const [file, repo] of fileToRepoMap.entries()) {
+      if (repo === payload.model) fileToRepoMap.delete(file);
+    }
     // Refresh model list
     try {
       const models = await geniex.listModels();
@@ -220,26 +226,30 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
   }>("asset-download-progress", (payload) => {
     const store = useDownloadStore.getState();
     if (payload.cancelled) {
-      store.setStatus(payload.file, "cancelled");
+      // Map file name to repo ID for unified entry
+      const repoId = fileToRepoMap.get(payload.file) ?? payload.file;
+      store.setStatus(repoId, "cancelled");
       return;
     }
+    // Resolve the unified repo ID for this file
+    const repoId = fileToRepoMap.get(payload.file) ?? payload.file;
     if (payload.complete) {
+      // Download complete — transition to importing status
       // Record final file size so progress bar shows 100% correctly
-      const store = useDownloadStore.getState();
-      const existing = store.downloads.find((d) => d.id === payload.file);
+      const existing = store.downloads.find((d) => d.id === repoId);
       if (existing && payload.total == null) {
         const finalSize = payload.received ?? existing.received;
-        store.patchProgress(payload.file, finalSize, finalSize, 0);
+        store.patchProgress(repoId, finalSize, finalSize, 0);
       }
-      store.setStatus(payload.file, "complete");
+      // Status will be set to "importing" by model-pull-start event
       return;
     }
     // Ensure download entry exists before patching progress
-    const existing = store.downloads.find((d) => d.id === payload.file);
+    const existing = store.downloads.find((d) => d.id === repoId);
     if (!existing) {
       store.upsert({
-        id: payload.file,
-        label: payload.file,
+        id: repoId,
+        label: repoId,
         received: 0,
         total: null,
         speed: 0,
@@ -247,12 +257,7 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
         startedAt: Date.now(),
       });
     }
-    store.patchProgress(
-      payload.file,
-      payload.received ?? 0,
-      payload.total ?? null,
-      payload.speed ?? 0,
-    );
+    store.patchProgress(repoId, payload.received ?? 0, payload.total ?? null, payload.speed ?? 0);
   });
 
   return <>{children}</>;

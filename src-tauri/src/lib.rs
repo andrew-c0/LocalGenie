@@ -54,7 +54,7 @@ pub fn run() {
             cli::get_geniex_version,
             commands::download::download_file,
             commands::download::cancel_download,
-            commands::download::delete_file,
+            commands::download::delete_directory,
             commands::download::import_gguf,
             cli::config_get,
             cli::config_set,
