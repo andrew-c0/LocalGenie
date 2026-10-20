@@ -283,6 +283,7 @@ pub async fn set_preference(
 /// Upsert local metadata recorded when a model is pulled from a hub.
 /// `context_size` / `param_count` are tokens / parameters (pass null when
 /// the hub metadata is unavailable).
+/// `repo_url` and `model_card` are optional metadata from Hugging Face.
 #[tauri::command]
 pub async fn upsert_downloaded_model(
     db: tauri::State<'_, DatabaseConnection>,
@@ -290,6 +291,8 @@ pub async fn upsert_downloaded_model(
     precision: Option<String>,
     context_size: Option<i64>,
     param_count: Option<i64>,
+    repo_url: Option<String>,
+    model_card: Option<String>,
 ) -> Result<(), String> {
     let now = now_millis();
     downloaded_model::Entity::insert(downloaded_model::ActiveModel {
@@ -297,6 +300,8 @@ pub async fn upsert_downloaded_model(
         precision: Set(precision),
         context_size: Set(context_size),
         param_count: Set(param_count),
+        repo_url: Set(repo_url),
+        model_card: Set(model_card),
         created_at: Set(now),
         updated_at: Set(now),
     })
@@ -306,6 +311,8 @@ pub async fn upsert_downloaded_model(
                 downloaded_model::Column::Precision,
                 downloaded_model::Column::ContextSize,
                 downloaded_model::Column::ParamCount,
+                downloaded_model::Column::RepoUrl,
+                downloaded_model::Column::ModelCard,
                 downloaded_model::Column::UpdatedAt,
             ])
             .to_owned(),

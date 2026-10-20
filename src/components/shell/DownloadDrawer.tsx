@@ -1,4 +1,5 @@
-import { Button, ProgressBar } from "@fluentui/react-components";
+import { Button, ProgressBar, Spinner } from "@fluentui/react-components";
+import { useEffect, useState } from "react";
 import {
   CheckmarkRegular,
   DeleteRegular,
@@ -8,7 +9,7 @@ import {
   ArrowImportRegular,
   ArrowDownloadRegular,
 } from "@fluentui/react-icons";
-import { useEffect } from "react";
+
 import { cancelDownload, downloadFile } from "../../services/download";
 import { useDownloadStore } from "../../stores/downloadStore";
 import { formatBytes } from "../../utils/format";
@@ -86,15 +87,28 @@ export default function DownloadDrawer({ open, onClose }: Props) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+
   if (!open) return null;
 
   const handleCancel = async (id: string) => {
-    await cancelDownload(id).catch(() => undefined);
+    if (loadingIds.has(id)) return;
+    setLoadingIds((prev) => new Set(prev).add(id));
+    try {
+      await cancelDownload(id).catch(() => undefined);
+    } finally {
+      setLoadingIds((prev) => {
+        const n = new Set(prev);
+        n.delete(id);
+        return n;
+      });
+    }
   };
 
   /** Resume a cancelled download by re-invoking downloadFile (backend resumes from partial). */
   const handleResume = (id: string, url?: string) => {
-    if (!url) return;
+    if (!url || loadingIds.has(id)) return;
+    setLoadingIds((prev) => new Set(prev).add(id));
     const store = useDownloadStore.getState();
     store.setStatus(id, "downloading");
     downloadFile(url, id)
@@ -102,6 +116,13 @@ export default function DownloadDrawer({ open, onClose }: Props) {
       .catch((err) => {
         const msg = String(err);
         if (!msg.includes("cancelled")) store.setStatus(id, "error", msg);
+      })
+      .finally(() => {
+        setLoadingIds((prev) => {
+          const n = new Set(prev);
+          n.delete(id);
+          return n;
+        });
       });
   };
 
@@ -225,10 +246,11 @@ export default function DownloadDrawer({ open, onClose }: Props) {
                           <Button
                             appearance="transparent"
                             size="small"
-                            icon={<PauseRegular />}
+                            icon={loadingIds.has(d.id) ? <Spinner size="tiny" /> : <PauseRegular />}
                             title="Cancel download"
                             aria-label={`Cancel ${d.label}`}
                             onClick={() => handleCancel(d.id)}
+                            disabled={loadingIds.has(d.id)}
                           />
                         )}
                         {isImporting && (
@@ -315,10 +337,11 @@ export default function DownloadDrawer({ open, onClose }: Props) {
                       <Button
                         appearance="transparent"
                         size="small"
-                        icon={<PlayRegular />}
+                        icon={loadingIds.has(d.id) ? <Spinner size="tiny" /> : <PlayRegular />}
                         title="Resume download"
                         aria-label={`Resume ${d.label}`}
                         onClick={() => handleResume(d.id, d.url)}
+                        disabled={loadingIds.has(d.id)}
                       />
                     )}
                     <Button

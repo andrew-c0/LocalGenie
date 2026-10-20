@@ -80,7 +80,7 @@ export default function PerformanceDashboard() {
         </div>
         <div className="lx-page-actions">
           <Button
-            appearance="subtle"
+            appearance="secondary"
             icon={<ArrowLeftRegular />}
             onClick={() => navigate("/prompt-benchmark/playground")}
           >
@@ -93,7 +93,7 @@ export default function PerformanceDashboard() {
           >
             {status === "running" ? "Stop" : "Run Benchmark"}
           </Button>
-          <Button appearance="subtle" icon={<ArrowDownloadRegular />} disabled>
+          <Button appearance="secondary" icon={<ArrowDownloadRegular />} disabled>
             Export
           </Button>
         </div>

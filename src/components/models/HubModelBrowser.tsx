@@ -1,6 +1,5 @@
 import { Button, Spinner } from "@fluentui/react-components";
 import {
-  ArrowDownloadRegular,
   ArrowSortRegular,
   ChevronDownRegular,
   ChevronRightRegular,
@@ -18,9 +17,9 @@ import {
   QUANTIZATION_CHIPS,
 } from "../../services/hubApi";
 import { useHubBrowseStore } from "../../stores/hubBrowseStore";
-import { formatCount } from "../../utils/format";
 import { ErrorBanner } from "../ui/ErrorBanner/ErrorBanner";
-import { StateBlock, StatusBadge } from "../ui/primitives";
+import { ModelCard, type ModelCardData } from "../ui/ModelCard/ModelCard";
+import { StateBlock } from "../ui/primitives";
 
 /** Badge for a Qualcomm tile based on learned compatibility info. */
 function compatBadge(
@@ -52,13 +51,11 @@ const CHIP_GROUPS: [string, readonly string[], HubFilter["type"]][] = [
 interface Props {
   /** Which hub area to browse — controlled by the parent page tabs. */
   area: "qualcomm" | "all";
-  /** Called when the user picks a model to download. */
-  onDownload: (repoId: string) => void;
   downloading: Set<string>;
 }
 
 /** Hugging Face browse area with sorting, filter chips and cursor pagination. */
-export default function HubBrowse({ area, onDownload, downloading }: Props) {
+export default function HubModelBrowser({ area, downloading }: Props) {
   const s = useHubBrowseStore();
   const navigate = useNavigate();
   const compatibleNames = useHubBrowseStore((st) => st.compatibleNames);
@@ -113,7 +110,7 @@ export default function HubBrowse({ area, onDownload, downloading }: Props) {
         </select>
         <Button
           size="small"
-          appearance="subtle"
+          appearance="secondary"
           icon={<ArrowSortRegular />}
           onClick={s.toggleAscending}
           title={s.ascending ? "Ascending" : "Descending"}
@@ -195,67 +192,35 @@ export default function HubBrowse({ area, onDownload, downloading }: Props) {
         <div className="lx-model-grid">
           {s.models.map((m) => {
             const isDownloading = downloading.has(m.id);
-            const openDetail = () => navigate(`/models/${encodeURIComponent(m.id)}`);
+            const openDetail = () =>
+              navigate(`/models/${encodeURIComponent(m.id)}`, { state: { isLocal: false } });
+            const cardData: ModelCardData = {
+              name: m.id,
+              installed: false,
+              downloads: m.downloads,
+              likes: m.likes,
+              pipelineTag: modelTagChips(m)[0],
+              badge:
+                area === "qualcomm" && compatibleNames
+                  ? (() => {
+                      const b = compatBadge(assetCompat[m.id], compatibleNames.has(m.id));
+                      return { tone: b.tone, label: b.label };
+                    })()
+                  : undefined,
+              gated: m.gated ? true : undefined,
+            };
             return (
-              <div key={m._id} className="lx-model-card">
-                <button
-                  type="button"
-                  className="lx-model-card-link"
-                  onClick={openDetail}
-                  style={{
-                    all: "unset",
-                    cursor: "pointer",
-                    display: "block",
-                    width: "100%",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 8,
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <div className="lx-model-card-name">{m.id}</div>
-                    {area === "qualcomm" && compatibleNames ? (
-                      (() => {
-                        const badge = compatBadge(assetCompat[m.id], compatibleNames.has(m.id));
-                        return <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>;
-                      })()
-                    ) : m.gated ? (
-                      <span title="Gated repo">🔒</span>
-                    ) : null}
-                  </div>
-                  <div className="lx-model-card-meta">
-                    <span>⬇ {formatCount(m.downloads)}</span>
-                    <span>❤ {formatCount(m.likes)}</span>
-                    {m.lastModified && (
-                      <span>Updated {new Date(m.lastModified).toLocaleDateString()}</span>
-                    )}
-                  </div>
-                  {modelTagChips(m).length > 0 && (
-                    <div className="lx-chiprow" style={{ marginTop: 6 }}>
-                      {modelTagChips(m).map((tag) => (
-                        <span key={tag} className="lx-chip" style={{ cursor: "default" }}>
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </button>
-                <div className="lx-model-card-actions">
-                  <Button
-                    size="small"
-                    appearance="primary"
-                    icon={isDownloading ? <Spinner size="tiny" /> : <ArrowDownloadRegular />}
-                    disabled={isDownloading}
-                    onClick={() => onDownload(m.id)}
-                  >
-                    {isDownloading ? "Pulling…" : "Download"}
-                  </Button>
-                </div>
-              </div>
+              <ModelCard
+                key={m._id}
+                model={cardData}
+                isLocal={false}
+                isLoaded={false}
+                isDownloading={isDownloading}
+                onOpenSelector={openDetail}
+                onDetails={(name, isLocal) =>
+                  navigate(`/models/${encodeURIComponent(name)}`, { state: { isLocal } })
+                }
+              />
             );
           })}
         </div>
@@ -265,7 +230,7 @@ export default function HubBrowse({ area, onDownload, downloading }: Props) {
       {s.nextCursor && !s.isLoading && (
         <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>
           <Button
-            appearance="subtle"
+            appearance="secondary"
             onClick={() => void s.fetchMore()}
             disabled={s.isFetchingMore}
           >

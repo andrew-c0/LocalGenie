@@ -157,4 +157,6 @@ export interface DownloadedModelMeta {
   precision?: string;
   contextSize?: number;
   paramCount?: number;
+  repo_url?: string;
+  model_card?: string;
 }

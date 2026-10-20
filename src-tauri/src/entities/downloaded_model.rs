@@ -15,6 +15,10 @@ pub struct Model {
     pub param_count: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
+    /// Repository URL on Hugging Face.
+    pub repo_url: Option<String>,
+    /// Full model card README content, stored for offline viewing.
+    pub model_card: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

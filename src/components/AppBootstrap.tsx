@@ -209,6 +209,8 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
         meta.precision ?? null,
         meta.contextSize ?? null,
         meta.paramCount ?? null,
+        meta.repo_url ?? null,
+        meta.model_card ?? null,
       );
     } catch {
       // ignore — metadata is a nice-to-have
@@ -276,6 +278,8 @@ export async function fetchDownloadedModelMeta(repoId: string): Promise<Download
       precision: row.precision ?? undefined,
       contextSize: row.context_size ?? undefined,
       paramCount: row.param_count ?? undefined,
+      repo_url: row.repo_url ?? undefined,
+      model_card: row.model_card ?? undefined,
     };
   }
 

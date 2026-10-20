@@ -128,6 +128,8 @@ export interface DbDownloadedModel {
   precision: string | null;
   context_size: number | null;
   param_count: number | null;
+  repo_url: string | null;
+  model_card: string | null;
 }
 
 export async function listDownloadedModels(): Promise<DbDownloadedModel[]> {
@@ -139,8 +141,13 @@ export async function upsertDownloadedModel(
   precision: string | null,
   contextSize: number | null,
   paramCount: number | null,
+  repoUrl?: string | null,
+  modelCard?: string | null,
 ): Promise<void> {
-  await invoke("upsert_downloaded_model", { name, precision, contextSize, paramCount });
+  const params: any = { name, precision, contextSize, paramCount };
+  if (repoUrl !== undefined) params.repoUrl = repoUrl;
+  if (modelCard !== undefined) params.modelCard = modelCard;
+  await invoke("upsert_downloaded_model", params);
 }
 
 export async function deleteDownloadedModel(name: string): Promise<void> {

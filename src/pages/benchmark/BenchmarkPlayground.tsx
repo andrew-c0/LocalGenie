@@ -173,7 +173,7 @@ export default function BenchmarkPlayground() {
           </p>
         </div>
         <div className="lx-page-actions">
-          <Button appearance="subtle" icon={<SaveRegular />} onClick={savePreset}>
+          <Button appearance="secondary" icon={<SaveRegular />} onClick={savePreset}>
             {saved ? "Saved ✓" : "Save Preset"}
           </Button>
           <Button

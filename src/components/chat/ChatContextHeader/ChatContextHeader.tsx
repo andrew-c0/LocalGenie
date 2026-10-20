@@ -45,7 +45,7 @@ export function ChatContextHeader() {
         />
       </div>
       <Button
-        appearance="subtle"
+        appearance="secondary"
         size="small"
         icon={<DismissRegular />}
         title="Close conversation"

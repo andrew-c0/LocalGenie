@@ -1,8 +1,8 @@
 ﻿import { Button, Spinner } from "@fluentui/react-components";
 import { SearchRegular } from "@fluentui/react-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import HubBrowse from "../components/models/HubBrowse";
-import ReleaseVersionDialog from "../components/models/ReleaseVersionDialog";
+import { useNavigate } from "react-router-dom";
+import HubModelBrowser from "../components/models/HubModelBrowser";
 import { ChipRow } from "../components/ui/ChipRow/ChipRow";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog/ConfirmDialog";
 import { ErrorBanner } from "../components/ui/ErrorBanner/ErrorBanner";
@@ -14,16 +14,13 @@ import {
 import { PageHeader } from "../components/ui/PageHeader/PageHeader";
 import { ProgressBar, StateBlock } from "../components/ui/primitives";
 import * as db from "../services/database";
-import { cleanupDownloadedModelDirectory, downloadFile, importGGUF } from "../services/download";
-import { fileToRepoMap } from "../components/AppBootstrap";
-import { useDownloadStore } from "../stores/downloadStore";
 import * as geniex from "../services/geniex";
 import * as hub from "../services/hubModels";
 import { useHubBrowseStore } from "../stores/hubBrowseStore";
 import { useModelStore } from "../stores/modelStore";
 
-/** Full-page model library (list + grid variants). */
-export default function ModelLibraryPage() {
+/** Browser page for locally installed models (list + grid variants). */
+export default function LocalModelsBrowserPage() {
   const models = useModelStore((s) => s.models);
   const searchResults = useModelStore((s) => s.searchResults);
   const isSearching = useModelStore((s) => s.isSearching);
@@ -42,14 +39,13 @@ export default function ModelLibraryPage() {
   const [downloadedMeta, setDownloadedMeta] = useState<Map<string, db.DbDownloadedModel>>(
     new Map(),
   );
-  const [showVersionDialog, setShowVersionDialog] = useState(false);
-  const [versionRepoId, setVersionRepoId] = useState("");
-  const [versionVariants, setVersionVariants] = useState<GGUFFileOption[]>([]);
 
-  // Load downloaded-model metadata once on mount.
+  // Refresh local model list + DB meta on mount so deleted models disappear.
   useEffect(() => {
     (async () => {
       try {
+        const updated = await geniex.listModels();
+        useModelStore.getState().setModels(updated);
         const rows = await db.listDownloadedModels();
         setDownloadedMeta(new Map(rows.map((r) => [r.name, r])));
       } catch {
@@ -57,6 +53,8 @@ export default function ModelLibraryPage() {
       }
     })();
   }, []);
+
+  const navigate = useNavigate();
 
   const handleSearch = useCallback(async () => {
     if (!query.trim()) return;
@@ -71,60 +69,6 @@ export default function ModelLibraryPage() {
       setIsSearching(false);
     }
   }, [query, setIsSearching, setSearchResults]);
-
-  /** Pull a single GGUF file from Hugging Face into the GenieX cache. */
-  const handleGGUFDownload = useCallback(
-    (repoId: string, variant?: GGUFFileOption) => {
-      setError(null);
-      if (!variant) return;
-      // Register file name -> repo ID mapping for unified download entry
-      fileToRepoMap.set(variant.filename, repoId);
-
-      // Create unified download entry
-      useDownloadStore.getState().upsert({ id: repoId, label: repoId });
-      useDownloadStore.getState().setStatus(repoId, "downloading");
-
-      const url = `https://huggingface.co/${repoId}/resolve/main/${variant.filename}`;
-      downloadFile(url, variant.filename, variant.precision ?? undefined)
-        .then((downloadedPath) => {
-          // Import into GenieX cache
-          useDownloadStore.getState().setStatus(repoId, "importing");
-          return importGGUF(downloadedPath, repoId, variant.filename, variant.precision)
-            .then((modelDir) => {
-              // Success - cleanup the downloaded model directory
-              return cleanupDownloadedModelDirectory(modelDir);
-            })
-            .then(() => {
-              // Success notification - transition to finished via downloadStore
-              useDownloadStore.getState().setStatus(repoId, "finished");
-            });
-        })
-        .catch((err) => {
-          useDownloadStore.getState().setStatus(repoId, "error", String(err));
-          setError(`GGUF import failed: ${err}`);
-        })
-        .finally(() => {
-          // Clean up the file->repo mapping
-          fileToRepoMap.delete(variant.filename);
-        });
-    },
-    [downloadFile, importGGUF, cleanupDownloadedModelDirectory],
-  );
-
-  /** Open the version picker for a search result card. */
-  const handlePickGGUF = useCallback(
-    (repoId: string, gguf?: GGUFFileOption[]) => {
-      if (!gguf || gguf.length === 0) {
-        // No GGUF files — fall back to a direct import.
-        handleGGUFDownload(repoId);
-        return;
-      }
-      setVersionRepoId(repoId);
-      setVersionVariants(gguf);
-      setShowVersionDialog(true);
-    },
-    [handleGGUFDownload],
-  );
 
   /** Lazily fetch the GGUF file list for a search result card. */
   const [ggufCache, setGgufCache] = useState<Map<string, GGUFFileOption[]>>(new Map());
@@ -232,7 +176,7 @@ export default function ModelLibraryPage() {
           subtitle="Search, download, and manage local weights from Hugging Face and Qualcomm AI Hub."
           actions={
             <Button
-              appearance="subtle"
+              appearance="secondary"
               onClick={() => geniex.cleanModels().catch((err: Error) => setError(String(err)))}
             >
               Clean Cache
@@ -347,20 +291,20 @@ export default function ModelLibraryPage() {
                     )}
                     isDownloading={downloads.some((d) => d.model === m.name)}
                     onOpenSelector={openSelector}
-                    onDownload={handleGGUFDownload}
-                    onPickGGUF={handlePickGGUF}
                     onRemove={setConfirmRemove}
+                    isLocal={m.installed}
+                    onDetails={(name, isLocal) =>
+                      navigate("/models/" + encodeURIComponent(name), {
+                        state: { isLocal },
+                      })
+                    }
                   />
                 ))}
               </div>
             )}
           </div>
         ) : (
-          <HubBrowse
-            area="all"
-            onDownload={handleGGUFDownload}
-            downloading={new Set(downloads.map((d) => d.model))}
-          />
+          <HubModelBrowser area="all" downloading={new Set(downloads.map((d) => d.model))} />
         )}
 
         {/* -- Remove confirmation -- */}
@@ -375,20 +319,6 @@ export default function ModelLibraryPage() {
             confirmLabel="Remove"
             onConfirm={() => handleRemove(confirmRemove)}
             onCancel={() => setConfirmRemove(null)}
-          />
-        )}
-
-        {/* -- GGUF variant picker dialog -- */}
-        {showVersionDialog && (
-          <ReleaseVersionDialog
-            repoId={versionRepoId}
-            variants={versionVariants}
-            onSelect={(v) => {
-              handleGGUFDownload(versionRepoId, v);
-              setShowVersionDialog(false);
-            }}
-            onClose={() => setShowVersionDialog(false)}
-            isDownloading={false}
           />
         )}
       </div>

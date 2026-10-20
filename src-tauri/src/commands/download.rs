@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use super::database;
+use sea_orm::DatabaseConnection;
+use reqwest::Client;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -219,6 +222,7 @@ pub async fn delete_directory(path: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn import_gguf(
     app: AppHandle,
+    db: State<'_, DatabaseConnection>,
     local_path: String,
     repo_id: String,
     filename: String,
@@ -280,6 +284,31 @@ pub async fn import_gguf(
         "model-pull-complete",
         serde_json::json!({ "model": repo_id }),
     );
+    // Fetch model card (README) and store metadata in database
+    let repo_url = format!("https://huggingface.co/{repo_id}");
+    let readme_url = format!("https://huggingface.co/{repo_id}/raw/main/README.md");
+    let model_card = Client::new()
+        .get(&readme_url)
+        .header("User-Agent", "LocalGenie/0.1")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch model card: {e}"))?
+        .text()
+        .await
+        .ok()
+        .filter(|s: &String| !s.trim().is_empty());
+    
+    if let Err(e) = database::upsert_downloaded_model(
+        db,
+        repo_id.clone(),
+        Some(precision.clone()),
+        None,
+        None,
+        Some(repo_url),
+        model_card,
+    ).await {
+        eprintln!("Failed to upsert downloaded model metadata: {e}");
+    }
     // Return the target directory path for cleanup
     Ok(target_dir.to_string_lossy().into_owned())
 }

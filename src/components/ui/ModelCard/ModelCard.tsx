@@ -1,8 +1,7 @@
 import { Button, Spinner } from "@fluentui/react-components";
-import { ArrowDownloadRegular, ChatRegular, DeleteRegular } from "@fluentui/react-icons";
+import { ChatRegular, DeleteRegular, InfoRegular } from "@fluentui/react-icons";
 import { formatCount } from "../../../utils/format";
 import { StatusBadge } from "../primitives";
-import "./ModelCard.css";
 
 export interface GGUFFileOption {
   filename: string;
@@ -28,6 +27,10 @@ export interface ModelCardData {
   paramCount?: number;
   /** GGUF variants available on Hugging Face (only set for search results). */
   ggufFiles?: GGUFFileOption[];
+  /** Optional status badge shown next to the name (e.g. Qualcomm asset compatibility). */
+  badge?: { tone: "green" | "default"; label: string };
+  /** Repo is gated on Hugging Face (shows a lock). */
+  gated?: boolean;
 }
 
 interface ModelCardProps {
@@ -35,12 +38,13 @@ interface ModelCardProps {
   /** Model is loaded on the server. */
   isLoaded: boolean;
   isDownloading: boolean;
+  /** Whether this card represents a locally installed model (vs. a remote HF result). */
+  isLocal: boolean;
   /** Open the header model selector (which loads + binds to the active chat). */
   onOpenSelector: () => void;
-  onDownload: (name: string, gguf?: GGUFFileOption) => void;
-  /** Open the GGUF variant picker (for HF search results with .gguf files). */
-  onPickGGUF?: (name: string, ggufFiles?: GGUFFileOption[]) => void;
   onRemove?: (name: string) => void;
+  /** Navigate to model detail page. Passes `isLocal` so the route can pick the right view. */
+  onDetails?: (name: string, isLocal: boolean) => void;
 }
 
 /** Card for a single model — installed or search result. */
@@ -48,10 +52,10 @@ export function ModelCard({
   model,
   isLoaded,
   isDownloading,
+  isLocal = false,
   onOpenSelector,
-  onDownload,
-  onPickGGUF,
   onRemove,
+  onDetails,
 }: ModelCardProps) {
   const fmt = (n?: number) => (n == null ? "—" : formatCount(n));
   const ggufFiles = model.ggufFiles ?? [];
@@ -60,11 +64,21 @@ export function ModelCard({
   return (
     <div className="lx-model-card">
       <div className="model-card-head">
-        <div className="lx-model-card-name">{model.name}</div>
-        {isLoaded ? (
+        <div
+          className="lx-model-card-name"
+          style={{ cursor: "pointer" }}
+          onClick={() => onDetails?.(model.name, isLocal)}
+        >
+          {model.name}
+        </div>
+        {model.badge ? (
+          <StatusBadge tone={model.badge.tone}>{model.badge.label}</StatusBadge>
+        ) : isLoaded ? (
           <StatusBadge tone="green">Loaded</StatusBadge>
         ) : model.installed ? (
           <StatusBadge tone="blue">Installed</StatusBadge>
+        ) : model.gated ? (
+          <StatusBadge>Gated</StatusBadge>
         ) : (
           <StatusBadge>Available</StatusBadge>
         )}
@@ -117,10 +131,19 @@ export function ModelCard({
             >
               {isLoaded ? "Active" : "Load & Chat"}
             </Button>
+            <Button
+              size="small"
+              appearance="secondary"
+              icon={<InfoRegular />}
+              title="View model details"
+              onClick={() => onDetails?.(model.name, isLocal)}
+            >
+              Details
+            </Button>
             {onRemove && (
               <Button
                 size="small"
-                appearance="subtle"
+                appearance="secondary"
                 icon={<DeleteRegular />}
                 title="Remove model"
                 onClick={() => onRemove(model.name)}
@@ -132,20 +155,20 @@ export function ModelCard({
             <Button
               size="small"
               appearance="primary"
-              icon={<ArrowDownloadRegular />}
-              onClick={() => onPickGGUF?.(model.name, ggufFiles)}
+              icon={<InfoRegular />}
+              onClick={() => onDetails?.(model.name, isLocal)}
             >
-              Download
+              Details
             </Button>
           </div>
         ) : (
           <Button
             size="small"
             appearance="primary"
-            icon={<ArrowDownloadRegular />}
-            onClick={() => onDownload(model.name)}
+            icon={<InfoRegular />}
+            onClick={() => onDetails?.(model.name, isLocal)}
           >
-            Download
+            Details
           </Button>
         )}
       </div>
