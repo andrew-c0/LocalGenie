@@ -5,6 +5,7 @@ import ChatArea from "../components/ChatArea";
 import ChatInput from "../components/ChatInput";
 import { ChatContextHeader } from "../components/chat/ChatContextHeader/ChatContextHeader";
 import { SessionList } from "../components/chat/SessionList/SessionList";
+import { PageHeader } from "../components/ui/PageHeader/PageHeader";
 import { StateBlock } from "../components/ui/StateBlock/StateBlock";
 import { useChatStore } from "../stores/chatStore";
 import { useModelStore } from "../stores/modelStore";
@@ -41,6 +42,7 @@ export default function ChatPage() {
   const setActiveSession = useChatStore((s) => s.setActiveSession);
   const sessions = useChatStore((s) => s.sessions);
   const serverStatus = useModelStore((s) => s.serverStatus);
+  const activeModelId = useModelStore((s) => s.activeModelId);
 
   // Sessions may still be loading when the page opens, so a missing id is shown, not redirected.
   const activeSession = sessions.find((s) => s.id === sessionId);
@@ -87,6 +89,15 @@ export default function ChatPage() {
       <SessionList />
 
       <div className={styles.canvas}>
+        <PageHeader
+          eyebrow="● CHAT"
+          title={activeSession?.title ?? "Chat"}
+          subtitle={
+            activeSession
+              ? (activeModelId?.split("/").pop() ?? "No model selected")
+              : "Chat with your loaded models. Conversations are stored on this device."
+          }
+        />
         <ChatContextHeader />
         {content}
       </div>

@@ -1,18 +1,17 @@
 import {
   Body1,
   Button,
-  Caption1Strong,
   Card,
   CardHeader,
   makeStyles,
   Text,
-  Title1,
   tokens,
 } from "@fluentui/react-components";
 import { ArrowDownloadRegular, ChatRegular } from "@fluentui/react-icons";
 import { useNavigate } from "react-router-dom";
 import { SpeedList } from "../components/benchmark/SpeedList/SpeedList";
 import { MetricCard } from "../components/ui/MetricCard/MetricCard";
+import { PageHeader } from "../components/ui/PageHeader/PageHeader";
 import { StateBlock } from "../components/ui/StateBlock/StateBlock";
 import { StatusBadge } from "../components/ui/StatusBadge/StatusBadge";
 import { useModelStore } from "../stores/modelStore";
@@ -31,20 +30,10 @@ const useStyles = makeStyles({
     maxWidth: "1200px",
     margin: "0 auto",
   },
-  hero: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    gap: tokens.spacingVerticalS,
-    padding: tokens.spacingVerticalXL,
-  },
-  accent: {
-    color: tokens.colorBrandForeground1,
-  },
   heroActions: {
     display: "flex",
+    alignItems: "center",
     gap: tokens.spacingHorizontalS,
-    marginTop: tokens.spacingVerticalS,
   },
   grid: {
     display: "grid",
@@ -76,30 +65,29 @@ export default function OverviewPage() {
   return (
     <div className={styles.page}>
       <div className={styles.inner}>
-        <section className={styles.hero}>
-          <Caption1Strong>
-            {serverStatus.running ? "● Hexagon NPU & DirectML Ready" : "● Runtime Offline"}
-          </Caption1Strong>
-          <Title1 as="h1">
-            Zero Cloud. <span className={styles.accent}>100% On-Device.</span>
-          </Title1>
-          <Body1>
-            Run open-weights foundation models locally with dedicated Qualcomm NPU acceleration.
-            Pure offline privacy, zero API latency.
-          </Body1>
-          <div className={styles.heroActions}>
-            <Button
-              appearance="primary"
-              icon={<ArrowDownloadRegular />}
-              onClick={() => navigate("/models")}
-            >
-              Browse Models
-            </Button>
-            <Button appearance="secondary" icon={<ChatRegular />} onClick={() => navigate("/chat")}>
-              Start Local Chat
-            </Button>
-          </div>
-        </section>
+        <PageHeader
+          eyebrow={serverStatus.running ? "● Hexagon NPU & DirectML Ready" : "● Runtime Offline"}
+          title="Overview"
+          subtitle="Run open-weights models locally on Qualcomm NPU, GPU or CPU. Zero cloud, zero API latency."
+          actions={
+            <div className={styles.heroActions}>
+              <Button
+                appearance="primary"
+                icon={<ArrowDownloadRegular />}
+                onClick={() => navigate("/models")}
+              >
+                Browse Models
+              </Button>
+              <Button
+                appearance="secondary"
+                icon={<ChatRegular />}
+                onClick={() => navigate("/chat")}
+              >
+                Start Local Chat
+              </Button>
+            </div>
+          }
+        />
 
         <div className={styles.grid}>
           <MetricCard

@@ -29,24 +29,29 @@ const SECTIONS: {
   id: SectionId;
   label: string;
   desc: string;
+  subtitle: string;
   icon: ReactElement;
 }[] = [
   {
     id: "app",
     label: "Application & Runtime",
     desc: "Server port, CLI updates",
+    subtitle: "Configure the local GenieX server port and keep the GenieX CLI up to date.",
     icon: <DesktopRegular />,
   },
   {
     id: "inference",
     label: "Inference & Sampling",
     desc: "Model parameters, system prompt",
+    subtitle: "Default sampling parameters and system prompt applied to every chat and benchmark.",
     icon: <BrainCircuitRegular />,
   },
   {
     id: "logs",
     label: "Logs",
     desc: "GenieX server output",
+    subtitle:
+      "Live output from the GenieX server process, useful for diagnosing load or inference errors.",
     icon: <DocumentBulletListRegular />,
   },
 ];
@@ -172,6 +177,7 @@ export default function SettingsPage() {
         <PageHeader
           eyebrow="● SETTINGS"
           title={current?.label}
+          subtitle={current?.subtitle}
           actions={
             <div className={styles.panelActions}>
               {section === "inference" && <Text size={200}>changes persist per model</Text>}

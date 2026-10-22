@@ -264,7 +264,7 @@ export default function BenchmarkPlayground() {
   return (
     <div className={styles.page}>
       <PageHeader
-        eyebrow="● PROMPT BENCHMARK PLAYGROUND"
+        eyebrow="● BENCHMARK SUITE"
         title="Prompt Benchmark"
         subtitle="Profile exact TTFT and sustained throughput for a fixed prompt on local acceleration hardware."
         actions={

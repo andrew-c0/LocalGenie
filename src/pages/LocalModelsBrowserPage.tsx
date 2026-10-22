@@ -251,8 +251,13 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
     <div className={styles.page}>
       <div className={styles.inner}>
         <PageHeader
+          eyebrow="● MODEL LIBRARY"
           title="Models"
-          subtitle="Manage the models installed on this device and find new GGUF models on Hugging Face."
+          subtitle={
+            tab === "local"
+              ? "Models installed on this device, ready to load into the GenieX server."
+              : "Search Hugging Face for GGUF models and download them to this device."
+          }
           actions={
             <Button
               appearance="secondary"

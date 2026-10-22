@@ -23,6 +23,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { GGUFVariantList } from "../../components/models/GGUFVariantList";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog/ConfirmDialog";
 import { MarkdownContent } from "../../components/ui/MarkdownContent/MarkdownContent";
+import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
 import { StateBlock } from "../../components/ui/StateBlock/StateBlock";
 import { StatusBadge } from "../../components/ui/StatusBadge/StatusBadge";
 import * as db from "../../services/database";
@@ -53,23 +54,6 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalL,
     maxWidth: "1200px",
     margin: "0 auto",
-  },
-  header: {
-    display: "flex",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: tokens.spacingHorizontalM,
-  },
-  titleBlock: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    gap: tokens.spacingVerticalXS,
-    minWidth: 0,
-  },
-  title: {
-    overflowWrap: "anywhere",
   },
   actions: {
     display: "flex",
@@ -143,10 +127,22 @@ export default function HubModelDetail({ isLocal }: Props) {
       setConfirmDelete(null);
     }
   };
+  const backButton = (
+    <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={() => navigate(backPath)}>
+      Back to Models
+    </Button>
+  );
+
   if (loading) {
     return (
       <div className={styles.page}>
         <div className={styles.inner}>
+          <PageHeader
+            eyebrow="● MODEL DETAILS"
+            title={repoId}
+            subtitle="Fetching model metadata and files from Hugging Face."
+            actions={backButton}
+          />
           <StateBlock icon="⏳" message={`Loading ${repoId} from Hugging Face…`} />
         </div>
       </div>
@@ -157,13 +153,12 @@ export default function HubModelDetail({ isLocal }: Props) {
     return (
       <div className={styles.page}>
         <div className={styles.inner}>
-          <Button
-            appearance="secondary"
-            icon={<ArrowLeftRegular />}
-            onClick={() => navigate(backPath)}
-          >
-            Back to Models
-          </Button>
+          <PageHeader
+            eyebrow="● MODEL DETAILS"
+            title={repoId}
+            subtitle="This model could not be displayed."
+            actions={backButton}
+          />
           <StateBlock icon="⚠️" message={error ?? "Model not found."} />
         </div>
       </div>
@@ -194,65 +189,59 @@ export default function HubModelDetail({ isLocal }: Props) {
   return (
     <div className={styles.page}>
       <div className={styles.inner}>
-        <div className={styles.header}>
-          <div className={styles.titleBlock}>
-            <Button
-              appearance="secondary"
-              icon={<ArrowLeftRegular />}
-              onClick={() => navigate(backPath)}
-            >
-              Back to Models
-            </Button>
-            <Text as="h1" size={600} weight="semibold" className={styles.title}>
-              {model.id}
-            </Text>
-            <Body1>
-              ⬇ {formatCount(model.downloads)} downloads · ❤ {formatCount(model.likes)} likes
-              {model.gguf?.context_length &&
-                ` · Context ${formatCount(model.gguf.context_length)} tokens`}
-              {model.lastModified &&
-                ` · Updated ${new Date(model.lastModified).toLocaleDateString()}`}
-              {model.gated ? " · 🔒 gated" : ""}
-            </Body1>
-            {model.pipeline_tag && <StatusBadge>{model.pipeline_tag}</StatusBadge>}
-          </div>
-
-          <div className={styles.actions}>
-            {isLocal && (
-              <Button
-                appearance="primary"
-                icon={<ChatRegular />}
-                onClick={() => setSelectorOpen(true)}
-              >
-                Load & Chat
-              </Button>
-            )}
-            {isLocal && (
+        <PageHeader
+          eyebrow={isLocal ? "● INSTALLED MODEL" : "● HUGGING FACE MODEL"}
+          title={model.id}
+          subtitle={[
+            `⬇ ${formatCount(model.downloads)} downloads`,
+            `❤ ${formatCount(model.likes)} likes`,
+            model.gguf?.context_length &&
+              `Context ${formatCount(model.gguf.context_length)} tokens`,
+            model.lastModified && `Updated ${new Date(model.lastModified).toLocaleDateString()}`,
+            model.gated && "🔒 gated",
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          actions={
+            <div className={styles.actions}>
+              {backButton}
+              {isLocal && (
+                <Button
+                  appearance="primary"
+                  icon={<ChatRegular />}
+                  onClick={() => setSelectorOpen(true)}
+                >
+                  Load & Chat
+                </Button>
+              )}
+              {isLocal && (
+                <Button
+                  appearance="secondary"
+                  icon={<DeleteRegular />}
+                  title="Remove model"
+                  onClick={() => setConfirmDelete(model.id)}
+                >
+                  Delete
+                </Button>
+              )}
               <Button
                 appearance="secondary"
-                icon={<DeleteRegular />}
-                title="Remove model"
-                onClick={() => setConfirmDelete(model.id)}
+                icon={<OpenRegular />}
+                onClick={() =>
+                  open(hubModelPageUrl(model.id)).catch((err) =>
+                    console.error("Failed to open browser:", err),
+                  )
+                }
               >
-                Delete
+                Open on Hugging Face
               </Button>
-            )}
-            <Button
-              appearance="secondary"
-              icon={<OpenRegular />}
-              onClick={() =>
-                open(hubModelPageUrl(model.id)).catch((err) =>
-                  console.error("Failed to open browser:", err),
-                )
-              }
-            >
-              Open on Hugging Face
-            </Button>
-          </div>
-        </div>
+            </div>
+          }
+        />
 
-        {modelTagChips(model).length > 0 && (
+        {(model.pipeline_tag || modelTagChips(model).length > 0) && (
           <div className={styles.tags}>
+            {model.pipeline_tag && <StatusBadge>{model.pipeline_tag}</StatusBadge>}
             {modelTagChips(model).map((tag) => (
               <Badge key={tag} appearance="outline">
                 {tag}

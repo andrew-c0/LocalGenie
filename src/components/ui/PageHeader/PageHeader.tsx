@@ -10,6 +10,20 @@ const useStyles = makeStyles({
     gap: tokens.spacingHorizontalM,
     padding: `${tokens.spacingVerticalL} ${tokens.spacingHorizontalL} 0`,
   },
+  titleBlock: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+    minWidth: 0,
+  },
+  title: {
+    margin: 0,
+    overflowWrap: "anywhere",
+  },
+  subtitle: {
+    color: tokens.colorNeutralForeground2,
+    maxWidth: "720px",
+  },
   actions: {
     display: "flex",
     alignItems: "center",
@@ -29,10 +43,16 @@ export function PageHeader({ eyebrow, title, subtitle, actions }: PageHeaderProp
   const styles = useStyles();
   return (
     <div className={styles.row}>
-      <div>
-        {eyebrow && <Caption1Strong>{eyebrow}</Caption1Strong>}
-        <Title2 as="h1">{title}</Title2>
-        {subtitle && <Body1>{subtitle}</Body1>}
+      <div className={styles.titleBlock}>
+        {eyebrow && <Caption1Strong block>{eyebrow}</Caption1Strong>}
+        <Title2 as="h1" block className={styles.title}>
+          {title}
+        </Title2>
+        {subtitle && (
+          <Body1 block className={styles.subtitle}>
+            {subtitle}
+          </Body1>
+        )}
       </div>
       {actions && <div className={styles.actions}>{actions}</div>}
     </div>

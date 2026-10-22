@@ -15,7 +15,6 @@ import { StatusBadge } from "../../components/ui/StatusBadge/StatusBadge";
 import { SurfaceCard } from "../../components/ui/SurfaceCard/SurfaceCard";
 import { useBenchmarkStore } from "../../stores/benchmarkStore";
 import { useChatStore } from "../../stores/chatStore";
-import { useModelStore } from "../../stores/modelStore";
 
 const useStyles = makeStyles({
   page: {
@@ -79,7 +78,6 @@ const useStyles = makeStyles({
 export default function PerformanceDashboard() {
   const styles = useStyles();
   const navigate = useNavigate();
-  const serverStatus = useModelStore((s) => s.serverStatus);
   const sessions = useChatStore((s) => s.sessions);
 
   const status = useBenchmarkStore((s) => s.status);
@@ -127,8 +125,8 @@ export default function PerformanceDashboard() {
   return (
     <div className={styles.page}>
       <PageHeader
-        eyebrow={serverStatus.running ? "● RUNTIME ACTIVE" : "● RUNTIME OFFLINE"}
-        title="Benchmark & Performance"
+        eyebrow="● BENCHMARK SUITE"
+        title="Performance Dashboard"
         subtitle="Real-time inference throughput, TTFT latency, and hardware efficiency on your device."
         actions={
           <div className={styles.actions}>
