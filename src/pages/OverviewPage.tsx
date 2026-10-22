@@ -1,32 +1,93 @@
-﻿import { Button } from "@fluentui/react-components";
+import {
+  Body1,
+  Button,
+  Caption1Strong,
+  Card,
+  CardHeader,
+  makeStyles,
+  Text,
+  Title1,
+  tokens,
+} from "@fluentui/react-components";
 import { ArrowDownloadRegular, ChatRegular } from "@fluentui/react-icons";
 import { useNavigate } from "react-router-dom";
 import { SpeedList } from "../components/benchmark/SpeedList/SpeedList";
-import { MetricCard, StateBlock, StatusBadge, SurfaceCard } from "../components/ui/primitives";
+import { MetricCard } from "../components/ui/MetricCard/MetricCard";
+import { StateBlock } from "../components/ui/StateBlock/StateBlock";
+import { StatusBadge } from "../components/ui/StatusBadge/StatusBadge";
 import { useModelStore } from "../stores/modelStore";
+
+const useStyles = makeStyles({
+  page: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    padding: tokens.spacingHorizontalL,
+  },
+  inner: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalL,
+    maxWidth: "1200px",
+    margin: "0 auto",
+  },
+  hero: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: tokens.spacingVerticalS,
+    padding: tokens.spacingVerticalXL,
+  },
+  accent: {
+    color: tokens.colorBrandForeground1,
+  },
+  heroActions: {
+    display: "flex",
+    gap: tokens.spacingHorizontalS,
+    marginTop: tokens.spacingVerticalS,
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+    gap: tokens.spacingHorizontalM,
+  },
+  capabilityBody: {
+    padding: `0 ${tokens.spacingHorizontalM} ${tokens.spacingVerticalM}`,
+  },
+  banner: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: tokens.spacingHorizontalM,
+    flexWrap: "wrap",
+    padding: tokens.spacingVerticalS,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+});
 
 /** Overview / capabilities dashboard. */
 export default function OverviewPage() {
+  const styles = useStyles();
   const navigate = useNavigate();
   const models = useModelStore((s) => s.models);
   const serverStatus = useModelStore((s) => s.serverStatus);
 
   return (
-    <div className="lx-page">
-      <div className="lx-page-inner">
-        {/* â”€â”€ Hero â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <section className="lx-hero">
-          <span className="lx-page-eyebrow">
-            {serverStatus.running ? "â— Hexagon NPU & DirectML Ready" : "â— Runtime Offline"}
-          </span>
-          <h1 className="lx-hero-title">
-            Zero Cloud. <span className="accent">100% On-Device.</span>
-          </h1>
-          <p className="lx-page-subtitle">
+    <div className={styles.page}>
+      <div className={styles.inner}>
+        <section className={styles.hero}>
+          <Caption1Strong>
+            {serverStatus.running ? "● Hexagon NPU & DirectML Ready" : "● Runtime Offline"}
+          </Caption1Strong>
+          <Title1 as="h1">
+            Zero Cloud. <span className={styles.accent}>100% On-Device.</span>
+          </Title1>
+          <Body1>
             Run open-weights foundation models locally with dedicated Qualcomm NPU acceleration.
             Pure offline privacy, zero API latency.
-          </p>
-          <div className="lx-hero-actions">
+          </Body1>
+          <div className={styles.heroActions}>
             <Button
               appearance="primary"
               icon={<ArrowDownloadRegular />}
@@ -40,8 +101,7 @@ export default function OverviewPage() {
           </div>
         </section>
 
-        {/* â”€â”€ Runtime metrics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <div className="lx-grid-3">
+        <div className={styles.grid}>
           <MetricCard
             label="Server Status"
             badge={
@@ -75,56 +135,62 @@ export default function OverviewPage() {
           <MetricCard
             label="Hardware Telemetry"
             badge={<StatusBadge tone="purple">Unavailable</StatusBadge>}
-            value="â€”"
+            value="—"
             unit="NPU / VRAM / Temp"
             sub="Live hardware metrics require backend telemetry support"
           />
         </div>
 
-        {/* â”€â”€ Capabilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <div className="lx-grid-3">
-          <SurfaceCard title="ðŸ”’ 100% Offline Privacy">
-            <p className="lx-page-subtitle" style={{ maxWidth: "none" }}>
-              Context windows, prompts, and vector embeddings reside strictly in local memory. Zero
-              telemetry outbound.
-            </p>
-          </SurfaceCard>
-          <SurfaceCard title="âš¡ Native NPU Acceleration">
-            <p className="lx-page-subtitle" style={{ maxWidth: "none" }}>
-              DirectML and Qualcomm Hexagon paths deliver sub-12ms time-to-first-token latency on
-              supported hardware.
-            </p>
-          </SurfaceCard>
-          <SurfaceCard title="âœ³ Open Weights Ingestion">
-            <p className="lx-page-subtitle" style={{ maxWidth: "none" }}>
-              Native support for GGUF and ONNX archives from Hugging Face and Qualcomm AI Hub with
-              automatic quantization.
-            </p>
-          </SurfaceCard>
+        <div className={styles.grid}>
+          <Card>
+            <CardHeader header={<Text weight="semibold">🔒 100% Offline Privacy</Text>} />
+            <div className={styles.capabilityBody}>
+              <Body1>
+                Context windows, prompts, and vector embeddings reside strictly in local memory.
+                Zero telemetry outbound.
+              </Body1>
+            </div>
+          </Card>
+          <Card>
+            <CardHeader header={<Text weight="semibold">⚡ Native NPU Acceleration</Text>} />
+            <div className={styles.capabilityBody}>
+              <Body1>
+                DirectML and Qualcomm Hexagon paths deliver sub-12ms time-to-first-token latency on
+                supported hardware.
+              </Body1>
+            </div>
+          </Card>
+          <Card>
+            <CardHeader header={<Text weight="semibold">✳ Open Weights Ingestion</Text>} />
+            <div className={styles.capabilityBody}>
+              <Body1>
+                Native support for GGUF and ONNX archives from Hugging Face and Qualcomm AI Hub with
+                automatic quantization.
+              </Body1>
+            </div>
+          </Card>
         </div>
 
-        {/* â”€â”€ Generation speeds (from real stats when present) â”€â”€ */}
-        <SurfaceCard
-          title="Recent Generation Speeds"
-          action={
-            <span className="lx-mono" style={{ fontSize: 11, color: "var(--lx-text-muted)" }}>
-              from your chats
-            </span>
-          }
-        >
+        <Card>
+          <CardHeader
+            header={<Text weight="semibold">Recent Generation Speeds</Text>}
+            action={
+              <Text font="monospace" size={200}>
+                from your chats
+              </Text>
+            }
+          />
           <SpeedList />
-        </SurfaceCard>
+        </Card>
 
-        {/* â”€â”€ Privacy banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <div className="lx-hw-banner">
-          <span>ðŸ›¡ Windows sandbox isolation active. 0 outbound network requests allowed.</span>
-          <span className="lx-titlebar-spacer" />
-          <span className="lx-mono">127.0.0.1:{serverStatus.port} (localhost)</span>
+        <div className={styles.banner}>
+          <Body1>🛡 Windows sandbox isolation active. 0 outbound network requests allowed.</Body1>
+          <Text font="monospace">127.0.0.1:{serverStatus.port} (localhost)</Text>
         </div>
 
         {models.length === 0 && (
           <StateBlock
-            icon="ðŸ“¦"
+            icon="📦"
             message="No models installed yet. Pull one from Hugging Face to get started."
           >
             <Button appearance="primary" onClick={() => navigate("/models")}>

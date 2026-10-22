@@ -38,15 +38,11 @@ interface HubBrowseState {
   /** AI Hub model names GenieX can pull directly on this chipset (from `geniex model list`). */
   compatibleNames: Set<string> | null;
   /**
-   * Release-asset compatibility per repo, learned when the user opens a
-   * model's detail page (release_assets.json read once, cached in hubApi).
+   * Asset compatibility per repo. Not populated yet: nothing calls setAssetCompat.
    */
   assetCompat: Record<string, AssetCompat>;
   /** Record a learned compatibility for a repo (called by the detail page). */
   setAssetCompat: (repoId: string, compat: AssetCompat) => void;
-  /** Active top tab of the Models page — kept here so back-navigation preserves it. */
-  activeTab: ModelTab;
-  setActiveTab: (tab: ModelTab) => void;
 
   setArea: (area: HubArea) => void;
   setSearch: (search: string) => void;
@@ -138,8 +134,6 @@ export const useHubBrowseStore = create<HubBrowseState>((set, get) => ({
   assetCompat: {},
   setAssetCompat: (repoId, compat) =>
     set((state) => ({ assetCompat: { ...state.assetCompat, [repoId]: compat } })),
-  activeTab: "local",
-  setActiveTab: (tab) => set({ activeTab: tab }),
 
   setArea: (area) => {
     set({ area, models: [], nextCursor: null });
@@ -202,7 +196,7 @@ export const useHubBrowseStore = create<HubBrowseState>((set, get) => ({
           try {
             // For the Qualcomm area, load the chipset-compatible names from
             // `geniex model list` once — used to badge cards and pick the
-            // download flow (direct pull vs release-assets zip). All models
+            // download flow. All models
             // are shown regardless.
             if (s.area === "qualcomm" && !s.compatibleNames) {
               try {

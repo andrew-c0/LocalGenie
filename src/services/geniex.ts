@@ -5,6 +5,7 @@ import type {
   GenerationSettings,
   ModelInfo,
   SearchModel,
+  ServerLogLine,
   ServerStartOptions,
   ServerStatus,
   UpdateInfo,
@@ -20,25 +21,6 @@ interface ChatMessage {
 
 export async function listModels(): Promise<ModelInfo[]> {
   return invoke("list_models");
-}
-
-interface PullModelOptions {
-  model: string;
-  precision?: string;
-  modelHub?: string;
-  modelType?: string;
-  localPath?: string;
-}
-
-export async function pullModel(options: PullModelOptions): Promise<void> {
-  const { model, precision, modelHub, modelType, localPath } = options;
-  return invoke("pull_model", {
-    model,
-    precision,
-    modelHub,
-    modelType,
-    localPath,
-  });
 }
 
 export async function removeModel(model: string): Promise<void> {
@@ -72,6 +54,17 @@ export async function stopServer(port?: number): Promise<ServerStatus> {
   return invoke("stop_server", { port });
 }
 
+/** Base URL of the GenieX server on this machine. Every frontend caller builds URLs through this. */
+export function serverBaseUrl(port: number): string {
+  return `http://127.0.0.1:${port}`;
+}
+
+/** True when something answers `/v1/models` on the local port. Used to check a port before use. */
+export async function isPortServing(port: number, signal?: AbortSignal): Promise<boolean> {
+  const resp = await fetch(`${serverBaseUrl(port)}/v1/models`, { method: "GET", signal });
+  return resp.ok;
+}
+
 export async function getServerStatus(port?: number): Promise<ServerStatus> {
   return invoke("get_server_status", { port });
 }
@@ -82,29 +75,31 @@ export async function loadModel(model: string, baseUrl?: string): Promise<Server
   return invoke("load_model", { model, baseUrl });
 }
 
-export async function unloadAllModels(): Promise<ServerStatus> {
-  return invoke("unload_all_models");
+export async function unloadAllModels(port?: number): Promise<ServerStatus> {
+  return invoke("unload_all_models", { port });
 }
 
 // ─── Chat ────────────────────────────────────────────────────────
 
+/**
+ * Stream a chat completion. Chunks and completion arrive as `chat-chunk` and
+ * `chat-done` events carrying `streamId`, so the caller can route them to the
+ * session that started the stream.
+ */
 export async function chatCompletion(
   messages: ChatMessage[],
   settings: GenerationSettings,
+  streamId: string,
   model?: string,
   baseUrl?: string,
 ): Promise<void> {
-  return invoke("chat_completion", { messages, settings, model, baseUrl });
+  return invoke("chat_completion", { messages, settings, streamId, model, baseUrl });
 }
 
 // ─── CLI Utilities ──────────────────────────────────────────────
 export async function checkGeniexInstalled(): Promise<boolean> {
   return invoke("check_geniex_installed");
 }
-export async function getGeniexVersion(): Promise<string> {
-  return invoke("get_geniex_version");
-}
-
 export async function checkForCliUpdate(): Promise<UpdateInfo> {
   return invoke("check_for_cli_update");
 }
@@ -130,6 +125,13 @@ export async function updateGeniex(): Promise<string> {
   return invoke("update_geniex");
 }
 
-export async function installGeniex(): Promise<string> {
-  return invoke("install_geniex");
+// ─── Server Logs ─────────────────────────────────────────────────
+
+/** Recent `geniex serve` output, oldest first. */
+export async function getServerLogs(): Promise<ServerLogLine[]> {
+  return invoke("get_server_logs");
+}
+
+export async function clearServerLogs(): Promise<void> {
+  return invoke("clear_server_logs");
 }

@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef } from "react";
-import { useDebouncedCallback, useTauriEvent } from "../hooks";
+import { useTauriEvent } from "../hooks";
 import * as db from "../services/database";
 import * as geniex from "../services/geniex";
 import { useChatStore } from "../stores/chatStore";
@@ -7,20 +7,20 @@ import { useDownloadStore } from "../stores/downloadStore";
 import { useModelStore } from "../stores/modelStore";
 import type { DownloadedModelMeta, Message } from "../types";
 
+/** Delay before sessions that changed are written to the DB. */
+const SESSION_SAVE_DELAY_MS = 500;
+
 /**
- * Global app bootstrap: initial data load (CLI check, sessions, models,
- * server status), Tauri event listeners (chat streaming, pull progress,
+ * Global app bootstrap: initial data load (CLI check, sessions, models, server
+ * status), Tauri event listeners (chat streaming, download and import progress,
  * server crashes) and debounced session persistence. Renders children once
  * mounted — `App.tsx` stays pure scaffolding.
  */
-
-// Module-level map: file name (from asset-download-progress) -> repo ID (unified download ID)
-export const fileToRepoMap = new Map<string, string>();
-
 export default function AppBootstrap({ children }: { children: ReactNode }) {
   const loadSessions = useChatStore((s) => s.loadSessions);
   const updateLastAssistantMessage = useChatStore((s) => s.updateLastAssistantMessage);
   const setStreaming = useChatStore((s) => s.setStreaming);
+  const setActiveStream = useChatStore((s) => s.setActiveStream);
   const lastSendTime = useChatStore((s) => s.lastSendTime);
 
   const setModels = useModelStore((s) => s.setModels);
@@ -33,51 +33,35 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
   const tokenCountRef = useRef(0);
   const firstTokenTimeRef = useRef(0);
 
-  // ── Initialise: check CLI, load sessions & models ────────────
+  // ── Initialise: load everything independent of each other in parallel ──
   useEffect(() => {
     (async () => {
-      try {
-        const installed = await geniex.checkGeniexInstalled();
-        setCliInstalled(installed);
+      const [installed, saved, models, port] = await Promise.all([
+        geniex.checkGeniexInstalled().catch(() => false),
+        db.loadSessions().catch((err) => {
+          console.error("[init] Failed to load sessions:", err);
+          return null;
+        }),
+        geniex.listModels().catch(() => null), // CLI may not be installed
+        db.getPreference<number>("server_port").catch(() => null),
+      ]);
 
-        // Check for CLI updates once we know the CLI is installed.
-        if (installed) {
-          try {
-            const info = await geniex.checkForCliUpdate();
-            setUpdateInfo(info);
-          } catch {
-            // Network error or parse failure — silently ignore.
-          }
-        }
-      } catch {
-        setCliInstalled(false);
-      }
-      try {
-        const saved = await db.loadSessions();
-        console.log(`[init] Loaded ${saved.length} sessions from DB`);
-        loadSessions(saved);
-      } catch (err) {
-        console.error("[init] Failed to load sessions:", err);
-      }
-      try {
-        const models = await geniex.listModels();
-        setModels(models);
-      } catch {
-        // GenieX CLI may not be installed
-      }
-      // Load port preference before probing server status
-      try {
-        const port = await db.getPreference<number>("server_port");
-        if (port && port > 0) setServerPort(port);
-      } catch {
-        // use default
-      }
-      try {
-        const currentPort = useModelStore.getState().serverPort;
-        const status = await geniex.getServerStatus(currentPort);
-        setServerStatus(status);
-      } catch {
-        // ignore
+      setCliInstalled(installed);
+      if (saved) loadSessions(saved);
+      if (models) setModels(models);
+      if (port && port > 0) setServerPort(port);
+
+      const status = await geniex
+        .getServerStatus(useModelStore.getState().serverPort)
+        .catch(() => null);
+      if (status) setServerStatus(status);
+
+      // The update check calls GitHub and can be slow: don't hold up the rest of startup.
+      if (installed) {
+        geniex
+          .checkForCliUpdate()
+          .then(setUpdateInfo)
+          .catch(() => undefined);
       }
     })();
   }, [loadSessions, setModels, setUpdateInfo, setServerStatus, setCliInstalled, setServerPort]);
@@ -86,26 +70,45 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
   useTauriEvent("server-stopped", () => {
     console.warn("[app] Server process exited unexpectedly");
     setServerStatus({ running: false, port: useModelStore.getState().serverPort, models: [] });
+    useModelStore.getState().setServerCompute(null);
   });
 
-  // ── Persist active session to DB (debounced) ──────────────────
-  const persistSession = useDebouncedCallback(() => {
-    const { sessions: currentSessions, activeSessionId: activeId } = useChatStore.getState();
-    if (!activeId) return;
-    const session = currentSessions.find((s) => s.id === activeId);
-    if (session) {
-      db.saveSession(session).catch(() => {});
-    }
-  }, 500);
-
+  // ── Persist every session whose content changed (debounced) ───
   useEffect(() => {
-    persistSession();
-  }, [persistSession]);
+    const dirty = new Set<string>();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const flush = () => {
+      timer = undefined;
+      for (const session of useChatStore.getState().sessions) {
+        if (dirty.has(session.id)) db.saveSession(session).catch(() => undefined);
+      }
+      dirty.clear();
+    };
+
+    const unsubscribe = useChatStore.subscribe((state, prev) => {
+      if (state.sessions === prev.sessions) return;
+      const previous = new Map(prev.sessions.map((s) => [s.id, s]));
+      for (const session of state.sessions) {
+        if (previous.get(session.id) !== session) dirty.add(session.id);
+      }
+      clearTimeout(timer);
+      timer = setTimeout(flush, SESSION_SAVE_DELAY_MS);
+    });
+
+    return () => {
+      unsubscribe();
+      clearTimeout(timer);
+      flush();
+    };
+  }, []);
 
   // ── Listen for streaming chat chunks from Rust backend ────────
-  useTauriEvent<{ content: string }>("chat-chunk", (payload) => {
-    const activeId = useChatStore.getState().activeSessionId;
-    if (!activeId) return;
+  useTauriEvent<{ streamId: string; content: string }>("chat-chunk", (payload) => {
+    // Tokens go to the session that started the stream, even if the user switched chats since.
+    const stream = useChatStore.getState().activeStream;
+    if (!stream || stream.streamId !== payload.streamId) return;
+    const activeId = stream.sessionId;
     const store = useChatStore.getState();
     const session = store.sessions.find((s) => s.id === activeId);
     if (!session) return;
@@ -129,15 +132,17 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
       };
       store.addMessage(activeId, assistantMsg);
       // Persist immediately so the message survives app restarts mid-stream
-      db.saveMessage(activeId, assistantMsg).catch(() => {});
+      db.saveMessage(activeId, assistantMsg).catch(() => undefined);
     }
   });
 
-  useTauriEvent("chat-done", () => {
+  useTauriEvent<{ streamId: string }>("chat-done", (payload) => {
+    const stream = useChatStore.getState().activeStream;
+    if (!stream || stream.streamId !== payload.streamId) return;
     setStreaming(false);
+    setActiveStream(null);
 
-    const activeId = useChatStore.getState().activeSessionId;
-    if (!activeId) return;
+    const activeId = stream.sessionId;
     const store = useChatStore.getState();
     const session = store.sessions.find((s) => s.id === activeId);
     if (!session) return;
@@ -170,137 +175,117 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
         tokenCount,
         promptChars,
       });
-      db.saveMessage(activeId, lastMsg).catch(() => {});
+      db.saveMessage(activeId, lastMsg).catch(() => undefined);
     }
   });
 
-  // ── Listen for pull progress ──────────────────────────────────
+  // ── Listen for model import progress (GenieX cache registration) ──
   useTauriEvent<{ model: string }>("model-pull-start", (payload) => {
-    // Register CLI pulls in the downloads drawer as soon as they start.
-    // Use repo ID as the unified key.
-    useDownloadStore.getState().upsert({ id: payload.model, label: payload.model });
-    useDownloadStore.getState().setStatus(payload.model, "importing");
+    const store = useDownloadStore.getState();
+    store.upsert({ id: payload.model, label: payload.model });
+    store.setStatus(payload.model, "importing");
   });
 
   useTauriEvent<{ model: string; message: string }>("model-pull-progress", (payload) => {
     useDownloadStore.getState().setImportingProgress(payload.model, payload.message);
   });
 
-  useTauriEvent<{ model: string }>("model-pull-complete", async (payload) => {
-    useModelStore.getState().removeDownload(payload.model);
+  useTauriEvent<{ model: string }>("model-pull-complete", (payload) => {
     useDownloadStore.getState().setStatus(payload.model, "finished");
-    // Clean up the file->repo mapping
-    for (const [file, repo] of fileToRepoMap.entries()) {
-      if (repo === payload.model) fileToRepoMap.delete(file);
-    }
-    // Refresh model list
-    try {
-      const models = await geniex.listModels();
-      useModelStore.getState().setModels(models);
-    } catch {
-      // ignore
-    }
-    // Persist downloaded-model metadata (precision + context size) so the
-    // model card can show real values instead of defaults. Best-effort.
-    try {
-      const meta = await fetchDownloadedModelMeta(payload.model);
-      await db.upsertDownloadedModel(
-        payload.model,
-        meta.precision ?? null,
-        meta.contextSize ?? null,
-        meta.paramCount ?? null,
-        meta.repo_url ?? null,
-        meta.model_card ?? null,
-      );
-    } catch {
-      // ignore — metadata is a nice-to-have
-    }
+    void refreshAfterImport(payload.model);
   });
 
-  // ── Listen for asset download progress (drawer) ──────────────
+  // ── Listen for file download progress (keyed by download id = repo id) ──
   useTauriEvent<{
+    id: string;
     file: string;
     received?: number;
     total?: number | null;
     speed?: number;
     complete?: boolean;
     cancelled?: boolean;
-  }>("asset-download-progress", (payload) => {
+  }>("download-progress", (payload) => {
     const store = useDownloadStore.getState();
     if (payload.cancelled) {
-      // Map file name to repo ID for unified entry
-      const repoId = fileToRepoMap.get(payload.file) ?? payload.file;
-      store.setStatus(repoId, "cancelled");
+      store.setStatus(payload.id, "cancelled");
       return;
     }
-    // Resolve the unified repo ID for this file
-    const repoId = fileToRepoMap.get(payload.file) ?? payload.file;
     if (payload.complete) {
-      // Download complete — transition to importing status
-      // Record final file size so progress bar shows 100% correctly
-      const existing = store.downloads.find((d) => d.id === repoId);
+      // Record the final size so the bar reads 100%; the import status arrives via model-pull-start.
+      const existing = store.downloads.find((d) => d.id === payload.id);
       if (existing && payload.total == null) {
         const finalSize = payload.received ?? existing.received;
-        store.patchProgress(repoId, finalSize, finalSize, 0);
+        store.patchProgress(payload.id, finalSize, finalSize, 0);
       }
-      // Status will be set to "importing" by model-pull-start event
       return;
     }
-    // Ensure download entry exists before patching progress
-    const existing = store.downloads.find((d) => d.id === repoId);
-    if (!existing) {
-      store.upsert({
-        id: repoId,
-        label: repoId,
-        received: 0,
-        total: null,
-        speed: 0,
-        status: "downloading",
-        startedAt: Date.now(),
-      });
+    if (!store.downloads.some((d) => d.id === payload.id)) {
+      store.upsert({ id: payload.id, label: payload.id, status: "downloading" });
     }
-    store.patchProgress(repoId, payload.received ?? 0, payload.total ?? null, payload.speed ?? 0);
+    store.patchProgress(
+      payload.id,
+      payload.received ?? 0,
+      payload.total ?? null,
+      payload.speed ?? 0,
+    );
   });
 
   return <>{children}</>;
 }
 
 /**
- * Fetch downloaded-model metadata from the local DB, falling back to the HF
- * config.json (real context size) and safetensors metadata (param count) when
- * the DB has nothing yet.
+ * After a successful import: refresh the CLI model list and persist the
+ * metadata the model card shows. Both are best-effort.
+ */
+async function refreshAfterImport(repoId: string): Promise<void> {
+  try {
+    useModelStore.getState().setModels(await geniex.listModels());
+  } catch {
+    // CLI list refresh is best-effort
+  }
+  try {
+    const meta = await fetchDownloadedModelMeta(repoId);
+    await db.upsertDownloadedModel(
+      repoId,
+      meta.precision ?? null,
+      meta.contextSize ?? null,
+      meta.paramCount ?? null,
+      meta.repoUrl ?? null,
+      meta.modelCard ?? null,
+    );
+  } catch {
+    // metadata is a nice-to-have
+  }
+}
+
+/**
+ * Downloaded-model metadata from the local DB. The context size falls back to the
+ * HF config.json when the DB row does not have it.
  */
 export async function fetchDownloadedModelMeta(repoId: string): Promise<DownloadedModelMeta> {
   const rows = await db.listDownloadedModels();
   const row = rows.find((r) => r.name === repoId);
-  if (row) {
-    return {
-      precision: row.precision ?? undefined,
-      contextSize: row.context_size ?? undefined,
-      paramCount: row.param_count ?? undefined,
-      repo_url: row.repo_url ?? undefined,
-      model_card: row.model_card ?? undefined,
-    };
-  }
+  const contextSize = row?.context_size ?? (await fetchContextSize(repoId));
+  return {
+    precision: row?.precision ?? undefined,
+    contextSize: contextSize ?? undefined,
+    paramCount: row?.param_count ?? undefined,
+    repoUrl: row?.repo_url ?? undefined,
+    modelCard: row?.model_card ?? undefined,
+  };
+}
 
-  // Fallback: read config.json from the HF repo to get the real context size.
+/** Context length from the repo's config.json, or null if it is not available. */
+async function fetchContextSize(repoId: string): Promise<number | null> {
   try {
     const res = await fetch(`https://huggingface.co/${repoId}/resolve/main/config.json`, {
       headers: { Accept: "application/json" },
     });
-    if (res.ok) {
-      const cfg = await res.json();
-      const ctx =
-        (cfg.context_length ??
-        cfg.max_position_embeddings ??
-        cfg.max_sequence_length ??
-        cfg.model_type === "llama")
-          ? cfg.max_position_embeddings
-          : undefined;
-      return { contextSize: ctx };
-    }
+    if (!res.ok) return null;
+    const cfg = (await res.json()) as Record<string, unknown>;
+    const value = cfg.context_length ?? cfg.max_position_embeddings ?? cfg.max_sequence_length;
+    return typeof value === "number" ? value : null;
   } catch {
-    // ignore
+    return null;
   }
-  return {};
 }

@@ -1,4 +1,18 @@
-import { Button, Dropdown, Option, Spinner } from "@fluentui/react-components";
+import type { BadgeProps } from "@fluentui/react-components";
+import {
+  Badge,
+  Body1,
+  Button,
+  Caption1,
+  Card,
+  CardHeader,
+  Dropdown,
+  makeStyles,
+  Option,
+  Spinner,
+  Text,
+  tokens,
+} from "@fluentui/react-components";
 import {
   ArrowDownloadRegular,
   ArrowLeftRegular,
@@ -9,258 +23,142 @@ import {
   OpenRegular,
 } from "@fluentui/react-icons";
 import { open } from "@tauri-apps/plugin-shell";
-import { useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import rehypeHighlight from "rehype-highlight";
-import rehypeRaw from "rehype-raw";
-import remarkGfm from "remark-gfm";
-import { fileToRepoMap } from "../../components/AppBootstrap";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog/ConfirmDialog";
-import { StateBlock, StatusBadge } from "../../components/ui/primitives";
+import { MarkdownContent } from "../../components/ui/MarkdownContent/MarkdownContent";
+import { StateBlock } from "../../components/ui/StateBlock/StateBlock";
+import { StatusBadge } from "../../components/ui/StatusBadge/StatusBadge";
 import * as db from "../../services/database";
-import { cleanupDownloadedModelDirectory, downloadFile, importGGUF } from "../../services/download";
 import * as geniex from "../../services/geniex";
 import {
   estimateModelBytes,
-  fetchHubModelReadme,
-  getHubModel,
-  type HubFileEntry,
-  type HubModel,
   hubModelPageUrl,
-  listHubModelFiles,
   modelTagChips,
   precisionInfo,
   ramFitForBytes,
 } from "../../services/hubApi";
-import type { GGUFFile } from "../../services/hubModels";
-import type { SystemMemoryInfo } from "../../services/system";
-import { getSystemMemory } from "../../services/system";
+import { type GGUFGroup, variantLabel } from "../../services/hubModels";
+import { isDownloadActive, startGGUFDownload, useDownloadStore } from "../../stores/downloadStore";
 import { useModelStore } from "../../stores/modelStore";
 import { formatBytes, formatCount } from "../../utils/format";
-import { parseGGUFFilename } from "../../utils/gguf";
+import { useDownloadedPrecisions, useHubModelData, useSystemMemory } from "./useHubModelDetail";
+
+const useStyles = makeStyles({
+  page: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    padding: `0 ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
+  },
+  inner: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalL,
+    maxWidth: "1200px",
+    margin: "0 auto",
+  },
+  header: {
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: tokens.spacingHorizontalM,
+  },
+  titleBlock: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: tokens.spacingVerticalXS,
+    minWidth: 0,
+  },
+  title: {
+    overflowWrap: "anywhere",
+  },
+  actions: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+  },
+  tags: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: tokens.spacingHorizontalXS,
+  },
+  variantRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    border: "none",
+    margin: 0,
+    padding: 0,
+    minWidth: 0,
+  },
+  dropdown: {
+    minWidth: "340px",
+  },
+  optionContent: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalXS,
+  },
+  alignStart: {
+    alignSelf: "flex-start",
+  },
+  fileRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+  },
+  fileName: {
+    overflowWrap: "anywhere",
+  },
+});
 
 interface Props {
-  /** RepoIds for which a download is in progress. */
-  downloading: Set<string>;
   /** Viewing a locally installed model (DB-backed). */
   isLocal?: boolean;
 }
 
-/** Grouped GGUF files: main file + its associated sidecars (mmproj, mtp, etc.) */
-interface GGUFGroup {
-  main: GGUFFile;
-  sidecars: GGUFFile[];
-}
+type BadgeColor = NonNullable<BadgeProps["color"]>;
 
-const convertToGGUFFiles = (entries: HubFileEntry[]): GGUFFile[] => {
-  const result: GGUFFile[] = [];
-  for (const e of entries) {
-    if (e.type !== "file") continue;
-    const parsed = parseGGUFFilename(e.path);
-    if (!parsed) continue;
-    result.push({
-      filename: e.path,
-      precision: parsed.encoding ?? "unknown",
-      sizeLabel: parsed.sizeLabel,
-      version: parsed.version,
-      shard: parsed.shard,
-      size: e.size,
-    });
-  }
-  return result;
-};
+/** Quantization width → badge colour (lower bits = more compressed). */
+const bitsBadgeColor = (bits: number): BadgeColor =>
+  bits <= 4 ? "success" : bits <= 6 ? "warning" : bits <= 8 ? "informative" : "important";
 
-/** Group GGUF files: each non-sidecar file is its own group, sidecars are attached to their matching main file */
-const groupGGUFFiles = (files: GGUFFile[]): GGUFGroup[] => {
-  const mainFiles: GGUFFile[] = [];
-  const sidecarFiles: GGUFFile[] = [];
+/** RAM fit level → badge colour. */
+const ramBadgeColor = (level: string): BadgeColor =>
+  level === "fits" ? "success" : level === "tight" ? "warning" : "danger";
 
-  /** Check if filename indicates a sidecar (mmproj/mtp) anywhere in the name */
-  const isSidecarFilename = (filename: string): boolean => {
-    const name = filename.replace(/\.gguf$/i, "");
-    return name.includes("-mmproj-") || name.includes("-mtp-");
-  };
-
-  /** Normalize fineTune for matching by stripping -mmproj / -mtp segments */
-  const normalizeFineTune = (fineTune: string | null): string => {
-    if (!fineTune) return "";
-    return fineTune.replace(/-mmproj/g, "").replace(/-mtp/g, "");
-  };
-
-  for (const f of files) {
-    const parsed = parseGGUFFilename(f.filename);
-    if (!parsed) continue;
-    // Sidecar if: regex detected prefix sidecar, OR filename contains -mmproj-/-mtp- (middle pattern)
-    if (parsed.sidecar !== null || isSidecarFilename(f.filename)) {
-      sidecarFiles.push(f);
-    } else {
-      mainFiles.push(f);
-    }
-  }
-
-  // Sort main files by size, ascending
-  mainFiles.sort((a, b) => (a.size ?? 0) - (b.size ?? 0));
-
-  // Each main file gets its own group
-  const groups: GGUFGroup[] = mainFiles.map((main) => ({ main, sidecars: [] }));
-
-  // Attach sidecars to the matching main file (same baseName + normalized fineTune + version + encoding)
-  for (const sidecar of sidecarFiles) {
-    const parsed = parseGGUFFilename(sidecar.filename);
-    if (!parsed) continue;
-    const match = groups.find((g) => {
-      const mainParsed = parseGGUFFilename(g.main.filename);
-      if (!mainParsed) return false;
-      return (
-        mainParsed.baseName === parsed.baseName &&
-        normalizeFineTune(mainParsed.fineTune) === normalizeFineTune(parsed.fineTune) &&
-        mainParsed.version === parsed.version &&
-        mainParsed.encoding === parsed.encoding
-      );
-    });
-    if (match) {
-      match.sidecars.push(sidecar);
-    }
-  }
-
-  return groups;
-};
-
-const getChipStyle = (bits: number) => ({
-  backgroundColor:
-    bits <= 4 ? "#4caf50" : bits <= 6 ? "#ff9800" : bits <= 8 ? "#2196f3" : "#9c27b0",
-  color: "#fff",
-  padding: "2px 6px",
-  borderRadius: "3px",
-  fontSize: "11px",
-  fontWeight: 600,
-  marginRight: "6px",
-});
-
-export default function HubModelDetail({ downloading, isLocal }: Props) {
+export default function HubModelDetail({ isLocal }: Props) {
+  const styles = useStyles();
   const { repoId = "" } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
   const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
-  const [model, setModel] = useState<HubModel | null>(null);
-  const [files, setFiles] = useState<HubFileEntry[]>([]);
-  const [readme, setReadme] = useState<string | null>(null);
-  const [localCard, setLocalCard] = useState<string | null>(null);
-  const [selectedVariant, setSelectedVariant] = useState<GGUFGroup | null>(null);
-  const [ggufGroups, setGgufGroups] = useState<GGUFGroup[]>([]);
-  const [systemMemory, setSystemMemory] = useState<SystemMemoryInfo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [filesOpen, setFilesOpen] = useState(false);
-  const [downloadingThis, setDownloadingThis] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [downloadedPrecisions, setDownloadedPrecisions] = useState<Set<string>>(
-    new Set(),
+  const { model, files, readme, localCard, ggufGroups, loading, error, setError } = useHubModelData(
+    repoId,
+    isLocal,
   );
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setModel(null);
-    setFiles([]);
-    setReadme(null);
-    setSelectedVariant(null);
-    setGgufGroups([]);
-    (async () => {
-      try {
-        if (isLocal) {
-          // Local model: build synthetic HubModel from DB so UI works
-          const models = await db.listDownloadedModels();
-          const row = models.find((m) => m.name === repoId || repoId.includes(m.name));
-          if (row) {
-            setModel({
-              _id: repoId,
-              id: repoId,
-              downloads: 0,
-              likes: 0,
-              gated: false,
-              safetensors: { parameters: row.param_count ?? undefined },
-            });
-            if (row.model_card) setLocalCard(row.model_card);
-            else setLocalCard(null);
-          } else {
-            setError("Local model not found in database.");
-          }
-          setLoading(false);
-          return;
-        }
-        const m = await getHubModel(repoId);
-        if (cancelled) return;
-        setModel(m);
-        listHubModelFiles(repoId)
-          .then((f) => !cancelled && setFiles(f))
-          .catch(() => undefined);
-        fetchHubModelReadme(repoId)
-          .then((r) => !cancelled && setReadme(r))
-          .catch(() => undefined);
-        listHubModelFiles(repoId)
-          .then((all) => {
-            if (cancelled) return;
-            const ggufFiles = convertToGGUFFiles(all);
-            setGgufGroups(groupGGUFFiles(ggufFiles));
-          })
-          .catch(() => undefined);
-      } catch (err) {
-        if (!cancelled) setError(String(err));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [repoId]);
-
-  // For local models, fetch stored model card from DB
-  useEffect(() => {
-    if (!isLocal || !repoId) return;
-    db.listDownloadedModels()
-      .then((models) => {
-        const row = models.find((m) => m.name === repoId);
-        if (row?.model_card) setLocalCard(row.model_card);
-      })
-      .catch(() => setLocalCard(null));
-  }, [isLocal, repoId]);
-
-  // Load system memory info once
-  useEffect(() => {
-    let cancelled = false;
-    getSystemMemory()
-      .then((mem) => !cancelled && setSystemMemory(mem))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Fetch downloaded precisions for this repo from DB
-  useEffect(() => {
-    let cancelled = false;
-    if (!repoId) {
-      setDownloadedPrecisions(new Set());
-      return;
-    }
-    db.listDownloadedModels()
-      .then((models) => {
-        if (!cancelled) {
-          const precisions = new Set(
-            models
-              .filter((m) => m.name === repoId || repoId.includes(m.name))
-              .map((m) => m.precision ?? "")
-              .filter((p) => p),
-          );
-          setDownloadedPrecisions(precisions);
-        }
-      })
-      .catch(() => setDownloadedPrecisions(new Set()));
-  }, [repoId]);
-
+  const downloadedPrecisions = useDownloadedPrecisions(repoId);
+  const systemMemory = useSystemMemory();
+  const isDownloading = useDownloadStore((s) =>
+    s.downloads.some((d) => d.id === repoId && isDownloadActive(d.status)),
+  );
+  // Selection is tied to the repo it was made for, so switching repos clears it without an effect.
+  const [variantSelection, setVariantSelection] = useState<{
+    repoId: string;
+    filename: string;
+  } | null>(null);
+  const selectedVariant =
+    variantSelection?.repoId === repoId
+      ? (ggufGroups.find((g) => g.main.filename === variantSelection.filename) ?? null)
+      : null;
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const handleDelete = async () => {
     if (!model) return;
@@ -282,8 +180,8 @@ export default function HubModelDetail({ downloading, isLocal }: Props) {
   };
   if (loading) {
     return (
-      <div className="lx-page">
-        <div className="lx-page-inner">
+      <div className={styles.page}>
+        <div className={styles.inner}>
           <StateBlock icon="⏳" message={`Loading ${repoId} from Hugging Face…`} />
         </div>
       </div>
@@ -292,10 +190,11 @@ export default function HubModelDetail({ downloading, isLocal }: Props) {
 
   if (error || !model) {
     return (
-      <div className="lx-page">
-        <div className="lx-page-inner">
+      <div className={styles.page}>
+        <div className={styles.inner}>
           <Button
             appearance="secondary"
+            size="small"
             icon={<ArrowLeftRegular />}
             onClick={() => navigate("/models")}
           >
@@ -307,7 +206,6 @@ export default function HubModelDetail({ downloading, isLocal }: Props) {
     );
   }
 
-  const isDownloading = downloading.has(model.id);
   const paramsCount = model?.safetensors?.parameters ?? null;
   // GGUF files have actual size — compute RAM fit directly from file size (with overhead for KV cache/activations)
   const estimateRamFitFromFileSize = (fileSize: number) => {
@@ -322,47 +220,22 @@ export default function HubModelDetail({ downloading, isLocal }: Props) {
     return ramFitForBytes(neededBytes, systemMemory);
   };
 
-  const handleDownload = async (group: GGUFGroup) => {
-    // Prevent concurrent downloads for the same precision
-    if (downloadingThis || isDownloading) return;
-    setDownloadingThis(true);
-    try {
-      const url = `https://huggingface.co/${repoId}/resolve/main/${group.main.filename}`;
-      const fileName = group.main.filename.split("/").pop() ?? group.main.filename;
-      fileToRepoMap.set(fileName, repoId);
-      for (const sidecar of group.sidecars) {
-        const sideName = sidecar.filename.split("/").pop() ?? sidecar.filename;
-        fileToRepoMap.set(sideName, repoId);
-      }
-      const downloadedPath = await downloadFile(
-        url,
-        fileName,
-        group.main.precision ?? undefined,
-      ).catch(() => undefined);
-      if (downloadedPath) {
-        try {
-          const modelDir = await importGGUF(downloadedPath, repoId, fileName, group.main.precision);
-          await cleanupDownloadedModelDirectory(modelDir);
-        } catch (e) {
-          console.error("Failed to import GGUF into GenieX cache:", e);
-        }
-      }
-      for (const sidecar of group.sidecars) {
-        const sideUrl = `https://huggingface.co/${repoId}/resolve/main/${sidecar.filename}`;
-        const sideName = sidecar.filename.split("/").pop() ?? sidecar.filename;
-        await downloadFile(sideUrl, sideName).catch(() => undefined);
-      }
-    } finally {
-      setDownloadingThis(false);
-    }
+  const handleDownload = (group: GGUFGroup) => {
+    void startGGUFDownload({ repoId, main: group.main, sidecars: group.sidecars });
   };
 
+  const isSelectedDownloaded =
+    !isLocal &&
+    selectedVariant !== null &&
+    downloadedPrecisions.has(selectedVariant.main.precision ?? "");
+  const busy = isDownloading;
+  const modelContent = isLocal ? localCard : readme;
+
   return (
-    <div className="lx-page">
-      <div className="lx-page-inner">
-        {/* ── Header ───────────────────────────────── */}
-        <div className="lx-page-headrow">
-          <div>
+    <div className={styles.page}>
+      <div className={styles.inner}>
+        <div className={styles.header}>
+          <div className={styles.titleBlock}>
             <Button
               appearance="secondary"
               size="small"
@@ -371,34 +244,33 @@ export default function HubModelDetail({ downloading, isLocal }: Props) {
             >
               Back to Models
             </Button>
-            <h1 className="lx-page-title lx-mono" style={{ marginTop: 8 }}>
+            <Text as="h1" font="monospace" size={600} weight="semibold" className={styles.title}>
               {model.id}
-            </h1>
-            <p className="lx-page-subtitle">
+            </Text>
+            <Body1>
               ⬇ {formatCount(model.downloads)} downloads · ❤ {formatCount(model.likes)} likes
               {model.lastModified &&
                 ` · Updated ${new Date(model.lastModified).toLocaleDateString()}`}
               {model.gated ? " · 🔒 gated" : ""}
-            </p>
-            {model.pipeline_tag && (
-              <div style={{ marginTop: 6 }}>
-                <StatusBadge>{model.pipeline_tag}</StatusBadge>
-              </div>
-            )}
+            </Body1>
+            {model.pipeline_tag && <StatusBadge>{model.pipeline_tag}</StatusBadge>}
           </div>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-            {isLocal ? (
+
+          <div className={styles.actions}>
+            {isLocal && (
               <Button
                 appearance="primary"
+                size="small"
                 icon={<ChatRegular />}
                 onClick={() => setSelectorOpen(true)}
               >
                 Load & Chat
               </Button>
-            ) : null}
+            )}
             {isLocal && (
               <Button
                 appearance="secondary"
+                size="small"
                 icon={<DeleteRegular />}
                 title="Remove model"
                 onClick={() => setConfirmDelete(model.id)}
@@ -408,6 +280,7 @@ export default function HubModelDetail({ downloading, isLocal }: Props) {
             )}
             <Button
               appearance="secondary"
+              size="small"
               icon={<OpenRegular />}
               onClick={() =>
                 open(hubModelPageUrl(model.id)).catch((err) =>
@@ -420,210 +293,140 @@ export default function HubModelDetail({ downloading, isLocal }: Props) {
           </div>
         </div>
 
-        {/* ── Tag chips ────────────────────────────── */}
         {modelTagChips(model).length > 0 && (
-          <div className="lx-chiprow">
+          <div className={styles.tags}>
             {modelTagChips(model).map((tag) => (
-              <span key={tag} className="lx-chip" style={{ cursor: "default" }}>
+              <Badge key={tag} appearance="outline">
                 {tag}
-              </span>
+              </Badge>
             ))}
           </div>
         )}
 
-        {/* ── Model name + actions (local vs remote) ─────────────── */}
-        <div
-          className="lx-precision-dropdown"
-          style={{ marginTop: 12, display: isLocal ? "none" : undefined }}
-        >
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-              alignItems: "center",
-            }}
-            role="group"
-            aria-label="Select GGUF variant"
-          >
-            <span className="lx-chip lx-model-chip">{model.id}</span>
-
-            {ggufGroups.length > 0 ? (
-              <>
-                <Dropdown
-                  selectedOptions={selectedVariant ? [selectedVariant.main.filename] : []}
-                  onOptionSelect={(_, data) => {
-                    const selected = ggufGroups.find((g) => g.main.filename === data.optionValue);
-                    setSelectedVariant(selected ?? null);
-                  }}
-                  className="lx-precision-select"
-                  aria-label="Select GGUF precision"
-                >
-                  <Option text="Select precision…" value="">
-                    Select precision…
+        {!isLocal && ggufGroups.length > 0 && (
+          <fieldset className={styles.variantRow} aria-label="Select GGUF variant">
+            <Badge appearance="outline" size="large">
+              {model.id}
+            </Badge>
+            <Dropdown
+              className={styles.dropdown}
+              aria-label="Select GGUF precision"
+              value={
+                selectedVariant
+                  ? `${variantLabel(selectedVariant)} — ${formatBytes(selectedVariant.main.size)}`
+                  : "Select precision…"
+              }
+              selectedOptions={selectedVariant ? [selectedVariant.main.filename] : []}
+              onOptionSelect={(_, data) => {
+                setVariantSelection(
+                  data.optionValue ? { repoId, filename: data.optionValue } : null,
+                );
+              }}
+            >
+              {ggufGroups.map((group) => {
+                const info = precisionInfo(group.main.precision);
+                const label = variantLabel(group);
+                const hasSidecar = group.sidecars.length > 0;
+                const ramFit =
+                  estimateRamFitFromFileSize(group.main.size ?? 0) ??
+                  estimateMemoryRequirement(info.bitsPerWeight ?? 4);
+                return (
+                  <Option
+                    key={group.main.filename}
+                    value={group.main.filename}
+                    text={`${label} — ${formatBytes(group.main.size)}`}
+                  >
+                    <span className={styles.optionContent}>
+                      <Badge
+                        appearance="filled"
+                        size="small"
+                        color={bitsBadgeColor(info.bitsPerWeight ?? 4)}
+                      >
+                        {label}
+                      </Badge>
+                      {hasSidecar && (
+                        <Badge appearance="filled" size="small" color="brand">
+                          +{group.sidecars.length} sidecar
+                        </Badge>
+                      )}
+                      {ramFit ? (
+                        <Badge appearance="filled" size="small" color={ramBadgeColor(ramFit.level)}>
+                          {ramFit.level === "fits" ? "✓" : ramFit.level === "tight" ? "⚠" : "✗"}{" "}
+                          {ramFit.label}
+                        </Badge>
+                      ) : (
+                        <Badge appearance="filled" size="small" color="subtle">
+                          N/A
+                        </Badge>
+                      )}
+                      <Caption1>{formatBytes(group.main.size)}</Caption1>
+                    </span>
                   </Option>
-                  {ggufGroups.map((group) => {
-                    const info = precisionInfo(group.main.precision);
-                    const labelParts = [info.label];
-                    if (group.main.sizeLabel) labelParts.push(group.main.sizeLabel);
-                    else if (group.main.version) labelParts.push(group.main.version);
-                    const bits = info.bitsPerWeight ?? 4;
-                    const chipStyle = getChipStyle(bits);
-                    const hasSidecar = group.sidecars.length > 0;
-                    const ramFit =
-                      estimateRamFitFromFileSize(group.main.size ?? 0) ??
-                      estimateMemoryRequirement(bits);
-                    const ramChip = ramFit ? (
-                      <span
-                        className="lx-chip"
-                        style={{
-                          backgroundColor:
-                            ramFit.level === "fits"
-                              ? "#4caf50"
-                              : ramFit.level === "tight"
-                                ? "#ff9800"
-                                : "#f44336",
-                          color: "#fff",
-                          padding: "2px 6px",
-                          borderRadius: "3px",
-                          fontSize: "11px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {ramFit.level === "fits" ? "✓" : ramFit.level === "tight" ? "⚠" : "✗"}{" "}
-                        {ramFit.label}
-                      </span>
-                    ) : (
-                      <span
-                        className="lx-chip"
-                        style={{
-                          backgroundColor: "#999",
-                          color: "#666",
-                          padding: "2px 6px",
-                          borderRadius: "3px",
-                          fontSize: "11px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        N/A
-                      </span>
-                    );
-                    return (
-                      <Option
-                        key={group.main.filename}
-                        value={group.main.filename}
-                        text={`${labelParts.join(" — ")} — ${formatBytes(group.main.size)}`}
-                      >
-                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={chipStyle} className="lx-chip">
-                            {labelParts.join(" — ")}
-                          </span>
-                          {hasSidecar && (
-                            <span
-                              className="lx-chip"
-                              style={{
-                                backgroundColor: "#6366f1",
-                                color: "#fff",
-                                padding: "2px 6px",
-                                borderRadius: "3px",
-                                fontSize: "11px",
-                                fontWeight: 600,
-                              }}
-                            >
-                              +{group.sidecars.length} sidecar
-                            </span>
-                          )}
-                          {ramChip}
-                          <span style={{ marginLeft: 8 }}>— {formatBytes(group.main.size)}</span>
-                        </span>
-                      </Option>
-                    );
-                  })}
-                </Dropdown>
+                );
+              })}
+            </Dropdown>
 
-                <Button
-                  appearance="primary"
-                  icon={downloadingThis || isDownloading ? <Spinner size="tiny" /> : 
-                   (!isLocal && selectedVariant && downloadedPrecisions.has(selectedVariant.main.precision ?? "") 
-                    ? <ChatRegular /> 
-                    : <ArrowDownloadRegular />)}
-                  disabled={!selectedVariant || downloadingThis || isDownloading}
-                  onClick={() => {
-                    if (!selectedVariant) return;
-                    if (!isLocal && selectedVariant && downloadedPrecisions.has(selectedVariant.main.precision ?? "")) {
-                      setSelectorOpen(true);
-                    } else {
-                      handleDownload(selectedVariant);
-                    }
-                  }}
-                >
-                  {downloadingThis || isDownloading ? "Pulling…" : 
-                   (!isLocal && selectedVariant && downloadedPrecisions.has(selectedVariant.main.precision ?? "") 
-                    ? "Load & Chat" 
-                    : "Download")}
-                </Button>
-              </>
-            ) : null}
-          </div>
-        </div>
+            <Button
+              appearance="primary"
+              size="small"
+              icon={
+                busy ? (
+                  <Spinner size="tiny" />
+                ) : isSelectedDownloaded ? (
+                  <ChatRegular />
+                ) : (
+                  <ArrowDownloadRegular />
+                )
+              }
+              disabled={!selectedVariant || busy}
+              onClick={() => {
+                if (!selectedVariant) return;
+                if (isSelectedDownloaded) {
+                  setSelectorOpen(true);
+                } else {
+                  handleDownload(selectedVariant);
+                }
+              }}
+            >
+              {busy ? "Pulling…" : isSelectedDownloaded ? "Load & Chat" : "Download"}
+            </Button>
+          </fieldset>
+        )}
 
-        {/* ── Files (collapsible, collapsed by default) ── */}
         {!isLocal && files.length > 0 && (
-          <div className="lx-card">
-            <button
-              type="button"
-              className="lx-files-toggle"
+          <Card size="small">
+            <Button
+              appearance="subtle"
+              size="small"
+              className={styles.alignStart}
+              icon={filesOpen ? <ChevronDownRegular /> : <ChevronRightRegular />}
               aria-expanded={filesOpen}
               onClick={() => setFilesOpen((v) => !v)}
             >
-              {filesOpen ? <ChevronDownRegular /> : <ChevronRightRegular />}
-              <span className="lx-card-title">Files ({files.length})</span>
-            </button>
-            {filesOpen && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {files.map((f) => (
-                  <div
-                    key={f.path}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontSize: 12.5,
-                      padding: "2px 0",
-                    }}
-                  >
-                    <span className="lx-mono">
-                      {f.type === "directory" ? "📁" : "📄"} {f.path}
-                    </span>
-                    <span style={{ color: "var(--lx-text-muted)" }}>{formatBytes(f.size)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+              Files ({files.length})
+            </Button>
+            {filesOpen &&
+              files.map((f) => (
+                <div key={f.path} className={styles.fileRow}>
+                  <Text font="monospace" size={200} className={styles.fileName}>
+                    {f.type === "directory" ? "📁" : "📄"} {f.path}
+                  </Text>
+                  <Caption1>{formatBytes(f.size)}</Caption1>
+                </div>
+              ))}
+          </Card>
         )}
 
-        {/* ── README ───────────────────────────────── */}
-        <div className="lx-card">
-          <div className="lx-card-title">Model Card</div>
-          {(isLocal ? localCard : readme) ? (
-            <div className="lx-readme">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeRaw, rehypeHighlight]}
-                components={{
-                  a: (props) => <a {...props} target="_blank" rel="noopener noreferrer" />,
-                }}
-              >
-                {isLocal ? localCard : readme}
-              </ReactMarkdown>
-            </div>
+        <Card>
+          <CardHeader header={<Text weight="semibold">Model Card</Text>} />
+          {modelContent ? (
+            <MarkdownContent allowHtml>{modelContent}</MarkdownContent>
           ) : (
-            <p style={{ fontSize: 13, color: "var(--lx-text-muted)", margin: 0 }}>
-              No README available for this model.
-            </p>
+            <Body1>No README available for this model.</Body1>
           )}
-        </div>
+        </Card>
       </div>
+
       {confirmDelete && (
         <ConfirmDialog
           title="Remove model"

@@ -1,364 +1,146 @@
-import { Button, ProgressBar, Spinner } from "@fluentui/react-components";
-import { useEffect, useState } from "react";
 import {
-  CheckmarkRegular,
-  DeleteRegular,
-  DismissRegular,
-  PauseRegular,
-  PlayRegular,
-  ArrowImportRegular,
-  ArrowDownloadRegular,
-} from "@fluentui/react-icons";
+  Button,
+  Caption1Strong,
+  Drawer,
+  DrawerBody,
+  DrawerHeader,
+  DrawerHeaderTitle,
+  makeStyles,
+  Text,
+  tokens,
+} from "@fluentui/react-components";
+import { DismissRegular } from "@fluentui/react-icons";
+import { useState } from "react";
+import { cancelDownload } from "../../services/download";
+import { isDownloadActive, startGGUFDownload, useDownloadStore } from "../../stores/downloadStore";
+import { DownloadItemCard } from "./DownloadItemCard";
 
-import { cancelDownload, downloadFile } from "../../services/download";
-import { useDownloadStore } from "../../stores/downloadStore";
-import { formatBytes } from "../../utils/format";
-
-/** Human-readable ETA from remaining bytes and speed. */
-function eta(remaining: number, speed: number): string {
-  if (speed <= 0 || remaining <= 0) return "—";
-  const s = Math.round(remaining / speed);
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
-  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
-}
-
-type DownloadStatus = "downloading" | "importing" | "finished" | "error" | "cancelled";
+const useStyles = makeStyles({
+  section: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+    marginBottom: tokens.spacingVerticalM,
+  },
+  toolbar: {
+    display: "flex",
+    justifyContent: "flex-end",
+  },
+});
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
-/** Status badge with color coding. */
-function StatusBadge({
-  status,
-  importingProgress,
-}: {
-  status: DownloadStatus;
-  importingProgress?: string;
-}) {
-  const config: Record<DownloadStatus, { icon: React.ReactNode; color: string; label: string }> = {
-    downloading: { icon: <ArrowDownloadRegular />, color: "var(--lx-brand)", label: "Downloading" },
-    importing: {
-      icon: <ArrowImportRegular />,
-      color: "var(--lx-telemetry)",
-      label: importingProgress ?? "Importing",
-    },
-    finished: { icon: <CheckmarkRegular />, color: "var(--lx-telemetry)", label: "Finished" },
-    error: {
-      icon: <span style={{ fontSize: 10 }}>⚠</span>,
-      color: "var(--lx-error)",
-      label: "Error",
-    },
-    cancelled: { icon: <PauseRegular />, color: "var(--lx-text-muted)", label: "Cancelled" },
-  };
-  const c = config[status];
-  return (
-    <span
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 4,
-        color: c.color,
-        fontSize: 11,
-        fontWeight: 500,
-      }}
-    >
-      <span style={{ display: "flex" }}>{c.icon}</span>
-      <span>{c.label}</span>
-    </span>
-  );
-}
-
-/** Right-side drawer listing past, active and cancelled downloads. */
+/** Right-side drawer listing active, finished and cancelled downloads. */
 export default function DownloadDrawer({ open, onClose }: Props) {
+  const styles = useStyles();
   const downloads = useDownloadStore((s) => s.downloads);
   const remove = useDownloadStore((s) => s.remove);
   const clearFinished = useDownloadStore((s) => s.clearFinished);
-
-  // Close on Escape
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
-  if (!open) return null;
+  const setBusy = (id: string, busy: boolean) =>
+    setLoadingIds((prev) => {
+      const next = new Set(prev);
+      if (busy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   const handleCancel = async (id: string) => {
     if (loadingIds.has(id)) return;
-    setLoadingIds((prev) => new Set(prev).add(id));
+    setBusy(id, true);
     try {
       await cancelDownload(id).catch(() => undefined);
     } finally {
-      setLoadingIds((prev) => {
-        const n = new Set(prev);
-        n.delete(id);
-        return n;
-      });
+      setBusy(id, false);
     }
   };
 
-  /** Resume a cancelled download by re-invoking downloadFile (backend resumes from partial). */
-  const handleResume = (id: string, url?: string) => {
-    if (!url || loadingIds.has(id)) return;
-    setLoadingIds((prev) => new Set(prev).add(id));
-    const store = useDownloadStore.getState();
-    store.setStatus(id, "downloading");
-    downloadFile(url, id)
-      .then(() => store.setStatus(id, "finished"))
-      .catch((err) => {
-        const msg = String(err);
-        if (!msg.includes("cancelled")) store.setStatus(id, "error", msg);
-      })
-      .finally(() => {
-        setLoadingIds((prev) => {
-          const n = new Set(prev);
-          n.delete(id);
-          return n;
-        });
-      });
+  /** Resume a cancelled download: the same flow restarts and the backend continues from the partial file. */
+  const handleResume = (id: string) => {
+    const variant = downloads.find((d) => d.id === id)?.variant;
+    if (!variant || loadingIds.has(id)) return;
+    setBusy(id, true);
+    void startGGUFDownload(variant).finally(() => setBusy(id, false));
   };
 
-  // Categorize downloads: active (downloading/importing), past (finished/error/cancelled)
-  const active = downloads.filter((d) => d.status === "downloading" || d.status === "importing");
+  const active = downloads.filter((d) => isDownloadActive(d.status));
   const past = downloads.filter(
     (d) => d.status === "finished" || d.status === "error" || d.status === "cancelled",
   );
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: overlay dismiss target
-    <div
-      role="presentation"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 3000,
-        background: "rgba(0,0,0,0.4)",
+    <Drawer
+      open={open}
+      position="end"
+      size="small"
+      onOpenChange={(_, data) => {
+        if (!data.open) onClose();
       }}
-      onClick={onClose}
-      onKeyDown={(e) => e.key === "Escape" && onClose()}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Downloads"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-        style={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: 380,
-          maxWidth: "90vw",
-          background: "var(--lx-surface-lowest)",
-          borderLeft: "1px solid var(--lx-outline)",
-          boxShadow: "-12px 0 32px rgba(0,0,0,0.5)",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "12px 16px",
-            borderBottom: "1px solid var(--lx-outline)",
-          }}
-        >
-          <strong style={{ fontSize: 13 }}>Downloads</strong>
-          <div style={{ display: "flex", gap: 4 }}>
-            {past.length > 0 && (
-              <Button appearance="transparent" size="small" onClick={clearFinished}>
-                Clear finished
-              </Button>
-            )}
+      <DrawerHeader>
+        <DrawerHeaderTitle
+          action={
             <Button
-              appearance="transparent"
-              size="small"
+              appearance="subtle"
               icon={<DismissRegular />}
-              onClick={onClose}
               aria-label="Close downloads"
+              onClick={onClose}
             />
+          }
+        >
+          Downloads
+        </DrawerHeaderTitle>
+      </DrawerHeader>
+
+      <DrawerBody>
+        {downloads.length === 0 && <Text>No downloads yet.</Text>}
+
+        {past.length > 0 && (
+          <div className={styles.toolbar}>
+            <Button appearance="subtle" size="small" onClick={clearFinished}>
+              Clear finished
+            </Button>
           </div>
-        </div>
+        )}
 
-        <div style={{ flex: 1, overflowY: "auto", padding: 12 }}>
-          {downloads.length === 0 && (
-            <div className="lx-empty" style={{ padding: 24 }}>
-              No downloads yet.
-            </div>
-          )}
+        {active.length > 0 && (
+          <section className={styles.section}>
+            <Caption1Strong>Active</Caption1Strong>
+            {active.map((d) => (
+              <DownloadItemCard
+                key={d.id}
+                download={d}
+                active
+                busy={loadingIds.has(d.id)}
+                onCancel={handleCancel}
+                onResume={handleResume}
+                onRemove={remove}
+              />
+            ))}
+          </section>
+        )}
 
-          {active.length > 0 && (
-            <>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "var(--lx-text-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.5,
-                  margin: "4px 0 8px",
-                }}
-              >
-                Active
-              </div>
-              {active.map((d) => {
-                const pct = d.total ? d.received / d.total : 0;
-                const remaining = d.total ? d.total - d.received : 0;
-                const isImporting = d.status === "importing";
-                return (
-                  <div
-                    key={d.id}
-                    className="lx-card"
-                    style={{
-                      padding: 12,
-                      marginBottom: 8,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 6,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <span
-                        className="lx-mono"
-                        style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis" }}
-                      >
-                        {d.label}
-                      </span>
-                      <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-                        {!isImporting && (
-                          <Button
-                            appearance="transparent"
-                            size="small"
-                            icon={loadingIds.has(d.id) ? <Spinner size="tiny" /> : <PauseRegular />}
-                            title="Cancel download"
-                            aria-label={`Cancel ${d.label}`}
-                            onClick={() => handleCancel(d.id)}
-                            disabled={loadingIds.has(d.id)}
-                          />
-                        )}
-                        {isImporting && (
-                          <StatusBadge status={d.status} importingProgress={d.importingProgress} />
-                        )}
-                      </div>
-                    </div>
-                    <ProgressBar
-                      value={Math.max(0, Math.min(1, pct ?? 0))}
-                      style={{ height: 4 }}
-                      aria-label={`Progress for ${d.label}`}
-                    />
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: 11,
-                        color: "var(--lx-text-muted)",
-                      }}
-                    >
-                      <span>
-                        {formatBytes(d.received)}
-                        {d.total ? ` / ${formatBytes(d.total)}` : ""}
-                        {pct != null && !isImporting ? ` (${(pct * 100).toFixed(0)}%)` : ""}
-                      </span>
-                      <span>
-                        {isImporting
-                          ? "Importing into GenieX…"
-                          : `${formatBytes(d.speed)}/s · ETA ${eta(remaining, d.speed)}`}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </>
-          )}
-
-          {past.length > 0 && (
-            <>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "var(--lx-text-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.5,
-                  margin: "12px 0 8px",
-                }}
-              >
-                History
-              </div>
-              {past.map((d) => (
-                <div
-                  key={d.id}
-                  className="lx-card"
-                  style={{
-                    padding: 12,
-                    marginBottom: 8,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <span style={{ flexShrink: 0 }}>
-                    <StatusBadge status={d.status} />
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      className="lx-mono"
-                      style={{
-                        fontSize: 12,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {d.label}
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--lx-text-muted)" }}>
-                      {d.status === "error" && d.error ? d.error : ""}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-                    {d.status === "cancelled" && d.url && (
-                      <Button
-                        appearance="transparent"
-                        size="small"
-                        icon={loadingIds.has(d.id) ? <Spinner size="tiny" /> : <PlayRegular />}
-                        title="Resume download"
-                        aria-label={`Resume ${d.label}`}
-                        onClick={() => handleResume(d.id, d.url)}
-                        disabled={loadingIds.has(d.id)}
-                      />
-                    )}
-                    <Button
-                      appearance="transparent"
-                      size="small"
-                      icon={<DeleteRegular />}
-                      title="Remove from list"
-                      aria-label={`Remove ${d.label} from list`}
-                      onClick={() => remove(d.id)}
-                    />
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+        {past.length > 0 && (
+          <section className={styles.section}>
+            <Caption1Strong>History</Caption1Strong>
+            {past.map((d) => (
+              <DownloadItemCard
+                key={d.id}
+                download={d}
+                active={false}
+                busy={loadingIds.has(d.id)}
+                onCancel={handleCancel}
+                onResume={handleResume}
+                onRemove={remove}
+              />
+            ))}
+          </section>
+        )}
+      </DrawerBody>
+    </Drawer>
   );
 }

@@ -1,88 +1,155 @@
 use std::collections::HashMap;
-use super::database;
-use sea_orm::DatabaseConnection;
-use reqwest::Client;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use tauri::{AppHandle, Emitter, State};
 use tokio::io::AsyncWriteExt;
 
-/// Shared download registry: cancel flags per file name.
-#[derive(Default)]
+const USER_AGENT: &str = "LocalGenie/0.1";
+/// Downloads may only be requested from this host.
+const HF_DOWNLOAD_PREFIX: &str = "https://huggingface.co/";
+
+/// In-flight downloads, keyed by download id (the Hugging Face repo id).
 pub struct DownloadRegistry {
-    pub cancels: Mutex<HashMap<String, std::sync::Arc<AtomicBool>>>,
+    cancels: Mutex<HashMap<String, Arc<AtomicBool>>>,
+    /// No overall timeout: GGUF files are multi-gigabyte.
+    client: reqwest::Client,
+}
+
+impl Default for DownloadRegistry {
+    fn default() -> Self {
+        Self {
+            cancels: Mutex::new(HashMap::new()),
+            client: reqwest::Client::builder()
+                .user_agent(USER_AGENT)
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new()),
+        }
+    }
 }
 
 impl DownloadRegistry {
-    fn register(&self, file: &str) -> std::sync::Arc<AtomicBool> {
-        let flag = std::sync::Arc::new(AtomicBool::new(false));
+    fn lock_cancels(&self) -> Result<MutexGuard<'_, HashMap<String, Arc<AtomicBool>>>, String> {
         self.cancels
             .lock()
-            .unwrap()
-            .insert(file.to_string(), flag.clone());
-        flag
+            .map_err(|_| "download registry is unavailable".to_string())
     }
 
-    fn remove(&self, file: &str) {
-        self.cancels.lock().unwrap().remove(file);
+    /// Register a download. Fails if the same id is already downloading.
+    fn register(&self, download_id: &str) -> Result<Arc<AtomicBool>, String> {
+        let mut map = self.lock_cancels()?;
+        if map.contains_key(download_id) {
+            return Err(format!("{download_id} is already downloading"));
+        }
+        let flag = Arc::new(AtomicBool::new(false));
+        map.insert(download_id.to_string(), flag.clone());
+        Ok(flag)
+    }
+
+    fn release(&self, download_id: &str) {
+        if let Ok(mut map) = self.lock_cancels() {
+            map.remove(download_id);
+        }
     }
 }
 
-/// Request cancellation of an in-flight download.
+/// Accept only a bare file name: no separators, no `..`, no root.
+pub(super) fn validate_file_name(name: &str) -> Result<(), String> {
+    let mut parts = Path::new(name).components();
+    match (parts.next(), parts.next()) {
+        (Some(Component::Normal(_)), None) => Ok(()),
+        _ => Err(format!("Invalid file name: {name}")),
+    }
+}
+
+/// Resolve a path and require it to sit strictly inside the Downloads folder.
+pub(super) fn ensure_inside_downloads(path: &str) -> Result<PathBuf, String> {
+    let root = download_dir().ok_or("Could not resolve a downloads directory")?;
+    let root = resolve_path(&root)?;
+    let resolved = resolve_path(Path::new(path))?;
+    if resolved == root || !resolved.starts_with(&root) {
+        return Err(format!(
+            "Refusing to touch {path}: it is outside the downloads folder"
+        ));
+    }
+    Ok(resolved)
+}
+
+fn resolve_path(path: &Path) -> Result<PathBuf, String> {
+    std::fs::canonicalize(path).map_err(|e| format!("Cannot resolve {}: {e}", path.display()))
+}
+
+/// Request cancellation of an in-flight download. The partial file is kept for resume.
 #[tauri::command]
-pub fn cancel_download(registry: State<'_, DownloadRegistry>, file_name: String) {
-    if let Some(flag) = registry.cancels.lock().unwrap().get(&file_name) {
+pub fn cancel_download(
+    registry: State<'_, DownloadRegistry>,
+    download_id: String,
+) -> Result<(), String> {
+    let map = registry.lock_cancels()?;
+    if let Some(flag) = map.get(&download_id) {
         flag.store(true, Ordering::Relaxed);
     }
+    Ok(())
 }
 
-/// Download a file from `url` to the app's downloads directory, emitting
-/// `asset-download-progress` events with received bytes, total, speed and ETA.
-/// Supports resume: if a partial file exists, continues from its size via an
-/// HTTP Range request. Cancellation keeps the partial file for later resume.
-/// Returns the full path of the downloaded file.
+/// Download `url` into the Downloads folder as `file_name`.
+///
+/// Bytes are written to `<file_name>.part` and renamed on success, so a partial
+/// file is never mistaken for a finished one. A later call for the same file
+/// resumes from the `.part` length via an HTTP Range request.
+/// Emits `download-progress` events keyed by `download_id`.
 #[tauri::command]
 pub async fn download_file(
     app: AppHandle,
     registry: State<'_, DownloadRegistry>,
+    download_id: String,
     url: String,
     file_name: String,
 ) -> Result<String, String> {
+    validate_file_name(&file_name)?;
+    if !url.starts_with(HF_DOWNLOAD_PREFIX) {
+        return Err(format!("Downloads must come from {HF_DOWNLOAD_PREFIX}"));
+    }
     let dir = download_dir().ok_or("Could not resolve a downloads directory")?;
     let target = dir.join(&file_name);
 
-    // Reuse a fully downloaded file instead of fetching again.
     if target.is_file() {
         return Ok(target.to_string_lossy().into_owned());
     }
 
-    let cancel = registry.register(&file_name);
-    let result = run_download(&app, &url, &target, &file_name, &cancel).await;
-    registry.remove(&file_name);
+    let cancel = registry.register(&download_id)?;
+    let result = run_download(
+        &app,
+        &registry.client,
+        &url,
+        &target,
+        &download_id,
+        &file_name,
+        &cancel,
+    )
+    .await;
+    registry.release(&download_id);
     result
 }
 
 async fn run_download(
     app: &AppHandle,
+    client: &reqwest::Client,
     url: &str,
-    target: &PathBuf,
+    target: &Path,
+    download_id: &str,
     file_name: &str,
     cancel: &AtomicBool,
 ) -> Result<String, String> {
-    let client = reqwest::Client::new();
+    let partial = target.with_file_name(format!("{file_name}.part"));
 
-    // Resume from an existing partial file, if any.
-    let mut resume_from: u64 = 0;
-    if target.is_file() {
-        resume_from = tokio::fs::metadata(target)
-            .await
-            .map(|m| m.len())
-            .unwrap_or(0);
-    }
+    let mut resume_from: u64 = match tokio::fs::metadata(&partial).await {
+        Ok(m) => m.len(),
+        Err(_) => 0,
+    };
 
-    let mut req = client.get(url).header("User-Agent", "LocalGenie/0.1");
+    let mut req = client.get(url);
     if resume_from > 0 {
         req = req.header("Range", format!("bytes={resume_from}-"));
     }
@@ -106,13 +173,13 @@ async fn run_download(
     let mut file = if resume_from > 0 {
         tokio::fs::OpenOptions::new()
             .append(true)
-            .open(target)
+            .open(&partial)
             .await
-            .map_err(|e| format!("Failed to open partial file {:?}: {e}", target))?
+            .map_err(|e| format!("Failed to open partial file {}: {e}", partial.display()))?
     } else {
-        tokio::fs::File::create(target)
+        tokio::fs::File::create(&partial)
             .await
-            .map_err(|e| format!("Failed to create file {:?}: {e}", target))?
+            .map_err(|e| format!("Failed to create file {}: {e}", partial.display()))?
     };
 
     let mut received: u64 = resume_from;
@@ -123,8 +190,8 @@ async fn run_download(
     loop {
         if cancel.load(Ordering::Relaxed) {
             let _ = app.emit(
-                "asset-download-progress",
-                serde_json::json!({ "file": file_name, "cancelled": true }),
+                "download-progress",
+                serde_json::json!({ "id": download_id, "file": file_name, "cancelled": true }),
             );
             return Err(format!("Download of {file_name} was cancelled"));
         }
@@ -156,8 +223,9 @@ async fn run_download(
             last_emit = received;
             last_emit_at = now;
             let _ = app.emit(
-                "asset-download-progress",
+                "download-progress",
                 serde_json::json!({
+                    "id": download_id,
                     "file": file_name,
                     "received": received,
                     "total": total,
@@ -170,10 +238,16 @@ async fn run_download(
     file.flush()
         .await
         .map_err(|e| format!("Failed to flush file: {e}"))?;
+    drop(file);
+
+    tokio::fs::rename(&partial, target)
+        .await
+        .map_err(|e| format!("Failed to finalise download: {e}"))?;
 
     let _ = app.emit(
-        "asset-download-progress",
+        "download-progress",
         serde_json::json!({
+            "id": download_id,
             "file": file_name,
             "received": received,
             "total": total,
@@ -186,7 +260,7 @@ async fn run_download(
 }
 
 /// Known-folder lookup for the user's Downloads directory (Windows).
-fn download_dir() -> Option<PathBuf> {
+pub(super) fn download_dir() -> Option<PathBuf> {
     let home = std::env::var_os("USERPROFILE")
         .or_else(|| std::env::var_os("HOME"))
         .map(PathBuf::from)?;
@@ -198,117 +272,19 @@ fn download_dir() -> Option<PathBuf> {
     }
 }
 
-/// Delete a directory (or file) after a successful model pull (the CLI copies into its
-/// cache, so the downloaded zip is no longer needed).
-#[tauri::command]
-pub async fn delete_directory(path: String) -> Result<(), String> {
-    match tokio::fs::metadata(&path).await {
-        Ok(md) if md.is_dir() => tokio::fs::remove_dir_all(&path)
-            .await
-            .map_err(|e| format!("Failed to delete directory {path}: {e}")),
-        _ => tokio::fs::remove_file(&path)
-            .await
-            .map_err(|e| format!("Failed to delete file {path}: {e}")),
-    }
-}
+#[cfg(test)]
+mod tests {
+    use super::validate_file_name;
 
-/// Import an already-downloaded GGUF file into the GenieX model cache.
-///
-/// After downloading, the file is moved into a directory whose name is the base
-/// model name (e.g. `llama-3-8b` for `llama-3-8b.Q4_0.gguf`), then registered with
-/// GenieX via `geniex pull --model-hub localfs --local-path <dir>`. The caller is
-/// responsible for downloading the file first; this function only handles the
-/// reorganization and cache registration, plus progress emissions.
-#[tauri::command]
-pub async fn import_gguf(
-    app: AppHandle,
-    db: State<'_, DatabaseConnection>,
-    local_path: String,
-    repo_id: String,
-    filename: String,
-    precision: String,
-) -> Result<String, String> {
-    // Extract base model name from repo_id (e.g., "qualcomm/Qwen3-4B-Instruct" -> "Qwen3-4B-Instruct")
-    let base_model_name = repo_id.split('/').next_back().unwrap_or(&repo_id);
-
-    // Create target directory for the base model (using the downloads directory)
-    let downloads_dir = download_dir().ok_or("Could not resolve downloads directory")?;
-    let target_dir = downloads_dir.join(base_model_name);
-
-    // Ensure the target directory exists
-    tokio::fs::create_dir_all(&target_dir)
-        .await
-        .map_err(|e| format!("Failed to create target directory: {e}"))?;
-
-    // Move the downloaded file to the base model name folder,
-    // keeping the original filename (e.g. llama-3-8b.Q4_0.gguf)
-    let new_path = target_dir.join(&filename);
-
-    // Move the file (rename if in same filesystem, otherwise copy+remove)
-    tokio::fs::rename(&local_path, &new_path)
-        .await
-        .map_err(|e| format!("Failed to move file to base model folder: {e}"))?;
-
-    // Now import from the new location
-    let _ = app.emit("model-pull-start", serde_json::json!({ "model": repo_id }));
-
-    let _ = app.emit(
-        "model-pull-progress",
-        serde_json::json!({ "model": repo_id, "message": "Importing into GenieX cache…" }),
-    );
-
-    let exe = super::cli::resolve_geniex_executable();
-    let output = tokio::process::Command::new(&exe)
-        .args([
-            "pull",
-            &format!("{repo_id}:{precision}"),
-            "--model-hub",
-            "localfs",
-            "--local-path",
-            &target_dir.to_string_lossy(),
-        ])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .output()
-        .await
-        .map_err(|e| format!("Failed to spawn `geniex pull`: {e}"))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        // Show the full error message in console
-        eprintln!("geniex pull failed: {stderr}");
-        return Err(format!("`geniex pull` failed: {stderr}"));
+    #[test]
+    fn accepts_bare_file_names() {
+        assert!(validate_file_name("model-Q4_0.gguf").is_ok());
     }
 
-    let _ = app.emit(
-        "model-pull-complete",
-        serde_json::json!({ "model": repo_id }),
-    );
-    // Fetch model card (README) and store metadata in database
-    let repo_url = format!("https://huggingface.co/{repo_id}");
-    let readme_url = format!("https://huggingface.co/{repo_id}/raw/main/README.md");
-    let model_card = Client::new()
-        .get(&readme_url)
-        .header("User-Agent", "LocalGenie/0.1")
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch model card: {e}"))?
-        .text()
-        .await
-        .ok()
-        .filter(|s: &String| !s.trim().is_empty());
-    
-    if let Err(e) = database::upsert_downloaded_model(
-        db,
-        repo_id.clone(),
-        Some(precision.clone()),
-        None,
-        None,
-        Some(repo_url),
-        model_card,
-    ).await {
-        eprintln!("Failed to upsert downloaded model metadata: {e}");
+    #[test]
+    fn rejects_paths_and_traversal() {
+        for bad in ["", "..", "../x.gguf", "sub/x.gguf", "/abs.gguf", "."] {
+            assert!(validate_file_name(bad).is_err(), "{bad} should be rejected");
+        }
     }
-    // Return the target directory path for cleanup
-    Ok(target_dir.to_string_lossy().into_owned())
 }

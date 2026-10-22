@@ -49,23 +49,6 @@ pub fn resolve_model_for_server(model: Option<&str>) -> Option<String> {
     }
 }
 
-/// Fetch the first loaded model from the server's /v1/models endpoint.
-pub async fn fetch_first_loaded_model(client: &reqwest::Client, base_url: &str) -> Option<String> {
-    let url = format!("{}/v1/models", base_url);
-    let resp = client.get(&url).send().await.ok()?;
-    let body: serde_json::Value = resp.json().await.ok()?;
-
-    let model_id = body["data"]
-        .as_array()?
-        .first()?
-        .get("id")?
-        .as_str()?
-        .to_string();
-
-    eprintln!("[chat] fetched loaded model from server: {}", model_id);
-    Some(strip_precision(&model_id).to_string())
-}
-
 /// Build the JSON body for a chat completion request.
 pub fn build_chat_body(
     messages_json: Vec<serde_json::Value>,
@@ -107,4 +90,37 @@ pub fn build_chat_body(
     }
 
     body
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_chat_body, strip_precision, GenerationSettings};
+
+    #[test]
+    fn strips_precision_suffix() {
+        assert_eq!(strip_precision("qualcomm/Qwen3:W4A16"), "qualcomm/Qwen3");
+        assert_eq!(strip_precision("qualcomm/Qwen3"), "qualcomm/Qwen3");
+    }
+
+    #[test]
+    fn chat_body_streams_and_omits_unset_settings() {
+        let settings = GenerationSettings {
+            temperature: Some(0.5),
+            top_p: None,
+            top_k: None,
+            min_p: None,
+            repetition_penalty: None,
+            presence_penalty: None,
+            frequency_penalty: None,
+            max_tokens: None,
+            nctx: None,
+            system_prompt: None,
+            think: None,
+        };
+        let body = build_chat_body(vec![], Some("m".into()), &settings);
+        assert_eq!(body["stream"], true);
+        assert_eq!(body["model"], "m");
+        assert_eq!(body["temperature"], 0.5);
+        assert!(body.get("top_p").is_none());
+    }
 }

@@ -1,8 +1,7 @@
 use tauri::{AppHandle, Emitter, State};
 
 use super::chat_helpers::{
-    build_chat_body, fetch_first_loaded_model, resolve_model_for_server, strip_precision,
-    ChatMessage, GenerationSettings,
+    build_chat_body, resolve_model_for_server, strip_precision, ChatMessage, GenerationSettings,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -11,7 +10,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 type CancelFlag = Arc<AtomicBool>;
 
 /// Registry entry: stream id → its cancel flag.
-type CancelEntry = (uuid::Uuid, CancelFlag);
+type CancelEntry = (String, CancelFlag);
 
 /// Per-request cancel flags. `chat_completion` registers a flag before
 /// streaming and removes it when done; `cancel_chat_completion` flips all
@@ -19,19 +18,36 @@ type CancelEntry = (uuid::Uuid, CancelFlag);
 static CANCEL_FLAGS: std::sync::LazyLock<StdMutex<Vec<CancelEntry>>> =
     std::sync::LazyLock::new(|| StdMutex::new(Vec::new()));
 
+fn lock_cancel_flags() -> Result<std::sync::MutexGuard<'static, Vec<CancelEntry>>, String> {
+    CANCEL_FLAGS
+        .lock()
+        .map_err(|_| "chat cancel registry is unavailable".to_string())
+}
+
+/// Removes a stream's cancel flag when the stream ends, including on early errors.
+struct CancelGuard(String);
+
+impl Drop for CancelGuard {
+    fn drop(&mut self) {
+        if let Ok(mut flags) = lock_cancel_flags() {
+            flags.retain(|(id, _)| *id != self.0);
+        }
+    }
+}
+
 /// Request the in-flight chat completion to stop at the next chunk boundary.
 #[tauri::command]
 pub async fn cancel_chat_completion() -> Result<(), String> {
-    let flags = CANCEL_FLAGS.lock().expect("cancel flags mutex poisoned");
-    let mut requested = 0;
+    let flags = lock_cancel_flags()?;
     for (_, flag) in flags.iter() {
         flag.store(true, Ordering::SeqCst);
-        requested += 1;
     }
-    eprintln!("[chat] cancel requested for {requested} in-flight stream(s)");
+    eprintln!(
+        "[chat] cancel requested for {} in-flight stream(s)",
+        flags.len()
+    );
     Ok(())
 }
-
 
 /// Load a model into the GenieX server by sending a minimal chat request.
 /// The server loads models on-demand; this warmup triggers that loading.
@@ -45,7 +61,10 @@ pub async fn load_model(
     let resolved_base = base_url.unwrap_or_else(|| super::constants::DEFAULT_BASE_URL.into());
     let clean_model = strip_precision(&model);
 
-    eprintln!("[load] loading model '{}' (stripped: '{}')", model, clean_model);
+    eprintln!(
+        "[load] loading model '{}' (stripped: '{}')",
+        model, clean_model
+    );
 
     // Parse port from the base URL for the returned status
     let port: u16 = resolved_base
@@ -81,13 +100,12 @@ pub async fn load_model(
     eprintln!("[load] model '{}' loaded successfully", clean_model);
 
     // Refresh server status to reflect newly loaded models
-    let models =
-        super::server::fetch_loaded_models(&state.http_client, &resolved_base).await?;
+    let models = super::server::fetch_loaded_models(&state.http_client, &resolved_base).await?;
 
     // Verify the model actually appears in the loaded list
-    let found = models.iter().any(|m| {
-        m == clean_model || m.starts_with(&format!("{}:", clean_model))
-    });
+    let found = models
+        .iter()
+        .any(|m| m == clean_model || m.starts_with(&format!("{}:", clean_model)));
     if !found {
         return Err(format!(
             "Model '{}' does not appear loaded on the server. Loaded models: {:?}",
@@ -123,6 +141,7 @@ pub async fn chat_completion(
     settings: GenerationSettings,
     model: Option<String>,
     base_url: Option<String>,
+    stream_id: String,
 ) -> Result<(), String> {
     let resolved_base = base_url.unwrap_or_else(|| super::constants::DEFAULT_BASE_URL.into());
     let url = format!("{}/v1/chat/completions", resolved_base);
@@ -160,7 +179,11 @@ pub async fn chat_completion(
     // Resolve model name — strip precision if present, or auto-detect from server
     let model_name = match resolve_model_for_server(model.as_deref()) {
         Some(name) => Some(name),
-        None => fetch_first_loaded_model(&state.http_client, &resolved_base).await,
+        None => super::server::fetch_loaded_models(&state.http_client, &resolved_base)
+            .await
+            .ok()
+            .and_then(|models| models.into_iter().next())
+            .map(|id| strip_precision(&id).to_string()),
     };
 
     if let Some(ref m) = model_name {
@@ -193,12 +216,10 @@ pub async fn chat_completion(
     use futures_util::StreamExt;
     use std::sync::Arc;
 
-    let stream_id = uuid::Uuid::new_v4();
     let cancel_flag: CancelFlag = Arc::new(AtomicBool::new(false));
-    CANCEL_FLAGS
-        .lock()
-        .expect("cancel flags mutex poisoned")
-        .push((stream_id, Arc::clone(&cancel_flag)));
+    lock_cancel_flags()?.push((stream_id.clone(), Arc::clone(&cancel_flag)));
+    // Deregisters on every exit path below, including `?` errors.
+    let _cancel_guard = CancelGuard(stream_id.clone());
 
     let mut stream = response.bytes_stream();
     let mut buffer = String::new();
@@ -206,14 +227,11 @@ pub async fn chat_completion(
 
     while let Some(chunk_result) = stream.next().await {
         let chunk = chunk_result.map_err(|e| format!("Stream error: {e}"))?;
-        let text = String::from_utf8_lossy(&chunk);
-        buffer.push_str(&text);
+        buffer.push_str(&String::from_utf8_lossy(&chunk));
 
         // Process complete SSE lines
         while let Some(newline_pos) = buffer.find('\n') {
-            let line = buffer[..newline_pos].to_string();
-            buffer = buffer[newline_pos + 1..].to_string();
-
+            let line: String = buffer.drain(..=newline_pos).collect();
             let trimmed = line.trim();
             if trimmed.is_empty() {
                 continue;
@@ -221,11 +239,7 @@ pub async fn chat_completion(
 
             if cancel_flag.load(Ordering::SeqCst) {
                 eprintln!("[chat] stream {stream_id} cancelled by user");
-                CANCEL_FLAGS
-                    .lock()
-                    .expect("cancel flags mutex poisoned")
-                    .retain(|(id, _)| *id != stream_id);
-                let _ = app.emit("chat-done", ());
+                let _ = app.emit("chat-done", serde_json::json!({ "streamId": stream_id }));
                 return Ok(());
             }
 
@@ -233,11 +247,7 @@ pub async fn chat_completion(
                 let data = data.trim();
                 if data == "[DONE]" {
                     eprintln!("[chat] stream complete: {chunk_count} chunks");
-                    CANCEL_FLAGS
-                        .lock()
-                        .expect("cancel flags mutex poisoned")
-                        .retain(|(id, _)| *id != stream_id);
-                    let _ = app.emit("chat-done", ());
+                    let _ = app.emit("chat-done", serde_json::json!({ "streamId": stream_id }));
                     return Ok(());
                 }
 
@@ -249,9 +259,13 @@ pub async fn chat_completion(
                                 if let Some(content) = delta["content"].as_str() {
                                     if !content.is_empty() {
                                         chunk_count += 1;
-                                        let _ = app.emit("chat-chunk", serde_json::json!({
-                                            "content": content,
-                                        }));
+                                        let _ = app.emit(
+                                            "chat-chunk",
+                                            serde_json::json!({
+                                                "streamId": stream_id,
+                                                "content": content,
+                                            }),
+                                        );
                                     }
                                 }
                             }
@@ -265,21 +279,12 @@ pub async fn chat_completion(
         // wait for more tokens to arrive over the wire.
         if cancel_flag.load(Ordering::SeqCst) {
             eprintln!("[chat] stream {stream_id} cancelled by user");
-            CANCEL_FLAGS
-                .lock()
-                .expect("cancel flags mutex poisoned")
-                .retain(|(id, _)| *id != stream_id);
-            let _ = app.emit("chat-done", ());
+            let _ = app.emit("chat-done", serde_json::json!({ "streamId": stream_id }));
             return Ok(());
         }
     }
 
-    // Stream done or cancelled — deregister the cancel flag.
-    CANCEL_FLAGS
-        .lock()
-        .expect("cancel flags mutex poisoned")
-        .retain(|(id, _)| *id != stream_id);
-    let _ = app.emit("chat-done", ());
+    let _ = app.emit("chat-done", serde_json::json!({ "streamId": stream_id }));
 
     Ok(())
 }

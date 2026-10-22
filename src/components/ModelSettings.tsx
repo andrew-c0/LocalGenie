@@ -2,12 +2,21 @@ import {
   Button,
   Divider,
   Dropdown,
+  Field,
+  MessageBar,
+  MessageBarBody,
+  makeStyles,
   Option,
   Slider,
+  SpinButton,
   Spinner,
+  Subtitle1,
   Switch,
+  Text,
+  Textarea,
   Toast,
   ToastTitle,
+  tokens,
   useToastController,
 } from "@fluentui/react-components";
 import { SaveRegular } from "@fluentui/react-icons";
@@ -16,7 +25,41 @@ import * as db from "../services/database";
 import { defaultSettings, useModelStore } from "../stores/modelStore";
 import type { GenerationSettings } from "../types";
 
+const useStyles = makeStyles({
+  root: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+  },
+  section: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+  },
+  sliderRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalM,
+  },
+  slider: {
+    flex: 1,
+    minWidth: 0,
+  },
+  sliderValue: {
+    minWidth: "48px",
+    textAlign: "right",
+  },
+  fullWidth: {
+    width: "100%",
+  },
+  textarea: {
+    width: "100%",
+    minHeight: "120px",
+  },
+});
+
 export default function ModelSettings() {
+  const styles = useStyles();
   const { dispatchToast } = useToastController("app-toaster");
   const activeModelId = useModelStore((s) => s.activeModelId);
   const downloadedModels = useModelStore((s) => s.models);
@@ -78,19 +121,21 @@ export default function ModelSettings() {
 
   if (!displayModel) return null;
 
+  const temperature = settings.temperature ?? 0.7;
+  const topP = settings.topP ?? 0.9;
+  const minP = settings.minP ?? 0.05;
+
   return (
-    <>
-      {/* ── Model Picker ────────────────────────── */}
+    <div className={styles.root}>
       {downloadedModels.length > 0 && (
-        <div className="ms-model-picker-group">
-          <div className="ms-model-label">Model</div>
+        <Field label="Model">
           <Dropdown
-            value={displayModel ?? "Select a model…"}
-            selectedOptions={displayModel ? [displayModel] : []}
+            className={styles.fullWidth}
+            value={displayModel}
+            selectedOptions={[displayModel]}
             onOptionSelect={(_, data) => {
               if (data.optionValue) setSelectedModel(data.optionValue);
             }}
-            className="ms-full-width"
           >
             {downloadedModels.map((m) => (
               <Option key={m.name} value={m.name}>
@@ -98,153 +143,151 @@ export default function ModelSettings() {
               </Option>
             ))}
           </Dropdown>
-        </div>
+        </Field>
       )}
 
-      {displayModel && activeModelId && displayModel !== activeModelId && (
-        <div className="ms-warn-banner">
-          ⚠ Editing settings for a model not currently loaded on the server.
-        </div>
+      {activeModelId && displayModel !== activeModelId && (
+        <MessageBar intent="warning">
+          <MessageBarBody>
+            Editing settings for a model not currently loaded on the server.
+          </MessageBarBody>
+        </MessageBar>
       )}
 
-      {/* ── Sampler Settings ────────────────────── */}
-      <div className="settings-section">
-        <div className="settings-section-title">Sampler</div>
+      <section className={styles.section}>
+        <Subtitle1>Sampler</Subtitle1>
 
-        <div className="settings-row">
-          <span className="settings-label">Temperature</span>
-          <div className="ms-slider-row">
+        <Field label="Temperature">
+          <div className={styles.sliderRow}>
             <Slider
+              className={styles.slider}
               min={0}
               max={2}
               step={0.1}
-              value={settings.temperature ?? 0.7}
+              value={temperature}
               onChange={(_, data) => update("temperature", data.value)}
-              className="ms-slider"
             />
-            <span className="ms-slider-value">{(settings.temperature ?? 0.7).toFixed(1)}</span>
+            <Text font="monospace" className={styles.sliderValue}>
+              {temperature.toFixed(1)}
+            </Text>
           </div>
-        </div>
+        </Field>
 
-        <div className="settings-row">
-          <span className="settings-label">Top P</span>
-          <div className="ms-slider-row">
+        <Field label="Top P">
+          <div className={styles.sliderRow}>
             <Slider
+              className={styles.slider}
               min={0}
               max={1}
               step={0.05}
-              value={settings.topP ?? 0.9}
+              value={topP}
               onChange={(_, data) => update("topP", data.value)}
-              className="ms-slider"
             />
-            <span className="ms-slider-value">{(settings.topP ?? 0.9).toFixed(2)}</span>
+            <Text font="monospace" className={styles.sliderValue}>
+              {topP.toFixed(2)}
+            </Text>
           </div>
-        </div>
+        </Field>
 
-        <div className="settings-row">
-          <span className="settings-label">Top K</span>
-          <input
-            className="settings-input"
-            type="number"
+        <Field label="Top K">
+          <SpinButton
             value={settings.topK ?? 40}
-            onChange={(e) => update("topK", Number(e.target.value))}
             min={1}
             max={100}
+            onChange={(_, data) => {
+              if (data.value != null) update("topK", data.value);
+            }}
           />
-        </div>
+        </Field>
 
-        <div className="settings-row">
-          <span className="settings-label">Min P</span>
-          <div className="ms-slider-row">
+        <Field label="Min P">
+          <div className={styles.sliderRow}>
             <Slider
+              className={styles.slider}
               min={0}
               max={1}
               step={0.01}
-              value={settings.minP ?? 0.05}
+              value={minP}
               onChange={(_, data) => update("minP", data.value)}
-              className="ms-slider"
             />
-            <span className="ms-slider-value">{(settings.minP ?? 0.05).toFixed(2)}</span>
+            <Text font="monospace" className={styles.sliderValue}>
+              {minP.toFixed(2)}
+            </Text>
           </div>
-        </div>
+        </Field>
 
-        <div className="settings-row">
-          <span className="settings-label">Repetition Penalty</span>
-          <input
-            className="settings-input"
-            type="number"
+        <Field label="Repetition Penalty">
+          <SpinButton
             value={settings.repetitionPenalty ?? 1.1}
-            onChange={(e) => update("repetitionPenalty", Number(e.target.value))}
             min={1}
             max={2}
             step={0.1}
+            onChange={(_, data) => {
+              if (data.value != null) update("repetitionPenalty", data.value);
+            }}
           />
-        </div>
-      </div>
+        </Field>
+      </section>
 
-      <Divider className="divider-vertical" />
+      <Divider />
 
-      {/* ── Generation Settings ─────────────────── */}
-      <div className="settings-section">
-        <div className="settings-section-title">Generation</div>
+      <section className={styles.section}>
+        <Subtitle1>Generation</Subtitle1>
 
-        <div className="settings-row">
-          <span className="settings-label">Max Tokens</span>
-          <input
-            className="settings-input"
-            type="number"
+        <Field label="Max Tokens">
+          <SpinButton
             value={settings.maxTokens ?? 2048}
-            onChange={(e) => update("maxTokens", Number(e.target.value))}
             min={256}
             max={32768}
             step={256}
+            onChange={(_, data) => {
+              if (data.value != null) update("maxTokens", data.value);
+            }}
           />
-        </div>
+        </Field>
 
-        <div className="settings-row">
-          <span className="settings-label">Context Window</span>
-          <input
-            className="settings-input"
-            type="number"
+        <Field label="Context Window">
+          <SpinButton
             value={settings.nctx ?? 4096}
-            onChange={(e) => update("nctx", Number(e.target.value))}
             min={512}
             max={131072}
             step={512}
+            onChange={(_, data) => {
+              if (data.value != null) update("nctx", data.value);
+            }}
           />
-        </div>
+        </Field>
 
-        <div className="settings-row">
-          <span className="settings-label">Think Mode</span>
-          <Switch
-            checked={settings.think ?? true}
-            onChange={(_, data) => update("think", data.checked)}
-          />
-        </div>
-      </div>
+        <Switch
+          label="Think Mode"
+          checked={settings.think ?? true}
+          onChange={(_, data) => update("think", data.checked)}
+        />
+      </section>
 
-      <Divider className="divider-vertical" />
+      <Divider />
 
-      {/* ── System Prompt ───────────────────────── */}
-      <div className="settings-section">
-        <div className="settings-section-title">System Prompt</div>
-        <textarea
-          className="ms-sys-prompt"
+      <section className={styles.section}>
+        <Subtitle1>System Prompt</Subtitle1>
+        <Textarea
+          className={styles.textarea}
           value={settings.systemPrompt ?? ""}
-          onChange={(e) => update("systemPrompt", e.target.value)}
+          onChange={(_, data) => update("systemPrompt", data.value)}
           placeholder="Optional system prompt…"
         />
-      </div>
+      </section>
 
-      <Button
-        appearance="primary"
-        icon={saving ? <Spinner size="tiny" /> : <SaveRegular />}
-        onClick={handleSave}
-        disabled={saving}
-        className="ms-save-btn"
-      >
-        {saving ? "Saving…" : "Save"}
-      </Button>
-    </>
+      <div>
+        <Button
+          appearance="primary"
+          size="small"
+          icon={saving ? <Spinner size="tiny" /> : <SaveRegular />}
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </div>
   );
 }

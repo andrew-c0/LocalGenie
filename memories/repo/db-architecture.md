@@ -10,6 +10,7 @@
 - `messages`: chat messages tied to a session
 - `model_settings`: per-model generation parameters
 - `user_preferences`: key-value app settings such as `server_port`
+- `downloaded_models`: GGUF models imported into GenieX (`name` primary key; precision, context_size, param_count, repo_url, model_card, timestamps). Written by `import_gguf`, read by the model page.
 
 ## Patterns
 - Use `MigrationTrait` for versioned schema changes.

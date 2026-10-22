@@ -1,10 +1,19 @@
+import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
 import {
+  Badge,
   Button,
+  Caption1,
   Dialog,
+  DialogActions,
   DialogBody,
   DialogContent,
   DialogSurface,
   DialogTitle,
+  makeStyles,
+  Tab,
+  TabList,
+  Text,
+  tokens,
 } from "@fluentui/react-components";
 import {
   ChatRegular,
@@ -12,9 +21,11 @@ import {
   GridRegular,
   PlayCircleRegular,
   SettingsRegular,
+  SparkleRegular,
 } from "@fluentui/react-icons";
-import { type ReactElement, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import type { ReactElement } from "react";
+import { useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import * as db from "../../services/database";
 import { useChatStore } from "../../stores/chatStore";
 import { useModelStore } from "../../stores/modelStore";
@@ -33,8 +44,49 @@ const NAV_ITEMS: {
   { to: "/settings", label: "Settings", icon: <SettingsRegular /> },
 ];
 
+const useStyles = makeStyles({
+  sidebar: {
+    width: "240px",
+    flexShrink: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+    padding: tokens.spacingVerticalM,
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  brand: {
+    justifyContent: "flex-start",
+  },
+  version: {
+    paddingLeft: tokens.spacingHorizontalM,
+  },
+  nav: {
+    flex: 1,
+    minHeight: 0,
+  },
+  navBadge: {
+    marginLeft: "auto",
+  },
+  footer: {
+    display: "flex",
+    flexDirection: "column",
+    padding: `0 ${tokens.spacingHorizontalM}`,
+  },
+});
+
+/** Map the current pathname to the nav item it belongs to (Tab value). */
+function activeNavValue(pathname: string): string {
+  const match = NAV_ITEMS.find(
+    (item) => item.to !== "/" && (pathname === item.to || pathname.startsWith(`${item.to}/`)),
+  );
+  return match ? match.to : "/";
+}
+
 export default function Sidebar() {
+  const styles = useStyles();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const activeSessionId = useChatStore((s) => s.activeSessionId);
   const deleteSession = useChatStore((s) => s.deleteSession);
   const models = useModelStore((s) => s.models);
@@ -48,70 +100,55 @@ export default function Sidebar() {
     setDeleteTarget(null);
   };
 
-  return (
-    <aside className="lx-sidebar">
-      {/* ── Brand ─────────────────────────────────── */}
-      <button
-        type="button"
-        className="lx-sidebar-brand"
-        title="Go to Overview"
-        onClick={() => navigate("/")}
-        style={{ cursor: "pointer", border: "none", background: "transparent", textAlign: "left" }}
-      >
-        <div className="lx-sidebar-brand-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M12 2c.6 4.8 4.2 8.4 9 9-4.8.6-8.4 4.2-9 9-.6-4.8-4.2-8.4-9-9 4.8-.6 8.4-4.2 9-9z"
-              fill="url(#lxBrandGrad)"
-            />
-            <defs>
-              <linearGradient id="lxBrandGrad" x1="3" y1="3" x2="21" y2="21">
-                <stop offset="0" stopColor="#a3c9ff" />
-                <stop offset="0.5" stopColor="#0078D4" />
-                <stop offset="1" stopColor="#8764B8" />
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-        <div>
-          <div className="lx-sidebar-brand-name">LocalGenie</div>
-          <div className="lx-sidebar-brand-sub">{APP_VERSION} · Local Runtime</div>
-        </div>
-      </button>
+  const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
+    navigate(String(data.value));
+  };
 
-      {/* ── Navigation ────────────────────────────── */}
-      <nav className="lx-sidebar-nav" aria-label="Main navigation">
+  return (
+    <aside className={styles.sidebar}>
+      <Button
+        appearance="subtle"
+        size="large"
+        icon={<SparkleRegular />}
+        title="Go to Overview"
+        className={styles.brand}
+        onClick={() => navigate("/")}
+      >
+        LocalGenie
+      </Button>
+      <Caption1 className={styles.version}>{APP_VERSION} · Local Runtime</Caption1>
+
+      <TabList
+        vertical
+        className={styles.nav}
+        aria-label="Main navigation"
+        selectedValue={activeNavValue(pathname)}
+        onTabSelect={handleTabSelect}
+      >
         {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === "/"}
-            className={({ isActive }) => `lx-nav-item${isActive ? " active" : ""}`}
-            aria-label={item.label}
-          >
-            {item.icon}
-            <span className="lx-nav-label">{item.label}</span>
+          <Tab key={item.to} value={item.to} icon={item.icon}>
+            {item.label}
             {item.to === "/models" && models.length > 0 && (
-              <span className="lx-nav-item-badge">{models.length}</span>
+              <Badge className={styles.navBadge} size="small" appearance="filled" color="brand">
+                {models.length}
+              </Badge>
             )}
             {item.to === "/chat" && activeSessionId && (
-              <span className="lx-nav-item-badge" aria-hidden="true" />
+              <Badge className={styles.navBadge} size="tiny" appearance="filled" color="brand" />
             )}
-          </NavLink>
+          </Tab>
         ))}
-      </nav>
+      </TabList>
 
-      {/* ── Hardware footer ───────────────────────── */}
-      <div className="lx-sidebar-footer">
-        <div>HARDWARE ACCEL</div>
-        <div className="lx-sidebar-footer-mono">
+      <div className={styles.footer}>
+        <Caption1>HARDWARE ACCEL</Caption1>
+        <Text font="monospace" size={200}>
           {serverStatus.running
             ? `Server :${serverStatus.port} · ${serverStatus.models.length} loaded`
             : "Server offline"}
-        </div>
+        </Text>
       </div>
 
-      {/* ── Delete Confirmation ────────────────────── */}
       <Dialog
         open={deleteTarget !== null}
         onOpenChange={(_, data) => {
@@ -123,18 +160,18 @@ export default function Sidebar() {
             <DialogTitle>Delete Chat</DialogTitle>
             <DialogContent>
               Are you sure you want to delete this conversation? This cannot be undone.
-              <div className="dialog-footer">
-                <Button appearance="secondary" onClick={() => setDeleteTarget(null)}>
-                  Cancel
-                </Button>
-                <Button
-                  appearance="primary"
-                  onClick={() => deleteTarget && handleDelete(deleteTarget)}
-                >
-                  Delete
-                </Button>
-              </div>
             </DialogContent>
+            <DialogActions>
+              <Button appearance="secondary" onClick={() => setDeleteTarget(null)}>
+                Cancel
+              </Button>
+              <Button
+                appearance="primary"
+                onClick={() => deleteTarget && handleDelete(deleteTarget)}
+              >
+                Delete
+              </Button>
+            </DialogActions>
           </DialogBody>
         </DialogSurface>
       </Dialog>

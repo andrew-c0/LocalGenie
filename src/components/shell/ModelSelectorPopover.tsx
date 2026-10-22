@@ -1,12 +1,26 @@
-import { Button, Spinner } from "@fluentui/react-components";
+import type { RadioGroupOnChangeData } from "@fluentui/react-components";
+import {
+  Button,
+  Caption1,
+  Caption1Strong,
+  Divider,
+  Input,
+  MessageBar,
+  MessageBarBody,
+  makeStyles,
+  PopoverSurface,
+  Radio,
+  RadioGroup,
+  Spinner,
+  tokens,
+} from "@fluentui/react-components";
 import {
   ArrowRightRegular,
   ArrowUploadRegular,
-  CheckmarkRegular,
   DismissRegular,
   SearchRegular,
 } from "@fluentui/react-icons";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as geniex from "../../services/geniex";
 import { useChatStore } from "../../stores/chatStore";
@@ -17,31 +31,59 @@ import {
   useModelStore,
 } from "../../stores/modelStore";
 import type { ModelInfo } from "../../types";
-import { shortName } from "../../utils/format";
+import { ModelOptionButton } from "./ModelOptionButton";
 
-interface ModelSelectorPopoverProps {
-  open: boolean;
-  onClose: () => void;
-  /** Callback when the popover is opened — used by the model library to open it. */
-  onOpenChange?: (open: boolean) => void;
-}
-
-/** Short label + description for each compute target. */
+/** Label + description for each compute target. */
 const COMPUTE_META: Record<ComputeChoice, { label: string; hint: string }> = {
   npu: { label: "NPU", hint: "Hexagon HTP — fastest, most efficient" },
   gpu: { label: "GPU", hint: "Adreno OpenCL path" },
   cpu: { label: "CPU", hint: "Baseline; slowest but always available" },
 };
 
+const useStyles = makeStyles({
+  surface: {
+    width: "360px",
+    maxHeight: "70vh",
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+    padding: tokens.spacingHorizontalM,
+  },
+  list: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXXS,
+    overflowY: "auto",
+  },
+  section: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: tokens.spacingVerticalXS,
+  },
+  computeRow: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXXS,
+  },
+  footer: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: tokens.spacingHorizontalS,
+  },
+  inline: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+  },
+});
+
 /**
- * Stitch-style active model dropdown: searchable list of installed models
- * split into loaded/active and ready-to-load, with quick actions.
+ * Model switcher shown inside the header's Popover. Open state is owned by the
+ * model store (other pages open it too), so this component only renders content.
  */
-export default function ModelSelectorPopover({
-  open,
-  onClose,
-  onOpenChange,
-}: ModelSelectorPopoverProps) {
+export default function ModelSelectorPopover() {
+  const styles = useStyles();
   const navigate = useNavigate();
   const models = useModelStore((s) => s.models);
   const serverStatus = useModelStore((s) => s.serverStatus);
@@ -49,57 +91,33 @@ export default function ModelSelectorPopover({
   const setServerStatus = useModelStore((s) => s.setServerStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
   const setActiveModel = useModelStore((s) => s.setActiveModel);
+  const selectorOpen = useModelStore((s) => s.selectorOpen);
+  const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
   const compute = useModelStore((s) => s.compute);
   const setCompute = useModelStore((s) => s.setCompute);
+  const serverCompute = useModelStore((s) => s.serverCompute);
+  const setServerCompute = useModelStore((s) => s.setServerCompute);
 
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /** Compute target the running server was started with (null = unknown/external). */
-  const activeComputeRef = useRef<ComputeChoice | null>(
-    serverStatus.running ? DEFAULT_COMPUTE : null,
-  );
-  const panelRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  /** Compute target the running server was started with; unknown (external) servers are assumed default. */
+  const runningCompute = serverCompute ?? DEFAULT_COMPUTE;
 
-  // Focus search on open
   useEffect(() => {
-    if (open) {
+    if (selectorOpen) {
       setQuery("");
       setError(null);
-      inputRef.current?.focus();
     }
-  }, [open]);
-
-  // Close on Escape / outside click
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    const onClick = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onClick);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("mousedown", onClick);
-    };
-  }, [open, onClose]);
-
-  // Notify parent when open state changes
-  useEffect(() => {
-    onOpenChange?.(open);
-  }, [open, onOpenChange]);
+  }, [selectorOpen]);
 
   const { loadedModels, readyModels } = useMemo(() => {
     const loadedNames = new Set(serverStatus.models.map((m) => m.split(":")[0]));
     const loaded: ModelInfo[] = [];
     const ready: ModelInfo[] = [];
+    const q = query.trim().toLowerCase();
     for (const m of models) {
       const base = m.name.split("/").pop() ?? m.name;
-      const q = query.trim().toLowerCase();
       if (q && !base.toLowerCase().includes(q)) continue;
       if (loadedNames.has(base)) loaded.push(m);
       else ready.push(m);
@@ -107,38 +125,35 @@ export default function ModelSelectorPopover({
     return { loadedModels: loaded, readyModels: ready };
   }, [models, serverStatus.models, query]);
 
-  if (!open) return null;
+  const close = () => setSelectorOpen(false);
 
   /** Load a model and set it active; also binds it to the open chat session. */
   const handleSelect = async (name: string) => {
     const base = name.split("/").pop() ?? name;
     if (serverStatus.models.some((lm) => lm === base || lm.startsWith(`${base}:`))) {
       setActiveModel(name);
-      onClose();
+      close();
       return;
     }
     setLoading(name);
     setError(null);
     try {
-      // Ensure the GenieX server is running before attempting to load.
-      // Start/restart it with the selected compute target — a server spawned
-      // with a different compute must be restarted for the flag to apply.
-      const needsRestart = serverStatus.running && compute !== activeComputeRef.current;
+      // A server spawned with a different compute target must be restarted for the flag to apply.
+      const needsRestart = serverStatus.running && compute !== runningCompute;
       if (needsRestart) {
         await geniex.stopServer(serverPort);
       }
       if (needsRestart || !serverStatus.running) {
         const started = await geniex.startServer({ port: serverPort, compute });
         setServerStatus(started);
-        activeComputeRef.current = compute;
+        setServerCompute(compute);
       }
-      // load_model returns the refreshed server status (with the new model listed).
       const status = await geniex.loadModel(name);
       setServerStatus(status);
       setActiveModel(name);
       const activeId = useChatStore.getState().activeSessionId;
       if (activeId) useChatStore.getState().setSessionModel(activeId, name);
-      onClose();
+      close();
     } catch (err) {
       setError(String(err));
     } finally {
@@ -155,10 +170,10 @@ export default function ModelSelectorPopover({
     setError(null);
     try {
       await geniex.stopServer(serverPort);
-      activeComputeRef.current = null;
+      setServerCompute(null);
       const started = await geniex.startServer({ port: serverPort, compute: next });
       setServerStatus(started);
-      activeComputeRef.current = next;
+      setServerCompute(next);
     } catch (err) {
       setCompute(prev);
       setError(String(err));
@@ -172,7 +187,7 @@ export default function ModelSelectorPopover({
     setLoading("__unload__");
     setError(null);
     try {
-      const status = await geniex.unloadAllModels();
+      const status = await geniex.unloadAllModels(serverPort);
       setServerStatus(status);
       setActiveModel(null);
     } catch (err) {
@@ -182,106 +197,82 @@ export default function ModelSelectorPopover({
     }
   };
 
-  const renderOption = (m: ModelInfo) => {
-    const base = m.name.split("/").pop() ?? m.name;
-    const isActive = activeModelId === m.name;
-    const loadedHere = serverStatus.models.some((lm) => lm === base || lm.startsWith(`${base}:`));
-    const precision = m.precisions.length > 0 ? m.precisions[0] : null;
-
-    return (
-      <button
-        key={m.name}
-        type="button"
-        className={`lx-popover-option${isActive ? " active" : ""}`}
-        onClick={() => handleSelect(m.name)}
-        disabled={loading !== null}
-      >
-        <span className={`lx-popover-dot${loadedHere ? " on" : ""}`} />
-        <span className="lx-popover-option-main">
-          <span className="lx-popover-option-name">
-            {shortName(m.name)}
-            {precision && <span className="lx-popover-quant">{precision}</span>}
-          </span>
-          <span className="lx-popover-option-sub">
-            {loadedHere ? "Loaded on server" : "Ready to load"} • {m.size}
-          </span>
-        </span>
-        {loading === m.name ? (
-          <Spinner size="tiny" />
-        ) : isActive ? (
-          <>
-            <span className="lx-popover-tps">Active</span>
-            <CheckmarkRegular style={{ color: "var(--lx-primary)", fontSize: 18 }} />
-          </>
-        ) : (
-          <span className="lx-popover-switch">Switch</span>
-        )}
-      </button>
-    );
+  const handleComputeSelect = (_: unknown, data: RadioGroupOnChangeData) => {
+    const next = COMPUTE_TARGETS.find((t) => t === data.value);
+    if (next) handleComputeChange(next);
   };
 
+  const isLoadedOnServer = (m: ModelInfo) => {
+    const base = m.name.split("/").pop() ?? m.name;
+    return serverStatus.models.some((lm) => lm === base || lm.startsWith(`${base}:`));
+  };
+
+  const renderOption = (m: ModelInfo) => (
+    <ModelOptionButton
+      key={m.name}
+      model={m}
+      isActive={activeModelId === m.name}
+      loadedHere={isLoadedOnServer(m)}
+      loading={loading === m.name}
+      disabled={loading !== null}
+      onSelect={handleSelect}
+    />
+  );
+
   return (
-    <div ref={panelRef} className="lx-popover" role="dialog" aria-label="Switch active model">
-      <div className="lx-popover-search">
-        <SearchRegular style={{ color: "var(--lx-text-muted)", flexShrink: 0 }} />
-        <input
-          ref={inputRef}
-          placeholder="Filter installed models..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Filter installed models"
-        />
-        <span className="lx-popover-kbd">Ctrl+K</span>
-        <Button
-          appearance="transparent"
-          size="small"
-          icon={<DismissRegular />}
-          onClick={onClose}
-          title="Close"
-        />
-      </div>
+    <PopoverSurface className={styles.surface} aria-label="Switch active model">
+      <Input
+        autoFocus
+        placeholder="Filter installed models..."
+        aria-label="Filter installed models"
+        value={query}
+        onChange={(_, data) => setQuery(data.value)}
+        contentBefore={<SearchRegular />}
+        contentAfter={
+          <Button
+            appearance="transparent"
+            size="small"
+            icon={<DismissRegular />}
+            onClick={close}
+            aria-label="Close"
+            title="Close"
+          />
+        }
+      />
 
-      {error && <div className="lx-popover-error">⚠ {error}</div>}
+      {error && (
+        <MessageBar intent="error">
+          <MessageBarBody>{error}</MessageBarBody>
+        </MessageBar>
+      )}
 
-      {/* ── Compute target selector ───────────────── */}
-      <div className="lx-compute-row">
-        <span className="lx-compute-row-label">Run on</span>
-        <div className="lx-compute-row-options">
-          {COMPUTE_TARGETS.map((t) => (
-            <label
-              key={t}
-              className={`lx-compute-pill${compute === t ? " selected" : ""}`}
-              title={COMPUTE_META[t].hint}
-            >
-              <input
-                type="radio"
-                name="compute-target"
-                value={t}
-                checked={compute === t}
-                disabled={loading !== null}
-                onChange={() => handleComputeChange(t)}
-                aria-label={`Run models on ${COMPUTE_META[t].label} — ${COMPUTE_META[t].hint}`}
-                className="lx-compute-input"
-              />
-              {loading === "__compute__" && compute === t ? (
-                <Spinner size="tiny" />
-              ) : (
-                COMPUTE_META[t].label
-              )}
-            </label>
-          ))}
+      <div className={styles.computeRow}>
+        <div className={styles.inline}>
+          <Caption1Strong>Run on</Caption1Strong>
+          <RadioGroup
+            layout="horizontal"
+            value={compute}
+            disabled={loading !== null}
+            onChange={handleComputeSelect}
+            aria-label="Compute target"
+          >
+            {COMPUTE_TARGETS.map((t) => (
+              <Radio key={t} value={t} label={COMPUTE_META[t].label} />
+            ))}
+          </RadioGroup>
+          {loading === "__compute__" && <Spinner size="tiny" />}
         </div>
+        <Caption1>{COMPUTE_META[compute].hint}</Caption1>
       </div>
 
-      <div className="lx-popover-body">
+      <div className={styles.list}>
         {loadedModels.length > 0 && (
           <>
-            <div className="lx-popover-section">
-              <span>Loaded & Active</span>
-              <span className="lx-popover-section-status">
-                <span className="lx-popover-pulse" />
+            <div className={styles.section}>
+              <Caption1Strong>Loaded & Active</Caption1Strong>
+              <Caption1>
                 {serverStatus.running ? `Compute: ${COMPUTE_META[compute].label}` : "Server"}
-              </span>
+              </Caption1>
             </div>
             {loadedModels.map(renderOption)}
           </>
@@ -289,58 +280,56 @@ export default function ModelSelectorPopover({
 
         {readyModels.length > 0 && (
           <>
-            <div className="lx-popover-section">
-              <span>Installed & Ready to Load</span>
-              <span className="lx-popover-section-count">{readyModels.length} available</span>
+            <div className={styles.section}>
+              <Caption1Strong>Installed & Ready to Load</Caption1Strong>
+              <Caption1>{readyModels.length} available</Caption1>
             </div>
             {readyModels.map(renderOption)}
           </>
         )}
 
         {loadedModels.length === 0 && readyModels.length === 0 && (
-          <div className="lx-empty" style={{ padding: 24 }}>
-            {query ? `No models match "${query}".` : "No models installed yet."}
-          </div>
+          <Caption1>{query ? `No models match "${query}".` : "No models installed yet."}</Caption1>
         )}
       </div>
 
-      <div className="lx-popover-divider" />
+      <Divider />
 
-      <div className="lx-popover-footer">
+      <div className={styles.footer}>
         {serverStatus.running && serverStatus.models.length > 0 && (
-          <button
-            type="button"
-            className="lx-popover-link muted"
-            title="unload"
+          <Button
+            appearance="subtle"
+            size="small"
+            icon={loading === "__unload__" ? <Spinner size="tiny" /> : <ArrowUploadRegular />}
             disabled={loading !== null}
-            onClick={() => handleUnload()}
+            onClick={handleUnload}
           >
-            {loading === "__unload__" ? <Spinner size="tiny" /> : <ArrowUploadRegular />}
-            <span>Unload</span>
-          </button>
+            Unload
+          </Button>
         )}
-        <button
-          type="button"
-          className="lx-popover-link"
+        <Button
+          appearance="subtle"
+          size="small"
+          icon={<ArrowRightRegular />}
+          iconPosition="after"
           onClick={() => {
-            onClose();
+            close();
             navigate("/models");
           }}
         >
-          <ArrowRightRegular />
-          <span>Browse Model Hub...</span>
-        </button>
-        <button
-          type="button"
-          className="lx-popover-link muted"
+          Browse Model Hub...
+        </Button>
+        <Button
+          appearance="subtle"
+          size="small"
           onClick={() => {
-            onClose();
+            close();
             navigate("/settings");
           }}
         >
-          <span>Manage Weights & Storage</span>
-        </button>
+          Manage Weights & Storage
+        </Button>
       </div>
-    </div>
+    </PopoverSurface>
   );
 }

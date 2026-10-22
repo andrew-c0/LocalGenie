@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatSession, Message } from "../types";
+import type { ActiveStream, ChatSession, Message } from "../types";
 
 /** Max characters used for auto-generated session titles from the first message. */
 const AUTO_TITLE_MAX_LENGTH = 50;
@@ -13,6 +13,8 @@ interface ChatState {
   sessions: ChatSession[];
   activeSessionId: string | null;
   isStreaming: boolean;
+  /** Stream in flight. Events are matched by its id and written to its session. */
+  activeStream: ActiveStream | null;
   retryFromMessageId: string | null;
   /** Timestamp when the last send was triggered — used for generation stats. */
   lastSendTime: number;
@@ -25,10 +27,10 @@ interface ChatState {
   updateMessageStats: (sessionId: string, messageId: string, stats: Message["stats"]) => void;
   removeMessagesAfter: (sessionId: string, messageId: string) => void;
   setStreaming: (streaming: boolean) => void;
+  setActiveStream: (stream: ActiveStream | null) => void;
   setRetryFromMessageId: (id: string | null) => void;
   setLastSendTime: (time: number) => void;
   loadSessions: (sessions: ChatSession[]) => void;
-  renameSession: (id: string, title: string) => void;
   setSessionModel: (sessionId: string, modelId: string) => void;
 }
 
@@ -36,6 +38,7 @@ export const useChatStore = create<ChatState>((set) => ({
   sessions: [],
   activeSessionId: null,
   isStreaming: false,
+  activeStream: null,
   retryFromMessageId: null,
   lastSendTime: 0,
 
@@ -142,6 +145,10 @@ export const useChatStore = create<ChatState>((set) => ({
     }));
   },
 
+  setActiveStream: (stream: ActiveStream | null) => {
+    set({ activeStream: stream });
+  },
+
   setStreaming: (streaming: boolean) => {
     set({ isStreaming: streaming });
   },
@@ -155,17 +162,8 @@ export const useChatStore = create<ChatState>((set) => ({
   },
 
   loadSessions: (sessions: ChatSession[]) => {
-    set((state) => ({
-      sessions,
-      // Auto-select the most recent session if none is active
-      activeSessionId: state.activeSessionId ?? (sessions.length > 0 ? sessions[0].id : null),
-    }));
-  },
-
-  renameSession: (id: string, title: string) => {
-    set((state) => ({
-      sessions: state.sessions.map((s) => (s.id === id ? { ...s, title } : s)),
-    }));
+    // The URL decides which chat is open, so loading sessions does not pick one.
+    set({ sessions });
   },
 
   setSessionModel: (sessionId: string, modelId: string) => {

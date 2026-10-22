@@ -1,6 +1,6 @@
 use super::AppState;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::process::Command;
 
 /// Status of the GenieX serve process.
@@ -48,7 +48,7 @@ pub async fn kill_process(pid: u32) {
     }
 }
 
-/// Fetch the list of loaded model ids from the server's `/v1/models` endpoint.
+/// Fetch the ids of the models the server reports at `/v1/models`.
 pub(crate) async fn fetch_loaded_models(
     client: &reqwest::Client,
     base_url: &str,
@@ -58,7 +58,9 @@ pub(crate) async fn fetch_loaded_models(
         .send()
         .await
         .map_err(|e| format!("Failed to fetch models: {e}"))?;
-
+    if !resp.status().is_success() {
+        return Err(format!("Server returned {} for /v1/models", resp.status()));
+    }
     let body: serde_json::Value = resp.json().await.unwrap_or_default();
     Ok(body["data"]
         .as_array()
@@ -70,14 +72,8 @@ pub(crate) async fn fetch_loaded_models(
         .unwrap_or_default())
 }
 
-/// Probe the server's `/v1/models` endpoint to check if it's alive.
-async fn probe_server(client: &reqwest::Client, port: u16) -> bool {
-    client
-        .get(format!("http://127.0.0.1:{port}/v1/models"))
-        .send()
-        .await
-        .map(|r| r.status().is_success())
-        .unwrap_or(false)
+fn local_base_url(port: u16) -> String {
+    format!("http://127.0.0.1:{port}")
 }
 
 /// Optional configuration for `geniex serve`.
@@ -103,20 +99,17 @@ pub async fn start_server(
     let port = opts.port;
     let serve_port = port.unwrap_or(super::constants::DEFAULT_PORT);
 
-    // First, check if a server is already running on the port (externally or by us)
-    if probe_server(&state.http_client, serve_port).await {
+    // A server already answering on the port (ours or external) is reused.
+    if fetch_loaded_models(&state.http_client, &local_base_url(serve_port))
+        .await
+        .is_ok()
+    {
         return get_server_status(state, port).await;
     }
 
-    // Check if we have a tracked process
-    {
-        let is_running = {
-            let proc = state.server_process.lock().expect("mutex poisoned");
-            proc.is_some()
-        };
-        if is_running {
-            return get_server_status(state, port).await;
-        }
+    // Our tracked process is cleared by its exit watcher, so a tracked PID means it is alive.
+    if tracked_pid(&state)?.is_some() {
+        return get_server_status(state, port).await;
     }
 
     let host = format!("127.0.0.1:{serve_port}");
@@ -143,7 +136,7 @@ pub async fn start_server(
         args.push(k.to_string());
     }
 
-    let child = Command::new(super::cli::resolve_geniex_executable())
+    let mut child = Command::new(super::cli::resolve_geniex_executable())
         .args(&args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -157,66 +150,84 @@ pub async fn start_server(
         })?;
 
     let pid = child.id().unwrap_or(0);
-
     {
-        let mut proc = state.server_process.lock().expect("mutex poisoned");
+        let mut proc = state
+            .server_process
+            .lock()
+            .map_err(|_| "server state is unavailable".to_string())?;
         *proc = Some(pid);
     }
 
-    let mut child_for_logging = child;
-    if let Some(stdout) = child_for_logging.stdout.take() {
-        let app_handle_stdout = app.clone();
-        tokio::spawn(async move {
-            use tokio::io::{AsyncBufReadExt, BufReader};
-            let mut reader = BufReader::new(stdout).lines();
-            while let Ok(Some(line)) = reader.next_line().await {
-                let _ = app_handle_stdout.emit("server-log", serde_json::json!({
-                    "stream": "stdout",
-                    "message": line
-                }));
-            }
-        });
+    if let Some(stdout) = child.stdout.take() {
+        forward_lines(app.clone(), stdout, "stdout");
+    }
+    if let Some(stderr) = child.stderr.take() {
+        forward_lines(app.clone(), stderr, "stderr");
     }
 
-    if let Some(stderr) = child_for_logging.stderr.take() {
-        let app_handle_stderr = app.clone();
-        tokio::spawn(async move {
-            use tokio::io::{AsyncBufReadExt, BufReader};
-            let mut reader = BufReader::new(stderr).lines();
-            while let Ok(Some(line)) = reader.next_line().await {
-                let _ = app_handle_stderr.emit("server-log", serde_json::json!({
-                    "stream": "stderr",
-                    "message": line
-                }));
-            }
-        });
-    }
-
-    let app_handle2 = app.clone();
+    // When the process exits, forget its PID so the next start actually spawns.
     tokio::spawn(async move {
-        let _ = child_for_logging.wait().await;
-        let _ = app_handle2.emit("server-stopped", ());
+        let _ = child.wait().await;
+        if let Ok(mut proc) = app.state::<AppState>().server_process.lock() {
+            if *proc == Some(pid) {
+                *proc = None;
+            }
+        }
+        let _ = app.emit("server-stopped", ());
     });
 
     // Poll for readiness instead of a fixed sleep.
-    // The server may take varying amounts of time to bind the port.
     for _ in 0..super::constants::SERVER_STARTUP_PROBES {
-        tokio::time::sleep(std::time::Duration::from_millis(super::constants::SERVER_STARTUP_PROBE_DELAY_MS)).await;
-        if probe_server(&state.http_client, serve_port).await {
-            return get_server_status(state, port).await;
+        tokio::time::sleep(std::time::Duration::from_millis(
+            super::constants::SERVER_STARTUP_PROBE_DELAY_MS,
+        ))
+        .await;
+        if fetch_loaded_models(&state.http_client, &local_base_url(serve_port))
+            .await
+            .is_ok()
+        {
+            break;
         }
     }
 
-    // Timed out — still report current status (may be running but slow)
+    // Report the current status even if the server is still starting.
     get_server_status(state, port).await
+}
+
+/// Stream a child's output lines to the frontend as `server-log` events.
+fn forward_lines<R>(app: AppHandle, reader: R, stream: &'static str)
+where
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        use tokio::io::{AsyncBufReadExt, BufReader};
+        let mut lines = BufReader::new(reader).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            super::logs::record(&app, stream, line);
+        }
+    });
+}
+
+fn tracked_pid(state: &AppState) -> Result<Option<u32>, String> {
+    state
+        .server_process
+        .lock()
+        .map(|proc| *proc)
+        .map_err(|_| "server state is unavailable".to_string())
 }
 
 /// Stop the running `geniex serve` process.
 #[tauri::command]
-pub async fn stop_server(state: State<'_, AppState>, port: Option<u16>) -> Result<ServerStatus, String> {
+pub async fn stop_server(
+    state: State<'_, AppState>,
+    port: Option<u16>,
+) -> Result<ServerStatus, String> {
     let serve_port = port.unwrap_or(super::constants::DEFAULT_PORT);
     let pid = {
-        let mut proc = state.server_process.lock().expect("mutex poisoned");
+        let mut proc = state
+            .server_process
+            .lock()
+            .map_err(|_| "server state is unavailable".to_string())?;
         proc.take()
     };
 
@@ -231,43 +242,25 @@ pub async fn stop_server(state: State<'_, AppState>, port: Option<u16>) -> Resul
     })
 }
 
-/// Check if the GenieX server is healthy by hitting the models endpoint.
+/// Report whether a server answers on the port and which models it has loaded.
 /// Works regardless of whether we spawned the server or it's running externally.
 #[tauri::command]
-pub async fn get_server_status(state: State<'_, AppState>, port: Option<u16>) -> Result<ServerStatus, String> {
+pub async fn get_server_status(
+    state: State<'_, AppState>,
+    port: Option<u16>,
+) -> Result<ServerStatus, String> {
     let serve_port = port.unwrap_or(super::constants::DEFAULT_PORT);
 
-    match state
-        .http_client
-        .get(format!("http://127.0.0.1:{serve_port}/v1/models"))
-        .send()
-        .await
-    {
-        Ok(resp) if resp.status().is_success() => {
-            let models = fetch_loaded_models_from_response(resp).await;
-            Ok(ServerStatus {
-                running: true,
-                port: serve_port,
-                models,
-            })
-        }
-        _ => Ok(ServerStatus {
+    match fetch_loaded_models(&state.http_client, &local_base_url(serve_port)).await {
+        Ok(models) => Ok(ServerStatus {
+            running: true,
+            port: serve_port,
+            models,
+        }),
+        Err(_) => Ok(ServerStatus {
             running: false,
             port: serve_port,
             models: vec![],
         }),
     }
-}
-
-/// Parse an already-received `/v1/models` JSON response into model ids.
-async fn fetch_loaded_models_from_response(resp: reqwest::Response) -> Vec<String> {
-    let body: serde_json::Value = resp.json().await.unwrap_or_default();
-    body["data"]
-        .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|m| m["id"].as_str().map(String::from))
-                .collect()
-        })
-        .unwrap_or_default()
 }

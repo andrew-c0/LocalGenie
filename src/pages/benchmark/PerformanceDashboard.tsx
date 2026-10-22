@@ -1,4 +1,4 @@
-import { Button } from "@fluentui/react-components";
+import { Button, makeStyles, Text, tokens } from "@fluentui/react-components";
 import {
   ArrowDownloadRegular,
   ArrowLeftRegular,
@@ -7,10 +7,67 @@ import {
 } from "@fluentui/react-icons";
 import { useNavigate } from "react-router-dom";
 import ThroughputChart from "../../components/benchmark/ThroughputChart";
-import { MetricCard, StateBlock, StatusBadge, SurfaceCard } from "../../components/ui/primitives";
+import { MetricCard } from "../../components/ui/MetricCard/MetricCard";
+import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
+import { ProgressBar } from "../../components/ui/ProgressBar/ProgressBar";
+import { StateBlock } from "../../components/ui/StateBlock/StateBlock";
+import { StatusBadge } from "../../components/ui/StatusBadge/StatusBadge";
+import { SurfaceCard } from "../../components/ui/SurfaceCard/SurfaceCard";
 import { useBenchmarkStore } from "../../stores/benchmarkStore";
 import { useChatStore } from "../../stores/chatStore";
 import { useModelStore } from "../../stores/modelStore";
+
+const useStyles = makeStyles({
+  page: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+  },
+  actions: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+  },
+  kpiGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+    gap: tokens.spacingHorizontalM,
+  },
+  split: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr)",
+    gap: tokens.spacingHorizontalM,
+    alignItems: "start",
+  },
+  legend: {
+    display: "flex",
+    gap: tokens.spacingHorizontalS,
+    fontSize: tokens.fontSizeBase200,
+  },
+  legendNpu: { color: tokens.colorPaletteTealForeground2 },
+  legendGpu: { color: tokens.colorPalettePurpleForeground2 },
+  legendCpu: { color: tokens.colorNeutralForeground3 },
+  list: {
+    display: "flex",
+    flexDirection: "column",
+  },
+  row: {
+    display: "grid",
+    gridTemplateColumns: "auto minmax(0, 1fr) auto",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalM,
+    paddingTop: tokens.spacingVerticalS,
+    paddingBottom: tokens.spacingVerticalS,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    ":last-child": { borderBottom: "none" },
+  },
+  rowBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+    minWidth: 0,
+  },
+});
 
 /**
  * Benchmark & performance dashboard. Live KPIs are derived from real chat
@@ -20,6 +77,7 @@ import { useModelStore } from "../../stores/modelStore";
  * Rendered as a nested route of the Benchmark Suite (`PromptBenchmarkPage`).
  */
 export default function PerformanceDashboard() {
+  const styles = useStyles();
   const navigate = useNavigate();
   const serverStatus = useModelStore((s) => s.serverStatus);
   const sessions = useChatStore((s) => s.sessions);
@@ -67,40 +125,37 @@ export default function PerformanceDashboard() {
   };
 
   return (
-    <>
-      <div className="lx-page-headrow">
-        <div>
-          <span className="lx-page-eyebrow">
-            ● {serverStatus.running ? "RUNTIME ACTIVE" : "RUNTIME OFFLINE"}
-          </span>
-          <h1 className="lx-page-title">Benchmark & Performance</h1>
-          <p className="lx-page-subtitle">
-            Real-time inference throughput, TTFT latency, and hardware efficiency on your device.
-          </p>
-        </div>
-        <div className="lx-page-actions">
-          <Button
-            appearance="secondary"
-            icon={<ArrowLeftRegular />}
-            onClick={() => navigate("/prompt-benchmark/playground")}
-          >
-            Back to Prompt Benchmark
-          </Button>
-          <Button
-            appearance="primary"
-            icon={status === "running" ? <StopRegular /> : <PlayRegular />}
-            onClick={handleRunStop}
-          >
-            {status === "running" ? "Stop" : "Run Benchmark"}
-          </Button>
-          <Button appearance="secondary" icon={<ArrowDownloadRegular />} disabled>
-            Export
-          </Button>
-        </div>
-      </div>
+    <div className={styles.page}>
+      <PageHeader
+        eyebrow={serverStatus.running ? "● RUNTIME ACTIVE" : "● RUNTIME OFFLINE"}
+        title="Benchmark & Performance"
+        subtitle="Real-time inference throughput, TTFT latency, and hardware efficiency on your device."
+        actions={
+          <div className={styles.actions}>
+            <Button
+              appearance="secondary"
+              size="small"
+              icon={<ArrowLeftRegular />}
+              onClick={() => navigate("/prompt-benchmark/playground")}
+            >
+              Back to Prompt Benchmark
+            </Button>
+            <Button
+              appearance="primary"
+              size="small"
+              icon={status === "running" ? <StopRegular /> : <PlayRegular />}
+              onClick={handleRunStop}
+            >
+              {status === "running" ? "Stop" : "Run Benchmark"}
+            </Button>
+            <Button appearance="secondary" size="small" icon={<ArrowDownloadRegular />} disabled>
+              Export
+            </Button>
+          </div>
+        }
+      />
 
-      {/* ── KPI grid ─────────────────────────────── */}
-      <div className="lx-kpi-grid">
+      <div className={styles.kpiGrid}>
         <MetricCard
           label="TTFT Latency"
           value={avgTtft != null ? avgTtft.toFixed(0) : "—"}
@@ -129,15 +184,14 @@ export default function PerformanceDashboard() {
         />
       </div>
 
-      {/* ── Chart + ranking ──────────────────────── */}
-      <div className="lx-bench-split">
+      <div className={styles.split}>
         <SurfaceCard
           title="Real-Time Inference Throughput"
           action={
-            <div style={{ display: "flex", gap: 8, fontSize: 10.5 }}>
-              <span style={{ color: "#4bd9e5" }}>● NPU</span>
-              <span style={{ color: "#d8baff" }}>● GPU</span>
-              <span style={{ color: "#8a919e" }}>● CPU</span>
+            <div className={styles.legend}>
+              <span className={styles.legendNpu}>● NPU</span>
+              <span className={styles.legendGpu}>● GPU</span>
+              <span className={styles.legendCpu}>● CPU</span>
             </div>
           }
         >
@@ -150,28 +204,28 @@ export default function PerformanceDashboard() {
         <SurfaceCard
           title="Model Ranking"
           action={
-            <span className="lx-mono" style={{ fontSize: 10.5, color: "var(--lx-text-muted)" }}>
+            <Text font="monospace" size={200}>
               from chat stats
-            </span>
+            </Text>
           }
         >
           {ranking.length === 0 ? (
             <StateBlock message="No benchmarks recorded yet." />
           ) : (
-            <div>
+            <div className={styles.list}>
               {ranking.map((r, i) => (
-                <div key={r.model} className="lx-ranking-row">
-                  <span className="lx-rank-num">0{i + 1}</span>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{r.model}</div>
-                    <div className="lx-progress" style={{ marginTop: 4 }}>
-                      <div
-                        className="lx-progress-fill"
-                        style={{ width: `${(r.tokensPerSec / ranking[0].tokensPerSec) * 100}%` }}
-                      />
-                    </div>
+                <div key={r.model} className={styles.row}>
+                  <Text font="monospace" weight="semibold">
+                    0{i + 1}
+                  </Text>
+                  <div className={styles.rowBody}>
+                    <Text weight="semibold">{r.model}</Text>
+                    <ProgressBar
+                      value={(r.tokensPerSec / ranking[0].tokensPerSec) * 100}
+                      color="cyan"
+                    />
                   </div>
-                  <span className="lx-speed-tps">{r.tokensPerSec.toFixed(1)} tok/s</span>
+                  <Text font="monospace">{r.tokensPerSec.toFixed(1)} tok/s</Text>
                 </div>
               ))}
             </div>
@@ -179,14 +233,13 @@ export default function PerformanceDashboard() {
         </SurfaceCard>
       </div>
 
-      {/* ── Recent runs ──────────────────────────── */}
       <SurfaceCard
         title="Recent Runs"
         action={
           kpis.ttftMs != null ? (
-            <span className="lx-mono" style={{ fontSize: 11 }}>
+            <Text font="monospace" size={200}>
               TTFT {kpis.ttftMs.toFixed(0)}ms
-            </span>
+            </Text>
           ) : undefined
         }
       >
@@ -204,27 +257,29 @@ export default function PerformanceDashboard() {
             </Button>
           </StateBlock>
         ) : (
-          <div>
+          <div className={styles.list}>
             {runs.map((run) => (
-              <div key={run.id} className="lx-ranking-row">
-                <span className="lx-rank-num">{run.id.slice(0, 6)}</span>
-                <div style={{ fontSize: 12.5 }}>
-                  <div>
+              <div key={run.id} className={styles.row}>
+                <Text font="monospace" weight="semibold">
+                  {run.id.slice(0, 6)}
+                </Text>
+                <div className={styles.rowBody}>
+                  <Text>
                     {run.target.toUpperCase()} · {new Date(run.startedAt).toLocaleTimeString()}
-                  </div>
-                  <div className="lx-mono" style={{ fontSize: 11, color: "var(--lx-text-muted)" }}>
+                  </Text>
+                  <Text font="monospace" size={200}>
                     {run.totalTokens} tokens · {run.promptChars} chars prompt
-                  </div>
+                  </Text>
                 </div>
-                <span className="lx-speed-tps">
+                <Text font="monospace">
                   {run.tokensPerSec != null ? `${run.tokensPerSec.toFixed(1)} tok/s` : "—"}
                   {run.ttftMs != null && ` · ${run.ttftMs.toFixed(0)}ms`}
-                </span>
+                </Text>
               </div>
             ))}
           </div>
         )}
       </SurfaceCard>
-    </>
+    </div>
   );
 }

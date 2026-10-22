@@ -1,11 +1,119 @@
-import { Button, Slider, Spinner } from "@fluentui/react-components";
+import {
+  Button,
+  Caption1,
+  Field,
+  makeStyles,
+  Slider,
+  Spinner,
+  Text,
+  Textarea,
+  ToggleButton,
+  tokens,
+} from "@fluentui/react-components";
 import { DeleteRegular, PlayRegular, SaveRegular, StopRegular } from "@fluentui/react-icons";
 import { useCallback, useState } from "react";
+import { TelemetryValues } from "../../components/benchmark/TelemetryValues";
 import { ErrorBanner } from "../../components/ui/ErrorBanner/ErrorBanner";
-import { StateBlock, StatusBadge, SurfaceCard } from "../../components/ui/primitives";
+import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
+import { StateBlock } from "../../components/ui/StateBlock/StateBlock";
+import { StatusBadge } from "../../components/ui/StatusBadge/StatusBadge";
+import { SurfaceCard } from "../../components/ui/SurfaceCard/SurfaceCard";
 import { useBenchmarkStore } from "../../stores/benchmarkStore";
 import { defaultSettings, useModelStore } from "../../stores/modelStore";
 import type { ComputeTarget, GenerationSettings } from "../../types";
+
+const useStyles = makeStyles({
+  page: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+  },
+  split: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr)",
+    gap: tokens.spacingHorizontalM,
+    alignItems: "start",
+  },
+  column: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+    minWidth: 0,
+  },
+  actions: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+  },
+  promptActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+  },
+  monoHint: {
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorPaletteTealForeground2,
+  },
+  prompt: {
+    width: "100%",
+    minHeight: "140px",
+    fontFamily: tokens.fontFamilyMonospace,
+  },
+  params: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+  },
+  sliderHead: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  chips: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: tokens.spacingHorizontalS,
+    border: "none",
+    margin: 0,
+    padding: 0,
+    minWidth: 0,
+  },
+  output: {
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200,
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    maxHeight: "220px",
+    overflowY: "auto",
+    backgroundColor: tokens.colorNeutralBackground3,
+    padding: tokens.spacingVerticalS,
+    borderRadius: tokens.borderRadiusMedium,
+    margin: 0,
+  },
+  runs: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+  },
+  runRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: tokens.spacingHorizontalM,
+  },
+  runMeta: {
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+  },
+});
+
+const COMPUTE_OPTIONS: [ComputeTarget, string][] = [
+  ["npu", "Hexagon NPU"],
+  ["gpu", "Adreno GPU"],
+  ["cpu", "CPU"],
+];
 
 /**
  * Prompt Benchmark Playground — executes a fixed prompt via the local
@@ -15,6 +123,7 @@ import type { ComputeTarget, GenerationSettings } from "../../types";
  * Rendered as a subpage of the Benchmark Suite (`PromptBenchmarkPage`).
  */
 export default function BenchmarkPlayground() {
+  const styles = useStyles();
   const serverStatus = useModelStore((s) => s.serverStatus);
   const serverPort = useModelStore((s) => s.serverPort);
   const activeModelId = useModelStore((s) => s.activeModelId);
@@ -39,7 +148,6 @@ export default function BenchmarkPlayground() {
   const recordRun = useBenchmarkStore((s) => s.recordRun);
 
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
 
   const approxTokens = Math.ceil(prompt.length / 4);
 
@@ -156,53 +264,51 @@ export default function BenchmarkPlayground() {
     }
   };
 
-  const savePreset = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
-  };
-
   return (
-    <>
-      <div className="lx-page-headrow">
-        <div>
-          <span className="lx-page-eyebrow">● PROMPT BENCHMARK PLAYGROUND</span>
-          <h1 className="lx-page-title">Prompt Benchmark</h1>
-          <p className="lx-page-subtitle">
-            Profile exact TTFT and sustained throughput for a fixed prompt on local acceleration
-            hardware.
-          </p>
-        </div>
-        <div className="lx-page-actions">
-          <Button appearance="secondary" icon={<SaveRegular />} onClick={savePreset}>
-            {saved ? "Saved ✓" : "Save Preset"}
-          </Button>
-          <Button
-            appearance="primary"
-            icon={status === "running" ? <StopRegular /> : <PlayRegular />}
-            onClick={() => (status === "running" ? setStatus("idle") : void execute())}
-            disabled={!serverStatus.running || !prompt.trim()}
-          >
-            {status === "running" ? <Spinner size="tiny" /> : "Execute Benchmark"}
-          </Button>
-        </div>
-      </div>
+    <div className={styles.page}>
+      <PageHeader
+        eyebrow="● PROMPT BENCHMARK PLAYGROUND"
+        title="Prompt Benchmark"
+        subtitle="Profile exact TTFT and sustained throughput for a fixed prompt on local acceleration hardware."
+        actions={
+          <div className={styles.actions}>
+            <Button
+              appearance="secondary"
+              size="small"
+              icon={<SaveRegular />}
+              disabled
+              title="Presets are not available yet"
+            >
+              Save Preset
+            </Button>
+            <Button
+              appearance="primary"
+              size="small"
+              icon={status === "running" ? <StopRegular /> : <PlayRegular />}
+              onClick={() => (status === "running" ? setStatus("idle") : void execute())}
+              disabled={!serverStatus.running || !prompt.trim()}
+            >
+              {status === "running" ? <Spinner size="tiny" /> : "Execute Benchmark"}
+            </Button>
+          </div>
+        }
+      />
 
       {error && <ErrorBanner message={error} />}
 
-      <div className="lx-bench-split-57">
-        {/* ── Left: editor + parameters ──────────── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className={styles.split}>
+        <div className={styles.column}>
           <SurfaceCard
             title="Prompt Editor"
             action={
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span className="lx-mono" style={{ fontSize: 11, color: "var(--lx-telemetry)" }}>
-                  ≈{approxTokens} tokens
-                </span>
+              <div className={styles.promptActions}>
+                <Caption1 className={styles.monoHint}>≈{approxTokens} tokens</Caption1>
                 <Button
                   appearance="transparent"
                   size="small"
                   icon={<DeleteRegular />}
+                  title="Clear prompt"
+                  aria-label="Clear prompt"
                   onClick={() => {
                     setPrompt("");
                     setGeneratedTokens(0);
@@ -212,31 +318,22 @@ export default function BenchmarkPlayground() {
               </div>
             }
           >
-            <textarea
-              className="lx-input"
-              style={{
-                width: "100%",
-                minHeight: 140,
-                resize: "vertical",
-                fontFamily: "Consolas, monospace",
-              }}
+            <Textarea
+              className={styles.prompt}
+              resize="vertical"
               placeholder="Instruction prompt to benchmark…"
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              onChange={(_, data) => setPrompt(data.value)}
               onKeyDown={handleKeyDown}
               aria-label="Benchmark prompt"
             />
           </SurfaceCard>
 
           <SurfaceCard title="Inference Parameters">
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ fontSize: 12.5 }}>
-                <div
-                  style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}
-                  id="lx-temp-label"
-                >
-                  <span>Temperature</span>
-                  <span className="lx-mono">{temperature.toFixed(2)}</span>
+            <div className={styles.params}>
+              <Field label="Temperature">
+                <div className={styles.sliderHead}>
+                  <Text font="monospace">{temperature.toFixed(2)}</Text>
                 </div>
                 <Slider
                   min={0}
@@ -244,16 +341,12 @@ export default function BenchmarkPlayground() {
                   step={0.05}
                   value={temperature}
                   onChange={(_, d) => setTemperature(d.value)}
-                  aria-labelledby="lx-temp-label"
+                  aria-label="Temperature"
                 />
-              </div>
-              <div style={{ fontSize: 12.5 }}>
-                <div
-                  style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}
-                  id="lx-topp-label"
-                >
-                  <span>Top-P</span>
-                  <span className="lx-mono">{topP.toFixed(2)}</span>
+              </Field>
+              <Field label="Top-P">
+                <div className={styles.sliderHead}>
+                  <Text font="monospace">{topP.toFixed(2)}</Text>
                 </div>
                 <Slider
                   min={0}
@@ -261,40 +354,33 @@ export default function BenchmarkPlayground() {
                   step={0.01}
                   value={topP}
                   onChange={(_, d) => setTopP(d.value)}
-                  aria-labelledby="lx-topp-label"
+                  aria-label="Top-P"
                 />
-              </div>
+              </Field>
             </div>
           </SurfaceCard>
 
           <SurfaceCard title="Compute Target">
-            <div className="lx-chiprow">
-              {(
-                [
-                  ["npu", "Hexagon NPU"],
-                  ["gpu", "Adreno GPU"],
-                  ["cpu", "CPU"],
-                ] as [ComputeTarget, string][]
-              ).map(([id, label]) => (
-                <button
+            <fieldset className={styles.chips} aria-label="Compute target">
+              {COMPUTE_OPTIONS.map(([id, label]) => (
+                <ToggleButton
                   key={id}
-                  type="button"
-                  className={`lx-chip${target === id ? " active" : ""}`}
+                  size="small"
+                  checked={target === id}
                   onClick={() => setTarget(id)}
                 >
                   {label}
-                </button>
+                </ToggleButton>
               ))}
-            </div>
-            <p className="lx-page-subtitle" style={{ marginTop: 8, fontSize: 11.5 }}>
+            </fieldset>
+            <Caption1>
               Target selection is recorded with the run. Actual execution device is chosen by the
               GenieX runtime.
-            </p>
+            </Caption1>
           </SurfaceCard>
         </div>
 
-        {/* ── Right: telemetry, output, runs ─────── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className={styles.column}>
           <SurfaceCard
             title="Live Telemetry"
             action={
@@ -311,28 +397,11 @@ export default function BenchmarkPlayground() {
           <SurfaceCard
             title="Output Preview"
             action={
-              <span className="lx-mono" style={{ fontSize: 11, color: "var(--lx-telemetry)" }}>
-                {generatedTokens} tokens generated
-              </span>
+              <Caption1 className={styles.monoHint}>{generatedTokens} tokens generated</Caption1>
             }
           >
             {output ? (
-              <pre
-                className="lx-mono"
-                style={{
-                  fontSize: 12,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  maxHeight: 220,
-                  overflowY: "auto",
-                  background: "var(--lx-surface-base)",
-                  padding: 12,
-                  borderRadius: 8,
-                  margin: 0,
-                }}
-              >
-                {output}
-              </pre>
+              <pre className={styles.output}>{output}</pre>
             ) : (
               <StateBlock message="Run the benchmark to see generated output." />
             )}
@@ -342,23 +411,20 @@ export default function BenchmarkPlayground() {
             {runs.length === 0 ? (
               <StateBlock message="No runs recorded yet." />
             ) : (
-              <div>
+              <div className={styles.runs}>
                 {runs.map((run, i) => (
-                  <div key={run.id} className="lx-ranking-row">
-                    <span className="lx-rank-num">#{runs.length - i}</span>
-                    <div style={{ fontSize: 12.5 }}>
-                      <div>{run.target.toUpperCase()}</div>
-                      <div
-                        className="lx-mono"
-                        style={{ fontSize: 11, color: "var(--lx-text-muted)" }}
-                      >
+                  <div key={run.id} className={styles.runRow}>
+                    <Text weight="semibold">#{runs.length - i}</Text>
+                    <div className={styles.runMeta}>
+                      <Text>{run.target.toUpperCase()}</Text>
+                      <Caption1 className={styles.monoHint}>
                         {new Date(run.startedAt).toLocaleTimeString()} · {run.totalTokens} tokens
-                      </div>
+                      </Caption1>
                     </div>
-                    <span className="lx-speed-tps">
+                    <Text font="monospace">
                       {run.ttftMs != null && `${run.ttftMs.toFixed(0)}ms · `}
                       {run.tokensPerSec != null ? `${run.tokensPerSec.toFixed(1)} tok/s` : "—"}
-                    </span>
+                    </Text>
                   </div>
                 ))}
               </div>
@@ -366,40 +432,6 @@ export default function BenchmarkPlayground() {
           </SurfaceCard>
         </div>
       </div>
-    </>
-  );
-}
-
-/** Live KPI values read from the benchmark store. */
-function TelemetryValues() {
-  const kpis = useBenchmarkStore((s) => s.kpis);
-  const cells: { label: string; value: string; unit: string }[] = [
-    {
-      label: "TTFT Latency",
-      value: kpis.ttftMs != null ? kpis.ttftMs.toFixed(1) : "—",
-      unit: "ms",
-    },
-    {
-      label: "Throughput",
-      value: kpis.tokensPerSec != null ? kpis.tokensPerSec.toFixed(1) : "—",
-      unit: "tok/s",
-    },
-    { label: "Total Time", value: kpis.ttftMs != null ? "✓" : "—", unit: "" },
-    { label: "Power Draw", value: "—", unit: "W" },
-  ];
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
-      {cells.map((c) => (
-        <div key={c.label}>
-          <div style={{ fontSize: 11, color: "var(--lx-text-muted)" }}>{c.label}</div>
-          <div>
-            <span className="lx-metric-value" style={{ fontSize: 20 }}>
-              {c.value}
-            </span>
-            {c.unit && <span className="lx-metric-unit"> {c.unit}</span>}
-          </div>
-        </div>
-      ))}
     </div>
   );
 }

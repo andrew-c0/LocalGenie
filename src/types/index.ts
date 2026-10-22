@@ -22,9 +22,6 @@ export interface AihubModel {
   model_type: string;
 }
 
-/** A single downloadable release asset with its direct download URL. */
-export type { ReleaseAsset } from "../services/hubApi";
-
 export interface Message {
   id: string;
   role: "user" | "assistant" | "system";
@@ -75,12 +72,6 @@ export interface GenerationSettings {
   think?: boolean;
 }
 
-export interface DownloadProgress {
-  model: string;
-  message: string;
-  status: "downloading" | "importing" | "finished" | "error";
-}
-
 export interface ConfigEntry {
   key: string;
   value: string;
@@ -95,14 +86,6 @@ export interface ServerStartOptions {
   keepalive?: number;
 }
 
-export interface PullModelOptions {
-  model: string;
-  precision?: string;
-  modelHub?: string;
-  modelType?: string;
-  localPath?: string;
-}
-
 export interface UpdateInfo {
   current_version: string;
   latest_version: string;
@@ -111,7 +94,6 @@ export interface UpdateInfo {
 }
 
 /** Top-level pages of the Stitch-designed workspace shell. */
-export type AppView = "overview" | "models" | "chat" | "prompt-benchmark" | "settings";
 
 export type ComputeTarget = "npu" | "gpu" | "cpu";
 
@@ -150,13 +132,25 @@ export interface BenchmarkRunSummary {
 }
 
 /** Model installation state used by the model library UI. */
-export type ModelInstallState = "loaded" | "ready" | "downloading" | "not-installed" | "error";
 
 /** Extra metadata for a downloaded model, persisted in the local DB. */
 export interface DownloadedModelMeta {
   precision?: string;
   contextSize?: number;
   paramCount?: number;
-  repo_url?: string;
-  model_card?: string;
+  repoUrl?: string;
+  modelCard?: string;
+}
+
+/** The chat stream in flight, and the session its tokens belong to. */
+export interface ActiveStream {
+  streamId: string;
+  sessionId: string;
+}
+
+/** One line of `geniex serve` output, as sent by the backend. */
+export interface ServerLogLine {
+  seq: number;
+  stream: "stdout" | "stderr";
+  message: string;
 }

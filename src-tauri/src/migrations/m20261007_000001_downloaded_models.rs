@@ -23,8 +23,16 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(DownloadedModels::Precision).string())
                     .col(ColumnDef::new(DownloadedModels::ContextSize).big_integer())
                     .col(ColumnDef::new(DownloadedModels::ParamCount).big_integer())
-                    .col(ColumnDef::new(DownloadedModels::CreatedAt).big_integer().not_null())
-                    .col(ColumnDef::new(DownloadedModels::UpdatedAt).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(DownloadedModels::CreatedAt)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(DownloadedModels::UpdatedAt)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(DownloadedModels::RepoUrl).string())
                     .col(ColumnDef::new(DownloadedModels::ModelCard).string())
                     .to_owned(),

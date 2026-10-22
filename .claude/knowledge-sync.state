@@ -1,0 +1,3 @@
+last_synced_commit=84170dd440a02e4f29ad6fae567baf9ed5daf32b
+last_synced_date=2026-10-22
+note=No new commits since 84170dd. Synced the uncommitted working tree (download lifecycle rewrite, server PID fix, dead-code removal, GGUF helpers in services/hubModels.ts, downloadStore.startGGUFDownload, install_geniex/pull_model/get_geniex_version removed, shell capability trimmed, src-tauri module split in progress with untracked import.rs/cli_update.rs/hub.rs). cargo not run; tsc and biome passed.

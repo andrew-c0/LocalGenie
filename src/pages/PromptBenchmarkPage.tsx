@@ -1,7 +1,17 @@
+import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
+import {
+  Caption1,
+  Divider,
+  makeStyles,
+  Tab,
+  TabList,
+  Text,
+  tokens,
+} from "@fluentui/react-components";
 import { GaugeRegular, PlayCircleRegular } from "@fluentui/react-icons";
 import type { ReactElement } from "react";
-import { NavLink, Outlet } from "react-router-dom";
-import { StatusBadge } from "../components/ui/primitives";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { StatusBadge } from "../components/ui/StatusBadge/StatusBadge";
 import { useModelStore } from "../stores/modelStore";
 
 const SUITE_HOME = "/prompt-benchmark/playground";
@@ -26,49 +36,105 @@ const SECTIONS: {
   },
 ];
 
+const useStyles = makeStyles({
+  page: {
+    display: "flex",
+    flex: 1,
+    minHeight: 0,
+    gap: tokens.spacingHorizontalL,
+    padding: tokens.spacingHorizontalL,
+  },
+  nav: {
+    width: "280px",
+    flexShrink: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+  },
+  navFooter: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+    marginTop: "auto",
+  },
+  navFooterRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: tokens.spacingHorizontalS,
+  },
+  navFooterText: {
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+  },
+  tabContent: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+  },
+  panel: {
+    flex: 1,
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    overflowY: "auto",
+  },
+});
+
 /**
  * Benchmark Suite — the single benchmark destination in the app. Hosts the
  * prompt benchmark playground and the performance dashboard as nested routes,
  * mirroring the Settings page layout.
  */
 export default function PromptBenchmarkPage() {
+  const styles = useStyles();
+  const navigate = useNavigate();
+  const location = useLocation();
   const serverStatus = useModelStore((s) => s.serverStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
 
+  const selected = SECTIONS.find((s) => location.pathname.startsWith(s.to))?.to ?? SUITE_HOME;
+
+  const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
+    navigate(String(data.value));
+  };
+
   return (
-    <div className="lx-settingspage">
-      {/* ── Section sub-menu ──────────────────────── */}
-      <aside className="lx-settings-nav">
-        <div className="lx-settings-nav-head">
-          <div className="lx-settings-nav-title">Benchmark Suite</div>
-          <div className="lx-settings-nav-sub lx-mono">
+    <div className={styles.page}>
+      <aside className={styles.nav}>
+        <div>
+          <Text weight="semibold" size={400}>
+            Benchmark Suite
+          </Text>
+          <Text font="monospace" size={200} block>
             {serverStatus.running ? `runtime :${serverStatus.port}` : "runtime offline"}
-          </div>
+          </Text>
         </div>
 
-        <nav className="lx-settings-nav-list" aria-label="Benchmark sections">
+        <TabList
+          vertical
+          aria-label="Benchmark sections"
+          selectedValue={selected}
+          onTabSelect={handleTabSelect}
+        >
           {SECTIONS.map((s) => (
-            <NavLink
-              key={s.to}
-              to={s.to}
-              className={({ isActive }) => `lx-settings-nav-item${isActive ? " active" : ""}`}
-            >
-              <span className="lx-settings-nav-icon">{s.icon}</span>
-              <span className="lx-settings-nav-text">
-                <span className="lx-settings-nav-label">{s.label}</span>
-                <span className="lx-settings-nav-desc">{s.desc}</span>
+            <Tab key={s.to} value={s.to} icon={s.icon}>
+              <span className={styles.tabContent}>
+                <Text weight="semibold">{s.label}</Text>
+                <Caption1>{s.desc}</Caption1>
               </span>
-            </NavLink>
+            </Tab>
           ))}
-        </nav>
+        </TabList>
 
-        <div className="lx-settings-nav-footer">
-          <div className="lx-settings-nav-footer-row">
-            <div>
-              <div className="lx-settings-nav-footer-label">Active Model</div>
-              <div className="lx-mono lx-settings-nav-footer-value">
+        <div className={styles.navFooter}>
+          <Divider />
+          <div className={styles.navFooterRow}>
+            <div className={styles.navFooterText}>
+              <Caption1>Active Model</Caption1>
+              <Text font="monospace">
                 {activeModelId ? activeModelId.split("/").pop() : "none"}
-              </div>
+              </Text>
             </div>
           </div>
           <StatusBadge tone={serverStatus.running ? "green" : "red"}>
@@ -77,12 +143,9 @@ export default function PromptBenchmarkPage() {
         </div>
       </aside>
 
-      {/* ── Section panel ─────────────────────────── */}
-      <div className="lx-settings-panel">
-        <div className="lx-settings-panel-body lx-bench-suite-body">
-          <Outlet />
-        </div>
-      </div>
+      <section className={styles.panel}>
+        <Outlet />
+      </section>
     </div>
   );
 }

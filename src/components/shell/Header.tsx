@@ -1,19 +1,41 @@
-import { Badge, Button } from "@fluentui/react-components";
+import {
+  Badge,
+  Button,
+  makeStyles,
+  Popover,
+  PopoverTrigger,
+  Text,
+  tokens,
+} from "@fluentui/react-components";
 import { ArrowDownloadRegular, ChevronDownRegular } from "@fluentui/react-icons";
 import { useState } from "react";
-import { useDownloadStore } from "../../stores/downloadStore";
+import { isDownloadActive, useDownloadStore } from "../../stores/downloadStore";
 import { useModelStore } from "../../stores/modelStore";
 import DownloadDrawer from "./DownloadDrawer";
 import ModelSelectorPopover from "./ModelSelectorPopover";
 
+const useStyles = makeStyles({
+  bar: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    backgroundColor: tokens.colorNeutralBackground1,
+  },
+  spacer: {
+    flex: 1,
+  },
+});
+
 export default function Header() {
+  const styles = useStyles();
   const serverStatus = useModelStore((s) => s.serverStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
   const selectorOpen = useModelStore((s) => s.selectorOpen);
   const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
-  const downloads = useModelStore((s) => s.downloads);
   const activeDownloads = useDownloadStore(
-    (s) => s.downloads.filter((d) => d.status === "downloading").length,
+    (s) => s.downloads.filter((d) => isDownloadActive(d.status)).length,
   );
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -24,44 +46,33 @@ export default function Header() {
       : "No model loaded";
 
   return (
-    <div className="lx-titlebar">
-      <div className="lx-titlebar-model-wrap">
-        <button
-          type="button"
-          className={`lx-titlebar-model${selectorOpen ? " open" : ""}`}
-          onClick={() => setSelectorOpen(!selectorOpen)}
-          aria-expanded={selectorOpen}
-          aria-haspopup="dialog"
-          title="Switch active model"
-        >
-          <span
-            className="dot"
-            style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--lx-primary)" }}
-          />
-          <strong>Active Model:</strong>
-          <span className="lx-mono">{activeLabel}</span>
-          <ChevronDownRegular
-            style={{
-              transform: selectorOpen ? "rotate(180deg)" : undefined,
-              transition: "transform 0.15s ease",
-            }}
-          />
-        </button>
+    <div className={styles.bar}>
+      <Popover
+        open={selectorOpen}
+        onOpenChange={(_, data) => setSelectorOpen(data.open)}
+        positioning="below-start"
+      >
+        <PopoverTrigger disableButtonEnhancement>
+          <Button
+            appearance="subtle"
+            icon={<ChevronDownRegular />}
+            iconPosition="after"
+            aria-label="Switch active model"
+            title="Switch active model"
+          >
+            <Text weight="semibold">Active Model:</Text> <Text font="monospace">{activeLabel}</Text>
+          </Button>
+        </PopoverTrigger>
+        <ModelSelectorPopover />
+      </Popover>
 
-        <ModelSelectorPopover
-          open={selectorOpen}
-          onClose={() => setSelectorOpen(false)}
-          onOpenChange={setSelectorOpen}
-        />
-      </div>
-
-      <span
-        className={`lx-titlebar-chip${serverStatus.running ? "" : " off"}`}
+      <Badge
+        appearance="tint"
+        color={serverStatus.running ? "success" : "danger"}
         title={`GenieX server on port ${serverStatus.port}`}
       >
-        <span className="dot" />
         {serverStatus.running ? "Connected" : "Offline"}
-      </span>
+      </Badge>
 
       {serverStatus.models.length > 0 && (
         <Badge appearance="filled" color="brand" size="small">
@@ -69,24 +80,22 @@ export default function Header() {
         </Badge>
       )}
 
-      {downloads.length > 0 && (
+      {activeDownloads > 0 && (
         <Badge appearance="tint" color="informative" size="small">
-          {downloads.length} downloading
+          {activeDownloads} downloading
         </Badge>
       )}
 
-      <div className="lx-titlebar-spacer" />
+      <div className={styles.spacer} />
 
       <Button
-        appearance="transparent"
-        size="small"
+        appearance={activeDownloads > 0 ? "primary" : "subtle"}
         icon={<ArrowDownloadRegular />}
         title="Downloads"
         aria-label="Downloads"
         onClick={() => setDrawerOpen(true)}
-        style={activeDownloads > 0 ? { color: "var(--lx-primary)" } : undefined}
       >
-        {activeDownloads > 0 ? `${activeDownloads}` : undefined}
+        {activeDownloads > 0 ? String(activeDownloads) : undefined}
       </Button>
 
       <DownloadDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />

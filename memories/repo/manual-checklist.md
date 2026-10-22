@@ -14,6 +14,7 @@ Run through these checks manually after building or deploying the app. Automated
   - Confirm no CSP violation errors appear in the dev console when the download starts (`connect-src` must permit `https://api.github.com` and the release download host `https://github.com` / `objects.githubusercontent.com`).
   - If the download fails instantly with a network error, check whether the Tauri CSP in `src-tauri/tauri.conf.json` blocks outbound HTTPS to GitHub.
   - Verify corporate proxy / firewall scenarios: the app uses `reqwest` with a `LocalGenie/0.1` User-Agent; some proxies block unknown agents.
+  - Note: the installer download runs in Rust (`reqwest`), so the webview CSP does not apply to it. The CSP check above only matters for webview `fetch` calls.
 
 - [ ] **Downloaded installer is executable**
   - Windows may mark downloaded files with a Mark-of-the-Web (MOTW) zone identifier. Confirm double-clicking or spawning the installer does not trigger a SmartScreen block that silently prevents launch.
@@ -36,7 +37,7 @@ Run through these checks manually after building or deploying the app. Automated
 
 - [ ] All 6 views render and switch via the sidebar: Overview, Models, Chat & Playground, Benchmarks, Prompt Bench, Settings — without losing active session or server status.
 - [ ] Chat: streaming updates in place, `chat-done` records generation stats, retry removes later messages in both Zustand and SQLite.
-- [ ] Models: search → pull → progress → completion refresh; Load & Chat sets active model; remove confirmation works; repo filter chips behave.
+- [ ] Models: search → download → import → progress → completion refresh; cancel and resume from the drawer; duplicate click is ignored; Load & Chat sets active model; remove confirmation works; repo filter chips behave.
 - [ ] Settings: port save/probe persists; CLI update card reflects `updateInfo` (badge on sidebar settings entry is currently gone — settings moved to a page, verify update badge UX still acceptable).
 - [ ] Prompt Benchmark: `Ctrl+Enter` executes a real streaming run against the local server; TTFT/throughput values change between runs; recent runs list updates.
 - [ ] Benchmark page: ranking populated from real chat stats only (no fabricated numbers); bandwidth/thermal cards show "—/N/A".

@@ -1,8 +1,40 @@
+import { Caption1, Divider, makeStyles, Spinner, tokens } from "@fluentui/react-components";
 import { useEffect, useRef } from "react";
 import { useChatStore } from "../stores/chatStore";
 import MessageBubble from "./MessageBubble";
 
+const useStyles = makeStyles({
+  area: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    padding: tokens.spacingHorizontalL,
+  },
+  messages: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+    maxWidth: "840px",
+    margin: "0 auto",
+  },
+  delimiter: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+  },
+  delimiterLine: {
+    flex: 1,
+  },
+  typing: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    color: tokens.colorNeutralForeground3,
+  },
+});
+
 export default function ChatArea() {
+  const styles = useStyles();
   const activeSessionId = useChatStore((s) => s.activeSessionId);
   const sessions = useChatStore((s) => s.sessions);
   const isStreaming = useChatStore((s) => s.isStreaming);
@@ -39,10 +71,10 @@ export default function ChatArea() {
     if (msg.role === "assistant" && msg.modelId && msg.modelId !== prevModelId) {
       const shortName = msg.modelId.split("/").pop() ?? msg.modelId;
       renderedMessages.push(
-        <div key={`delimiter-${msg.id}`} className="model-delimiter">
-          <span className="model-delimiter-line" />
-          <span className="model-delimiter-label">{shortName}</span>
-          <span className="model-delimiter-line" />
+        <div key={`delimiter-${msg.id}`} className={styles.delimiter}>
+          <Divider className={styles.delimiterLine} />
+          <Caption1>{shortName}</Caption1>
+          <Divider className={styles.delimiterLine} />
         </div>,
       );
     }
@@ -59,20 +91,14 @@ export default function ChatArea() {
   }
 
   return (
-    <div className="chat-area">
-      <div className="chat-messages">
+    <div className={styles.area}>
+      <div className={styles.messages}>
         {renderedMessages}
 
         {showTypingIndicator && (
-          <div className="message-row assistant">
-            <div className="message-avatar assistant">AI</div>
-            <div className="message-bubble assistant">
-              <div className="typing-indicator">
-                <span className="typing-dot" />
-                <span className="typing-dot" />
-                <span className="typing-dot" />
-              </div>
-            </div>
+          <div className={styles.typing}>
+            <Spinner size="tiny" />
+            <Caption1>Generating…</Caption1>
           </div>
         )}
 

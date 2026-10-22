@@ -3,28 +3,28 @@ mod commands;
 pub mod entities;
 pub mod migrations;
 
-use tauri::Manager;
+use commands::chat;
+use commands::cli;
+use commands::cli_update;
+use commands::database;
+use commands::hub;
+use commands::import;
+use commands::logs;
 use commands::models;
 use commands::server;
-use commands::chat;
-use commands::database;
-use commands::cli;
 use commands::system;
+use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             // Resolve DB path in the app data directory.
-            let db_dir = app
-                .path()
-                .app_data_dir()
-                .expect("failed to resolve app data dir");
-            std::fs::create_dir_all(&db_dir).ok();
+            let db_dir = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&db_dir)?;
             let db_path = db_dir.join("geniex.db");
             let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
-            let db = tauri::async_runtime::block_on(database::init_database(&db_url))
-                .expect("failed to initialise database");
+            let db = tauri::async_runtime::block_on(database::init_database(&db_url))?;
 
             app.manage(db);
             Ok(())
@@ -35,9 +35,8 @@ pub fn run() {
             // Model management
             models::list_models,
             models::list_aihub_models,
-            models::pull_model,
             models::remove_model,
-            models::search_models,
+            hub::search_models,
             models::clean_models,
             models::set_model_type,
             // Server management
@@ -51,17 +50,17 @@ pub fn run() {
             chat::unload_all_models,
             // CLI utilities
             cli::check_geniex_installed,
-            cli::get_geniex_version,
             commands::download::download_file,
             commands::download::cancel_download,
-            commands::download::delete_directory,
-            commands::download::import_gguf,
+            import::delete_directory,
+            import::import_gguf,
             cli::config_get,
             cli::config_set,
             cli::config_list,
-            cli::check_for_cli_update,
-            cli::install_geniex,
-            cli::update_geniex,
+            cli_update::check_for_cli_update,
+            cli_update::update_geniex,
+            logs::get_server_logs,
+            logs::clear_server_logs,
             // System
             system::get_system_memory,
             // Database
@@ -81,10 +80,11 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 let state = window.state::<commands::AppState>();
-                let pid = {
-                    let mut proc = state.server_process.lock().unwrap();
-                    proc.take()
-                };
+                let pid = state
+                    .server_process
+                    .lock()
+                    .ok()
+                    .and_then(|mut proc| proc.take());
                 if let Some(pid) = pid {
                     server::kill_process_sync(pid);
                 }

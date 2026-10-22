@@ -1,5 +1,12 @@
-import { Button } from "@fluentui/react-components";
-import "./ConfirmDialog.css";
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+} from "@fluentui/react-components";
 
 interface ConfirmDialogProps {
   title: string;
@@ -9,7 +16,7 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-/** Simple modal confirmation dialog (overlay + card). */
+/** Modal confirmation dialog. Rendered by the caller only while it should be shown. */
 export function ConfirmDialog({
   title,
   message,
@@ -18,34 +25,26 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: overlay dismiss target
-    <div
-      className="confirm-overlay"
-      role="presentation"
-      onClick={onCancel}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") onCancel();
+    <Dialog
+      open
+      onOpenChange={(_, data) => {
+        if (!data.open) onCancel();
       }}
     >
-      <div
-        className="lx-card confirm-card"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-      >
-        <div className="lx-card-title confirm-title">{title}</div>
-        <p className="confirm-message">{message}</p>
-        <div className="confirm-actions">
-          <Button appearance="secondary" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button appearance="primary" onClick={onConfirm}>
-            {confirmLabel}
-          </Button>
-        </div>
-      </div>
-    </div>
+      <DialogSurface>
+        <DialogBody>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogContent>{message}</DialogContent>
+          <DialogActions>
+            <Button appearance="secondary" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button appearance="primary" onClick={onConfirm}>
+              {confirmLabel}
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
   );
 }

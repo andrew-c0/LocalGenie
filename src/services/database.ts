@@ -102,12 +102,7 @@ export async function getPreference<T = string>(key: string): Promise<T | null> 
   const raw: string | null = await invoke("get_preference", { key });
   if (raw === null) return null;
 
-  // The Rust side returns the raw string; we infer the type from context.
-  // Try to parse as number, then boolean, then JSON, then return as string.
-  const num = Number(raw);
-  if (!Number.isNaN(num) && raw.trim() !== "") return num as T;
-  if (raw === "true") return true as T;
-  if (raw === "false") return false as T;
+  // Values are stored as JSON. Rows written before that are plain text, so fall back to the raw string.
   try {
     return JSON.parse(raw) as T;
   } catch {
@@ -115,9 +110,9 @@ export async function getPreference<T = string>(key: string): Promise<T | null> 
   }
 }
 
+/** Store a preference as JSON, so `getPreference` returns the same type it was given. */
 export async function setPreference(key: string, value: unknown, type = "string"): Promise<void> {
-  const strValue = typeof value === "string" ? value : JSON.stringify(value);
-  await invoke("set_preference", { key, value: strValue, prefType: type });
+  await invoke("set_preference", { key, value: JSON.stringify(value), prefType: type });
 }
 
 // ─── Downloaded model metadata ─────────────────────────────────────
@@ -144,7 +139,7 @@ export async function upsertDownloadedModel(
   repoUrl?: string | null,
   modelCard?: string | null,
 ): Promise<void> {
-  const params: any = { name, precision, contextSize, paramCount };
+  const params: Record<string, unknown> = { name, precision, contextSize, paramCount };
   if (repoUrl !== undefined) params.repoUrl = repoUrl;
   if (modelCard !== undefined) params.modelCard = modelCard;
   await invoke("upsert_downloaded_model", params);

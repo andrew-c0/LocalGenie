@@ -1,4 +1,5 @@
 import React from "react";
+import { ErrorFallback } from "./ErrorFallback";
 
 interface Props {
   children: React.ReactNode;
@@ -27,16 +28,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="error-boundary">
-          <div className="error-boundary-icon">!</div>
-          <h2 className="error-boundary-title">Something went wrong</h2>
-          <p className="error-boundary-message">
-            {this.state.error?.message ?? "An unexpected error occurred."}
-          </p>
-          <button type="button" className="error-boundary-retry" onClick={this.handleReset}>
-            Try Again
-          </button>
-        </div>
+        <ErrorFallback
+          message={this.state.error?.message ?? "An unexpected error occurred."}
+          onReset={this.handleReset}
+        />
       );
     }
     return this.props.children;

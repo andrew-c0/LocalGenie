@@ -1,9 +1,13 @@
 pub mod chat;
 pub mod chat_helpers;
 pub mod cli;
+pub mod cli_update;
 pub mod constants;
 pub mod database;
 pub mod download;
+pub mod hub;
+pub mod import;
+pub mod logs;
 pub mod models;
 pub mod server;
 pub mod system;
@@ -18,16 +22,19 @@ pub struct AppState {
     /// `reqwest::Client` manages a connection pool internally — reusing it
     /// avoids allocating a new pool and TCP connections per request.
     pub http_client: reqwest::Client,
+    /// Recent `geniex serve` output for the Logs page.
+    pub server_logs: Mutex<logs::LogBuffer>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
             server_process: Mutex::new(None),
+            server_logs: Mutex::new(logs::LogBuffer::default()),
             http_client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(constants::HTTP_TIMEOUT_SECS))
                 .build()
-                .expect("Failed to create HTTP client"),
+                .unwrap_or_else(|_| reqwest::Client::new()),
         }
     }
 }

@@ -1,6 +1,19 @@
-﻿import { Button, Spinner } from "@fluentui/react-components";
-import { SearchRegular } from "@fluentui/react-icons";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
+import {
+  Button,
+  Caption1,
+  Card,
+  CardHeader,
+  makeStyles,
+  ProgressBar,
+  SearchBox,
+  Spinner,
+  Tab,
+  TabList,
+  Text,
+  tokens,
+} from "@fluentui/react-components";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import HubModelBrowser from "../components/models/HubModelBrowser";
 import { ChipRow } from "../components/ui/ChipRow/ChipRow";
@@ -12,25 +25,70 @@ import {
   type ModelCardData,
 } from "../components/ui/ModelCard/ModelCard";
 import { PageHeader } from "../components/ui/PageHeader/PageHeader";
-import { ProgressBar, StateBlock } from "../components/ui/primitives";
+import { StateBlock } from "../components/ui/StateBlock/StateBlock";
 import * as db from "../services/database";
 import * as geniex from "../services/geniex";
 import * as hub from "../services/hubModels";
-import { useHubBrowseStore } from "../stores/hubBrowseStore";
+import { isDownloadActive, useDownloadStore } from "../stores/downloadStore";
 import { useModelStore } from "../stores/modelStore";
+import { runWithConcurrency } from "../utils/async";
 
-/** Browser page for locally installed models (list + grid variants). */
-export default function LocalModelsBrowserPage() {
+/** Parallel GGUF tree lookups for search results (Hugging Face rate-limits bursts). */
+const GGUF_LOOKUP_CONCURRENCY = 4;
+
+const useStyles = makeStyles({
+  page: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    padding: `0 ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
+  },
+  inner: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+    maxWidth: "1200px",
+    margin: "0 auto",
+  },
+  toolbar: {
+    display: "flex",
+    gap: tokens.spacingHorizontalS,
+    alignItems: "center",
+  },
+  search: {
+    flex: 1,
+    minWidth: 0,
+  },
+  downloads: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+    gap: tokens.spacingHorizontalM,
+  },
+});
+
+/** Browser page for locally installed models, plus Hugging Face search. */
+/** Library tabs; each is its own route (`/models`, `/models/browse`). */
+type LibraryTab = "local" | "all";
+
+export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
+  const styles = useStyles();
   const models = useModelStore((s) => s.models);
   const searchResults = useModelStore((s) => s.searchResults);
   const isSearching = useModelStore((s) => s.isSearching);
   const setSearchResults = useModelStore((s) => s.setSearchResults);
   const setIsSearching = useModelStore((s) => s.setIsSearching);
-  const downloads = useModelStore((s) => s.downloads);
+  const downloads = useDownloadStore((s) => s.downloads);
+  const activeDownloads = useMemo(
+    () => downloads.filter((d) => isDownloadActive(d.status)),
+    [downloads],
+  );
+  const activeIds = useMemo(() => new Set(activeDownloads.map((d) => d.id)), [activeDownloads]);
   const serverStatus = useModelStore((s) => s.serverStatus);
-
-  const activeTab = useHubBrowseStore((s) => s.activeTab);
-  const setActiveTab = useHubBrowseStore((s) => s.setActiveTab);
 
   const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
   const [query, setQuery] = useState("");
@@ -39,6 +97,9 @@ export default function LocalModelsBrowserPage() {
   const [downloadedMeta, setDownloadedMeta] = useState<Map<string, db.DbDownloadedModel>>(
     new Map(),
   );
+  const [ggufCache, setGgufCache] = useState<Map<string, GGUFFileOption[]>>(new Map());
+  /** Repo ids with a GGUF lookup queued or running, so re-renders never request them twice. */
+  const ggufPending = useRef(new Set<string>());
 
   // Refresh local model list + DB meta on mount so deleted models disappear.
   useEffect(() => {
@@ -71,7 +132,6 @@ export default function LocalModelsBrowserPage() {
   }, [query, setIsSearching, setSearchResults]);
 
   /** Lazily fetch the GGUF file list for a search result card. */
-  const [ggufCache, setGgufCache] = useState<Map<string, GGUFFileOption[]>>(new Map());
   const ensureGGUF = useCallback(
     async (repoId: string): Promise<GGUFFileOption[]> => {
       const cached = ggufCache.get(repoId);
@@ -123,15 +183,23 @@ export default function LocalModelsBrowserPage() {
 
   // When search results appear, fetch the GGUF file list for each so the
   // cards can show the variant picker. Best-effort — failures just leave the
-  // card with the generic "Download" button.
+  // card with the generic "Details" button. At most GGUF_LOOKUP_CONCURRENCY run at once.
   useEffect(() => {
-    if (searchResults.length === 0) return;
     const installedNames = new Set(models.map((m) => m.name));
-    for (const r of searchResults) {
-      if (installedNames.has(r.id)) continue;
-      if (ggufCache.has(r.id)) continue;
-      void ensureGGUF(r.id);
-    }
+    const pending = searchResults
+      .map((r) => r.id)
+      .filter(
+        (id) => !installedNames.has(id) && !ggufCache.has(id) && !ggufPending.current.has(id),
+      );
+    if (pending.length === 0) return;
+    for (const id of pending) ggufPending.current.add(id);
+    void runWithConcurrency(pending, GGUF_LOOKUP_CONCURRENCY, async (id) => {
+      try {
+        await ensureGGUF(id);
+      } finally {
+        ggufPending.current.delete(id);
+      }
+    });
   }, [searchResults, models, ggufCache, ensureGGUF]);
 
   /** Normalized card model combining installed + search results. */
@@ -167,9 +235,13 @@ export default function LocalModelsBrowserPage() {
     return list;
   }, [models, searchResults, ggufCache, downloadedMeta]);
 
+  const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
+    navigate(data.value === "all" ? "/models/browse" : "/models");
+  };
+
   return (
-    <div className="lx-page">
-      <div className="lx-page-inner">
+    <div className={styles.page}>
+      <div className={styles.inner}>
         <PageHeader
           eyebrow="● MODEL LIBRARY"
           title="Models"
@@ -177,6 +249,7 @@ export default function LocalModelsBrowserPage() {
           actions={
             <Button
               appearance="secondary"
+              size="small"
               onClick={() => geniex.cleanModels().catch((err: Error) => setError(String(err)))}
             >
               Clean Cache
@@ -186,71 +259,33 @@ export default function LocalModelsBrowserPage() {
 
         {error && <ErrorBanner message={error} />}
 
-        {/* Tab selector: Local vs. Hugging Face (all) */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-          <button
-            type="button"
-            style={{
-              flex: 1,
-              padding: 6,
-              border:
-                activeTab === "local"
-                  ? "1px solid var(--lx-text-accent)"
-                  : "1px solid var(--lx-border)",
-              borderRadius: 4,
-              background: activeTab === "local" ? "var(--lx-bg-subtle)" : "transparent",
-              color: activeTab === "local" ? "var(--lx-text)" : "var(--lx-text-muted)",
-              cursor: "pointer",
-              fontWeight: activeTab === "local" ? "500" : "400",
-            }}
-            onClick={() => setActiveTab("local")}
-          >
-            Local
-          </button>
-          <button
-            type="button"
-            style={{
-              flex: 1,
-              padding: 6,
-              border:
-                activeTab === "all"
-                  ? "1px solid var(--lx-text-accent)"
-                  : "1px solid var(--lx-border)",
-              borderRadius: 4,
-              background: activeTab === "all" ? "var(--lx-bg-subtle)" : "transparent",
-              color: activeTab === "all" ? "var(--lx-text)" : "var(--lx-text-muted)",
-              cursor: "pointer",
-              fontWeight: activeTab === "all" ? "500" : "400",
-            }}
-            onClick={() => setActiveTab("all")}
-          >
-            Hugging Face
-          </button>
-        </div>
+        <TabList selectedValue={tab} onTabSelect={handleTabSelect}>
+          <Tab value="local">Local</Tab>
+          <Tab value="all">Hugging Face</Tab>
+        </TabList>
 
-        {activeTab === "local" ? (
-          <div>
-            <div className="lx-model-toolbar">
-              <div className="lx-search">
-                <SearchRegular style={{ color: "var(--lx-text-muted)" }} />
-                <input
-                  placeholder="Search models, quantized weights, architectures…"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSearch();
-                  }}
-                  aria-label="Search models"
-                />
-                <Button
-                  size="small"
-                  appearance="primary"
-                  onClick={handleSearch}
-                  disabled={isSearching || !query.trim()}
-                >
-                  {isSearching ? <Spinner size="tiny" /> : "Search"}
-                </Button>
-              </div>
+        {tab === "local" ? (
+          <>
+            <div className={styles.toolbar}>
+              <SearchBox
+                className={styles.search}
+                placeholder="Search models, quantized weights, architectures…"
+                aria-label="Search models"
+                value={query}
+                onChange={(_, data) => setQuery(data.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSearch();
+                }}
+              />
+              <Button
+                appearance="primary"
+                size="small"
+                onClick={handleSearch}
+                disabled={isSearching || !query.trim()}
+                icon={isSearching ? <Spinner size="tiny" /> : undefined}
+              >
+                Search
+              </Button>
             </div>
 
             {searchResults.length > 0 && (
@@ -262,26 +297,27 @@ export default function LocalModelsBrowserPage() {
               />
             )}
 
-            {/* -- Active downloads -- */}
-            {downloads.map((d) => (
-              <div
-                key={d.model}
-                className="lx-card"
-                style={{ display: "flex", flexDirection: "column", gap: 6 }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
-                  <span className="lx-mono">{d.model}</span>
-                  <span style={{ color: "var(--lx-text-muted)" }}>{d.message}</span>
-                </div>
-                <ProgressBar value={60} />
+            {activeDownloads.length > 0 && (
+              <div className={styles.downloads}>
+                {activeDownloads.map((d) => (
+                  <Card key={d.id} size="small">
+                    <CardHeader
+                      header={<Text font="monospace">{d.label}</Text>}
+                      description={<Caption1>{d.importingProgress ?? d.status}</Caption1>}
+                    />
+                    <ProgressBar
+                      aria-label={`Downloading ${d.label}`}
+                      value={d.total ? d.received / d.total : undefined}
+                    />
+                  </Card>
+                ))}
               </div>
-            ))}
+            )}
 
-            {/* -- Model cards -- */}
             {cards.length === 0 ? (
               <StateBlock icon="📦" message="No models found. Search Hugging Face to pull one." />
             ) : (
-              <div className="lx-model-grid">
+              <div className={styles.grid}>
                 {cards.map((m) => (
                   <ModelCard
                     key={m.name}
@@ -289,12 +325,12 @@ export default function LocalModelsBrowserPage() {
                     isLoaded={serverStatus.models.some(
                       (lm) => lm === m.name || lm.startsWith(`${m.name}:`),
                     )}
-                    isDownloading={downloads.some((d) => d.model === m.name)}
+                    isDownloading={activeIds.has(m.name)}
                     onOpenSelector={openSelector}
                     onRemove={setConfirmRemove}
                     isLocal={m.installed}
                     onDetails={(name, isLocal) =>
-                      navigate("/models/" + encodeURIComponent(name), {
+                      navigate(`/models/${encodeURIComponent(name)}`, {
                         state: { isLocal },
                       })
                     }
@@ -302,12 +338,11 @@ export default function LocalModelsBrowserPage() {
                 ))}
               </div>
             )}
-          </div>
+          </>
         ) : (
-          <HubModelBrowser area="all" downloading={new Set(downloads.map((d) => d.model))} />
+          <HubModelBrowser area="all" downloading={activeIds} />
         )}
 
-        {/* -- Remove confirmation -- */}
         {confirmRemove && (
           <ConfirmDialog
             title="Remove Model"

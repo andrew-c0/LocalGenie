@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import type {
-  DownloadProgress,
   GenerationSettings,
   ModelInfo,
   SearchModel,
@@ -22,7 +21,6 @@ interface ModelState {
   models: ModelInfo[];
   serverStatus: ServerStatus;
   serverPort: number;
-  downloads: DownloadProgress[];
   searchResults: SearchModel[];
   isSearching: boolean;
   /** The model currently loaded on the server — single source of truth. */
@@ -31,6 +29,8 @@ interface ModelState {
   updateInfo: UpdateInfo | null;
   /** Compute target used when starting the GenieX server. */
   compute: ComputeChoice;
+  /** Compute target the running server was started with; null when unknown or stopped. */
+  serverCompute: ComputeChoice | null;
   /** Whether the header model-selector popover is open. */
   selectorOpen: boolean;
 
@@ -39,12 +39,11 @@ interface ModelState {
   setServerStatus: (status: ServerStatus) => void;
   setServerPort: (port: number) => void;
   setActiveModel: (modelId: string | null) => void;
-  addDownload: (progress: DownloadProgress) => void;
-  removeDownload: (model: string) => void;
   setSearchResults: (results: SearchModel[]) => void;
   setIsSearching: (v: boolean) => void;
   setUpdateInfo: (info: UpdateInfo | null) => void;
   setCompute: (c: ComputeChoice) => void;
+  setServerCompute: (c: ComputeChoice | null) => void;
   setSelectorOpen: (open: boolean) => void;
 }
 
@@ -53,12 +52,12 @@ export const useModelStore = create<ModelState>((set) => ({
   models: [],
   serverStatus: { running: false, port: DEFAULT_PORT, models: [] },
   serverPort: DEFAULT_PORT,
-  downloads: [],
   searchResults: [],
   isSearching: false,
   activeModelId: null,
   updateInfo: null,
   compute: DEFAULT_COMPUTE,
+  serverCompute: null,
   selectorOpen: false,
 
   setCliInstalled: (v) => set({ cliInstalled: v }),
@@ -84,18 +83,11 @@ export const useModelStore = create<ModelState>((set) => ({
       serverStatus: { ...state.serverStatus, port },
     })),
   setActiveModel: (modelId) => set({ activeModelId: modelId }),
-  addDownload: (progress) =>
-    set((state) => ({
-      downloads: [...state.downloads.filter((d) => d.model !== progress.model), progress],
-    })),
-  removeDownload: (model) =>
-    set((state) => ({
-      downloads: state.downloads.filter((d) => d.model !== model),
-    })),
   setSearchResults: (results) => set({ searchResults: results }),
   setIsSearching: (v) => set({ isSearching: v }),
   setUpdateInfo: (info) => set({ updateInfo: info }),
   setCompute: (compute) => set({ compute }),
+  setServerCompute: (c) => set({ serverCompute: c }),
 }));
 
 /** Default generation settings per model. */

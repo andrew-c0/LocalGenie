@@ -1,0 +1,114 @@
+use sea_orm::DatabaseConnection;
+use tauri::{AppHandle, Emitter, State};
+
+use super::download::{download_dir, ensure_inside_downloads, validate_file_name};
+use super::{database, AppState};
+
+/// Delete a directory or file inside the Downloads folder (after a model import).
+#[tauri::command]
+pub async fn delete_directory(path: String) -> Result<(), String> {
+    let resolved = ensure_inside_downloads(&path)?;
+    let md = tokio::fs::metadata(&resolved)
+        .await
+        .map_err(|e| format!("Failed to read {path}: {e}"))?;
+    if md.is_dir() {
+        tokio::fs::remove_dir_all(&resolved)
+            .await
+            .map_err(|e| format!("Failed to delete directory {path}: {e}"))
+    } else {
+        tokio::fs::remove_file(&resolved)
+            .await
+            .map_err(|e| format!("Failed to delete file {path}: {e}"))
+    }
+}
+
+/// Import an already-downloaded GGUF file into the GenieX model cache.
+///
+/// The file is moved into `<Downloads>/<base-model>/` and registered with
+/// `geniex pull <repo>:<precision> --model-hub localfs --local-path <dir>`.
+/// The model card is fetched best-effort; a missing README does not fail the import.
+#[tauri::command]
+pub async fn import_gguf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    db: State<'_, DatabaseConnection>,
+    local_path: String,
+    repo_id: String,
+    filename: String,
+    precision: String,
+) -> Result<String, String> {
+    // Extract base model name from repo_id (e.g., "qualcomm/Qwen3-4B-Instruct" -> "Qwen3-4B-Instruct")
+    let base_model_name = repo_id.split('/').next_back().unwrap_or(&repo_id);
+    validate_file_name(base_model_name)?;
+    validate_file_name(&filename)?;
+
+    let source = ensure_inside_downloads(&local_path)?;
+    let downloads_dir = download_dir().ok_or("Could not resolve downloads directory")?;
+    let target_dir = downloads_dir.join(base_model_name);
+
+    tokio::fs::create_dir_all(&target_dir)
+        .await
+        .map_err(|e| format!("Failed to create target directory: {e}"))?;
+
+    let new_path = target_dir.join(&filename);
+    tokio::fs::rename(&source, &new_path)
+        .await
+        .map_err(|e| format!("Failed to move file to base model folder: {e}"))?;
+
+    let _ = app.emit("model-pull-start", serde_json::json!({ "model": repo_id }));
+    let _ = app.emit(
+        "model-pull-progress",
+        serde_json::json!({ "model": repo_id, "message": "Importing into GenieX cache…" }),
+    );
+
+    let exe = super::cli::resolve_geniex_executable();
+    let output = tokio::process::Command::new(&exe)
+        .args([
+            "pull",
+            &format!("{repo_id}:{precision}"),
+            "--model-hub",
+            "localfs",
+            "--local-path",
+            &target_dir.to_string_lossy(),
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| format!("Failed to spawn `geniex pull`: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("geniex pull failed: {stderr}");
+        return Err(format!("`geniex pull` failed: {stderr}"));
+    }
+
+    let _ = app.emit(
+        "model-pull-complete",
+        serde_json::json!({ "model": repo_id }),
+    );
+
+    let repo_url = format!("https://huggingface.co/{repo_id}");
+    let readme_url = format!("https://huggingface.co/{repo_id}/raw/main/README.md");
+    let model_card = match state.http_client.get(&readme_url).send().await {
+        Ok(resp) if resp.status().is_success() => resp.text().await.ok(),
+        _ => None,
+    }
+    .filter(|s| !s.trim().is_empty());
+
+    if let Err(e) = database::upsert_downloaded_model(
+        db,
+        repo_id.clone(),
+        Some(precision.clone()),
+        None,
+        None,
+        Some(repo_url),
+        model_card,
+    )
+    .await
+    {
+        eprintln!("Failed to upsert downloaded model metadata: {e}");
+    }
+
+    Ok(target_dir.to_string_lossy().into_owned())
+}

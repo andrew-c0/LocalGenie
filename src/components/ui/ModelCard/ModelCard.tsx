@@ -1,7 +1,16 @@
-import { Button, Spinner } from "@fluentui/react-components";
+import {
+  Button,
+  Caption1,
+  Card,
+  CardFooter,
+  CardHeader,
+  makeStyles,
+  Spinner,
+  tokens,
+} from "@fluentui/react-components";
 import { ChatRegular, DeleteRegular, InfoRegular } from "@fluentui/react-icons";
 import { formatCount } from "../../../utils/format";
-import { StatusBadge } from "../primitives";
+import { StatusBadge } from "../StatusBadge/StatusBadge";
 
 export interface GGUFFileOption {
   filename: string;
@@ -47,6 +56,27 @@ interface ModelCardProps {
   onDetails?: (name: string, isLocal: boolean) => void;
 }
 
+const useStyles = makeStyles({
+  card: {
+    minWidth: 0,
+  },
+  name: {
+    justifyContent: "flex-start",
+    minWidth: 0,
+    maxWidth: "100%",
+  },
+  meta: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: tokens.spacingHorizontalM,
+  },
+  actions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: tokens.spacingHorizontalS,
+  },
+});
+
 /** Card for a single model — installed or search result. */
 export function ModelCard({
   model,
@@ -57,65 +87,67 @@ export function ModelCard({
   onRemove,
   onDetails,
 }: ModelCardProps) {
+  const styles = useStyles();
   const fmt = (n?: number) => (n == null ? "—" : formatCount(n));
-  const ggufFiles = model.ggufFiles ?? [];
-  const hasGGUF = !model.installed && ggufFiles.length > 0;
+  const openDetails = () => onDetails?.(model.name, isLocal);
+
+  const status = model.badge ? (
+    <StatusBadge tone={model.badge.tone}>{model.badge.label}</StatusBadge>
+  ) : isLoaded ? (
+    <StatusBadge tone="green">Loaded</StatusBadge>
+  ) : model.installed ? (
+    <StatusBadge tone="blue">Installed</StatusBadge>
+  ) : model.gated ? (
+    <StatusBadge>Gated</StatusBadge>
+  ) : (
+    <StatusBadge>Available</StatusBadge>
+  );
 
   return (
-    <div className="lx-model-card">
-      <div className="model-card-head">
-        <div
-          className="lx-model-card-name"
-          style={{ cursor: "pointer" }}
-          onClick={() => onDetails?.(model.name, isLocal)}
-        >
-          {model.name}
-        </div>
-        {model.badge ? (
-          <StatusBadge tone={model.badge.tone}>{model.badge.label}</StatusBadge>
-        ) : isLoaded ? (
-          <StatusBadge tone="green">Loaded</StatusBadge>
-        ) : model.installed ? (
-          <StatusBadge tone="blue">Installed</StatusBadge>
-        ) : model.gated ? (
-          <StatusBadge>Gated</StatusBadge>
+    <Card size="small" className={styles.card}>
+      <CardHeader
+        header={
+          <Button appearance="transparent" className={styles.name} onClick={openDetails}>
+            {model.name}
+          </Button>
+        }
+        action={status}
+      />
+
+      <div className={styles.meta}>
+        {model.installed ? (
+          <>
+            <Caption1>Size: {model.size ?? "—"}</Caption1>
+            <Caption1>Source: {model.source ?? "—"}</Caption1>
+            {model.precisions && model.precisions.length > 0 && (
+              <Caption1>{model.precisions.join(" / ")}</Caption1>
+            )}
+            {model.downloadedPrecision && (
+              <Caption1>
+                Precision: <strong>{model.downloadedPrecision}</strong>
+              </Caption1>
+            )}
+            {model.contextSize && (
+              <Caption1>
+                Context: <strong>{model.contextSize.toLocaleString()}</strong>
+              </Caption1>
+            )}
+            {model.paramCount && (
+              <Caption1>
+                Params: <strong>{(model.paramCount / 1e9).toFixed(1)}B</strong>
+              </Caption1>
+            )}
+          </>
         ) : (
-          <StatusBadge>Available</StatusBadge>
+          <>
+            <Caption1>⬇ {fmt(model.downloads)}</Caption1>
+            <Caption1>❤ {fmt(model.likes)}</Caption1>
+            {model.pipelineTag && <Caption1>{model.pipelineTag}</Caption1>}
+          </>
         )}
       </div>
 
-      {model.installed ? (
-        <div className="lx-model-card-meta">
-          <span>Size: {model.size ?? "—"}</span>
-          <span>Source: {model.source ?? "—"}</span>
-          {model.precisions && model.precisions.length > 0 && (
-            <span>{model.precisions.join(" / ")}</span>
-          )}
-          {model.downloadedPrecision && (
-            <span>
-              Precision: <strong>{model.downloadedPrecision}</strong>
-            </span>
-          )}
-          {model.contextSize && (
-            <span>
-              Context: <strong>{model.contextSize.toLocaleString()}</strong>
-            </span>
-          )}
-          {model.paramCount && (
-            <span>
-              Params: <strong>{(model.paramCount / 1e9).toFixed(1)}B</strong>
-            </span>
-          )}
-        </div>
-      ) : (
-        <div className="lx-model-card-meta">
-          <span>⬇ {fmt(model.downloads)}</span>
-          <span>❤ {fmt(model.likes)}</span>
-          {model.pipelineTag && <span>{model.pipelineTag}</span>}
-        </div>
-      )}
-
-      <div className="lx-model-card-actions">
+      <CardFooter className={styles.actions}>
         {isDownloading ? (
           <Button size="small" disabled icon={<Spinner size="tiny" />}>
             Pulling…
@@ -135,8 +167,7 @@ export function ModelCard({
               size="small"
               appearance="secondary"
               icon={<InfoRegular />}
-              title="View model details"
-              onClick={() => onDetails?.(model.name, isLocal)}
+              onClick={openDetails}
             >
               Details
             </Button>
@@ -146,32 +177,17 @@ export function ModelCard({
                 appearance="secondary"
                 icon={<DeleteRegular />}
                 title="Remove model"
+                aria-label={`Remove ${model.name}`}
                 onClick={() => onRemove(model.name)}
               />
             )}
           </>
-        ) : hasGGUF ? (
-          <div className="lx-gguf-picker" style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <Button
-              size="small"
-              appearance="primary"
-              icon={<InfoRegular />}
-              onClick={() => onDetails?.(model.name, isLocal)}
-            >
-              Details
-            </Button>
-          </div>
         ) : (
-          <Button
-            size="small"
-            appearance="primary"
-            icon={<InfoRegular />}
-            onClick={() => onDetails?.(model.name, isLocal)}
-          >
+          <Button size="small" appearance="primary" icon={<InfoRegular />} onClick={openDetails}>
             Details
           </Button>
         )}
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
 }

@@ -1,4 +1,16 @@
-import { Button, Spinner } from "@fluentui/react-components";
+import type { DropdownProps } from "@fluentui/react-components";
+import {
+  Button,
+  Caption1,
+  Dropdown,
+  makeStyles,
+  Option,
+  SearchBox,
+  Spinner,
+  Switch,
+  ToggleButton,
+  tokens,
+} from "@fluentui/react-components";
 import {
   ArrowSortRegular,
   ChevronDownRegular,
@@ -10,6 +22,7 @@ import { useNavigate } from "react-router-dom";
 import type { AssetCompat } from "../../services/hubApi";
 import {
   type HubFilter,
+  type HubSort,
   LIBRARY_CHIPS,
   LICENSE_CHIPS,
   modelTagChips,
@@ -19,7 +32,7 @@ import {
 import { useHubBrowseStore } from "../../stores/hubBrowseStore";
 import { ErrorBanner } from "../ui/ErrorBanner/ErrorBanner";
 import { ModelCard, type ModelCardData } from "../ui/ModelCard/ModelCard";
-import { StateBlock } from "../ui/primitives";
+import { StateBlock } from "../ui/StateBlock/StateBlock";
 
 /** Badge for a Qualcomm tile based on learned compatibility info. */
 function compatBadge(
@@ -33,7 +46,7 @@ function compatBadge(
   return { tone: "default", label: "Check assets" };
 }
 
-const SORT_OPTIONS: [string, string][] = [
+const SORT_OPTIONS: [HubSort, string][] = [
   ["downloads", "Most downloads"],
   ["likes", "Most likes"],
   ["lastModified", "Recently updated"],
@@ -48,6 +61,55 @@ const CHIP_GROUPS: [string, readonly string[], HubFilter["type"]][] = [
   ["Quantization", QUANTIZATION_CHIPS, "quantization"],
 ];
 
+const useStyles = makeStyles({
+  root: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+  },
+  toolbar: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+  },
+  search: {
+    flex: 1,
+    minWidth: "240px",
+  },
+  sort: {
+    minWidth: "180px",
+  },
+  filters: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+  },
+  group: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    border: "none",
+    margin: 0,
+    padding: 0,
+    minWidth: 0,
+  },
+  groupLabel: {
+    minWidth: "80px",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+    gap: tokens.spacingHorizontalM,
+  },
+  center: {
+    display: "flex",
+    justifyContent: "center",
+    padding: `${tokens.spacingVerticalS} 0`,
+  },
+});
+
 interface Props {
   /** Which hub area to browse — controlled by the parent page tabs. */
   area: "qualcomm" | "all";
@@ -56,6 +118,7 @@ interface Props {
 
 /** Hugging Face browse area with sorting, filter chips and cursor pagination. */
 export default function HubModelBrowser({ area, downloading }: Props) {
+  const styles = useStyles();
   const s = useHubBrowseStore();
   const navigate = useNavigate();
   const compatibleNames = useHubBrowseStore((st) => st.compatibleNames);
@@ -73,41 +136,46 @@ export default function HubModelBrowser({ area, downloading }: Props) {
   }, [area, storeArea, setArea]);
 
   const activeFilterCount = s.filters.length;
+  const sortLabel = SORT_OPTIONS.find(([value]) => value === s.sort)?.[1] ?? "";
+
+  const handleSortSelect: DropdownProps["onOptionSelect"] = (_, data) => {
+    const next = SORT_OPTIONS.find(([value]) => value === data.optionValue);
+    if (next) s.setSort(next[0]);
+  };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* Search + sort */}
-      <div className="lx-model-toolbar">
-        <div className="lx-search">
-          <input
-            placeholder={
-              s.area === "qualcomm"
-                ? "Search Qualcomm AI Hub models…"
-                : "Search all Hugging Face models…"
-            }
-            value={s.search}
-            onChange={(e) => s.setSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void s.refresh();
-            }}
-            aria-label="Search Hugging Face models"
-          />
-          <Button size="small" appearance="primary" onClick={() => void s.refresh()}>
-            {s.isLoading ? <Spinner size="tiny" /> : "Search"}
-          </Button>
-        </div>
-        <select
-          className="lx-select"
-          value={s.sort}
-          onChange={(e) => s.setSort(e.target.value as never)}
+    <div className={styles.root}>
+      <div className={styles.toolbar}>
+        <SearchBox
+          className={styles.search}
+          placeholder={
+            area === "qualcomm"
+              ? "Search Qualcomm AI Hub models…"
+              : "Search all Hugging Face models…"
+          }
+          aria-label="Search Hugging Face models"
+          value={s.search}
+          onChange={(_, data) => s.setSearch(data.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void s.refresh();
+          }}
+        />
+        <Button appearance="primary" size="small" onClick={() => void s.refresh()}>
+          {s.isLoading ? <Spinner size="tiny" /> : "Search"}
+        </Button>
+        <Dropdown
+          className={styles.sort}
           aria-label="Sort models"
+          value={sortLabel}
+          selectedOptions={[s.sort]}
+          onOptionSelect={handleSortSelect}
         >
           {SORT_OPTIONS.map(([value, label]) => (
-            <option key={value} value={value}>
+            <Option key={value} value={value}>
               {label}
-            </option>
+            </Option>
           ))}
-        </select>
+        </Dropdown>
         <Button
           size="small"
           appearance="secondary"
@@ -118,80 +186,68 @@ export default function HubModelBrowser({ area, downloading }: Props) {
           {s.ascending ? "Asc" : "Desc"}
         </Button>
         {area === "all" && (
-          <button
-            type="button"
-            className={`lx-chip${s.ggufOnly ? " active" : ""}`}
-            onClick={() => s.setGgufOnly(!s.ggufOnly)}
-            aria-pressed={s.ggufOnly}
+          <Switch
+            label="GGUF only"
+            checked={s.ggufOnly}
+            onChange={(_, data) => s.setGgufOnly(data.checked)}
             title="Show only models with GGUF weights (runnable by GenieX)"
-          >
-            GGUF only
-          </button>
+          />
         )}
       </div>
 
-      {/* Filter chips (collapsible, collapsed by default) */}
-      <button
-        type="button"
-        className="lx-files-toggle"
+      <Button
+        appearance="subtle"
+        size="small"
+        icon={filtersOpen ? <ChevronDownRegular /> : <ChevronRightRegular />}
         aria-expanded={filtersOpen}
         onClick={() => setFiltersOpen((v) => !v)}
-        style={{ alignSelf: "flex-start" }}
+        className={styles.toolbar}
       >
-        {filtersOpen ? <ChevronDownRegular /> : <ChevronRightRegular />}
-        <span style={{ fontSize: 12.5, fontWeight: 600 }}>
-          Filters{activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ""}
-        </span>
-      </button>
+        Filters{activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ""}
+      </Button>
+
       {filtersOpen && (
-        <>
+        <div className={styles.filters}>
           {CHIP_GROUPS.map(([label, values, type]) => (
-            <fieldset
-              key={type}
-              className="lx-chiprow"
-              style={{ border: "none", padding: 0, margin: 0 }}
-            >
-              <legend className="lx-visually-hidden">{label} filters</legend>
-              <span style={{ fontSize: 12, color: "var(--lx-text-muted)", minWidth: 80 }}>
-                {label}
-              </span>
-              {values.map((value) => {
-                const active = s.filters.some((f) => f.type === type && f.value === value);
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    className={`lx-chip${active ? " active" : ""}`}
-                    onClick={() => s.toggleFilter({ type, value })}
-                  >
-                    {value}
-                  </button>
-                );
-              })}
+            <fieldset key={type} className={styles.group} aria-label={`${label} filters`}>
+              <Caption1 className={styles.groupLabel}>{label}</Caption1>
+              {values.map((value) => (
+                <ToggleButton
+                  key={value}
+                  size="small"
+                  checked={s.filters.some((f) => f.type === type && f.value === value)}
+                  onClick={() => s.toggleFilter({ type, value })}
+                >
+                  {value}
+                </ToggleButton>
+              ))}
             </fieldset>
           ))}
 
           {activeFilterCount > 0 && (
-            <div className="lx-chiprow">
-              <button type="button" className="lx-chip" onClick={s.clearFilters}>
-                <DismissRegular /> Clear {activeFilterCount} filter(s)
-              </button>
+            <div>
+              <Button
+                size="small"
+                appearance="subtle"
+                icon={<DismissRegular />}
+                onClick={s.clearFilters}
+              >
+                Clear {activeFilterCount} filter(s)
+              </Button>
             </div>
           )}
-        </>
+        </div>
       )}
 
       {s.error && <ErrorBanner message={s.error} />}
 
-      {/* Results */}
       {s.isLoading ? (
         <StateBlock icon="⏳" message="Loading models from Hugging Face…" />
       ) : s.models.length === 0 ? (
         <StateBlock icon="🔍" message="No models match the current filters." />
       ) : (
-        <div className="lx-model-grid">
+        <div className={styles.grid}>
           {s.models.map((m) => {
-            const isDownloading = downloading.has(m.id);
             const openDetail = () =>
               navigate(`/models/${encodeURIComponent(m.id)}`, { state: { isLocal: false } });
             const cardData: ModelCardData = {
@@ -202,10 +258,7 @@ export default function HubModelBrowser({ area, downloading }: Props) {
               pipelineTag: modelTagChips(m)[0],
               badge:
                 area === "qualcomm" && compatibleNames
-                  ? (() => {
-                      const b = compatBadge(assetCompat[m.id], compatibleNames.has(m.id));
-                      return { tone: b.tone, label: b.label };
-                    })()
+                  ? compatBadge(assetCompat[m.id], compatibleNames.has(m.id))
                   : undefined,
               gated: m.gated ? true : undefined,
             };
@@ -215,7 +268,7 @@ export default function HubModelBrowser({ area, downloading }: Props) {
                 model={cardData}
                 isLocal={false}
                 isLoaded={false}
-                isDownloading={isDownloading}
+                isDownloading={downloading.has(m.id)}
                 onOpenSelector={openDetail}
                 onDetails={(name, isLocal) =>
                   navigate(`/models/${encodeURIComponent(name)}`, { state: { isLocal } })
@@ -226,13 +279,13 @@ export default function HubModelBrowser({ area, downloading }: Props) {
         </div>
       )}
 
-      {/* Pagination */}
       {s.nextCursor && !s.isLoading && (
-        <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>
+        <div className={styles.center}>
           <Button
             appearance="secondary"
-            onClick={() => void s.fetchMore()}
+            size="small"
             disabled={s.isFetchingMore}
+            onClick={() => void s.fetchMore()}
           >
             {s.isFetchingMore ? <Spinner size="tiny" /> : "Load more"}
           </Button>

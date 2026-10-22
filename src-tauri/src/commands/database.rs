@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use sea_orm::prelude::*;
-use sea_orm::{
-    ColumnTrait, Database, DatabaseBackend, DatabaseConnection, EntityTrait,
-    QueryFilter, QueryOrder, Set, Statement,
-};
 use sea_orm::sea_query::{Expr, OnConflict};
+use sea_orm::{
+    ColumnTrait, Database, DatabaseBackend, DatabaseConnection, EntityTrait, QueryFilter,
+    QueryOrder, Set, Statement, TransactionTrait,
+};
 use sea_orm_migration::MigratorTrait;
 use serde::{Deserialize, Serialize};
 
@@ -69,30 +71,25 @@ pub async fn load_sessions(
             .map_err(|e| e.to_string())?
     };
 
-    // Group messages by session_id
-    let mut msgs_by_session: Vec<(String, Vec<message::Model>)> = session_ids
-        .iter()
-        .map(|id| (id.clone(), Vec::new()))
-        .collect();
+    // Group messages by session_id (messages arrive ordered by created_at).
+    let mut msgs_by_session: HashMap<String, Vec<message::Model>> = HashMap::new();
     for msg in all_messages {
-        if let Some(entry) = msgs_by_session.iter_mut().find(|(id, _)| *id == msg.session_id) {
-            entry.1.push(msg);
-        }
+        msgs_by_session
+            .entry(msg.session_id.clone())
+            .or_default()
+            .push(msg);
     }
 
-    let mut result = Vec::with_capacity(sessions.len());
-    for s in sessions {
-        let messages = msgs_by_session
-            .iter()
-            .find(|(id, _)| *id == s.id)
-            .map(|(_, msgs)| msgs.clone())
-            .unwrap_or_default();
-        result.push(ChatSessionWithMessages {
-            session: s,
-            messages,
-        });
-    }
-    Ok(result)
+    Ok(sessions
+        .into_iter()
+        .map(|s| {
+            let messages = msgs_by_session.remove(&s.id).unwrap_or_default();
+            ChatSessionWithMessages {
+                session: s,
+                messages,
+            }
+        })
+        .collect())
 }
 
 #[tauri::command]
@@ -130,17 +127,18 @@ pub async fn delete_session(
     db: tauri::State<'_, DatabaseConnection>,
     id: String,
 ) -> Result<(), String> {
+    // Messages and the session row go together or not at all.
+    let txn = db.begin().await.map_err(|e| e.to_string())?;
     message::Entity::delete_many()
         .filter(message::Column::SessionId.eq(&id))
-        .exec(&*db)
+        .exec(&txn)
         .await
         .map_err(|e| e.to_string())?;
-
     chat_session::Entity::delete_by_id(&id)
-        .exec(&*db)
+        .exec(&txn)
         .await
         .map_err(|e| e.to_string())?;
-    Ok(())
+    txn.commit().await.map_err(|e| e.to_string())
 }
 
 // ─── Messages ──────────────────────────────────────────────────────
@@ -352,6 +350,6 @@ pub async fn delete_downloaded_model(
 fn now_millis() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .expect("system time before UNIX epoch")
-        .as_millis() as i64
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }

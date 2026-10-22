@@ -1,11 +1,29 @@
-import { BrainCircuitRegular, DesktopRegular, InfoRegular } from "@fluentui/react-icons";
-import { type ReactElement, useState } from "react";
+import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
+import {
+  Caption1,
+  Divider,
+  makeStyles,
+  Tab,
+  TabList,
+  Text,
+  tokens,
+} from "@fluentui/react-components";
+import {
+  BrainCircuitRegular,
+  DesktopRegular,
+  DocumentBulletListRegular,
+  InfoRegular,
+} from "@fluentui/react-icons";
+import type { ReactElement } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import AppSettings from "../components/AppSettings";
 import ModelSettings from "../components/ModelSettings";
-import { StatusBadge } from "../components/ui/primitives";
+import ServerLogsCard from "../components/settings/ServerLogsCard";
+import { PageHeader } from "../components/ui/PageHeader/PageHeader";
+import { StatusBadge } from "../components/ui/StatusBadge/StatusBadge";
 import { useModelStore } from "../stores/modelStore";
 
-type SectionId = "app" | "inference";
+type SectionId = "app" | "inference" | "logs";
 
 const SECTIONS: {
   id: SectionId;
@@ -25,59 +43,125 @@ const SECTIONS: {
     desc: "Model parameters, system prompt",
     icon: <BrainCircuitRegular />,
   },
+  {
+    id: "logs",
+    label: "Logs",
+    desc: "GenieX server output",
+    icon: <DocumentBulletListRegular />,
+  },
 ];
 
-/** Settings page: refined left sub-menu + focused section panel (mirrors Chat layout). */
+const useStyles = makeStyles({
+  page: {
+    display: "flex",
+    flex: 1,
+    minHeight: 0,
+    gap: tokens.spacingHorizontalL,
+    padding: tokens.spacingHorizontalL,
+  },
+  nav: {
+    width: "280px",
+    flexShrink: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+  },
+  navFooter: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalS,
+    marginTop: "auto",
+  },
+  navFooterRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: tokens.spacingHorizontalS,
+  },
+  navFooterText: {
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+  },
+  tabContent: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+  },
+  panel: {
+    flex: 1,
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+    overflowY: "auto",
+  },
+  panelActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+  },
+  panelFooter: {
+    marginTop: "auto",
+  },
+});
+
+/** Settings page: section sub-menu on the left, focused section panel on the right. */
 export default function SettingsPage() {
-  const [section, setSection] = useState<SectionId>("app");
+  const styles = useStyles();
+  const navigate = useNavigate();
+  const { section: sectionParam } = useParams<{ section: string }>();
+  // Unknown sections fall back to the first one.
+  const section: SectionId = SECTIONS.find((s) => s.id === sectionParam)?.id ?? "app";
   const serverStatus = useModelStore((s) => s.serverStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
   const updateInfo = useModelStore((s) => s.updateInfo);
 
   const updateBadge = updateInfo?.update_available ?? false;
+  const current = SECTIONS.find((s) => s.id === section);
+
+  const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
+    const next = SECTIONS.find((s) => s.id === data.value);
+    if (next) navigate(`/settings/${next.id}`);
+  };
 
   return (
-    <div className="lx-settingspage">
-      {/* ── Section sub-menu ──────────────────────── */}
-      <aside className="lx-settings-nav">
-        <div className="lx-settings-nav-head">
-          <div className="lx-settings-nav-title">System Configuration</div>
-          <div className="lx-settings-nav-sub lx-mono">
+    <div className={styles.page}>
+      <aside className={styles.nav}>
+        <div>
+          <Text weight="semibold" size={400}>
+            System Configuration
+          </Text>
+          <Text font="monospace" size={200} block>
             {serverStatus.running ? `runtime :${serverStatus.port}` : "runtime offline"}
-          </div>
+          </Text>
         </div>
 
-        <nav className="lx-settings-nav-list" aria-label="Settings sections">
+        <TabList
+          vertical
+          aria-label="Settings sections"
+          selectedValue={section}
+          onTabSelect={handleTabSelect}
+        >
           {SECTIONS.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              className={`lx-settings-nav-item${section === s.id ? " active" : ""}`}
-              onClick={() => setSection(s.id)}
-              aria-current={section === s.id ? "true" : undefined}
-            >
-              <span className="lx-settings-nav-icon">{s.icon}</span>
-              <span className="lx-settings-nav-text">
-                <span className="lx-settings-nav-label">{s.label}</span>
-                <span className="lx-settings-nav-desc">{s.desc}</span>
+            <Tab key={s.id} value={s.id} icon={s.icon}>
+              <span className={styles.tabContent}>
+                <Text weight="semibold">{s.label}</Text>
+                <Caption1>{s.desc}</Caption1>
               </span>
-              {s.id === "app" && updateBadge && (
-                <span className="lx-settings-nav-badge" title="CLI update available">
-                  !
-                </span>
-              )}
-            </button>
+              {s.id === "app" && updateBadge && <StatusBadge tone="red">!</StatusBadge>}
+            </Tab>
           ))}
-        </nav>
+        </TabList>
 
-        <div className="lx-settings-nav-footer">
-          <div className="lx-settings-nav-footer-row">
-            <InfoRegular style={{ fontSize: 14, color: "var(--lx-text-muted)" }} />
-            <div>
-              <div className="lx-settings-nav-footer-label">Active Model</div>
-              <div className="lx-mono lx-settings-nav-footer-value">
+        <div className={styles.navFooter}>
+          <Divider />
+          <div className={styles.navFooterRow}>
+            <InfoRegular />
+            <div className={styles.navFooterText}>
+              <Caption1>Active Model</Caption1>
+              <Text font="monospace">
                 {activeModelId ? activeModelId.split("/").pop() : "none"}
-              </div>
+              </Text>
             </div>
           </div>
           <StatusBadge tone={serverStatus.running ? "green" : "red"}>
@@ -86,38 +170,34 @@ export default function SettingsPage() {
         </div>
       </aside>
 
-      {/* ── Section panel ─────────────────────────── */}
-      <div className="lx-settings-panel">
-        <div className="lx-settings-panel-head">
-          <div>
-            <span className="lx-page-eyebrow">● SETTINGS</span>
-            <h1 className="lx-page-title" style={{ fontSize: 20 }}>
-              {SECTIONS.find((s) => s.id === section)?.label}
-            </h1>
-          </div>
-          <div className="lx-page-actions">
-            {section === "inference" && (
-              <span className="lx-mono" style={{ fontSize: 11, color: "var(--lx-text-muted)" }}>
-                changes persist per model
-              </span>
-            )}
-            {updateBadge && section === "app" && (
-              <StatusBadge tone="blue">v{updateInfo?.latest_version} available</StatusBadge>
-            )}
-          </div>
-        </div>
+      <section className={styles.panel}>
+        <PageHeader
+          eyebrow="● SETTINGS"
+          title={current?.label}
+          actions={
+            <div className={styles.panelActions}>
+              {section === "inference" && (
+                <Text font="monospace" size={200}>
+                  changes persist per model
+                </Text>
+              )}
+              {updateBadge && section === "app" && (
+                <StatusBadge tone="blue">v{updateInfo?.latest_version} available</StatusBadge>
+              )}
+            </div>
+          }
+        />
 
-        <div className="lx-settings-panel-body">
-          {section === "app" && <AppSettings updateInfo={updateInfo} />}
-          {section === "inference" && <ModelSettings />}
-        </div>
+        {section === "app" && <AppSettings updateInfo={updateInfo} />}
+        {section === "inference" && <ModelSettings />}
+        {section === "logs" && <ServerLogsCard />}
 
-        <div className="lx-settings-panel-footer">
-          <span>
+        <div className={styles.panelFooter}>
+          <Caption1>
             Preferences are stored locally and applied on the next server start where applicable.
-          </span>
+          </Caption1>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

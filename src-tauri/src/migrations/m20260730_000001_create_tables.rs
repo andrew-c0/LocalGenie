@@ -54,11 +54,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Messages::Role).string().not_null())
                     .col(ColumnDef::new(Messages::Content).string().not_null())
                     .col(ColumnDef::new(Messages::ModelId).string())
-                    .col(
-                        ColumnDef::new(Messages::CreatedAt)
-                            .big_integer()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Messages::CreatedAt).big_integer().not_null())
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_messages_session")

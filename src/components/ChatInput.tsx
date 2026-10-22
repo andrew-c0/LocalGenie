@@ -1,12 +1,33 @@
+import { Button, makeStyles, Textarea, tokens } from "@fluentui/react-components";
 import { SendRegular, StopRegular } from "@fluentui/react-icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as db from "../services/database";
 import * as geniex from "../services/geniex";
+import { serverBaseUrl } from "../services/geniex";
 import { useChatStore } from "../stores/chatStore";
 import { defaultSettings, useModelStore } from "../stores/modelStore";
 import type { Message } from "../types";
 
+const useStyles = makeStyles({
+  area: {
+    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL} ${tokens.spacingVerticalM}`,
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  wrapper: {
+    display: "flex",
+    alignItems: "flex-end",
+    gap: tokens.spacingHorizontalS,
+    maxWidth: "840px",
+    margin: "0 auto",
+  },
+  field: {
+    flex: 1,
+    minWidth: 0,
+  },
+});
+
 export default function ChatInput() {
+  const styles = useStyles();
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeSessionId = useChatStore((s) => s.activeSessionId);
@@ -14,6 +35,7 @@ export default function ChatInput() {
   const addMessage = useChatStore((s) => s.addMessage);
   const setStreaming = useChatStore((s) => s.setStreaming);
   const setLastSendTime = useChatStore((s) => s.setLastSendTime);
+  const setActiveStream = useChatStore((s) => s.setActiveStream);
   const serverStatus = useModelStore((s) => s.serverStatus);
   const serverPort = useModelStore((s) => s.serverPort);
   const retryFromMessageId = useChatStore((s) => s.retryFromMessageId);
@@ -27,6 +49,8 @@ export default function ChatInput() {
     ) => {
       setStreaming(true);
       setLastSendTime(Date.now());
+      const streamId = crypto.randomUUID();
+      setActiveStream({ streamId, sessionId });
 
       const rawModelId = useModelStore.getState().activeModelId;
 
@@ -43,10 +67,19 @@ export default function ChatInput() {
         }
 
         // Pass the model name if set, otherwise auto-detect from server
-        const baseUrl = `http://127.0.0.1:${serverPort}`;
-        await geniex.chatCompletion(apiMessages, settings, rawModelId ?? undefined, baseUrl);
+        const baseUrl = serverBaseUrl(serverPort);
+        await geniex.chatCompletion(
+          apiMessages,
+          settings,
+          streamId,
+          rawModelId ?? undefined,
+          baseUrl,
+        );
       } catch (err) {
         console.error("Chat completion failed:", err);
+        // TODO: this error is shown but not saved to the DB, and it is sent back as
+        // context on the next turn. Decide whether errors should be excluded from context
+        // and persisted, so they survive a reload.
         const errorMsg: Message = {
           id: crypto.randomUUID(),
           role: "assistant",
@@ -54,10 +87,11 @@ export default function ChatInput() {
           timestamp: Date.now(),
         };
         addMessage(sessionId, errorMsg);
+        setActiveStream(null);
         setStreaming(false);
       }
     },
-    [addMessage, setStreaming, setLastSendTime, serverPort],
+    [addMessage, setStreaming, setLastSendTime, setActiveStream, serverPort],
   );
 
   /** Handle a normal new-message send. */
@@ -155,14 +189,15 @@ export default function ChatInput() {
   const isDisabled = !text.trim() || isStreaming || !serverStatus.running;
 
   return (
-    <div className="chat-input-area">
-      <div className="chat-input-wrapper">
-        <textarea
+    <div className={styles.area}>
+      <div className={styles.wrapper}>
+        <Textarea
           ref={textareaRef}
-          className="chat-input-field"
+          className={styles.field}
+          resize="none"
           value={text}
-          onChange={(e) => {
-            setText(e.target.value);
+          onChange={(_, data) => {
+            setText(data.value);
             handleInput();
           }}
           onKeyDown={handleKeyDown}
@@ -173,25 +208,30 @@ export default function ChatInput() {
           }
           rows={1}
           disabled={isStreaming}
+          aria-label="Message"
         />
         {isStreaming ? (
-          <button
+          <Button
             type="button"
-            className="send-button"
+            appearance="secondary"
+            size="small"
             onClick={handleStop}
             title="Stop generation"
+            aria-label="Stop generation"
           >
             <StopRegular />
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             type="button"
-            className={`send-button${isDisabled ? " send-button-disabled" : ""}`}
+            appearance="primary"
+            size="small"
             onClick={handleSend}
             disabled={isDisabled}
+            aria-label="Send message"
           >
             <SendRegular />
-          </button>
+          </Button>
         )}
       </div>
     </div>

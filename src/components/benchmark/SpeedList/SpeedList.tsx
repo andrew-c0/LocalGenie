@@ -1,9 +1,32 @@
+import { makeStyles, Text, tokens } from "@fluentui/react-components";
 import { useChatStore } from "../../../stores/chatStore";
-import { StateBlock } from "../../ui/primitives";
-import "./SpeedList.css";
+import { ProgressBar } from "../../ui/ProgressBar/ProgressBar";
+import { StateBlock } from "../../ui/StateBlock/StateBlock";
+
+const useStyles = makeStyles({
+  list: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+  },
+  row: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalM,
+  },
+  body: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+    minWidth: 0,
+    maxWidth: "320px",
+  },
+});
 
 /** Derives tokens/sec from stored chat message stats and shows the top 5. */
 export function SpeedList() {
+  const styles = useStyles();
   const sessions = useChatStore((s) => s.sessions);
 
   const speeds: { model: string; tps: number }[] = [];
@@ -32,16 +55,14 @@ export function SpeedList() {
   }
 
   return (
-    <div>
+    <div className={styles.list}>
       {top.map((s) => (
-        <div key={`${s.model}-${s.tps}`} className="lx-speed-row">
-          <div>
-            <div className="lx-speed-name">{s.model}</div>
-            <div className="lx-progress speed-bar">
-              <div className="lx-progress-fill cyan" style={{ width: `${(s.tps / max) * 100}%` }} />
-            </div>
+        <div key={`${s.model}-${s.tps}`} className={styles.row}>
+          <div className={styles.body}>
+            <Text weight="semibold">{s.model}</Text>
+            <ProgressBar value={(s.tps / max) * 100} color="cyan" />
           </div>
-          <div className="lx-speed-tps">{s.tps.toFixed(1)} tok/s</div>
+          <Text font="monospace">{s.tps.toFixed(1)} tok/s</Text>
         </div>
       ))}
     </div>
