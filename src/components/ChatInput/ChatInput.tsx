@@ -4,16 +4,33 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as db from "../../services/database";
 import * as geniex from "../../services/geniex";
 import { serverBaseUrl } from "../../services/geniex";
+import * as systemService from "../../services/system";
 import { useChatStore } from "../../stores/chatStore";
 import { defaultSettings, useModelStore } from "../../stores/modelStore";
 import type { Message, StoredModelSettings } from "../../types";
 import { chatErrorContent } from "../../utils/chatError";
 import { chatSettingsFor, engineOf, modelSettingsKey } from "../../utils/modelSettings";
+import {
+  composeSystemPrompt,
+  localTimeZone,
+  type PlatformSnapshot,
+  withSystemBlocks,
+} from "../../utils/systemPrompt";
 import { toast } from "../../utils/toast";
 import "./ChatInput.css";
 
 /** The message box grows from one row up to this many rows, then scrolls. */
 const MAX_INPUT_ROWS = 5;
+
+/** Platform details for a send: the OS probe plus the startup chipset. Null when the probe fails. */
+async function platformForSend(): Promise<PlatformSnapshot | null> {
+  try {
+    const info = await systemService.getPlatformInfo();
+    return { ...info, chipset: useModelStore.getState().chipset };
+  } catch {
+    return null;
+  }
+}
 
 /** Last message in a session, read from the store. */
 function lastMessageOf(sessionId: string): Message | undefined {
@@ -53,10 +70,12 @@ export default function ChatInput() {
       try {
         const key = rawModelId ? modelSettingsKey(rawModelId) : null;
         let stored: StoredModelSettings = { ...defaultSettings };
+        let nativeContext: number | null = null;
         if (key) {
           try {
             const saved = await db.loadModelSettings(key);
-            if (saved) stored = { ...defaultSettings, ...JSON.parse(saved) };
+            stored = withSystemBlocks({ ...defaultSettings, ...saved });
+            nativeContext = await db.loadNativeContext(key);
           } catch {
             // use defaults
           }
@@ -64,7 +83,27 @@ export default function ChatInput() {
         const model = key
           ? useModelStore.getState().models.find((m) => modelSettingsKey(m.name) === key)
           : undefined;
-        const settings = chatSettingsFor(stored, engineOf(model), useModelStore.getState().compute);
+        const composed = await composeSystemPrompt(stored.systemBlocks ?? [], {
+          now: new Date(),
+          timeZone: localTimeZone(),
+          platform: await platformForSend(),
+          readFile: systemService.readTextFile,
+        });
+        if (composed.skipped.length > 0) {
+          toast.info(
+            "Attached file skipped",
+            `Could not read ${composed.skipped.join(", ")}. The reply uses the rest of the system prompt.`,
+          );
+        }
+        const settings = {
+          ...chatSettingsFor(
+            stored,
+            engineOf(model),
+            useModelStore.getState().compute,
+            nativeContext,
+          ),
+          systemPrompt: composed.prompt,
+        };
 
         // Pass the model name if set, otherwise auto-detect from server
         const baseUrl = serverBaseUrl(serverPort);

@@ -12,9 +12,14 @@ export type ModelEngine = "llama_cpp" | "qairt";
 
 /** Defaults matching the GenieX CLI. `compute` falls back to the header choice. */
 export const DEFAULT_LOAD_SETTINGS: ModelLoadSettings = {
-  nctx: 4096,
   ngl: -1,
 };
+
+/**
+ * Context window shown when neither the settings nor the model's GGUF metadata has one. This is
+ * the GenieX CLI default. A model's own length is used before it, so it is never overwritten.
+ */
+export const DEFAULT_CONTEXT_WINDOW = 4096;
 
 /** App-wide server defaults, used until the Application & Runtime settings are saved. */
 export const DEFAULT_SERVER_SETTINGS: ServerSettings = {
@@ -76,6 +81,11 @@ export function modelSettingsKey(modelId: string): string {
   return colon === -1 ? modelId : modelId.slice(0, colon);
 }
 
+/** True when two model names refer to the same saved settings row, ignoring any `:precision`. */
+export function sameModel(a: string, b: string): boolean {
+  return modelSettingsKey(a) === modelSettingsKey(b);
+}
+
 /** Engine for a downloaded model. Unknown models are treated as llama.cpp (the GGUF path). */
 export function engineOf(model: Pick<ModelInfo, "source"> | undefined): ModelEngine {
   return model?.source === "aihub" ? "qairt" : "llama_cpp";
@@ -126,19 +136,22 @@ export function draftModelDisabledReason(
 
 /**
  * Load parameters for a model's chat requests. Disabled settings are left out so the server
- * default applies instead of a value the engine would ignore.
+ * default applies instead of a value the engine would ignore. The context window is the saved
+ * one, else the model's own (`nativeContext`), else left to the server.
  */
 export function resolveLoadParams(
   saved: ModelLoadSettings,
   engine: ModelEngine,
   fallbackCompute: string,
+  nativeContext: number | null = null,
 ): ModelLoadParams {
   const merged = { ...DEFAULT_LOAD_SETTINGS, ...saved };
   const compute = merged.compute || fallbackCompute;
   const params: ModelLoadParams = {};
+  const nctx = saved.nctx ?? nativeContext ?? undefined;
 
   if (!loadSettingDisabledReason("compute", engine, compute)) params.compute = compute;
-  if (!loadSettingDisabledReason("nctx", engine, compute)) params.nctx = merged.nctx;
+  if (!loadSettingDisabledReason("nctx", engine, compute) && nctx != null) params.nctx = nctx;
   if (!loadSettingDisabledReason("ngl", engine, compute)) params.ngl = merged.ngl;
   if (merged.powerMode) params.powerMode = merged.powerMode;
 
@@ -161,12 +174,15 @@ export function chatSettingsFor(
   stored: StoredModelSettings,
   engine: ModelEngine,
   fallbackCompute: string,
+  nativeContext: number | null = null,
 ): ChatSettings {
   const generation: Record<string, unknown> = { ...stored };
-  for (const key of [...LEGACY_SERVER_KEYS, ...LOAD_PARAM_KEYS]) delete generation[key];
+  for (const key of [...LEGACY_SERVER_KEYS, ...LOAD_PARAM_KEYS, "systemBlocks"]) {
+    delete generation[key];
+  }
   return {
     ...(generation as ChatSettings),
-    ...resolveLoadParams(stored, engine, fallbackCompute),
+    ...resolveLoadParams(stored, engine, fallbackCompute, nativeContext),
   };
 }
 

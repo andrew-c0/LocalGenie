@@ -9,10 +9,9 @@ use sea_orm::{
 use sea_orm_migration::MigratorTrait;
 use serde::{Deserialize, Serialize};
 
-use crate::entities::{
-    chat_error, chat_session, downloaded_model, message, model_setting, user_preference,
-};
+use crate::entities::{chat_error, chat_session, downloaded_model, message, user_preference};
 use crate::migrations::Migrator;
+use crate::model_settings;
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -287,42 +286,23 @@ pub async fn delete_chat_error(
 
 // ─── Model Settings ────────────────────────────────────────────────
 
+/// Saved settings for a model, keyed by setting name. Empty when nothing is saved.
 #[tauri::command]
 pub async fn load_model_settings(
     db: tauri::State<'_, DatabaseConnection>,
     model_id: String,
-) -> Result<Option<String>, String> {
-    let result = model_setting::Entity::find_by_id(&model_id)
-        .one(&*db)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(result.map(|r| r.settings))
+) -> Result<HashMap<String, serde_json::Value>, String> {
+    model_settings::load(&db, &model_id).await
 }
 
+/// Replaces the saved settings for a model with `settings`. Keys left out are removed.
 #[tauri::command]
 pub async fn save_model_settings(
     db: tauri::State<'_, DatabaseConnection>,
     model_id: String,
-    settings: String,
+    settings: HashMap<String, serde_json::Value>,
 ) -> Result<(), String> {
-    let now = now_millis();
-    model_setting::Entity::insert(model_setting::ActiveModel {
-        model_id: Set(model_id),
-        settings: Set(settings),
-        updated_at: Set(now),
-    })
-    .on_conflict(
-        OnConflict::column(model_setting::Column::ModelId)
-            .update_columns([
-                model_setting::Column::Settings,
-                model_setting::Column::UpdatedAt,
-            ])
-            .to_owned(),
-    )
-    .exec(&*db)
-    .await
-    .map_err(|e| e.to_string())?;
-    Ok(())
+    model_settings::save(&db, &model_id, settings).await
 }
 
 // ─── User Preferences ──────────────────────────────────────────────

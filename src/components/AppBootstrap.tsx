@@ -16,11 +16,12 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
   const setServerPort = useModelStore((s) => s.setServerPort);
   const setCliInstalled = useModelStore((s) => s.setCliInstalled);
   const setUpdateInfo = useModelStore((s) => s.setUpdateInfo);
+  const setChipset = useModelStore((s) => s.setChipset);
 
   useEffect(() => {
     (async () => {
       // Independent reads run in parallel.
-      const [installed, saved, models, port] = await Promise.all([
+      const [installed, saved, models, port, chipset] = await Promise.all([
         geniex.checkGeniexInstalled().catch(() => false),
         db.loadSessions().catch((err) => {
           console.error("[init] Failed to load sessions:", err);
@@ -28,12 +29,15 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
         }),
         geniex.listModels().catch(() => null), // CLI may not be installed
         db.getPreference<number>("server_port").catch(() => null),
+        // Chipset comes from the CLI host probe. It is null when the CLI is missing.
+        geniex.configGet("chipset").catch(() => null),
       ]);
 
       setCliInstalled(installed);
       if (saved) loadSessions(saved);
       if (models) setModels(models);
       if (port && port > 0) setServerPort(port);
+      setChipset(chipset);
 
       const status = await geniex
         .getServerStatus(useModelStore.getState().serverPort)
@@ -48,7 +52,15 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
           .catch(() => undefined);
       }
     })();
-  }, [loadSessions, setModels, setUpdateInfo, setServerStatus, setCliInstalled, setServerPort]);
+  }, [
+    loadSessions,
+    setModels,
+    setUpdateInfo,
+    setServerStatus,
+    setCliInstalled,
+    setServerPort,
+    setChipset,
+  ]);
 
   return <>{children}</>;
 }

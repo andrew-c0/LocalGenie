@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import ChatArea from "../../components/ChatArea/ChatArea";
 import ChatInput from "../../components/ChatInput/ChatInput";
 import { ChatContextHeader } from "../../components/chat/ChatContextHeader/ChatContextHeader";
+import MissingFileBanner from "../../components/chat/MissingFileBanner/MissingFileBanner";
 import { SessionList } from "../../components/chat/SessionList/SessionList";
 import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
 import { StateBlock } from "../../components/ui/StateBlock/StateBlock";
@@ -34,6 +35,7 @@ export default function ChatPage() {
     content = (
       <>
         <ChatArea />
+        {activeSession.messages.length === 0 && <MissingFileBanner />}
         <ChatInput />
       </>
     );

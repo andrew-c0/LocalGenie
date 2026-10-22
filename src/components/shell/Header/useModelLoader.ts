@@ -64,8 +64,9 @@ export function useModelLoader() {
     setError(null);
     try {
       const model = useModelStore.getState().models.find((m) => m.name === name);
-      const savedJson = await db.loadModelSettings(modelSettingsKey(name)).catch(() => null);
-      const saved: ModelLoadSettings = savedJson ? JSON.parse(savedJson) : {};
+      const saved: ModelLoadSettings = await db
+        .loadModelSettings(modelSettingsKey(name))
+        .catch(() => ({}));
 
       const serverSettings = await db.getServerSettings();
       // A server started with other origins or keepalive must restart. An external server
@@ -83,7 +84,8 @@ export function useModelLoader() {
         setServerOptions(serverSettings);
       }
 
-      const load = resolveLoadParams(saved, engineOf(model), compute);
+      const nativeContext = await db.loadNativeContext(modelSettingsKey(name)).catch(() => null);
+      const load = resolveLoadParams(saved, engineOf(model), compute, nativeContext);
       const status = await geniex.loadModel(name, load);
       setServerStatus(status);
       setActiveModel(name);

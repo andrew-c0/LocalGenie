@@ -171,12 +171,24 @@ pub async fn start_server(
     // When the process exits, forget its PID so the next start actually spawns.
     tokio::spawn(async move {
         let _ = child.wait().await;
-        if let Ok(mut proc) = app.state::<AppState>().server_process.lock() {
-            if *proc == Some(pid) {
-                *proc = None;
-            }
+        // A user stop (unload) takes the PID out of the state before killing the process, so
+        // only an exit we did not ask for still finds it here and is reported.
+        let unexpected = app
+            .state::<AppState>()
+            .server_process
+            .lock()
+            .map(|mut proc| {
+                if *proc == Some(pid) {
+                    *proc = None;
+                    true
+                } else {
+                    false
+                }
+            })
+            .unwrap_or(false);
+        if unexpected {
+            let _ = app.emit("server-stopped", ());
         }
-        let _ = app.emit("server-stopped", ());
     });
 
     // Poll for readiness instead of a fixed sleep.

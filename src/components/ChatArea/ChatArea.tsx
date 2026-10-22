@@ -28,11 +28,16 @@ export default function ChatArea() {
 
   const session = sessions.find((s) => s.id === activeSessionId);
 
-  // Auto-scroll to bottom on new messages
+  // Reply text grows in place while streaming, so the last message's length is also a trigger.
+  const lastMessage = session?.messages[session.messages.length - 1];
+  const lastMessageLength = lastMessage?.content.length ?? 0;
+
+  // Auto-scroll to bottom on new messages and while a reply streams in. Streaming scrolls
+  // instantly: smooth scrolling falls behind fast token output.
   // biome-ignore lint/correctness/useExhaustiveDependencies: message length is the intended trigger, not array identity
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [session?.messages.length, isStreaming]);
+    bottomRef.current?.scrollIntoView({ behavior: isStreaming ? "auto" : "smooth" });
+  }, [session?.messages.length, lastMessageLength, isStreaming]);
 
   if (!session) return null;
 

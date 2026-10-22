@@ -22,9 +22,11 @@ import {
 import { SaveRegular } from "@fluentui/react-icons";
 import { useCallback, useEffect, useState } from "react";
 import * as db from "../../services/database";
+import { reloadModel } from "../../services/modelLoad";
 import { defaultSettings, useModelStore } from "../../stores/modelStore";
 import type { StoredModelSettings } from "../../types";
 import {
+  DEFAULT_CONTEXT_WINDOW,
   DEFAULT_LOAD_SETTINGS,
   draftModelDisabledReason,
   engineOf,
@@ -32,10 +34,13 @@ import {
   modelSettingsKey,
   POWER_MODES,
   SPEC_TYPES,
+  sameModel,
 } from "../../utils/modelSettings";
+import { withSystemBlocks } from "../../utils/systemPrompt";
 import { toast } from "../../utils/toast";
 import { Body } from "../ui/Typography/Typography";
 import SettingField from "./SettingField/SettingField";
+import SystemPromptEditor from "./SystemPromptEditor/SystemPromptEditor";
 import "./ModelSettings.css";
 
 export default function ModelSettings() {
@@ -43,48 +48,56 @@ export default function ModelSettings() {
   const downloadedModels = useModelStore((s) => s.models);
   const headerCompute = useModelStore((s) => s.compute);
 
-  // Local model selection — defaults to the active model
-  const [selectedModel, setSelectedModel] = useState<string | null>(activeModelId);
+  // Manual pick from the dropdown. Null means "follow the active model".
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  // When the active model changes (loaded or switched), drop a stale manual pick.
+  const [trackedActiveId, setTrackedActiveId] = useState(activeModelId);
+  if (trackedActiveId !== activeModelId) {
+    setTrackedActiveId(activeModelId);
+    setSelectedModel(null);
+  }
   const displayModel = selectedModel ?? activeModelId;
   const settingsKey = displayModel ? modelSettingsKey(displayModel) : null;
 
-  // Keep in sync when activeModelId changes externally (e.g. model loaded)
-  useEffect(() => {
-    if (activeModelId && !selectedModel) {
-      setSelectedModel(activeModelId);
-    }
-  }, [activeModelId, selectedModel]);
-
   const [settings, setSettings] = useState<StoredModelSettings>({ ...defaultSettings });
+  const [nativeContext, setNativeContext] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Load saved settings whenever the selected model changes
+  // Load saved settings and the model's own context window whenever the selected model changes
   useEffect(() => {
     if (!settingsKey) return;
     db.loadModelSettings(settingsKey)
-      .then((saved) => {
-        if (saved) {
-          setSettings({ ...defaultSettings, ...JSON.parse(saved) });
-        } else {
-          setSettings({ ...defaultSettings });
-        }
-      })
+      .then((saved) => setSettings(withSystemBlocks({ ...defaultSettings, ...saved })))
       .catch(() => {});
+    db.loadNativeContext(settingsKey)
+      .then(setNativeContext)
+      .catch(() => setNativeContext(null));
   }, [settingsKey]);
 
   const handleSave = useCallback(async () => {
-    if (!settingsKey) return;
+    if (!settingsKey || !displayModel) return;
     setSaving(true);
     let saved = false;
     try {
-      await db.saveModelSettings(settingsKey, JSON.stringify(settings));
+      await db.saveModelSettings(settingsKey, settings);
       saved = true;
     } catch (err) {
       console.error("Failed to save model settings:", err);
     }
-    setSaving(false);
     if (saved) toast.success("Model settings saved");
-  }, [settingsKey, settings]);
+
+    // Load parameters only apply at load time, so a loaded model is reloaded to pick them up.
+    const isLoaded = !!activeModelId && sameModel(activeModelId, displayModel);
+    if (saved && isLoaded) {
+      try {
+        await reloadModel(displayModel);
+        toast.success("Model reloaded", "It now uses the saved settings.");
+      } catch (err) {
+        toast.error("Model failed to reload", String(err));
+      }
+    }
+    setSaving(false);
+  }, [settingsKey, settings, displayModel, activeModelId]);
 
   const update = <K extends keyof StoredModelSettings>(key: K, value: StoredModelSettings[K]) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -129,7 +142,7 @@ export default function ModelSettings() {
         </Field>
       )}
 
-      {activeModelId && displayModel !== activeModelId && (
+      {activeModelId && displayModel && !sameModel(displayModel, activeModelId) && (
         <MessageBar intent="warning">
           <MessageBarBody>
             Editing settings for a model not currently loaded on the server.
@@ -170,7 +183,7 @@ export default function ModelSettings() {
         >
           <SpinButton
             disabled={!!reason.nctx}
-            value={settings.nctx ?? DEFAULT_LOAD_SETTINGS.nctx}
+            value={settings.nctx ?? nativeContext ?? DEFAULT_CONTEXT_WINDOW}
             min={512}
             max={131072}
             step={512}
@@ -378,13 +391,12 @@ export default function ModelSettings() {
         <Subtitle1>System Prompt</Subtitle1>
         <SettingField
           label="System Prompt"
-          info="Instructions sent before every conversation, for example a persona or output rules."
+          info="Instructions sent before every conversation. Add text, the current date and time, platform details, or a .txt or .md file read on every send."
         >
-          <Textarea
-            className="model-settings__textarea"
-            value={settings.systemPrompt ?? ""}
-            onChange={(_, data) => update("systemPrompt", data.value)}
-            placeholder="Optional system prompt…"
+          <SystemPromptEditor
+            blocks={settings.systemBlocks ?? []}
+            onChange={(blocks) => update("systemBlocks", blocks)}
+            contextWindow={settings.nctx ?? nativeContext ?? DEFAULT_CONTEXT_WINDOW}
           />
         </SettingField>
       </section>

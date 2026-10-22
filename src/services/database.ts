@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ChatSession, GenerationStats, Message, ServerSettings } from "../types";
+import type {
+  ChatSession,
+  GenerationStats,
+  Message,
+  ServerSettings,
+  StoredModelSettings,
+} from "../types";
 import { chatErrorContent } from "../utils/chatError";
 import { DEFAULT_SERVER_SETTINGS } from "../utils/modelSettings";
 
@@ -166,12 +172,28 @@ export async function deleteChatError(id: string): Promise<void> {
 
 // ─── Model Settings ──────────────────────────────────────────────
 
-export async function loadModelSettings(modelId: string): Promise<string | null> {
+/** Saved settings for a model. A setting that was never saved is absent. */
+export async function loadModelSettings(modelId: string): Promise<Partial<StoredModelSettings>> {
   return invoke("load_model_settings", { modelId });
 }
 
-export async function saveModelSettings(modelId: string, settings: string): Promise<void> {
-  await invoke("save_model_settings", { modelId, settings });
+/** Replaces the saved settings for a model. Unset fields are left out, so they are removed. */
+export async function saveModelSettings(
+  modelId: string,
+  settings: StoredModelSettings,
+): Promise<void> {
+  const set = Object.fromEntries(Object.entries(settings).filter(([, v]) => v !== undefined));
+  await invoke("save_model_settings", { modelId, settings: set });
+}
+
+/**
+ * The context window the model was downloaded with (read from its GGUF), or null when unknown.
+ * Rows are keyed by repo id, so a short model name also matches its repo.
+ */
+export async function loadNativeContext(modelKey: string): Promise<number | null> {
+  const rows = await listDownloadedModels();
+  const row = rows.find((r) => r.name === modelKey || r.name.endsWith(`/${modelKey}`));
+  return row?.context_size ?? null;
 }
 
 // ─── User Preferences ──────────────────────────────────────────

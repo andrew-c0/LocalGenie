@@ -5,6 +5,7 @@ pub mod cli_update;
 pub mod constants;
 pub mod database;
 pub mod download;
+pub mod files;
 pub mod hub;
 pub mod import;
 pub mod logs;

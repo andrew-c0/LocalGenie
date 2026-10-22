@@ -34,8 +34,11 @@ interface ModelState {
   serverOptions: ServerSettings | null;
   /** Whether the header model-selector popover is open. */
   selectorOpen: boolean;
+  /** Chipset name from the CLI host probe, read once at startup. Null when unknown. */
+  chipset: string | null;
 
   setCliInstalled: (v: boolean) => void;
+  setChipset: (chipset: string | null) => void;
   setModels: (models: ModelInfo[]) => void;
   setServerStatus: (status: ServerStatus) => void;
   setServerPort: (port: number) => void;
@@ -60,8 +63,10 @@ export const useModelStore = create<ModelState>((set) => ({
   compute: DEFAULT_COMPUTE,
   serverOptions: null,
   selectorOpen: false,
+  chipset: null,
 
   setCliInstalled: (v) => set({ cliInstalled: v }),
+  setChipset: (chipset) => set({ chipset }),
   setSelectorOpen: (open: boolean) => set({ selectorOpen: open }),
   setModels: (models) => set({ models }),
   setServerStatus: (status) =>
@@ -100,5 +105,4 @@ export const defaultSettings: GenerationSettings = {
   repetitionPenalty: 1.1,
   // maxTokens and seed are unset by default: the server's own values apply.
   think: true,
-  systemPrompt: "",
 };

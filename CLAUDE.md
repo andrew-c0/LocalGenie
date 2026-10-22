@@ -18,7 +18,7 @@ Working agents: `.claude/agents/` (`rust-expert`, `react-expert`, `geniex-specia
 - `tasks.md` - current backlog
 
 ## Commands
-`npm run dev` (tauri dev) - `npm run check` (tsc) - `npm run lint` (biome) - `cargo check` / `cargo clippy` in `src-tauri/` - `npm run build`.
+`npm run dev` (tauri dev) - `npm run check` (tsc) - `npm run lint` (biome) - `npm test` (vitest) - `cargo check` / `cargo clippy` / `cargo test` in `src-tauri/` - `npm run build`.
 
 ## Essentials
 - `invoke()` only in `src/services/`; routes only in `src/Navigation.tsx`; `App.tsx` stays scaffolding.

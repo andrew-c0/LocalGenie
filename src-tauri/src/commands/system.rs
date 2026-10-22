@@ -27,3 +27,47 @@ pub async fn get_system_memory() -> Result<SystemMemoryInfo, String> {
     .await
     .map_err(|e| format!("system memory probe failed: {e}"))?
 }
+
+/// Host details shown in the system prompt's platform block.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlatformInfo {
+    /// OS family name, for example "Windows" or "Ubuntu".
+    pub os: String,
+    /// Long OS version string, empty when the OS does not report one.
+    pub os_version: String,
+    /// CPU architecture, for example "x86_64" or "aarch64".
+    pub arch: String,
+    /// Total physical memory in bytes.
+    pub total_memory_bytes: u64,
+}
+
+/// Report OS, architecture and total RAM for the system prompt's platform block.
+#[tauri::command]
+pub async fn get_platform_info() -> Result<PlatformInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let mut sys = sysinfo::System::new();
+        sys.refresh_memory();
+        Ok(PlatformInfo {
+            os: sysinfo::System::name().unwrap_or_else(|| std::env::consts::OS.to_string()),
+            os_version: sysinfo::System::long_os_version().unwrap_or_default(),
+            arch: std::env::consts::ARCH.to_string(),
+            total_memory_bytes: sys.total_memory(),
+        })
+    })
+    .await
+    .map_err(|e| format!("platform probe failed: {e}"))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn platform_info_reports_os_and_arch() {
+        let info = get_platform_info().await.expect("platform info");
+        assert!(!info.os.is_empty());
+        assert!(!info.arch.is_empty());
+        assert!(info.total_memory_bytes > 0);
+    }
+}

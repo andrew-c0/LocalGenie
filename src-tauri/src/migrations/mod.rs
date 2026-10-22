@@ -5,6 +5,7 @@ mod m20261007_000001_downloaded_models;
 mod m20261020_000001_add_repo_columns;
 mod m20261022_000001_message_finish_and_errors;
 mod m20261022_000002_message_stats;
+mod m20261023_000001_model_setting_values;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -16,6 +17,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261020_000001_add_repo_columns::Migration),
             Box::new(m20261022_000001_message_finish_and_errors::Migration),
             Box::new(m20261022_000002_message_stats::Migration),
+            Box::new(m20261023_000001_model_setting_values::Migration),
         ]
     }
 }
@@ -24,8 +26,8 @@ impl MigratorTrait for Migrator {
 mod tests {
     use super::Migrator;
     use crate::commands::database::init_database;
-    use crate::entities::{chat_error, chat_session, message};
-    use sea_orm::{ActiveModelTrait, ConnectionTrait, EntityTrait, Set};
+    use crate::entities::{chat_error, chat_session, message, model_setting_value};
+    use sea_orm::{ActiveModelTrait, ConnectionTrait, DatabaseBackend, EntityTrait, Set, Statement};
     use sea_orm_migration::MigratorTrait;
 
     /// Fresh database file in the temp dir, removed when the test ends.
@@ -180,7 +182,8 @@ mod tests {
         assert_eq!(msg.token_count, Some(42));
         assert_eq!(msg.prompt_chars, Some(7));
 
-        Migrator::down(&db, Some(1))
+        // Two steps: the model settings migration comes after this one.
+        Migrator::down(&db, Some(2))
             .await
             .expect("revert stats migration");
         let after_down = columns(db.clone()).await;
@@ -202,6 +205,54 @@ mod tests {
                 "{col} missing after reapply"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn model_settings_migration_splits_json_rows() {
+        let tmp = TempDb::new("migrate-settings");
+        let db = init_database(&tmp.url()).await.expect("migrations apply");
+
+        // Put back the old JSON row, then apply the migration again so it copies it.
+        Migrator::down(&db, Some(1))
+            .await
+            .expect("revert settings migration");
+        db.execute(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            r#"INSERT INTO model_settings (model_id, settings, updated_at) VALUES ('org/model',
+            '{"temperature":0.2,"think":false,"compute":"npu","nctx":4096,"systemPrompt":"Be brief.",
+              "origins":"*","keepalive":300,"seed":null}', 5)"#
+                .to_owned(),
+        ))
+        .await
+        .expect("insert legacy row");
+        Migrator::up(&db, None)
+            .await
+            .expect("reapply settings migration");
+
+        let rows = model_setting_value::Entity::find()
+            .all(&db)
+            .await
+            .expect("query");
+        let stored: std::collections::HashMap<String, String> = rows
+            .into_iter()
+            .map(|r| (r.key, r.value))
+            .collect();
+
+        assert_eq!(stored.get("temperature").map(String::as_str), Some("0.2"));
+        assert_eq!(stored.get("think").map(String::as_str), Some("false"));
+        assert_eq!(stored.get("compute").map(String::as_str), Some("\"npu\""));
+        assert_eq!(stored.get("nctx").map(String::as_str), Some("4096"));
+        assert!(!stored.contains_key("seed"), "null values are not copied");
+        assert!(!stored.contains_key("origins"));
+        assert!(!stored.contains_key("keepalive"));
+        assert!(!stored.contains_key("systemPrompt"));
+
+        let blocks: serde_json::Value =
+            serde_json::from_str(&stored["systemBlocks"]).expect("blocks are JSON");
+        assert_eq!(
+            blocks,
+            serde_json::json!([{ "id": "legacy-text", "kind": "text", "text": "Be brief." }])
+        );
     }
 
     #[tokio::test]

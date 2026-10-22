@@ -6,9 +6,37 @@ import {
   loadSettingDisabledReason,
   modelSettingsKey,
   resolveLoadParams,
+  sameModel,
   sameServerOptions,
   usesDraftModel,
 } from "./modelSettings";
+
+describe("context window fallback", () => {
+  it("uses the model's own context window when none is saved", () => {
+    const params = resolveLoadParams({}, "llama_cpp", "npu", 40960);
+    expect(params.nctx).toBe(40960);
+  });
+
+  it("prefers the saved context window over the model's own", () => {
+    const params = resolveLoadParams({ nctx: 8192 }, "llama_cpp", "npu", 40960);
+    expect(params.nctx).toBe(8192);
+  });
+
+  it("leaves the context window to the server when neither is known", () => {
+    const params = resolveLoadParams({}, "llama_cpp", "npu", null);
+    expect(params).not.toHaveProperty("nctx");
+  });
+});
+
+describe("sameModel", () => {
+  it("matches a model with and without its precision suffix", () => {
+    expect(sameModel("Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-GGUF:Q8_K_XL")).toBe(true);
+  });
+
+  it("does not match different models", () => {
+    expect(sameModel("Qwen3.5-0.8B-GGUF", "unsloth/gemma-4-E4B-it-GGUF:Q4_1")).toBe(false);
+  });
+});
 
 describe("modelSettingsKey", () => {
   it("strips the precision suffix", () => {

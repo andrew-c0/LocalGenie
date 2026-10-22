@@ -6,6 +6,7 @@ import * as db from "../../../services/database";
 import { useChatStore } from "../../../stores/chatStore";
 import { useModelStore } from "../../../stores/modelStore";
 import { formatCount } from "../../../utils/format";
+import { modelSettingsKey } from "../../../utils/modelSettings";
 import { StatusBadge } from "../../ui/StatusBadge/StatusBadge";
 import { BodyStrong, Meta } from "../../ui/Typography/Typography";
 import { ContextRing } from "./ContextRing/ContextRing";
@@ -22,24 +23,22 @@ export function ChatContextHeader() {
   const serverStatus = useModelStore((s) => s.serverStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
   const models = useModelStore((s) => s.models);
-  /** Native context window of the active model in tokens; null when it was never recorded. */
+  /** Context window in tokens: the saved setting, else the model's own. Null when neither is known. */
   const [contextWindow, setContextWindow] = useState<number | null>(null);
 
-  // The window is stored with the downloaded-model row; re-read when the model or the list changes.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: models is the trigger, the row is read from the DB
+  // The window is the saved setting, else the model's own (stored with the downloaded-model row).
+  // Re-read when the model, the list or the server changes, since a reload can change the setting.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: models and server status are the triggers, the values are read from the DB
   useEffect(() => {
     if (!activeModelId) {
       setContextWindow(null);
       return;
     }
-    const repoId = activeModelId.split(":")[0];
+    const key = modelSettingsKey(activeModelId);
     let cancelled = false;
-    db.listDownloadedModels()
-      .then((rows) => {
-        // The active model may be stored by short name, the database by repo id: compare base names.
-        const baseId = repoId.split("/").pop();
-        const row = rows.find((r) => r.name.split("/").pop() === baseId);
-        if (!cancelled) setContextWindow(row?.context_size ?? null);
+    Promise.all([db.loadModelSettings(key), db.loadNativeContext(key)])
+      .then(([saved, native]) => {
+        if (!cancelled) setContextWindow(saved.nctx ?? native);
       })
       .catch(() => {
         if (!cancelled) setContextWindow(null);
@@ -47,7 +46,7 @@ export function ChatContextHeader() {
     return () => {
       cancelled = true;
     };
-  }, [activeModelId, models]);
+  }, [activeModelId, models, serverStatus]);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   if (!activeSession) return null;

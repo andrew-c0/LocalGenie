@@ -77,7 +77,25 @@ export interface GenerationSettings {
   think?: boolean;
   /** GBNF grammar for constrained output. Empty means unconstrained. */
   grammarString?: string;
+  /** Legacy single-text system prompt. Read as one text block, never written back. */
   systemPrompt?: string;
+  /** Ordered system prompt blocks. Resolved into `systemPrompt` on every send. */
+  systemBlocks?: SystemPromptBlock[];
+}
+
+/** One part of a system prompt. Date, platform and file blocks are resolved at send time. */
+export type SystemPromptBlock =
+  | { id: string; kind: "text"; text: string }
+  | { id: string; kind: "datetime" }
+  | { id: string; kind: "platform" }
+  | { id: string; kind: "file"; path: string; name: string; size?: number };
+
+/** Host details from the Rust `get_platform_info` command. */
+export interface PlatformInfo {
+  os: string;
+  osVersion: string;
+  arch: string;
+  totalMemoryBytes: number;
 }
 
 /**
