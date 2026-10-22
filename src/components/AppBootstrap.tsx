@@ -6,7 +6,7 @@ import { fetchContextLength } from "../services/hubApi";
 import { useChatStore } from "../stores/chatStore";
 import { useDownloadStore } from "../stores/downloadStore";
 import { useModelStore } from "../stores/modelStore";
-import type { DownloadedModelMeta, Message } from "../types";
+import type { DownloadedModelMeta, GenerationStats, Message } from "../types";
 
 /** Delay before sessions that changed are written to the DB. */
 const SESSION_SAVE_DELAY_MS = 500;
@@ -137,7 +137,7 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
     }
   });
 
-  useTauriEvent<{ streamId: string }>("chat-done", (payload) => {
+  useTauriEvent<{ streamId: string; finishReason: string | null }>("chat-done", (payload) => {
     const stream = useChatStore.getState().activeStream;
     if (!stream || stream.streamId !== payload.streamId) return;
     setStreaming(false);
@@ -169,14 +169,21 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
       }
     }
 
+    if (lastMsg.role === "assistant" && payload.finishReason) {
+      store.updateMessageFinishReason(activeId, lastMsg.id, payload.finishReason);
+    }
+
     if (lastMsg.role === "assistant" && lastMsg.content) {
-      store.updateMessageStats(activeId, lastMsg.id, {
-        timeToFirstToken,
-        totalTime,
-        tokenCount,
-        promptChars,
-      });
-      db.saveMessage(activeId, lastMsg).catch(() => undefined);
+      const stats: GenerationStats = { timeToFirstToken, totalTime, tokenCount, promptChars };
+      store.updateMessageStats(activeId, lastMsg.id, stats);
+      // `lastMsg` was read before the finish reason and stats were set, so build the saved copy
+      // after both are known. Saving the stale copy would drop them from the database.
+      const finalMsg: Message = {
+        ...lastMsg,
+        ...(payload.finishReason ? { finishReason: payload.finishReason } : {}),
+        stats,
+      };
+      db.saveMessage(activeId, finalMsg).catch(() => undefined);
     }
   });
 

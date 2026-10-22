@@ -230,12 +230,14 @@ export default function ModelSettings() {
 
         <Field label="Max Tokens">
           <SpinButton
-            value={settings.maxTokens ?? 2048}
+            value={settings.maxTokens}
+            placeholder="Unset (no limit)"
             min={256}
             max={32768}
             step={256}
             onChange={(_, data) => {
-              if (data.value != null) update("maxTokens", data.value);
+              // Clearing the field unsets the value so max_tokens is omitted.
+              update("maxTokens", data.value ?? undefined);
             }}
           />
         </Field>

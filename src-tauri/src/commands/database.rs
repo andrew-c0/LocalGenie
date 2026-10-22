@@ -9,17 +9,20 @@ use sea_orm::{
 use sea_orm_migration::MigratorTrait;
 use serde::{Deserialize, Serialize};
 
-use crate::entities::{chat_session, downloaded_model, message, model_setting, user_preference};
+use crate::entities::{
+    chat_error, chat_session, downloaded_model, message, model_setting, user_preference,
+};
 use crate::migrations::Migrator;
 
 // ─── Types ─────────────────────────────────────────────────────────
 
-/// Full session with messages — returned to the frontend.
+/// Full session with messages and chat errors — returned to the frontend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatSessionWithMessages {
     #[serde(flatten)]
     pub session: chat_session::Model,
     pub messages: Vec<message::Model>,
+    pub errors: Vec<chat_error::Model>,
 }
 
 // ─── Initialisation ────────────────────────────────────────────────
@@ -71,6 +74,17 @@ pub async fn load_sessions(
             .map_err(|e| e.to_string())?
     };
 
+    let all_errors = if session_ids.is_empty() {
+        vec![]
+    } else {
+        chat_error::Entity::find()
+            .filter(chat_error::Column::SessionId.is_in(&session_ids))
+            .order_by_asc(chat_error::Column::CreatedAt)
+            .all(&*db)
+            .await
+            .map_err(|e| e.to_string())?
+    };
+
     // Group messages by session_id (messages arrive ordered by created_at).
     let mut msgs_by_session: HashMap<String, Vec<message::Model>> = HashMap::new();
     for msg in all_messages {
@@ -79,14 +93,23 @@ pub async fn load_sessions(
             .or_default()
             .push(msg);
     }
+    let mut errors_by_session: HashMap<String, Vec<chat_error::Model>> = HashMap::new();
+    for err in all_errors {
+        errors_by_session
+            .entry(err.session_id.clone())
+            .or_default()
+            .push(err);
+    }
 
     Ok(sessions
         .into_iter()
         .map(|s| {
             let messages = msgs_by_session.remove(&s.id).unwrap_or_default();
+            let errors = errors_by_session.remove(&s.id).unwrap_or_default();
             ChatSessionWithMessages {
                 session: s,
                 messages,
+                errors,
             }
         })
         .collect())
@@ -127,10 +150,15 @@ pub async fn delete_session(
     db: tauri::State<'_, DatabaseConnection>,
     id: String,
 ) -> Result<(), String> {
-    // Messages and the session row go together or not at all.
+    // Messages, errors and the session row go together or not at all.
     let txn = db.begin().await.map_err(|e| e.to_string())?;
     message::Entity::delete_many()
         .filter(message::Column::SessionId.eq(&id))
+        .exec(&txn)
+        .await
+        .map_err(|e| e.to_string())?;
+    chat_error::Entity::delete_many()
+        .filter(chat_error::Column::SessionId.eq(&id))
         .exec(&txn)
         .await
         .map_err(|e| e.to_string())?;
@@ -156,6 +184,11 @@ pub async fn save_message(
         content: Set(message.content),
         model_id: Set(message.model_id),
         created_at: Set(message.created_at),
+        finish_reason: Set(message.finish_reason),
+        time_to_first_token_ms: Set(message.time_to_first_token_ms),
+        total_time_ms: Set(message.total_time_ms),
+        token_count: Set(message.token_count),
+        prompt_chars: Set(message.prompt_chars),
     })
     .on_conflict(
         OnConflict::column(message::Column::Id)
@@ -165,6 +198,11 @@ pub async fn save_message(
                 message::Column::Content,
                 message::Column::ModelId,
                 message::Column::CreatedAt,
+                message::Column::FinishReason,
+                message::Column::TimeToFirstTokenMs,
+                message::Column::TotalTimeMs,
+                message::Column::TokenCount,
+                message::Column::PromptChars,
             ])
             .to_owned(),
     )
@@ -189,7 +227,58 @@ pub async fn delete_message(
     db: tauri::State<'_, DatabaseConnection>,
     id: String,
 ) -> Result<(), String> {
+    // Errors attached to the reply go with it.
+    let txn = db.begin().await.map_err(|e| e.to_string())?;
+    chat_error::Entity::delete_many()
+        .filter(chat_error::Column::MessageId.eq(&id))
+        .exec(&txn)
+        .await
+        .map_err(|e| e.to_string())?;
     message::Entity::delete_by_id(&id)
+        .exec(&txn)
+        .await
+        .map_err(|e| e.to_string())?;
+    txn.commit().await.map_err(|e| e.to_string())
+}
+
+// ─── Chat Errors ───────────────────────────────────────────────────
+
+/// Persist a chat error. `message_id` links it to the reply it belongs to, or is null.
+#[tauri::command]
+pub async fn save_chat_error(
+    db: tauri::State<'_, DatabaseConnection>,
+    error: chat_error::Model,
+) -> Result<(), String> {
+    chat_error::Entity::insert(chat_error::ActiveModel {
+        id: Set(error.id),
+        session_id: Set(error.session_id),
+        message_id: Set(error.message_id),
+        error: Set(error.error),
+        created_at: Set(error.created_at),
+    })
+    .on_conflict(
+        OnConflict::column(chat_error::Column::Id)
+            .update_columns([
+                chat_error::Column::SessionId,
+                chat_error::Column::MessageId,
+                chat_error::Column::Error,
+                chat_error::Column::CreatedAt,
+            ])
+            .to_owned(),
+    )
+    .exec(&*db)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Forget a chat error (used when its message is removed by a retry).
+#[tauri::command]
+pub async fn delete_chat_error(
+    db: tauri::State<'_, DatabaseConnection>,
+    id: String,
+) -> Result<(), String> {
+    chat_error::Entity::delete_by_id(&id)
         .exec(&*db)
         .await
         .map_err(|e| e.to_string())?;

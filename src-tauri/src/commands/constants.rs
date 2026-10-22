@@ -4,7 +4,13 @@ pub const DEFAULT_PORT: u16 = 18181;
 /// Default base URL for the GenieX server (used when no URL is provided).
 pub const DEFAULT_BASE_URL: &str = "http://127.0.0.1:18181";
 
-/// Default HTTP client timeout in seconds (for long-running streaming requests).
+/// Connect timeout for the shared HTTP client, in seconds. No total timeout is set
+/// on the client, so long chat streams are not cut off.
+pub const HTTP_CONNECT_TIMEOUT_SECS: u64 = 10;
+
+/// Timeout for non-streaming HTTP calls (model list, warmup, probes, Hugging Face
+/// lookups), applied per request, in seconds. Also bounds how long a chat request
+/// may take to return response headers.
 pub const HTTP_TIMEOUT_SECS: u64 = 300;
 
 /// Number of readiness probe retries when starting the server.

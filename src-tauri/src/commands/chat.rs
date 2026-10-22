@@ -1,7 +1,8 @@
 use tauri::{AppHandle, Emitter, State};
 
 use super::chat_helpers::{
-    build_chat_body, resolve_model_for_server, strip_precision, ChatMessage, GenerationSettings,
+    build_chat_body, chat_done_payload, finish_reason_from_chunk, is_first_output, no_output_error,
+    resolve_model_for_server, strip_precision, ChatMessage, GenerationSettings,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -84,6 +85,9 @@ pub async fn load_model(
     let response = state
         .http_client
         .post(&url)
+        .timeout(std::time::Duration::from_secs(
+            super::constants::HTTP_TIMEOUT_SECS,
+        ))
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
@@ -194,14 +198,35 @@ pub async fn chat_completion(
 
     let body = build_chat_body(messages_json, model_name, &settings);
 
-    let response = state
+    // Time-to-first-output limit. It covers the wait for response headers and the
+    // wait for the first chunk with content or a finish_reason. Once output has
+    // started, the stream runs with no time limit (no per-request `.timeout()`,
+    // which would also cut the body).
+    let limit_secs = super::constants::HTTP_TIMEOUT_SECS;
+    let first_output_by = tokio::time::Instant::now() + std::time::Duration::from_secs(limit_secs);
+
+    let cancel_flag: CancelFlag = Arc::new(AtomicBool::new(false));
+    lock_cancel_flags()?.push((stream_id.clone(), Arc::clone(&cancel_flag)));
+    // Deregisters on every exit path below, including `?` errors.
+    let _cancel_guard = CancelGuard(stream_id.clone());
+
+    let send = state
         .http_client
         .post(&url)
         .header("Content-Type", "application/json")
         .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to connect to GenieX server at {url}: {e}"))?;
+        .send();
+    let response = match unless_cancelled(&cancel_flag, bounded(send, Some(first_output_by))).await
+    {
+        None => {
+            emit_cancelled(&app, &stream_id);
+            return Ok(());
+        }
+        Some(Err(_elapsed)) => return Err(no_output_error(&url, limit_secs)),
+        Some(Ok(sent)) => {
+            sent.map_err(|e| format!("Failed to connect to GenieX server at {url}: {e}"))?
+        }
+    };
 
     let status = response.status();
     eprintln!("[chat] server response status: {}", status);
@@ -214,18 +239,30 @@ pub async fn chat_completion(
 
     // Stream the SSE response
     use futures_util::StreamExt;
-    use std::sync::Arc;
-
-    let cancel_flag: CancelFlag = Arc::new(AtomicBool::new(false));
-    lock_cancel_flags()?.push((stream_id.clone(), Arc::clone(&cancel_flag)));
-    // Deregisters on every exit path below, including `?` errors.
-    let _cancel_guard = CancelGuard(stream_id.clone());
 
     let mut stream = response.bytes_stream();
     let mut buffer = String::new();
     let mut chunk_count: u32 = 0;
+    // Set from the server's `finish_reason` ("stop", "length", ...) when it arrives.
+    let mut finish_reason: Option<String> = None;
+    // False until the first content or finish_reason chunk; only then is the limit lifted.
+    let mut answered = false;
 
-    while let Some(chunk_result) = stream.next().await {
+    loop {
+        let deadline = if answered {
+            None
+        } else {
+            Some(first_output_by)
+        };
+        let next = match unless_cancelled(&cancel_flag, bounded(stream.next(), deadline)).await {
+            None => {
+                emit_cancelled(&app, &stream_id);
+                return Ok(());
+            }
+            Some(Err(_elapsed)) => return Err(no_output_error(&url, limit_secs)),
+            Some(Ok(next)) => next,
+        };
+        let Some(chunk_result) = next else { break };
         let chunk = chunk_result.map_err(|e| format!("Stream error: {e}"))?;
         buffer.push_str(&String::from_utf8_lossy(&chunk));
 
@@ -238,8 +275,7 @@ pub async fn chat_completion(
             }
 
             if cancel_flag.load(Ordering::SeqCst) {
-                eprintln!("[chat] stream {stream_id} cancelled by user");
-                let _ = app.emit("chat-done", serde_json::json!({ "streamId": stream_id }));
+                emit_cancelled(&app, &stream_id);
                 return Ok(());
             }
 
@@ -247,12 +283,21 @@ pub async fn chat_completion(
                 let data = data.trim();
                 if data == "[DONE]" {
                     eprintln!("[chat] stream complete: {chunk_count} chunks");
-                    let _ = app.emit("chat-done", serde_json::json!({ "streamId": stream_id }));
+                    let _ = app.emit(
+                        "chat-done",
+                        chat_done_payload(&stream_id, finish_reason.as_deref()),
+                    );
                     return Ok(());
                 }
 
                 // Parse the SSE JSON chunk
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
+                    if is_first_output(&parsed) {
+                        answered = true;
+                    }
+                    if let Some(reason) = finish_reason_from_chunk(&parsed) {
+                        finish_reason = Some(reason);
+                    }
                     if let Some(choices) = parsed["choices"].as_array() {
                         for choice in choices {
                             if let Some(delta) = choice.get("delta") {
@@ -278,13 +323,88 @@ pub async fn chat_completion(
         // Cancel checked between network chunks too — a user stop should not
         // wait for more tokens to arrive over the wire.
         if cancel_flag.load(Ordering::SeqCst) {
-            eprintln!("[chat] stream {stream_id} cancelled by user");
-            let _ = app.emit("chat-done", serde_json::json!({ "streamId": stream_id }));
+            emit_cancelled(&app, &stream_id);
             return Ok(());
         }
     }
 
-    let _ = app.emit("chat-done", serde_json::json!({ "streamId": stream_id }));
+    // Stream ended without `[DONE]`; report whatever finish reason was seen.
+    let _ = app.emit(
+        "chat-done",
+        chat_done_payload(&stream_id, finish_reason.as_deref()),
+    );
 
     Ok(())
+}
+
+/// Tell the frontend a stream was stopped by the user.
+fn emit_cancelled(app: &AppHandle, stream_id: &str) {
+    eprintln!("[chat] stream {stream_id} cancelled by user");
+    let _ = app.emit("chat-done", chat_done_payload(stream_id, Some("cancelled")));
+}
+
+/// How often a waiting request re-checks its cancel flag.
+const CANCEL_POLL: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// Await `fut`, failing with `Elapsed` if `deadline` passes first. `None` means no limit.
+async fn bounded<F: std::future::Future>(
+    fut: F,
+    deadline: Option<tokio::time::Instant>,
+) -> Result<F::Output, tokio::time::error::Elapsed> {
+    match deadline {
+        Some(at) => tokio::time::timeout_at(at, fut).await,
+        None => Ok(fut.await),
+    }
+}
+
+/// Await `fut`, returning `None` as soon as the cancel flag is set.
+async fn unless_cancelled<F: std::future::Future>(
+    cancel: &AtomicBool,
+    fut: F,
+) -> Option<F::Output> {
+    tokio::pin!(fut);
+    loop {
+        tokio::select! {
+            out = &mut fut => return Some(out),
+            _ = tokio::time::sleep(CANCEL_POLL) => {
+                if cancel.load(Ordering::SeqCst) {
+                    return None;
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{bounded, unless_cancelled};
+    use std::sync::atomic::AtomicBool;
+
+    #[tokio::test]
+    async fn deadline_in_the_past_elapses_a_pending_wait() {
+        let result = bounded(
+            std::future::pending::<()>(),
+            Some(tokio::time::Instant::now()),
+        )
+        .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn no_deadline_waits_for_the_value() {
+        assert_eq!(bounded(async { 7 }, None).await.ok(), Some(7));
+    }
+
+    #[tokio::test]
+    async fn cancel_flag_interrupts_a_pending_wait() {
+        let flag = AtomicBool::new(true);
+        let out = unless_cancelled(&flag, std::future::pending::<()>()).await;
+        assert!(out.is_none());
+    }
+
+    #[tokio::test]
+    async fn completed_wait_is_returned_when_not_cancelled() {
+        let flag = AtomicBool::new(false);
+        assert_eq!(unless_cancelled(&flag, async { 3 }).await, Some(3));
+    }
 }

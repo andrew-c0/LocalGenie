@@ -84,7 +84,9 @@ export async function unloadAllModels(port?: number): Promise<ServerStatus> {
 /**
  * Stream a chat completion. Chunks and completion arrive as `chat-chunk` and
  * `chat-done` events carrying `streamId`, so the caller can route them to the
- * session that started the stream.
+ * session that started the stream. `chat-done` also carries `finishReason`
+ * (the server's value, `"cancelled"` on user stop, or null). The stream runs
+ * until it finishes; there is no app-side token cap or total timeout.
  */
 export async function chatCompletion(
   messages: ChatMessage[],

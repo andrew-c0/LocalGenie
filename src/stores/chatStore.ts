@@ -25,6 +25,7 @@ interface ChatState {
   addMessage: (sessionId: string, message: Message) => void;
   updateLastAssistantMessage: (sessionId: string, content: string) => void;
   updateMessageStats: (sessionId: string, messageId: string, stats: Message["stats"]) => void;
+  updateMessageFinishReason: (sessionId: string, messageId: string, finishReason: string) => void;
   removeMessagesAfter: (sessionId: string, messageId: string) => void;
   setStreaming: (streaming: boolean) => void;
   setActiveStream: (stream: ActiveStream | null) => void;
@@ -123,6 +124,18 @@ export const useChatStore = create<ChatState>((set) => ({
         return {
           ...s,
           messages: s.messages.map((m) => (m.id === messageId ? { ...m, stats } : m)),
+        };
+      }),
+    }));
+  },
+
+  updateMessageFinishReason: (sessionId: string, messageId: string, finishReason: string) => {
+    set((state) => ({
+      sessions: state.sessions.map((s) => {
+        if (s.id !== sessionId) return s;
+        return {
+          ...s,
+          messages: s.messages.map((m) => (m.id === messageId ? { ...m, finishReason } : m)),
         };
       }),
     }));

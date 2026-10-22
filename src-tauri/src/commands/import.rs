@@ -103,7 +103,13 @@ pub async fn import_gguf(
 
     let repo_url = format!("https://huggingface.co/{repo_id}");
     let readme_url = format!("https://huggingface.co/{repo_id}/raw/main/README.md");
-    let model_card = match state.http_client.get(&readme_url).send().await {
+    let model_card = match state
+        .http_client
+        .get(&readme_url)
+        .timeout(std::time::Duration::from_secs(super::constants::HTTP_TIMEOUT_SECS))
+        .send()
+        .await
+    {
         Ok(resp) if resp.status().is_success() => resp.text().await.ok(),
         _ => None,
     }

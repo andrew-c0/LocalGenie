@@ -29,6 +29,9 @@ pub async fn search_models(
     let resp = state
         .http_client
         .get(&url)
+        .timeout(std::time::Duration::from_secs(
+            super::constants::HTTP_TIMEOUT_SECS,
+        ))
         .send()
         .await
         .map_err(|e| format!("HF API request failed: {e}"))?;

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ChatSession, Message } from "../types";
+import type { ChatSession, GenerationStats, Message } from "../types";
+import { chatErrorContent } from "../utils/chatError";
 
 /** Valid message roles — used to validate DB values at runtime. */
 const VALID_ROLES = new Set<Message["role"]>(["user", "assistant", "system"]);
@@ -19,6 +20,7 @@ interface DbSessionWithMessages {
   created_at: number;
   updated_at: number;
   messages: DbMessageRow[];
+  errors: DbChatErrorRow[];
 }
 
 interface DbMessageRow {
@@ -28,25 +30,71 @@ interface DbMessageRow {
   content: string;
   model_id: string | null;
   created_at: number;
+  finish_reason: string | null;
+  time_to_first_token_ms: number | null;
+  total_time_ms: number | null;
+  token_count: number | null;
+  prompt_chars: number | null;
+}
+
+/** Builds `GenerationStats` from a message row. Undefined unless all four columns are set (older rows have none). */
+function toGenerationStats(m: DbMessageRow): GenerationStats | undefined {
+  if (
+    m.time_to_first_token_ms === null ||
+    m.total_time_ms === null ||
+    m.token_count === null ||
+    m.prompt_chars === null
+  ) {
+    return undefined;
+  }
+  return {
+    timeToFirstToken: m.time_to_first_token_ms,
+    totalTime: m.total_time_ms,
+    tokenCount: m.token_count,
+    promptChars: m.prompt_chars,
+  };
+}
+
+/** Row of `chat_errors`. `message_id` is null when the error had no reply. */
+interface DbChatErrorRow {
+  id: string;
+  session_id: string;
+  message_id: string | null;
+  error: string;
+  created_at: number;
 }
 
 export async function loadSessions(): Promise<ChatSession[]> {
   const rows: DbSessionWithMessages[] = await invoke("load_sessions");
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    modelId: row.model_id ?? undefined,
-    contextChars: row.context_chars,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    messages: row.messages.map((m) => ({
+  return rows.map((row) => {
+    const messages: Message[] = row.messages.map((m) => ({
       id: m.id,
       role: toValidRole(m.role),
       content: m.content,
       modelId: m.model_id ?? undefined,
       timestamp: m.created_at,
-    })),
-  }));
+      finishReason: m.finish_reason ?? undefined,
+      stats: toGenerationStats(m),
+    }));
+    // Errors come back as their own rows; show them in time order, after the reply they belong to.
+    const errors: Message[] = row.errors.map((e) => ({
+      id: e.id,
+      role: "assistant",
+      content: chatErrorContent(e.error),
+      timestamp: e.created_at,
+      isError: true,
+    }));
+    return {
+      id: row.id,
+      title: row.title,
+      modelId: row.model_id ?? undefined,
+      contextChars: row.context_chars,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      // Array sort is stable, so on equal timestamps the stored message stays first.
+      messages: [...messages, ...errors].sort((a, b) => a.timestamp - b.timestamp),
+    };
+  });
 }
 
 export async function saveSession(session: ChatSession): Promise<void> {
@@ -82,8 +130,37 @@ export async function saveMessage(sessionId: string, message: Message): Promise<
       content: message.content,
       model_id: message.modelId ?? null,
       created_at: message.timestamp,
+      finish_reason: message.finishReason ?? null,
+      time_to_first_token_ms: message.stats?.timeToFirstToken ?? null,
+      total_time_ms: message.stats?.totalTime ?? null,
+      token_count: message.stats?.tokenCount ?? null,
+      prompt_chars: message.stats?.promptChars ?? null,
     },
   });
+}
+
+/** A chat error to persist. `messageId` is the reply it belongs to, or null if there was no reply. */
+export interface ChatErrorInput {
+  id: string;
+  messageId: string | null;
+  error: string;
+  timestamp: number;
+}
+
+export async function saveChatError(sessionId: string, error: ChatErrorInput): Promise<void> {
+  await invoke("save_chat_error", {
+    error: {
+      id: error.id,
+      session_id: sessionId,
+      message_id: error.messageId,
+      error: error.error,
+      created_at: error.timestamp,
+    },
+  });
+}
+
+export async function deleteChatError(id: string): Promise<void> {
+  await invoke("delete_chat_error", { id });
 }
 
 // ─── Model Settings ──────────────────────────────────────────────

@@ -29,6 +29,10 @@ export interface Message {
   timestamp: number;
   modelId?: string;
   stats?: GenerationStats;
+  /** Server `finish_reason` for an assistant reply ("stop", "length", ...), or "cancelled". Persisted. */
+  finishReason?: string;
+  /** True for an error shown in the chat. Stored in `chat_errors`, not in `messages`. */
+  isError?: boolean;
 }
 
 export interface GenerationStats {

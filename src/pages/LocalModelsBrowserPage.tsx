@@ -32,6 +32,7 @@ import * as hub from "../services/hubModels";
 import { isDownloadActive, useDownloadStore } from "../stores/downloadStore";
 import { useModelStore } from "../stores/modelStore";
 import { runWithConcurrency } from "../utils/async";
+import { FAMILY_ALL, familyFilterOptions, matchesFamily } from "../utils/modelFamily";
 
 /** Parallel GGUF tree lookups for search results (Hugging Face rate-limits bursts). */
 const GGUF_LOOKUP_CONCURRENCY = 4;
@@ -94,6 +95,7 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
 
   const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
   const [query, setQuery] = useState("");
+  const [family, setFamily] = useState(FAMILY_ALL);
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [downloadedMeta, setDownloadedMeta] = useState<Map<string, db.DbDownloadedModel>>(
@@ -236,12 +238,17 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
     return list;
   }, [models, searchResults, ggufCache, downloadedMeta]);
 
-  /** Cards whose model name contains the search text (case-insensitive). */
+  /** Family chips for the cards on screen; the active family falls back to All when it disappears. */
+  const familyOptions = useMemo(() => familyFilterOptions(cards.map((c) => c.name)), [cards]);
+  const activeFamily = familyOptions.some(([id]) => id === family) ? family : FAMILY_ALL;
+
+  /** Cards whose model name contains the search text (case-insensitive) and that match the family. */
   const visibleCards = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return cards;
-    return cards.filter((m) => m.name.toLowerCase().includes(q));
-  }, [cards, query]);
+    return cards.filter(
+      (m) => (!q || m.name.toLowerCase().includes(q)) && matchesFamily(m.name, activeFamily),
+    );
+  }, [cards, query, activeFamily]);
 
   const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
     navigate(data.value === "all" ? "/models/browse" : "/models");
@@ -297,6 +304,15 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
                 Search
               </Button>
             </div>
+
+            {familyOptions.length > 2 && (
+              <ChipRow
+                options={familyOptions}
+                value={activeFamily}
+                onChange={setFamily}
+                ariaLabel="Model family"
+              />
+            )}
 
             {searchResults.length > 0 && (
               <ChipRow

@@ -7,6 +7,7 @@ import { serverBaseUrl } from "../services/geniex";
 import { useChatStore } from "../stores/chatStore";
 import { defaultSettings, useModelStore } from "../stores/modelStore";
 import type { Message } from "../types";
+import { chatErrorContent } from "../utils/chatError";
 
 const useStyles = makeStyles({
   area: {
@@ -33,6 +34,12 @@ const useStyles = makeStyles({
 /** The message box grows from one row up to this many rows, then scrolls. */
 const MAX_INPUT_ROWS = 5;
 
+/** Last message in a session, read from the store. */
+function lastMessageOf(sessionId: string): Message | undefined {
+  const messages = useChatStore.getState().sessions.find((s) => s.id === sessionId)?.messages ?? [];
+  return messages[messages.length - 1];
+}
+
 export default function ChatInput() {
   const styles = useStyles();
   const [text, setText] = useState("");
@@ -58,6 +65,8 @@ export default function ChatInput() {
       setLastSendTime(Date.now());
       const streamId = crypto.randomUUID();
       setActiveStream({ streamId, sessionId });
+      // A reply has started only if a message newer than this one appears during the send.
+      const priorLastId = lastMessageOf(sessionId)?.id;
 
       const rawModelId = useModelStore.getState().activeModelId;
 
@@ -84,16 +93,31 @@ export default function ChatInput() {
         );
       } catch (err) {
         console.error("Chat completion failed:", err);
-        // TODO: this error is shown but not saved to the DB, and it is sent back as
-        // context on the next turn. Decide whether errors should be excluded from context
-        // and persisted, so they survive a reload.
+        const error = String(err);
+        const timestamp = Date.now();
+        // The reply in progress, if this send produced one. Its partial text is saved so the error has a stored parent.
+        const last = lastMessageOf(sessionId);
+        const reply =
+          last && last.role === "assistant" && last.id !== priorLastId && !last.isError
+            ? last
+            : undefined;
+        // Shown in the chat like before, and stored as a chat error so a reload restores it.
+        // The error stays out of `messages`, so it is not stored twice.
         const errorMsg: Message = {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: `⚠️ Error: ${String(err)}`,
-          timestamp: Date.now(),
+          content: chatErrorContent(error),
+          timestamp,
+          isError: true,
         };
         addMessage(sessionId, errorMsg);
+        if (reply) db.saveMessage(sessionId, reply).catch(() => {});
+        db.saveChatError(sessionId, {
+          id: errorMsg.id,
+          messageId: reply?.id ?? null,
+          error,
+          timestamp,
+        }).catch(() => {});
         setActiveStream(null);
         setStreaming(false);
       }
@@ -160,7 +184,8 @@ export default function ChatInput() {
     if (messagesToRemove.length > 0) {
       store.removeMessagesAfter(activeSessionId, retryFromMessageId);
       for (const msg of messagesToRemove) {
-        db.deleteMessage(msg.id).catch(() => {});
+        if (msg.isError) db.deleteChatError(msg.id).catch(() => {});
+        else db.deleteMessage(msg.id).catch(() => {});
       }
     }
 

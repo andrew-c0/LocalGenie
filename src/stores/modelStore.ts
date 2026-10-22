@@ -97,7 +97,7 @@ export const defaultSettings: GenerationSettings = {
   topK: 40,
   minP: 0.05,
   repetitionPenalty: 1.1,
-  maxTokens: 2048,
+  // maxTokens is unset by default: the server's own limit applies.
   nctx: 4096,
   systemPrompt: "",
   think: true,

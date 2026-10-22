@@ -55,6 +55,9 @@ pub(crate) async fn fetch_loaded_models(
 ) -> Result<Vec<String>, String> {
     let resp = client
         .get(format!("{base_url}/v1/models"))
+        .timeout(std::time::Duration::from_secs(
+            super::constants::HTTP_TIMEOUT_SECS,
+        ))
         .send()
         .await
         .map_err(|e| format!("Failed to fetch models: {e}"))?;

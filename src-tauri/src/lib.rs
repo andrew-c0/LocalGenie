@@ -72,6 +72,8 @@ pub fn run() {
             database::delete_session,
             database::save_message,
             database::delete_message,
+            database::save_chat_error,
+            database::delete_chat_error,
             database::load_model_settings,
             database::save_model_settings,
             database::get_preference,

@@ -11,6 +11,13 @@ pub struct Model {
     pub content: String,
     pub model_id: Option<String>,
     pub created_at: i64,
+    /// Server `finish_reason` ("stop", "length", "cancelled"); None when unknown.
+    pub finish_reason: Option<String>,
+    /// Generation stats in ms / counts; None for messages saved before stats were kept.
+    pub time_to_first_token_ms: Option<i64>,
+    pub total_time_ms: Option<i64>,
+    pub token_count: Option<i64>,
+    pub prompt_chars: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

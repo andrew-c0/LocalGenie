@@ -3,6 +3,8 @@ import { ArrowReplyRegular } from "@fluentui/react-icons";
 import { useChatStore } from "../stores/chatStore";
 import type { Message } from "../types";
 import { formatDuration, formatTokPerSec } from "../utils/format";
+import { parseThinking } from "../utils/thinking";
+import { ThinkingBlock } from "./chat/ThinkingBlock/ThinkingBlock";
 import { MarkdownContent } from "./ui/MarkdownContent/MarkdownContent";
 
 const useStyles = makeStyles({
@@ -38,18 +40,24 @@ const useStyles = makeStyles({
     gap: tokens.spacingHorizontalS,
     color: tokens.colorNeutralForeground3,
   },
+  notice: {
+    color: tokens.colorPaletteDarkOrangeForeground1,
+  },
 });
 
 interface MessageBubbleProps {
   message: Message;
   isLastUserMessage?: boolean;
   isStreaming?: boolean;
+  /** True for the reply that is being streamed right now. */
+  isLive?: boolean;
 }
 
 export default function MessageBubble({
   message,
   isLastUserMessage = false,
   isStreaming = false,
+  isLive = false,
 }: MessageBubbleProps) {
   const styles = useStyles();
   const isUser = message.role === "user";
@@ -59,15 +67,22 @@ export default function MessageBubble({
   const showRetry = isUser && isLastUserMessage && !isStreaming && message.content.trim();
 
   const stats = isAssistant ? message.stats : undefined;
+  const reply = isAssistant ? parseThinking(message.content) : null;
 
   return (
     <div className={`${styles.row} ${isUser ? styles.rowUser : ""}`}>
       <Avatar name={isUser ? "User" : "AI"} size={32} color={isUser ? "neutral" : "brand"} />
       <div className={`${styles.bubble} ${isUser ? styles.bubbleUser : ""}`}>
-        {isUser ? (
-          <Body1 className={styles.pre}>{message.content}</Body1>
-        ) : (
-          <MarkdownContent>{message.content || ""}</MarkdownContent>
+        {isUser && <Body1 className={styles.pre}>{message.content}</Body1>}
+        {reply && (reply.thinking || reply.thinkingOpen) && (
+          <ThinkingBlock text={reply.thinking} live={isLive && reply.thinkingOpen} />
+        )}
+        {reply?.answer && <MarkdownContent>{reply.answer}</MarkdownContent>}
+
+        {isAssistant && message.finishReason === "length" && (
+          <Caption1 className={styles.notice}>
+            Stopped: the model reached its length limit.
+          </Caption1>
         )}
 
         {isAssistant && stats && (

@@ -31,8 +31,12 @@ impl Default for AppState {
         Self {
             server_process: Mutex::new(None),
             server_logs: Mutex::new(logs::LogBuffer::default()),
+            // No total timeout here: chat streams run until the model finishes.
+            // Non-streaming calls set `HTTP_TIMEOUT_SECS` per request.
             http_client: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(constants::HTTP_TIMEOUT_SECS))
+                .connect_timeout(std::time::Duration::from_secs(
+                    constants::HTTP_CONNECT_TIMEOUT_SECS,
+                ))
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new()),
         }

@@ -2,6 +2,7 @@ import { Caption1, Divider, makeStyles, Spinner, tokens } from "@fluentui/react-
 import { useEffect, useRef } from "react";
 import { useChatStore } from "../stores/chatStore";
 import type { Message } from "../types";
+import { parseThinking } from "../utils/thinking";
 import MessageBubble from "./MessageBubble";
 
 const useStyles = makeStyles({
@@ -36,17 +37,16 @@ const useStyles = makeStyles({
 
 /**
  * What the model is doing before its visible answer starts. Derived from the streamed text:
- * no reply yet → prefill; an open `<think>` block → thinking; only whitespace visible → outputting.
- * Returns null once visible answer text exists (the bubble itself shows progress from there).
+ * no reply yet → prefill; an open thinking block → its own panel shows progress (null here);
+ * no answer text yet → outputting. Returns null once visible answer text exists.
  */
 function streamingStatus(messages: Message[], isStreaming: boolean): string | null {
   if (!isStreaming) return null;
   const last = messages[messages.length - 1];
   if (last?.role !== "assistant") return "Prefilling prompt…";
-  const text = last.content;
-  if (text.lastIndexOf("<think>") > text.lastIndexOf("</think>")) return "Thinking…";
-  const visible = text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-  return visible ? null : "Outputting…";
+  const reply = parseThinking(last.content);
+  if (reply.thinkingOpen) return null;
+  return reply.answer ? null : "Outputting…";
 }
 
 export default function ChatArea() {
@@ -81,6 +81,8 @@ export default function ChatArea() {
   const renderedMessages: React.ReactNode[] = [];
   let prevModelId: string | undefined;
 
+  const lastMsgId = session.messages[session.messages.length - 1]?.id;
+
   for (const msg of session.messages) {
     // Show delimiter when the assistant's model changes
     if (msg.role === "assistant" && msg.modelId && msg.modelId !== prevModelId) {
@@ -101,6 +103,7 @@ export default function ChatArea() {
         message={msg}
         isLastUserMessage={msg.role === "user" && msg.id === lastUserMsgId}
         isStreaming={isStreaming}
+        isLive={isStreaming && msg.id === lastMsgId}
       />,
     );
   }

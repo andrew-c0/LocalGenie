@@ -11,6 +11,7 @@ import {
   PopoverSurface,
   Radio,
   RadioGroup,
+  Select,
   Spinner,
   tokens,
 } from "@fluentui/react-components";
@@ -31,6 +32,7 @@ import {
   useModelStore,
 } from "../../stores/modelStore";
 import type { ModelInfo } from "../../types";
+import { FAMILY_ALL, familyFilterOptions, matchesFamily } from "../../utils/modelFamily";
 import { ModelOptionButton } from "./ModelOptionButton";
 
 /** Label + description for each compute target. */
@@ -106,6 +108,7 @@ export default function ModelSelectorPopover() {
   const setServerCompute = useModelStore((s) => s.setServerCompute);
 
   const [query, setQuery] = useState("");
+  const [family, setFamily] = useState(FAMILY_ALL);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** Compute target the running server was started with; unknown (external) servers are assumed default. */
@@ -114,9 +117,13 @@ export default function ModelSelectorPopover() {
   useEffect(() => {
     if (selectorOpen) {
       setQuery("");
+      setFamily(FAMILY_ALL);
       setError(null);
     }
   }, [selectorOpen]);
+
+  const familyOptions = useMemo(() => familyFilterOptions(models.map((m) => m.name)), [models]);
+  const activeFamily = familyOptions.some(([id]) => id === family) ? family : FAMILY_ALL;
 
   const { loadedModels, readyModels } = useMemo(() => {
     const loadedNames = new Set(serverStatus.models.map((m) => m.split(":")[0]));
@@ -126,11 +133,12 @@ export default function ModelSelectorPopover() {
     for (const m of models) {
       const base = m.name.split("/").pop() ?? m.name;
       if (q && !base.toLowerCase().includes(q)) continue;
+      if (!matchesFamily(m.name, activeFamily)) continue;
       if (loadedNames.has(base)) loaded.push(m);
       else ready.push(m);
     }
     return { loadedModels: loaded, readyModels: ready };
-  }, [models, serverStatus.models, query]);
+  }, [models, serverStatus.models, query, activeFamily]);
 
   const close = () => setSelectorOpen(false);
 
@@ -245,6 +253,24 @@ export default function ModelSelectorPopover() {
           />
         }
       />
+
+      {familyOptions.length > 2 && (
+        <div className={styles.inline}>
+          <Caption1Strong>Family</Caption1Strong>
+          <Select
+            size="small"
+            aria-label="Filter models by family"
+            value={activeFamily}
+            onChange={(_, data) => setFamily(data.value)}
+          >
+            {familyOptions.map(([id, label]) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
 
       {error && (
         <MessageBar intent="error">
