@@ -16,8 +16,8 @@ import {
 } from "@fluentui/react-components";
 import {
   ArrowRightRegular,
-  ArrowUploadRegular,
   DismissRegular,
+  PlugDisconnectedRegular,
   SearchRegular,
 } from "@fluentui/react-icons";
 import { useEffect, useMemo, useState } from "react";
@@ -42,31 +42,38 @@ const COMPUTE_META: Record<ComputeChoice, { label: string; hint: string }> = {
 
 const useStyles = makeStyles({
   surface: {
-    width: "360px",
+    minWidth: "360px",
     maxHeight: "70vh",
     display: "flex",
     flexDirection: "column",
-    gap: tokens.spacingVerticalS,
-    padding: tokens.spacingHorizontalM,
+    gap: tokens.spacingVerticalM,
+    padding: tokens.spacingHorizontalL,
   },
   list: {
     display: "flex",
     flexDirection: "column",
-    gap: tokens.spacingVerticalXXS,
+    gap: tokens.spacingVerticalS,
     overflowY: "auto",
   },
   section: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: tokens.spacingVerticalXS,
+    paddingTop: tokens.spacingVerticalS,
   },
   computeRow: {
     display: "flex",
     flexDirection: "column",
-    gap: tokens.spacingVerticalXXS,
+    gap: tokens.spacingVerticalS,
   },
   footer: {
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+  },
+  footerGroup: {
     display: "flex",
     flexWrap: "wrap",
     gap: tokens.spacingHorizontalS,
@@ -231,7 +238,6 @@ export default function ModelSelectorPopover() {
         contentAfter={
           <Button
             appearance="transparent"
-            size="small"
             icon={<DismissRegular />}
             onClick={close}
             aria-label="Close"
@@ -296,39 +302,39 @@ export default function ModelSelectorPopover() {
       <Divider />
 
       <div className={styles.footer}>
+        <div className={styles.footerGroup}>
+          <Button
+            appearance="subtle"
+            icon={<ArrowRightRegular />}
+            iconPosition="after"
+            onClick={() => {
+              close();
+              navigate("/models");
+            }}
+          >
+            Browse Model Hub...
+          </Button>
+          <Button
+            appearance="subtle"
+            onClick={() => {
+              close();
+              navigate("/settings");
+            }}
+          >
+            Manage Weights & Storage
+          </Button>
+        </div>
         {serverStatus.running && serverStatus.models.length > 0 && (
           <Button
             appearance="subtle"
-            size="small"
-            icon={loading === "__unload__" ? <Spinner size="tiny" /> : <ArrowUploadRegular />}
+            icon={loading === "__unload__" ? <Spinner size="tiny" /> : <PlugDisconnectedRegular />}
+            title="Unload all models"
             disabled={loading !== null}
             onClick={handleUnload}
           >
             Unload
           </Button>
         )}
-        <Button
-          appearance="subtle"
-          size="small"
-          icon={<ArrowRightRegular />}
-          iconPosition="after"
-          onClick={() => {
-            close();
-            navigate("/models");
-          }}
-        >
-          Browse Model Hub...
-        </Button>
-        <Button
-          appearance="subtle"
-          size="small"
-          onClick={() => {
-            close();
-            navigate("/settings");
-          }}
-        >
-          Manage Weights & Storage
-        </Button>
       </div>
     </PopoverSurface>
   );

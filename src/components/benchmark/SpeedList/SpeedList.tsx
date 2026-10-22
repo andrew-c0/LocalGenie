@@ -62,7 +62,7 @@ export function SpeedList() {
             <Text weight="semibold">{s.model}</Text>
             <ProgressBar value={(s.tps / max) * 100} color="cyan" />
           </div>
-          <Text font="monospace">{s.tps.toFixed(1)} tok/s</Text>
+          <Text>{s.tps.toFixed(1)} tok/s</Text>
         </div>
       ))}
     </div>

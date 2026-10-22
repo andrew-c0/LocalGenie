@@ -6,7 +6,7 @@ const useStyles = makeStyles({
     display: "flex",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    alignItems: "flex-end",
+    alignItems: "center",
     gap: tokens.spacingHorizontalM,
     padding: `${tokens.spacingVerticalL} ${tokens.spacingHorizontalL} 0`,
   },
@@ -18,19 +18,19 @@ const useStyles = makeStyles({
 });
 
 interface PageHeaderProps {
-  eyebrow: string;
+  eyebrow?: string;
   title: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
 }
 
-/** Standard page header: eyebrow + title + subtitle with optional action area. */
+/** Standard page header: optional eyebrow, title, optional subtitle and action area. */
 export function PageHeader({ eyebrow, title, subtitle, actions }: PageHeaderProps) {
   const styles = useStyles();
   return (
     <div className={styles.row}>
       <div>
-        <Caption1Strong>{eyebrow}</Caption1Strong>
+        {eyebrow && <Caption1Strong>{eyebrow}</Caption1Strong>}
         <Title2 as="h1">{title}</Title2>
         {subtitle && <Body1>{subtitle}</Body1>}
       </div>

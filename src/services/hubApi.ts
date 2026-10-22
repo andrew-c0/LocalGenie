@@ -27,6 +27,8 @@ export interface HubModel {
   private?: boolean;
   /** Present on GET /api/models/{id} — total parameter count of the repo. */
   safetensors?: { total?: number; parameters?: number };
+  /** Present on GET /api/models/{id}?expand[]=gguf for GGUF repos — metadata read from the GGUF file. */
+  gguf?: { architecture?: string; context_length?: number; total?: number };
 }
 
 /** One active filter chip. Encoded as `filter=<type>:<value>` on the wire. */
@@ -129,13 +131,35 @@ export async function listHubModels(query: HubQuery): Promise<HubPage> {
   return { models, nextCursor: parseCursor(res.headers.get("Link")) };
 }
 
-/** GET /api/models/{namespace}/{repo} — full details for one model. */
+/**
+ * GET /api/models/{namespace}/{repo} — full details for one model, with its GGUF metadata merged in.
+ * `expand[]=gguf` returns only the expanded fields, so it is fetched separately and the GGUF metadata
+ * is merged in; the base response keeps downloads, likes and the rest.
+ */
 export async function getHubModel(repoId: string): Promise<HubModel> {
-  const res = await fetch(`${HUB_BASE}/api/models/${repoId}`, {
-    headers: { Accept: "application/json" },
-  });
-  if (!res.ok) throw new Error(`Hugging Face API error ${res.status}: ${res.statusText}`);
-  return (await res.json()) as HubModel;
+  const headers = { Accept: "application/json" };
+  const [baseRes, ggufRes] = await Promise.all([
+    fetch(`${HUB_BASE}/api/models/${repoId}`, { headers }),
+    fetch(`${HUB_BASE}/api/models/${repoId}?expand[]=gguf`, { headers }).catch(() => null),
+  ]);
+  if (!baseRes.ok)
+    throw new Error(`Hugging Face API error ${baseRes.status}: ${baseRes.statusText}`);
+  const model = (await baseRes.json()) as HubModel;
+  if (ggufRes?.ok) {
+    const expanded = (await ggufRes.json()) as Partial<HubModel>;
+    if (expanded.gguf) model.gguf = expanded.gguf;
+  }
+  return model;
+}
+
+/** Native context window (tokens) from the repo's GGUF metadata, or null when the repo does not report one. */
+export async function fetchContextLength(repoId: string): Promise<number | null> {
+  try {
+    const model = await getHubModel(repoId);
+    return model.gguf?.context_length ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** One file entry from the repo tree (GET /api/models/{id}/tree/{rev}). */

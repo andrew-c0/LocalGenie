@@ -106,7 +106,7 @@ export default function PromptBenchmarkPage() {
           <Text weight="semibold" size={400}>
             Benchmark Suite
           </Text>
-          <Text font="monospace" size={200} block>
+          <Text size={200} block>
             {serverStatus.running ? `runtime :${serverStatus.port}` : "runtime offline"}
           </Text>
         </div>
@@ -132,9 +132,7 @@ export default function PromptBenchmarkPage() {
           <div className={styles.navFooterRow}>
             <div className={styles.navFooterText}>
               <Caption1>Active Model</Caption1>
-              <Text font="monospace">
-                {activeModelId ? activeModelId.split("/").pop() : "none"}
-              </Text>
+              <Text>{activeModelId ? activeModelId.split("/").pop() : "none"}</Text>
             </div>
           </div>
           <StatusBadge tone={serverStatus.running ? "green" : "red"}>

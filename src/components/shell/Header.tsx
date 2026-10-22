@@ -23,8 +23,17 @@ const useStyles = makeStyles({
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     backgroundColor: tokens.colorNeutralBackground1,
   },
-  spacer: {
+  selectorButton: {
     flex: 1,
+    minWidth: 0,
+    justifyContent: "space-between",
+  },
+  label: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalM,
+    minWidth: 0,
+    overflow: "hidden",
   },
 });
 
@@ -43,24 +52,28 @@ export default function Header() {
     ? activeModelId.split("/").pop()
     : serverStatus.models.length > 0
       ? serverStatus.models[0].split("/").pop()
-      : "No model loaded";
+      : null;
 
   return (
     <div className={styles.bar}>
       <Popover
         open={selectorOpen}
         onOpenChange={(_, data) => setSelectorOpen(data.open)}
-        positioning="below-start"
+        positioning={{ position: "below", align: "start", matchTargetSize: "width" }}
       >
         <PopoverTrigger disableButtonEnhancement>
           <Button
             appearance="subtle"
+            className={styles.selectorButton}
             icon={<ChevronDownRegular />}
             iconPosition="after"
             aria-label="Switch active model"
             title="Switch active model"
           >
-            <Text weight="semibold">Active Model:</Text> <Text font="monospace">{activeLabel}</Text>
+            <span className={styles.label}>
+              <Text weight="semibold">{activeLabel ? "Active Model:" : "Model selector:"}</Text>
+              <Text>{activeLabel ?? "no model loaded"}</Text>
+            </span>
           </Button>
         </PopoverTrigger>
         <ModelSelectorPopover />
@@ -73,20 +86,6 @@ export default function Header() {
       >
         {serverStatus.running ? "Connected" : "Offline"}
       </Badge>
-
-      {serverStatus.models.length > 0 && (
-        <Badge appearance="filled" color="brand" size="small">
-          {serverStatus.models.length} loaded
-        </Badge>
-      )}
-
-      {activeDownloads > 0 && (
-        <Badge appearance="tint" color="informative" size="small">
-          {activeDownloads} downloading
-        </Badge>
-      )}
-
-      <div className={styles.spacer} />
 
       <Button
         appearance={activeDownloads > 0 ? "primary" : "subtle"}

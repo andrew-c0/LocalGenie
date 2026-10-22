@@ -143,7 +143,6 @@ export default function ServerPortCard() {
         <div className={styles.actions}>
           <Button
             appearance="primary"
-            size="small"
             icon={saving ? <Spinner size="tiny" /> : <SaveRegular />}
             onClick={handleSave}
             disabled={saving || (isPortChanged && portInUse)}

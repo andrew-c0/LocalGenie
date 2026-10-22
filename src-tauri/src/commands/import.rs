@@ -55,6 +55,24 @@ pub async fn import_gguf(
         .await
         .map_err(|e| format!("Failed to move file to base model folder: {e}"))?;
 
+    // Read the native context length now: the frontend deletes this folder once the import finishes.
+    let header_path = new_path.clone();
+    let context_size = match tokio::task::spawn_blocking(move || {
+        crate::gguf::read_context_length(&header_path)
+    })
+    .await
+    {
+        Ok(Ok(size)) => size,
+        Ok(Err(e)) => {
+            eprintln!("Could not read GGUF context length: {e}");
+            None
+        }
+        Err(e) => {
+            eprintln!("GGUF header task failed: {e}");
+            None
+        }
+    };
+
     let _ = app.emit("model-pull-start", serde_json::json!({ "model": repo_id }));
     let _ = app.emit(
         "model-pull-progress",
@@ -83,11 +101,6 @@ pub async fn import_gguf(
         return Err(format!("`geniex pull` failed: {stderr}"));
     }
 
-    let _ = app.emit(
-        "model-pull-complete",
-        serde_json::json!({ "model": repo_id }),
-    );
-
     let repo_url = format!("https://huggingface.co/{repo_id}");
     let readme_url = format!("https://huggingface.co/{repo_id}/raw/main/README.md");
     let model_card = match state.http_client.get(&readme_url).send().await {
@@ -100,7 +113,7 @@ pub async fn import_gguf(
         db,
         repo_id.clone(),
         Some(precision.clone()),
-        None,
+        context_size,
         None,
         Some(repo_url),
         model_card,
@@ -109,6 +122,12 @@ pub async fn import_gguf(
     {
         eprintln!("Failed to upsert downloaded model metadata: {e}");
     }
+
+    // Emitted last: listeners read the metadata row as soon as this fires.
+    let _ = app.emit(
+        "model-pull-complete",
+        serde_json::json!({ "model": repo_id }),
+    );
 
     Ok(target_dir.to_string_lossy().into_owned())
 }

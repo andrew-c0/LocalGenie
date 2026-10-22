@@ -88,7 +88,6 @@ export default function ServerLogsCard() {
           </Caption1>
           <Button
             appearance="subtle"
-            size="small"
             icon={<DeleteRegular />}
             onClick={handleClear}
             disabled={lines.length === 0}

@@ -15,7 +15,7 @@ const useStyles = makeStyles({
   },
   wrapper: {
     display: "flex",
-    alignItems: "flex-end",
+    alignItems: "stretch",
     gap: tokens.spacingHorizontalS,
     maxWidth: "840px",
     margin: "0 auto",
@@ -24,7 +24,14 @@ const useStyles = makeStyles({
     flex: 1,
     minWidth: 0,
   },
+  actionButton: {
+    height: "auto",
+    minWidth: "44px",
+  },
 });
+
+/** The message box grows from one row up to this many rows, then scrolls. */
+const MAX_INPUT_ROWS = 5;
 
 export default function ChatInput() {
   const styles = useStyles();
@@ -178,13 +185,23 @@ export default function ChatInput() {
     }
   };
 
-  const handleInput = () => {
+  /** Fit the textarea to its content, capped at MAX_INPUT_ROWS rows. Runs whenever the text changes, including after a send clears it. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: text is the trigger, the height is read from the DOM
+  useEffect(() => {
     const el = textareaRef.current;
-    if (el) {
-      el.style.height = "auto";
-      el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
-    }
-  };
+    if (!el) return;
+    el.style.height = "auto";
+    const computed = getComputedStyle(el);
+    const lineHeight = Number.parseFloat(computed.lineHeight) || 20;
+    const chrome =
+      Number.parseFloat(computed.paddingTop) +
+      Number.parseFloat(computed.paddingBottom) +
+      Number.parseFloat(computed.borderTopWidth) +
+      Number.parseFloat(computed.borderBottomWidth);
+    const maxHeight = lineHeight * MAX_INPUT_ROWS + chrome;
+    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+    el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [text]);
 
   const isDisabled = !text.trim() || isStreaming || !serverStatus.running;
 
@@ -196,10 +213,7 @@ export default function ChatInput() {
           className={styles.field}
           resize="none"
           value={text}
-          onChange={(_, data) => {
-            setText(data.value);
-            handleInput();
-          }}
+          onChange={(_, data) => setText(data.value)}
           onKeyDown={handleKeyDown}
           placeholder={
             serverStatus.running
@@ -214,7 +228,7 @@ export default function ChatInput() {
           <Button
             type="button"
             appearance="secondary"
-            size="small"
+            className={styles.actionButton}
             onClick={handleStop}
             title="Stop generation"
             aria-label="Stop generation"
@@ -225,7 +239,7 @@ export default function ChatInput() {
           <Button
             type="button"
             appearance="primary"
-            size="small"
+            className={styles.actionButton}
             onClick={handleSend}
             disabled={isDisabled}
             aria-label="Send message"

@@ -75,6 +75,8 @@ const useStyles = makeStyles({
   },
   search: {
     flex: 1,
+    width: "100%",
+    maxWidth: "none",
     minWidth: "240px",
   },
   sort: {
@@ -160,54 +162,53 @@ export default function HubModelBrowser({ area, downloading }: Props) {
             if (e.key === "Enter") void s.refresh();
           }}
         />
-        <Button appearance="primary" size="small" onClick={() => void s.refresh()}>
+        <Button appearance="primary" onClick={() => void s.refresh()}>
           {s.isLoading ? <Spinner size="tiny" /> : "Search"}
         </Button>
-        <Dropdown
-          className={styles.sort}
-          aria-label="Sort models"
-          value={sortLabel}
-          selectedOptions={[s.sort]}
-          onOptionSelect={handleSortSelect}
-        >
-          {SORT_OPTIONS.map(([value, label]) => (
-            <Option key={value} value={value}>
-              {label}
-            </Option>
-          ))}
-        </Dropdown>
         <Button
-          size="small"
           appearance="secondary"
-          icon={<ArrowSortRegular />}
-          onClick={s.toggleAscending}
-          title={s.ascending ? "Ascending" : "Descending"}
+          icon={filtersOpen ? <ChevronDownRegular /> : <ChevronRightRegular />}
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen((v) => !v)}
         >
-          {s.ascending ? "Asc" : "Desc"}
+          Filters{activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ""}
         </Button>
-        {area === "all" && (
-          <Switch
-            label="GGUF only"
-            checked={s.ggufOnly}
-            onChange={(_, data) => s.setGgufOnly(data.checked)}
-            title="Show only models with GGUF weights (runnable by GenieX)"
-          />
-        )}
       </div>
-
-      <Button
-        appearance="subtle"
-        size="small"
-        icon={filtersOpen ? <ChevronDownRegular /> : <ChevronRightRegular />}
-        aria-expanded={filtersOpen}
-        onClick={() => setFiltersOpen((v) => !v)}
-        className={styles.toolbar}
-      >
-        Filters{activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ""}
-      </Button>
 
       {filtersOpen && (
         <div className={styles.filters}>
+          <div className={styles.toolbar}>
+            <Dropdown
+              className={styles.sort}
+              aria-label="Sort models"
+              value={sortLabel}
+              selectedOptions={[s.sort]}
+              onOptionSelect={handleSortSelect}
+            >
+              {SORT_OPTIONS.map(([value, label]) => (
+                <Option key={value} value={value}>
+                  {label}
+                </Option>
+              ))}
+            </Dropdown>
+            <Button
+              appearance="secondary"
+              icon={<ArrowSortRegular />}
+              onClick={s.toggleAscending}
+              title={s.ascending ? "Ascending" : "Descending"}
+            >
+              {s.ascending ? "Asc" : "Desc"}
+            </Button>
+            {area === "all" && (
+              <Switch
+                label="GGUF only"
+                checked={s.ggufOnly}
+                onChange={(_, data) => s.setGgufOnly(data.checked)}
+                title="Show only models with GGUF weights (runnable by GenieX)"
+              />
+            )}
+          </div>
+
           {CHIP_GROUPS.map(([label, values, type]) => (
             <fieldset key={type} className={styles.group} aria-label={`${label} filters`}>
               <Caption1 className={styles.groupLabel}>{label}</Caption1>
@@ -226,12 +227,7 @@ export default function HubModelBrowser({ area, downloading }: Props) {
 
           {activeFilterCount > 0 && (
             <div>
-              <Button
-                size="small"
-                appearance="subtle"
-                icon={<DismissRegular />}
-                onClick={s.clearFilters}
-              >
+              <Button appearance="subtle" icon={<DismissRegular />} onClick={s.clearFilters}>
                 Clear {activeFilterCount} filter(s)
               </Button>
             </div>
@@ -283,7 +279,6 @@ export default function HubModelBrowser({ area, downloading }: Props) {
         <div className={styles.center}>
           <Button
             appearance="secondary"
-            size="small"
             disabled={s.isFetchingMore}
             onClick={() => void s.fetchMore()}
           >

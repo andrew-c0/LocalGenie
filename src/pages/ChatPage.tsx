@@ -61,7 +61,7 @@ export default function ChatPage() {
     content = (
       <div className={styles.empty}>
         <StateBlock icon="🔎" message="This conversation no longer exists.">
-          <Button appearance="secondary" size="small" onClick={() => navigate("/chat")}>
+          <Button appearance="secondary" onClick={() => navigate("/chat")}>
             Back to chats
           </Button>
         </StateBlock>

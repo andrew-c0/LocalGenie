@@ -88,7 +88,6 @@ export default function MessageBubble({
           <Button
             type="button"
             appearance="primary"
-            size="small"
             icon={<ArrowReplyRegular />}
             onClick={() => setRetryFromMessageId(message.id)}
             title="Regenerate response"

@@ -134,7 +134,6 @@ export default function PerformanceDashboard() {
           <div className={styles.actions}>
             <Button
               appearance="secondary"
-              size="small"
               icon={<ArrowLeftRegular />}
               onClick={() => navigate("/prompt-benchmark/playground")}
             >
@@ -142,13 +141,12 @@ export default function PerformanceDashboard() {
             </Button>
             <Button
               appearance="primary"
-              size="small"
               icon={status === "running" ? <StopRegular /> : <PlayRegular />}
               onClick={handleRunStop}
             >
               {status === "running" ? "Stop" : "Run Benchmark"}
             </Button>
-            <Button appearance="secondary" size="small" icon={<ArrowDownloadRegular />} disabled>
+            <Button appearance="secondary" icon={<ArrowDownloadRegular />} disabled>
               Export
             </Button>
           </div>
@@ -201,23 +199,14 @@ export default function PerformanceDashboard() {
           )}
         </SurfaceCard>
 
-        <SurfaceCard
-          title="Model Ranking"
-          action={
-            <Text font="monospace" size={200}>
-              from chat stats
-            </Text>
-          }
-        >
+        <SurfaceCard title="Model Ranking" action={<Text size={200}>from chat stats</Text>}>
           {ranking.length === 0 ? (
             <StateBlock message="No benchmarks recorded yet." />
           ) : (
             <div className={styles.list}>
               {ranking.map((r, i) => (
                 <div key={r.model} className={styles.row}>
-                  <Text font="monospace" weight="semibold">
-                    0{i + 1}
-                  </Text>
+                  <Text weight="semibold">0{i + 1}</Text>
                   <div className={styles.rowBody}>
                     <Text weight="semibold">{r.model}</Text>
                     <ProgressBar
@@ -225,7 +214,7 @@ export default function PerformanceDashboard() {
                       color="cyan"
                     />
                   </div>
-                  <Text font="monospace">{r.tokensPerSec.toFixed(1)} tok/s</Text>
+                  <Text>{r.tokensPerSec.toFixed(1)} tok/s</Text>
                 </div>
               ))}
             </div>
@@ -236,11 +225,7 @@ export default function PerformanceDashboard() {
       <SurfaceCard
         title="Recent Runs"
         action={
-          kpis.ttftMs != null ? (
-            <Text font="monospace" size={200}>
-              TTFT {kpis.ttftMs.toFixed(0)}ms
-            </Text>
-          ) : undefined
+          kpis.ttftMs != null ? <Text size={200}>TTFT {kpis.ttftMs.toFixed(0)}ms</Text> : undefined
         }
       >
         {runs.length === 0 ? (
@@ -248,11 +233,7 @@ export default function PerformanceDashboard() {
             icon="🧪"
             message="No completed runs yet. Use the Prompt Benchmark to measure a specific prompt."
           >
-            <Button
-              appearance="primary"
-              size="small"
-              onClick={() => navigate("/prompt-benchmark/playground")}
-            >
+            <Button appearance="primary" onClick={() => navigate("/prompt-benchmark/playground")}>
               Open Prompt Benchmark
             </Button>
           </StateBlock>
@@ -260,18 +241,16 @@ export default function PerformanceDashboard() {
           <div className={styles.list}>
             {runs.map((run) => (
               <div key={run.id} className={styles.row}>
-                <Text font="monospace" weight="semibold">
-                  {run.id.slice(0, 6)}
-                </Text>
+                <Text weight="semibold">{run.id.slice(0, 6)}</Text>
                 <div className={styles.rowBody}>
                   <Text>
                     {run.target.toUpperCase()} · {new Date(run.startedAt).toLocaleTimeString()}
                   </Text>
-                  <Text font="monospace" size={200}>
+                  <Text size={200}>
                     {run.totalTokens} tokens · {run.promptChars} chars prompt
                   </Text>
                 </div>
-                <Text font="monospace">
+                <Text>
                   {run.tokensPerSec != null ? `${run.tokensPerSec.toFixed(1)} tok/s` : "—"}
                   {run.ttftMs != null && ` · ${run.ttftMs.toFixed(0)}ms`}
                 </Text>

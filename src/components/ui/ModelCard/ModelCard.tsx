@@ -149,13 +149,12 @@ export function ModelCard({
 
       <CardFooter className={styles.actions}>
         {isDownloading ? (
-          <Button size="small" disabled icon={<Spinner size="tiny" />}>
+          <Button disabled icon={<Spinner size="tiny" />}>
             Pulling…
           </Button>
         ) : model.installed ? (
           <>
             <Button
-              size="small"
               appearance="primary"
               icon={<ChatRegular />}
               onClick={onOpenSelector}
@@ -163,17 +162,11 @@ export function ModelCard({
             >
               {isLoaded ? "Active" : "Load & Chat"}
             </Button>
-            <Button
-              size="small"
-              appearance="secondary"
-              icon={<InfoRegular />}
-              onClick={openDetails}
-            >
+            <Button appearance="secondary" icon={<InfoRegular />} onClick={openDetails}>
               Details
             </Button>
             {onRemove && (
               <Button
-                size="small"
                 appearance="secondary"
                 icon={<DeleteRegular />}
                 title="Remove model"
@@ -183,7 +176,7 @@ export function ModelCard({
             )}
           </>
         ) : (
-          <Button size="small" appearance="primary" icon={<InfoRegular />} onClick={openDetails}>
+          <Button appearance="primary" icon={<InfoRegular />} onClick={openDetails}>
             Details
           </Button>
         )}

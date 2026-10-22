@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 import { useTauriEvent } from "../hooks";
 import * as db from "../services/database";
 import * as geniex from "../services/geniex";
+import { fetchContextLength } from "../services/hubApi";
 import { useChatStore } from "../stores/chatStore";
 import { useDownloadStore } from "../stores/downloadStore";
 import { useModelStore } from "../stores/modelStore";
@@ -238,11 +239,7 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
  * metadata the model card shows. Both are best-effort.
  */
 async function refreshAfterImport(repoId: string): Promise<void> {
-  try {
-    useModelStore.getState().setModels(await geniex.listModels());
-  } catch {
-    // CLI list refresh is best-effort
-  }
+  // Metadata first: the model list refresh triggers the chat context bar, which reads this row.
   try {
     const meta = await fetchDownloadedModelMeta(repoId);
     await db.upsertDownloadedModel(
@@ -256,6 +253,11 @@ async function refreshAfterImport(repoId: string): Promise<void> {
   } catch {
     // metadata is a nice-to-have
   }
+  try {
+    useModelStore.getState().setModels(await geniex.listModels());
+  } catch {
+    // CLI list refresh is best-effort
+  }
 }
 
 /**
@@ -265,7 +267,8 @@ async function refreshAfterImport(repoId: string): Promise<void> {
 export async function fetchDownloadedModelMeta(repoId: string): Promise<DownloadedModelMeta> {
   const rows = await db.listDownloadedModels();
   const row = rows.find((r) => r.name === repoId);
-  const contextSize = row?.context_size ?? (await fetchContextSize(repoId));
+  // The Hub's GGUF metadata is the source of truth; the header value written at import is the fallback.
+  const contextSize = (await fetchContextLength(repoId)) ?? row?.context_size ?? null;
   return {
     precision: row?.precision ?? undefined,
     contextSize: contextSize ?? undefined,
@@ -273,19 +276,4 @@ export async function fetchDownloadedModelMeta(repoId: string): Promise<Download
     repoUrl: row?.repo_url ?? undefined,
     modelCard: row?.model_card ?? undefined,
   };
-}
-
-/** Context length from the repo's config.json, or null if it is not available. */
-async function fetchContextSize(repoId: string): Promise<number | null> {
-  try {
-    const res = await fetch(`https://huggingface.co/${repoId}/resolve/main/config.json`, {
-      headers: { Accept: "application/json" },
-    });
-    if (!res.ok) return null;
-    const cfg = (await res.json()) as Record<string, unknown>;
-    const value = cfg.context_length ?? cfg.max_position_embeddings ?? cfg.max_sequence_length;
-    return typeof value === "number" ? value : null;
-  } catch {
-    return null;
-  }
 }

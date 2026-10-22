@@ -58,19 +58,29 @@ const useStyles = makeStyles({
   brand: {
     justifyContent: "flex-start",
   },
-  version: {
-    paddingLeft: tokens.spacingHorizontalM,
-  },
   nav: {
     flex: 1,
     minHeight: 0,
   },
-  navBadge: {
-    marginLeft: "auto",
+  navTab: {
+    width: "100%",
+  },
+  navRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: tokens.spacingHorizontalS,
+    width: "100%",
+  },
+  navLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
   },
   footer: {
     display: "flex",
     flexDirection: "column",
+    gap: tokens.spacingVerticalXXS,
     padding: `0 ${tokens.spacingHorizontalM}`,
   },
 });
@@ -108,7 +118,6 @@ export default function Sidebar() {
     <aside className={styles.sidebar}>
       <Button
         appearance="subtle"
-        size="large"
         icon={<SparkleRegular />}
         title="Go to Overview"
         className={styles.brand}
@@ -116,8 +125,6 @@ export default function Sidebar() {
       >
         LocalGenie
       </Button>
-      <Caption1 className={styles.version}>{APP_VERSION} · Local Runtime</Caption1>
-
       <TabList
         vertical
         className={styles.nav}
@@ -126,27 +133,32 @@ export default function Sidebar() {
         onTabSelect={handleTabSelect}
       >
         {NAV_ITEMS.map((item) => (
-          <Tab key={item.to} value={item.to} icon={item.icon}>
-            {item.label}
-            {item.to === "/models" && models.length > 0 && (
-              <Badge className={styles.navBadge} size="small" appearance="filled" color="brand">
-                {models.length}
-              </Badge>
-            )}
-            {item.to === "/chat" && activeSessionId && (
-              <Badge className={styles.navBadge} size="tiny" appearance="filled" color="brand" />
-            )}
+          <Tab key={item.to} value={item.to} className={styles.navTab}>
+            <span className={styles.navRow}>
+              <span className={styles.navLabel}>
+                {item.icon}
+                {item.label}
+              </span>
+              {item.to === "/models" && models.length > 0 && (
+                <Badge size="small" appearance="filled" color="brand">
+                  {models.length}
+                </Badge>
+              )}
+              {item.to === "/chat" && activeSessionId && (
+                <Badge size="tiny" appearance="filled" color="brand" />
+              )}
+            </span>
           </Tab>
         ))}
       </TabList>
 
       <div className={styles.footer}>
-        <Caption1>HARDWARE ACCEL</Caption1>
-        <Text font="monospace" size={200}>
+        <Text size={200}>
           {serverStatus.running
             ? `Server :${serverStatus.port} · ${serverStatus.models.length} loaded`
             : "Server offline"}
         </Text>
+        <Caption1>{APP_VERSION} · Local Runtime</Caption1>
       </div>
 
       <Dialog

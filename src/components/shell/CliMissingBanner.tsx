@@ -38,7 +38,6 @@ export default function CliMissingBanner() {
       <MessageBarActions>
         <Button
           appearance="primary"
-          size="small"
           onClick={() => open(GENIEX_RELEASES_URL).catch((err) => console.error(err))}
         >
           Open releases page

@@ -174,18 +174,14 @@ export default function OverviewPage() {
         <Card>
           <CardHeader
             header={<Text weight="semibold">Recent Generation Speeds</Text>}
-            action={
-              <Text font="monospace" size={200}>
-                from your chats
-              </Text>
-            }
+            action={<Text size={200}>from your chats</Text>}
           />
           <SpeedList />
         </Card>
 
         <div className={styles.banner}>
           <Body1>🛡 Windows sandbox isolation active. 0 outbound network requests allowed.</Body1>
-          <Text font="monospace">127.0.0.1:{serverStatus.port} (localhost)</Text>
+          <Text>127.0.0.1:{serverStatus.port} (localhost)</Text>
         </div>
 
         {models.length === 0 && (

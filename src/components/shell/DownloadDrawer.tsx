@@ -101,7 +101,7 @@ export default function DownloadDrawer({ open, onClose }: Props) {
 
         {past.length > 0 && (
           <div className={styles.toolbar}>
-            <Button appearance="subtle" size="small" onClick={clearFinished}>
+            <Button appearance="subtle" onClick={clearFinished}>
               Clear finished
             </Button>
           </div>

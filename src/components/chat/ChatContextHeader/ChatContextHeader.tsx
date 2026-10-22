@@ -1,11 +1,15 @@
 import { Button, makeStyles, ProgressBar, Text, tokens } from "@fluentui/react-components";
 import { DismissRegular } from "@fluentui/react-icons";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import * as db from "../../../services/database";
 import { useChatStore } from "../../../stores/chatStore";
 import { useModelStore } from "../../../stores/modelStore";
+import { formatCount } from "../../../utils/format";
 import { StatusBadge } from "../../ui/StatusBadge/StatusBadge";
 
-const MAX_CONTEXT_CHARS = 8192;
+/** Rough characters-per-token ratio used to estimate how much of the window the chat fills. */
+const CHARS_PER_TOKEN = 4;
 
 const useStyles = makeStyles({
   bar: {
@@ -26,50 +30,82 @@ const useStyles = makeStyles({
     gap: tokens.spacingHorizontalS,
   },
   barTrack: {
-    width: "90px",
+    width: "120px",
   },
 });
 
-/** Context bar above the chat thread: model, status, context usage, close. */
+/** Context bar above the chat thread: model, server state, context usage vs. the model's window, close. */
 export function ChatContextHeader() {
   const styles = useStyles();
   const activeSessionId = useChatStore((s) => s.activeSessionId);
   const sessions = useChatStore((s) => s.sessions);
-  const isStreaming = useChatStore((s) => s.isStreaming);
   const navigate = useNavigate();
   const serverStatus = useModelStore((s) => s.serverStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
+  const models = useModelStore((s) => s.models);
+  /** Native context window of the active model in tokens; null when it was never recorded. */
+  const [contextWindow, setContextWindow] = useState<number | null>(null);
+
+  // The window is stored with the downloaded-model row; re-read when the model or the list changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: models is the trigger, the row is read from the DB
+  useEffect(() => {
+    if (!activeModelId) {
+      setContextWindow(null);
+      return;
+    }
+    const repoId = activeModelId.split(":")[0];
+    let cancelled = false;
+    db.listDownloadedModels()
+      .then((rows) => {
+        if (!cancelled) setContextWindow(rows.find((r) => r.name === repoId)?.context_size ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setContextWindow(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeModelId, models]);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   if (!activeSession) return null;
 
-  const contextChars = activeSession.contextChars ?? 0;
-  const contextPct = Math.min(100, Math.round((contextChars / MAX_CONTEXT_CHARS) * 100));
+  const usedTokens = Math.round((activeSession.contextChars ?? 0) / CHARS_PER_TOKEN);
+  const contextPct =
+    contextWindow && contextWindow > 0
+      ? Math.min(100, Math.round((usedTokens / contextWindow) * 100))
+      : null;
 
   return (
     <div className={styles.bar}>
       <Text weight="semibold">
         {activeModelId ? activeModelId.split("/").pop() : "No model selected"}
       </Text>
-      <StatusBadge tone={serverStatus.running ? "cyan" : "red"}>
-        {serverStatus.running ? "Inference Ready" : "Server Offline"}
-      </StatusBadge>
-      {isStreaming && <StatusBadge tone="purple">Streaming…</StatusBadge>}
+      {!serverStatus.running && <StatusBadge tone="red">Server Offline</StatusBadge>}
       <div className={styles.spacer} />
       <div className={styles.usage}>
-        <Text font="monospace" size={200}>
-          Context: {(contextChars / 1000).toFixed(1)}k / 8k chars
-        </Text>
-        <ProgressBar
-          className={styles.barTrack}
-          value={contextPct / 100}
-          color={contextPct > 90 ? "error" : "brand"}
-          aria-label="Context usage"
-        />
+        {contextWindow && contextPct !== null ? (
+          <>
+            <Text size={200}>
+              Context: ~{formatCount(usedTokens)} / {formatCount(contextWindow)} tokens
+            </Text>
+            <ProgressBar
+              className={styles.barTrack}
+              value={contextPct / 100}
+              color={contextPct > 90 ? "error" : "brand"}
+              aria-label="Context usage"
+            />
+          </>
+        ) : (
+          <Text size={200}>
+            {activeModelId
+              ? `Context: ~${formatCount(usedTokens)} tokens · window unknown`
+              : `Context: ~${formatCount(usedTokens)} tokens`}
+          </Text>
+        )}
       </div>
       <Button
         appearance="subtle"
-        size="small"
         icon={<DismissRegular />}
         title="Close conversation"
         aria-label="Close conversation"

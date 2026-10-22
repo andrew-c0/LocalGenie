@@ -1,4 +1,3 @@
-import type { BadgeProps } from "@fluentui/react-components";
 import {
   Badge,
   Body1,
@@ -6,15 +5,11 @@ import {
   Caption1,
   Card,
   CardHeader,
-  Dropdown,
   makeStyles,
-  Option,
-  Spinner,
   Text,
   tokens,
 } from "@fluentui/react-components";
 import {
-  ArrowDownloadRegular,
   ArrowLeftRegular,
   ChatRegular,
   ChevronDownRegular,
@@ -25,6 +20,7 @@ import {
 import { open } from "@tauri-apps/plugin-shell";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { GGUFVariantList } from "../../components/models/GGUFVariantList";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog/ConfirmDialog";
 import { MarkdownContent } from "../../components/ui/MarkdownContent/MarkdownContent";
 import { StateBlock } from "../../components/ui/StateBlock/StateBlock";
@@ -38,7 +34,7 @@ import {
   precisionInfo,
   ramFitForBytes,
 } from "../../services/hubApi";
-import { type GGUFGroup, variantLabel } from "../../services/hubModels";
+import type { GGUFGroup } from "../../services/hubModels";
 import { isDownloadActive, startGGUFDownload, useDownloadStore } from "../../stores/downloadStore";
 import { useModelStore } from "../../stores/modelStore";
 import { formatBytes, formatCount } from "../../utils/format";
@@ -49,7 +45,7 @@ const useStyles = makeStyles({
     flex: 1,
     minHeight: 0,
     overflowY: "auto",
-    padding: `0 ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
+    padding: tokens.spacingHorizontalL,
   },
   inner: {
     display: "flex",
@@ -86,25 +82,6 @@ const useStyles = makeStyles({
     flexWrap: "wrap",
     gap: tokens.spacingHorizontalXS,
   },
-  variantRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalS,
-    border: "none",
-    margin: 0,
-    padding: 0,
-    minWidth: 0,
-  },
-  dropdown: {
-    minWidth: "340px",
-  },
-  optionContent: {
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalXS,
-  },
   alignStart: {
     alignSelf: "flex-start",
   },
@@ -124,16 +101,6 @@ interface Props {
   isLocal?: boolean;
 }
 
-type BadgeColor = NonNullable<BadgeProps["color"]>;
-
-/** Quantization width → badge colour (lower bits = more compressed). */
-const bitsBadgeColor = (bits: number): BadgeColor =>
-  bits <= 4 ? "success" : bits <= 6 ? "warning" : bits <= 8 ? "informative" : "important";
-
-/** RAM fit level → badge colour. */
-const ramBadgeColor = (level: string): BadgeColor =>
-  level === "fits" ? "success" : level === "tight" ? "warning" : "danger";
-
 export default function HubModelDetail({ isLocal }: Props) {
   const styles = useStyles();
   const { repoId = "" } = useParams<{ repoId: string }>();
@@ -148,15 +115,11 @@ export default function HubModelDetail({ isLocal }: Props) {
   const isDownloading = useDownloadStore((s) =>
     s.downloads.some((d) => d.id === repoId && isDownloadActive(d.status)),
   );
-  // Selection is tied to the repo it was made for, so switching repos clears it without an effect.
-  const [variantSelection, setVariantSelection] = useState<{
-    repoId: string;
-    filename: string;
-  } | null>(null);
-  const selectedVariant =
-    variantSelection?.repoId === repoId
-      ? (ggufGroups.find((g) => g.main.filename === variantSelection.filename) ?? null)
-      : null;
+  const activeFilename = useDownloadStore(
+    (s) =>
+      s.downloads.find((d) => d.id === repoId && isDownloadActive(d.status))?.variant?.main
+        .filename ?? null,
+  );
   const [filesOpen, setFilesOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
@@ -194,7 +157,6 @@ export default function HubModelDetail({ isLocal }: Props) {
         <div className={styles.inner}>
           <Button
             appearance="secondary"
-            size="small"
             icon={<ArrowLeftRegular />}
             onClick={() => navigate("/models")}
           >
@@ -224,10 +186,6 @@ export default function HubModelDetail({ isLocal }: Props) {
     void startGGUFDownload({ repoId, main: group.main, sidecars: group.sidecars });
   };
 
-  const isSelectedDownloaded =
-    !isLocal &&
-    selectedVariant !== null &&
-    downloadedPrecisions.has(selectedVariant.main.precision ?? "");
   const busy = isDownloading;
   const modelContent = isLocal ? localCard : readme;
 
@@ -238,17 +196,18 @@ export default function HubModelDetail({ isLocal }: Props) {
           <div className={styles.titleBlock}>
             <Button
               appearance="secondary"
-              size="small"
               icon={<ArrowLeftRegular />}
               onClick={() => navigate("/models")}
             >
               Back to Models
             </Button>
-            <Text as="h1" font="monospace" size={600} weight="semibold" className={styles.title}>
+            <Text as="h1" size={600} weight="semibold" className={styles.title}>
               {model.id}
             </Text>
             <Body1>
               ⬇ {formatCount(model.downloads)} downloads · ❤ {formatCount(model.likes)} likes
+              {model.gguf?.context_length &&
+                ` · Context ${formatCount(model.gguf.context_length)} tokens`}
               {model.lastModified &&
                 ` · Updated ${new Date(model.lastModified).toLocaleDateString()}`}
               {model.gated ? " · 🔒 gated" : ""}
@@ -260,7 +219,6 @@ export default function HubModelDetail({ isLocal }: Props) {
             {isLocal && (
               <Button
                 appearance="primary"
-                size="small"
                 icon={<ChatRegular />}
                 onClick={() => setSelectorOpen(true)}
               >
@@ -270,7 +228,6 @@ export default function HubModelDetail({ isLocal }: Props) {
             {isLocal && (
               <Button
                 appearance="secondary"
-                size="small"
                 icon={<DeleteRegular />}
                 title="Remove model"
                 onClick={() => setConfirmDelete(model.id)}
@@ -280,7 +237,6 @@ export default function HubModelDetail({ isLocal }: Props) {
             )}
             <Button
               appearance="secondary"
-              size="small"
               icon={<OpenRegular />}
               onClick={() =>
                 open(hubModelPageUrl(model.id)).catch((err) =>
@@ -304,100 +260,24 @@ export default function HubModelDetail({ isLocal }: Props) {
         )}
 
         {!isLocal && ggufGroups.length > 0 && (
-          <fieldset className={styles.variantRow} aria-label="Select GGUF variant">
-            <Badge appearance="outline" size="large">
-              {model.id}
-            </Badge>
-            <Dropdown
-              className={styles.dropdown}
-              aria-label="Select GGUF precision"
-              value={
-                selectedVariant
-                  ? `${variantLabel(selectedVariant)} — ${formatBytes(selectedVariant.main.size)}`
-                  : "Select precision…"
-              }
-              selectedOptions={selectedVariant ? [selectedVariant.main.filename] : []}
-              onOptionSelect={(_, data) => {
-                setVariantSelection(
-                  data.optionValue ? { repoId, filename: data.optionValue } : null,
-                );
-              }}
-            >
-              {ggufGroups.map((group) => {
-                const info = precisionInfo(group.main.precision);
-                const label = variantLabel(group);
-                const hasSidecar = group.sidecars.length > 0;
-                const ramFit =
-                  estimateRamFitFromFileSize(group.main.size ?? 0) ??
-                  estimateMemoryRequirement(info.bitsPerWeight ?? 4);
-                return (
-                  <Option
-                    key={group.main.filename}
-                    value={group.main.filename}
-                    text={`${label} — ${formatBytes(group.main.size)}`}
-                  >
-                    <span className={styles.optionContent}>
-                      <Badge
-                        appearance="filled"
-                        size="small"
-                        color={bitsBadgeColor(info.bitsPerWeight ?? 4)}
-                      >
-                        {label}
-                      </Badge>
-                      {hasSidecar && (
-                        <Badge appearance="filled" size="small" color="brand">
-                          +{group.sidecars.length} sidecar
-                        </Badge>
-                      )}
-                      {ramFit ? (
-                        <Badge appearance="filled" size="small" color={ramBadgeColor(ramFit.level)}>
-                          {ramFit.level === "fits" ? "✓" : ramFit.level === "tight" ? "⚠" : "✗"}{" "}
-                          {ramFit.label}
-                        </Badge>
-                      ) : (
-                        <Badge appearance="filled" size="small" color="subtle">
-                          N/A
-                        </Badge>
-                      )}
-                      <Caption1>{formatBytes(group.main.size)}</Caption1>
-                    </span>
-                  </Option>
-                );
-              })}
-            </Dropdown>
-
-            <Button
-              appearance="primary"
-              size="small"
-              icon={
-                busy ? (
-                  <Spinner size="tiny" />
-                ) : isSelectedDownloaded ? (
-                  <ChatRegular />
-                ) : (
-                  <ArrowDownloadRegular />
-                )
-              }
-              disabled={!selectedVariant || busy}
-              onClick={() => {
-                if (!selectedVariant) return;
-                if (isSelectedDownloaded) {
-                  setSelectorOpen(true);
-                } else {
-                  handleDownload(selectedVariant);
-                }
-              }}
-            >
-              {busy ? "Pulling…" : isSelectedDownloaded ? "Load & Chat" : "Download"}
-            </Button>
-          </fieldset>
+          <GGUFVariantList
+            groups={ggufGroups}
+            downloadedPrecisions={downloadedPrecisions}
+            fitFor={(group) =>
+              estimateRamFitFromFileSize(group.main.size ?? 0) ??
+              estimateMemoryRequirement(precisionInfo(group.main.precision).bitsPerWeight ?? 4)
+            }
+            activeFilename={activeFilename}
+            busy={busy}
+            onDownload={handleDownload}
+            onLoad={() => setSelectorOpen(true)}
+          />
         )}
 
         {!isLocal && files.length > 0 && (
           <Card size="small">
             <Button
               appearance="subtle"
-              size="small"
               className={styles.alignStart}
               icon={filesOpen ? <ChevronDownRegular /> : <ChevronRightRegular />}
               aria-expanded={filesOpen}
@@ -408,7 +288,7 @@ export default function HubModelDetail({ isLocal }: Props) {
             {filesOpen &&
               files.map((f) => (
                 <div key={f.path} className={styles.fileRow}>
-                  <Text font="monospace" size={200} className={styles.fileName}>
+                  <Text size={200} className={styles.fileName}>
                     {f.type === "directory" ? "📁" : "📄"} {f.path}
                   </Text>
                   <Caption1>{formatBytes(f.size)}</Caption1>

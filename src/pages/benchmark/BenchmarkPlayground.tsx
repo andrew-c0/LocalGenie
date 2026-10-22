@@ -51,14 +51,12 @@ const useStyles = makeStyles({
     gap: tokens.spacingHorizontalS,
   },
   monoHint: {
-    fontFamily: tokens.fontFamilyMonospace,
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorPaletteTealForeground2,
   },
   prompt: {
     width: "100%",
     minHeight: "140px",
-    fontFamily: tokens.fontFamilyMonospace,
   },
   params: {
     display: "flex",
@@ -80,7 +78,6 @@ const useStyles = makeStyles({
     minWidth: 0,
   },
   output: {
-    fontFamily: tokens.fontFamilyMonospace,
     fontSize: tokens.fontSizeBase200,
     whiteSpace: "pre-wrap",
     wordBreak: "break-word",
@@ -274,7 +271,6 @@ export default function BenchmarkPlayground() {
           <div className={styles.actions}>
             <Button
               appearance="secondary"
-              size="small"
               icon={<SaveRegular />}
               disabled
               title="Presets are not available yet"
@@ -283,7 +279,6 @@ export default function BenchmarkPlayground() {
             </Button>
             <Button
               appearance="primary"
-              size="small"
               icon={status === "running" ? <StopRegular /> : <PlayRegular />}
               onClick={() => (status === "running" ? setStatus("idle") : void execute())}
               disabled={!serverStatus.running || !prompt.trim()}
@@ -305,7 +300,6 @@ export default function BenchmarkPlayground() {
                 <Caption1 className={styles.monoHint}>≈{approxTokens} tokens</Caption1>
                 <Button
                   appearance="transparent"
-                  size="small"
                   icon={<DeleteRegular />}
                   title="Clear prompt"
                   aria-label="Clear prompt"
@@ -333,7 +327,7 @@ export default function BenchmarkPlayground() {
             <div className={styles.params}>
               <Field label="Temperature">
                 <div className={styles.sliderHead}>
-                  <Text font="monospace">{temperature.toFixed(2)}</Text>
+                  <Text>{temperature.toFixed(2)}</Text>
                 </div>
                 <Slider
                   min={0}
@@ -346,7 +340,7 @@ export default function BenchmarkPlayground() {
               </Field>
               <Field label="Top-P">
                 <div className={styles.sliderHead}>
-                  <Text font="monospace">{topP.toFixed(2)}</Text>
+                  <Text>{topP.toFixed(2)}</Text>
                 </div>
                 <Slider
                   min={0}
@@ -421,7 +415,7 @@ export default function BenchmarkPlayground() {
                         {new Date(run.startedAt).toLocaleTimeString()} · {run.totalTokens} tokens
                       </Caption1>
                     </div>
-                    <Text font="monospace">
+                    <Text>
                       {run.ttftMs != null && `${run.ttftMs.toFixed(0)}ms · `}
                       {run.tokensPerSec != null ? `${run.tokensPerSec.toFixed(1)} tok/s` : "—"}
                     </Text>

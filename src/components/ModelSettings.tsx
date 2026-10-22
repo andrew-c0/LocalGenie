@@ -167,9 +167,7 @@ export default function ModelSettings() {
               value={temperature}
               onChange={(_, data) => update("temperature", data.value)}
             />
-            <Text font="monospace" className={styles.sliderValue}>
-              {temperature.toFixed(1)}
-            </Text>
+            <Text className={styles.sliderValue}>{temperature.toFixed(1)}</Text>
           </div>
         </Field>
 
@@ -183,9 +181,7 @@ export default function ModelSettings() {
               value={topP}
               onChange={(_, data) => update("topP", data.value)}
             />
-            <Text font="monospace" className={styles.sliderValue}>
-              {topP.toFixed(2)}
-            </Text>
+            <Text className={styles.sliderValue}>{topP.toFixed(2)}</Text>
           </div>
         </Field>
 
@@ -210,9 +206,7 @@ export default function ModelSettings() {
               value={minP}
               onChange={(_, data) => update("minP", data.value)}
             />
-            <Text font="monospace" className={styles.sliderValue}>
-              {minP.toFixed(2)}
-            </Text>
+            <Text className={styles.sliderValue}>{minP.toFixed(2)}</Text>
           </div>
         </Field>
 
@@ -280,7 +274,6 @@ export default function ModelSettings() {
       <div>
         <Button
           appearance="primary"
-          size="small"
           icon={saving ? <Spinner size="tiny" /> : <SaveRegular />}
           onClick={handleSave}
           disabled={saving}

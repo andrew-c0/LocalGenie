@@ -57,6 +57,8 @@ const useStyles = makeStyles({
   },
   search: {
     flex: 1,
+    width: "100%",
+    maxWidth: "none",
     minWidth: 0,
   },
   downloads: {
@@ -235,6 +237,13 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
     return list;
   }, [models, searchResults, ggufCache, downloadedMeta]);
 
+  /** Cards whose model name contains the search text (case-insensitive). */
+  const visibleCards = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return cards;
+    return cards.filter((m) => m.name.toLowerCase().includes(q));
+  }, [cards, query]);
+
   const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
     navigate(data.value === "all" ? "/models/browse" : "/models");
   };
@@ -243,13 +252,11 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
     <div className={styles.page}>
       <div className={styles.inner}>
         <PageHeader
-          eyebrow="● MODEL LIBRARY"
           title="Models"
-          subtitle="Search, download, and manage local weights from Hugging Face and Qualcomm AI Hub."
+          subtitle="Manage the models installed on this device and find new GGUF models on Hugging Face."
           actions={
             <Button
               appearance="secondary"
-              size="small"
               onClick={() => geniex.cleanModels().catch((err: Error) => setError(String(err)))}
             >
               Clean Cache
@@ -269,8 +276,8 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
             <div className={styles.toolbar}>
               <SearchBox
                 className={styles.search}
-                placeholder="Search models, quantized weights, architectures…"
-                aria-label="Search models"
+                placeholder="Filter by model name, or press Search to find on Hugging Face"
+                aria-label="Filter models by name"
                 value={query}
                 onChange={(_, data) => setQuery(data.value)}
                 onKeyDown={(e) => {
@@ -279,7 +286,6 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
               />
               <Button
                 appearance="primary"
-                size="small"
                 onClick={handleSearch}
                 disabled={isSearching || !query.trim()}
                 icon={isSearching ? <Spinner size="tiny" /> : undefined}
@@ -302,7 +308,7 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
                 {activeDownloads.map((d) => (
                   <Card key={d.id} size="small">
                     <CardHeader
-                      header={<Text font="monospace">{d.label}</Text>}
+                      header={<Text>{d.label}</Text>}
                       description={<Caption1>{d.importingProgress ?? d.status}</Caption1>}
                     />
                     <ProgressBar
@@ -316,9 +322,11 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
 
             {cards.length === 0 ? (
               <StateBlock icon="📦" message="No models found. Search Hugging Face to pull one." />
+            ) : visibleCards.length === 0 ? (
+              <StateBlock icon="🔍" message={`No models match "${query.trim()}".`} />
             ) : (
               <div className={styles.grid}>
-                {cards.map((m) => (
+                {visibleCards.map((m) => (
                   <ModelCard
                     key={m.name}
                     model={m}

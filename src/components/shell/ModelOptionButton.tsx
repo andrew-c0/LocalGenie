@@ -1,5 +1,4 @@
 import { Badge, Button, makeStyles, Spinner, Text, tokens } from "@fluentui/react-components";
-import { CheckmarkRegular } from "@fluentui/react-icons";
 import type { ModelInfo } from "../../types";
 import { shortName } from "../../utils/format";
 
@@ -68,18 +67,14 @@ export function ModelOptionButton({
         {loading ? (
           <Spinner size="tiny" />
         ) : isActive ? (
-          <>
-            <Badge appearance="tint" color="brand" size="small">
-              Active
-            </Badge>
-            <CheckmarkRegular />
-          </>
+          <Badge appearance="tint" color="brand" size="small">
+            Active
+          </Badge>
         ) : (
           <Badge appearance="outline" color="informative" size="small">
-            Switch
+            Load
           </Badge>
         )}
-        <Badge size="tiny" color={loadedHere ? "success" : "subtle"} />
       </span>
     </Button>
   );

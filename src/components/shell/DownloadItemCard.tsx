@@ -31,7 +31,6 @@ const useStyles = makeStyles({
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
-    fontFamily: tokens.fontFamilyMonospace,
   },
   meta: {
     display: "flex",
@@ -85,7 +84,6 @@ export function DownloadItemCard({
               {d.status === "cancelled" && d.variant && (
                 <Button
                   appearance="transparent"
-                  size="small"
                   icon={busy ? <Spinner size="tiny" /> : <PlayRegular />}
                   title="Resume download"
                   aria-label={`Resume ${d.label}`}
@@ -95,7 +93,6 @@ export function DownloadItemCard({
               )}
               <Button
                 appearance="transparent"
-                size="small"
                 icon={<DeleteRegular />}
                 title="Remove from list"
                 aria-label={`Remove ${d.label} from list`}
@@ -118,7 +115,6 @@ export function DownloadItemCard({
           ) : (
             <Button
               appearance="transparent"
-              size="small"
               icon={busy ? <Spinner size="tiny" /> : <PauseRegular />}
               title="Cancel download"
               aria-label={`Cancel ${d.label}`}

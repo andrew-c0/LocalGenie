@@ -102,13 +102,13 @@ export default function CliUpdateCard({ updateInfo }: { updateInfo: UpdateInfo |
           <>
             <div className={styles.row}>
               <Caption1>Installed</Caption1>
-              <Text font="monospace">v{updateInfo.current_version}</Text>
+              <Text>v{updateInfo.current_version}</Text>
             </div>
             {updateInfo.update_available ? (
               <>
                 <div className={styles.row}>
                   <Caption1>Latest</Caption1>
-                  <Text font="monospace">v{updateInfo.latest_version}</Text>
+                  <Text>v{updateInfo.latest_version}</Text>
                 </div>
                 <Body1>
                   {updating && updateStatus ? updateStatus : "A newer version is available."}
@@ -116,7 +116,6 @@ export default function CliUpdateCard({ updateInfo }: { updateInfo: UpdateInfo |
                 <div className={styles.actions}>
                   <Button
                     appearance="primary"
-                    size="small"
                     icon={updating ? undefined : <ArrowUpRegular />}
                     onClick={handleUpdate}
                     disabled={updating}

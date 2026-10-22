@@ -1,6 +1,7 @@
 import { Caption1, Divider, makeStyles, Spinner, tokens } from "@fluentui/react-components";
 import { useEffect, useRef } from "react";
 import { useChatStore } from "../stores/chatStore";
+import type { Message } from "../types";
 import MessageBubble from "./MessageBubble";
 
 const useStyles = makeStyles({
@@ -33,6 +34,21 @@ const useStyles = makeStyles({
   },
 });
 
+/**
+ * What the model is doing before its visible answer starts. Derived from the streamed text:
+ * no reply yet → prefill; an open `<think>` block → thinking; only whitespace visible → outputting.
+ * Returns null once visible answer text exists (the bubble itself shows progress from there).
+ */
+function streamingStatus(messages: Message[], isStreaming: boolean): string | null {
+  if (!isStreaming) return null;
+  const last = messages[messages.length - 1];
+  if (last?.role !== "assistant") return "Prefilling prompt…";
+  const text = last.content;
+  if (text.lastIndexOf("<think>") > text.lastIndexOf("</think>")) return "Thinking…";
+  const visible = text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  return visible ? null : "Outputting…";
+}
+
 export default function ChatArea() {
   const styles = useStyles();
   const activeSessionId = useChatStore((s) => s.activeSessionId);
@@ -50,8 +66,7 @@ export default function ChatArea() {
 
   if (!session) return null;
 
-  const lastMsg = session.messages[session.messages.length - 1];
-  const showTypingIndicator = isStreaming && (!lastMsg || lastMsg.role === "user");
+  const statusLabel = streamingStatus(session.messages, isStreaming);
 
   // Compute last user message ID once (avoids repeated .filter().slice() per bubble)
   let lastUserMsgId: string | undefined;
@@ -95,10 +110,10 @@ export default function ChatArea() {
       <div className={styles.messages}>
         {renderedMessages}
 
-        {showTypingIndicator && (
+        {statusLabel && (
           <div className={styles.typing}>
             <Spinner size="tiny" />
-            <Caption1>Generating…</Caption1>
+            <Caption1>{statusLabel}</Caption1>
           </div>
         )}
 

@@ -1,4 +1,6 @@
 mod commands;
+mod gguf;
+mod tray;
 
 pub mod entities;
 pub mod migrations;
@@ -27,6 +29,7 @@ pub fn run() {
             let db = tauri::async_runtime::block_on(database::init_database(&db_url))?;
 
             app.manage(db);
+            tray::init(app)?;
             Ok(())
         })
         .manage(commands::AppState::default())

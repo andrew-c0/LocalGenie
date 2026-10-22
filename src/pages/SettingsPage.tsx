@@ -131,7 +131,7 @@ export default function SettingsPage() {
           <Text weight="semibold" size={400}>
             System Configuration
           </Text>
-          <Text font="monospace" size={200} block>
+          <Text size={200} block>
             {serverStatus.running ? `runtime :${serverStatus.port}` : "runtime offline"}
           </Text>
         </div>
@@ -159,9 +159,7 @@ export default function SettingsPage() {
             <InfoRegular />
             <div className={styles.navFooterText}>
               <Caption1>Active Model</Caption1>
-              <Text font="monospace">
-                {activeModelId ? activeModelId.split("/").pop() : "none"}
-              </Text>
+              <Text>{activeModelId ? activeModelId.split("/").pop() : "none"}</Text>
             </div>
           </div>
           <StatusBadge tone={serverStatus.running ? "green" : "red"}>
@@ -176,11 +174,7 @@ export default function SettingsPage() {
           title={current?.label}
           actions={
             <div className={styles.panelActions}>
-              {section === "inference" && (
-                <Text font="monospace" size={200}>
-                  changes persist per model
-                </Text>
-              )}
+              {section === "inference" && <Text size={200}>changes persist per model</Text>}
               {updateBadge && section === "app" && (
                 <StatusBadge tone="blue">v{updateInfo?.latest_version} available</StatusBadge>
               )}
