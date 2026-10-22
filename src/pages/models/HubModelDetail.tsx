@@ -105,6 +105,8 @@ export default function HubModelDetail({ isLocal }: Props) {
   const styles = useStyles();
   const { repoId = "" } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
+  /** Back returns to the tab the model was opened from: Local for installed models, Hugging Face otherwise. */
+  const backPath = isLocal ? "/models" : "/models/browse";
   const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
   const { model, files, readme, localCard, ggufGroups, loading, error, setError } = useHubModelData(
     repoId,
@@ -158,7 +160,7 @@ export default function HubModelDetail({ isLocal }: Props) {
           <Button
             appearance="secondary"
             icon={<ArrowLeftRegular />}
-            onClick={() => navigate("/models")}
+            onClick={() => navigate(backPath)}
           >
             Back to Models
           </Button>
@@ -197,7 +199,7 @@ export default function HubModelDetail({ isLocal }: Props) {
             <Button
               appearance="secondary"
               icon={<ArrowLeftRegular />}
-              onClick={() => navigate("/models")}
+              onClick={() => navigate(backPath)}
             >
               Back to Models
             </Button>

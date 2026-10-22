@@ -144,7 +144,6 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
           filename: f.filename,
           precision: f.precision,
           sizeLabel: f.sizeLabel,
-          version: f.version,
         }));
         setGgufCache((prev) => {
           const next = new Map(prev);

@@ -86,11 +86,6 @@ const useStyles = makeStyles({
     flex: "1 1 240px",
     minWidth: 0,
   },
-  filename: {
-    flex: "1 1 160px",
-    minWidth: 0,
-    overflowWrap: "anywhere",
-  },
   fit: {
     display: "flex",
     alignItems: "center",
@@ -204,9 +199,6 @@ export function GGUFVariantList({
                         +{group.sidecars.length} sidecar
                       </Badge>
                     )}
-                    <Caption1 title={group.main.filename} className={styles.filename}>
-                      {group.main.filename}
-                    </Caption1>
                   </div>
 
                   <div className={styles.fit}>

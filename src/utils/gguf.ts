@@ -1,78 +1,86 @@
 /**
  * GGUF filename parser.
  *
- * Implements the naming convention documented in
- * `memories/external/gguf/gguf.md`:
+ * Hugging Face repos name GGUF files loosely, so the parser looks for known
+ * tokens anywhere in the name rather than relying on a fixed layout:
  *
- *   `[<Sidecar>]<BaseName><SizeLabel><FineTune><Version><Encoding><Type><Shard>.gguf`
+ *   `[<Sidecar>-]<BaseName>[-<SizeLabel>][-<FineTune>][-<Version>][-<Precision>][-<Shard>].gguf`
  *
- * Each component is delimited by a `-` when present.
+ * A sidecar marker (`mmproj` / `mtp`) may appear at the start, middle or end,
+ * e.g. `mmproj-F16.gguf` or `gemma-4-E4B-it-mmproj.gguf`.
  */
 
 /** Result of parsing a GGUF filename. */
 export interface GGUFParseResult {
   sidecar: "mmproj" | "mtp" | null;
+  /**
+   * Model name without the sidecar, precision and shard tokens lowercased, e.g.
+   * `gemma-4-e4b-it`. Files with the same stem belong to the same model.
+   */
+  stem: string;
   baseName: string | null;
   sizeLabel: string | null;
-  fineTune: string | null;
-  version: string;
+  /** Precision token as written in the file name, e.g. `Q4_K_M`, `IQ1_M`, `MXFP4_MOE`, `BF16`. */
   encoding: string | null;
-  type: "LoRA" | "vocab" | null;
   shard: string | null;
 }
 
-/** The GGUF naming-convention regex with an optional version. */
-const GGUF_REGEX =
-  /^(?:(?<Sidecar>mmproj|mtp)-)?(?<BaseName>[A-Za-z0-9\s._-]+?)(?:-(?<SizeLabel>(?:\d+x)?(?:\d+\.)?\d+[A-Za-z](?:-[A-Za-z]+(?:\d+\.)?\d+[A-Za-z]+)?))?(?:-(?<FineTune>[A-Za-z0-9\s._-]+?))?(?:-(?<Version>v\d+(?:\.\d+)*))?(?:-(?<Encoding>(?!LoRA|vocab)[\w_]+))?(?:-(?<Type>LoRA|vocab))?(?:-(?<Shard>\d{5}-of-\d{5}))?\.gguf$/;
+const EXTENSION = /\.gguf$/i;
+const SHARD_SUFFIX = /-(\d{5}-of-\d{5})$/i;
+const SIDECAR_TOKEN = /(?<=^|[-_])(mmproj|mtp)(?=[-_]|$)/i;
+const SIZE_LABEL =
+  /(?<=^|[-_])((?:\d+x)?\d+(?:\.\d+)?[A-Za-z](?:-[A-Za-z]+\d+(?:\.\d+)?[A-Za-z]+)?)(?=[-_.]|$)/;
+/**
+ * Quantization / precision token: Q4_K_M, IQ1_M, PTQ1_0, PQ2_0, MXFP4_MOE, W4A16, INT8, BF16, F16, F32.
+ * Up to two letters may precede the Q (e.g. the `PT` in `PTQ1_0`).
+ */
+const PRECISION_TOKEN =
+  /(?<![A-Za-z0-9])([A-Za-z]{0,2}I?Q\d+(?:_[A-Za-z0-9]+)*|MXFP\d+(?:_[A-Za-z0-9]+)*|W\d+A\d+|W\d+|INT\d+|B?FP?(?:16|32))(?![A-Za-z0-9])/gi;
 
 /**
- * Parse a GGUF filename using the naming convention.
- * Returns `null` when the filename does not match the convention.
+ * True when `filename` is a `.gguf` file at the top level of its repo.
+ * Files inside subfolders are not offered for download.
  */
-function isQuantEncoding(s: string): boolean {
-  // Matches Q[2-8][._]something or Q[2-8]Ksomething (case-insensitive)
-  return /^Q[2-8][._][A-Za-z0-9_]+$/i.test(s) || /^Q[2-8]K[._][A-Za-z0-9_]+$/i.test(s);
-}
-
-export function parseGGUFFilename(filename: string): GGUFParseResult | null {
-  const m = GGUF_REGEX.exec(filename);
-  if (!m) return null;
-
-  const groups = m.groups;
-  if (!groups) return null;
-
-  const result: GGUFParseResult = {
-    sidecar: (groups.Sidecar as "mmproj" | "mtp" | undefined) ?? null,
-    baseName: groups.BaseName?.trim() ?? null,
-    sizeLabel: groups.SizeLabel?.trim() ?? null,
-    fineTune: groups.FineTune?.trim() ?? null,
-    version: groups.Version ?? "v1.0",
-    encoding: groups.Encoding ?? null,
-    type: (groups.Type as "LoRA" | "vocab" | undefined) ?? null,
-    shard: groups.Shard ?? null,
-  };
-
-  // If encoding is null and fineTune looks like a quantization pattern, swap them
-  if (!result.encoding && result.fineTune && isQuantEncoding(result.fineTune)) {
-    result.encoding = result.fineTune;
-    result.fineTune = null;
-  }
-  // If fineTune contains a dash and the first segment is quantization, split it
-  // This handles cases like "Q4_K_M-GGUF" where GGUF may be a version tag
-  else if (result.fineTune?.includes("-")) {
-    const dashIdx = result.fineTune.indexOf("-");
-    const firstPart = result.fineTune.slice(0, dashIdx);
-    const rest = result.fineTune.slice(dashIdx + 1);
-    if (isQuantEncoding(firstPart)) {
-      result.encoding = firstPart;
-      result.fineTune = rest || null;
-    }
-  }
-
-  return result;
-}
-
-/** True when `filename` ends in `.gguf` and matches the naming convention. */
 export function isGGUF(filename: string): boolean {
-  return GGUF_REGEX.test(filename);
+  return EXTENSION.test(filename) && !filename.includes("/");
+}
+
+/** Parse a GGUF filename. Returns `null` when the filename is not a top-level GGUF file. */
+export function parseGGUFFilename(filename: string): GGUFParseResult | null {
+  if (!isGGUF(filename)) return null;
+
+  const shard = SHARD_SUFFIX.exec(filename.replace(EXTENSION, ""))?.[1] ?? null;
+  const name = filename.replace(EXTENSION, "").replace(SHARD_SUFFIX, "");
+  const sidecar = (SIDECAR_TOKEN.exec(name)?.[1].toLowerCase() ?? null) as
+    | GGUFParseResult["sidecar"]
+    | null;
+  // Sidecar markers are replaced with a separator so the remaining tokens keep their boundaries.
+  const core = name.replace(SIDECAR_TOKEN, "-");
+
+  // The quantization is normally the last precision-like token in the name.
+  const precisions = [...core.matchAll(PRECISION_TOKEN)];
+  const precision = precisions.length > 0 ? precisions[precisions.length - 1] : null;
+  const encoding = precision?.[1] ?? null;
+
+  const size = SIZE_LABEL.exec(core);
+  const cut = size?.index ?? precision?.index ?? core.length;
+  const baseName = trimSeparators(core.slice(0, cut)) || null;
+
+  const withoutPrecision = precision
+    ? `${core.slice(0, precision.index)}-${core.slice(precision.index + precision[0].length)}`
+    : core;
+  const stem = trimSeparators(withoutPrecision.replace(/[-_]+/g, "-")).toLowerCase();
+
+  return {
+    sidecar,
+    stem,
+    baseName,
+    sizeLabel: size?.[1] ?? null,
+    encoding,
+    shard,
+  };
+}
+
+function trimSeparators(s: string): string {
+  return s.replace(/^[-_]+|[-_]+$/g, "");
 }

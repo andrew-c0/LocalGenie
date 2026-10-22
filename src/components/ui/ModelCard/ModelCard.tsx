@@ -16,7 +16,6 @@ export interface GGUFFileOption {
   filename: string;
   precision: string;
   sizeLabel: string | null;
-  version: string;
 }
 
 export interface ModelCardData {
