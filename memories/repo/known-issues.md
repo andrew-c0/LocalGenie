@@ -3,9 +3,9 @@
 Status labels: **code-verified** = read in the working tree (uncommitted frontend refactor, 2026-10-22); **runtime-unverified** = not run. Nothing was launched in this sync.
 
 ## Active
-- Model load/chat hangs: the GenieX warmup request in `load_model` may never get a response. Not re-validated (runtime-unverified).
+- Model load/chat hangs: the GenieX warmup request in `load_model` may never get a response. The warmup now carries the model's load params (uncommitted change), so it matches chat. Not re-validated (runtime-unverified).
 - Normal chat depends on a successful model load.
-- Settings `nctx` and `think` do nothing: `ModelSettings` writes them, but `startServer` is only called with `port`/`compute` and `build_chat_body` does not read either (code-verified).
+- Known gaps (GenieX limits, not LocalGenie bugs): no per-model unload (only stopping the server unloads; see `geniex-server-behaviour.md`); the GenieX chat endpoint ignores `stop`, so LocalGenie has no stop-sequence setting (code-verified).
 - Webview `fetch` to `huggingface.co` (`hubApi.ts`, incl. `fetchContextLength` used by `downloadPipeline.ts`) is not allowed by the CSP `connect-src` as configured (code-verified against `tauri.conf.json`). Runtime-unverified; the Hub browser and import metadata may fail. Moving these to Rust is the candidate fix.
 - Context size from the Hub now reads only `gguf.context_length` (code-verified in `hubApi.ts`). The earlier `max_position_embeddings` / `max_sequence_length` fallback is gone, so models without GGUF metadata fall back to the DB row (possibly null).
 - `HubModelDetail` loads downloaded precisions once per repo (`useDownloadedPrecisions` in `pages/models/useHubModelDetail.ts`, keyed on `repoId`), so "Load & Chat" does not appear until the page is reopened after an import (code-verified; runtime-unverified).
@@ -41,6 +41,7 @@ Status labels: **code-verified** = read in the working tree (uncommitted fronten
 - The running server PID is cleared when the `geniex serve` child exits, so a crashed server can be started again (code-verified in `server.rs`; runtime-unverified).
 
 ## Resolved (code-verified in the working tree; runtime-unverified)
+- Settings `nctx` and `think` had no effect. Now `nctx` and the other load params go to `load_model` and every chat request, and `think` is sent as `enable_think` (uncommitted: `commands/chat_helpers.rs`, `utils/modelSettings.ts`, `Header/useModelLoader.ts`). Reported live run (not re-run by knowledge-sync): against `geniex serve` v0.9.3 with `unsloth/Qwen3.5-0.8B-GGUF` Q8_K_XL, a warmup then a chat with identical params did not reload, and a changed `nctx` did reload.
 - Chat events carry `streamId`; `useChatStream` applies them only to the active stream, so a stream keeps its session when the user switches chats (`chat-chunk`/`chat-done` in `ChatRuntime/useChatStream.ts`). The stream also keeps running on other pages, since `ChatRuntime` is mounted in `MainLayout`.
 - Per-response stats (TTFT, total time, token count, prompt chars) are saved with the message (`messages` columns from `m20261022_000002`; `database.rs`, `services/database.ts`), so they survive a reload. Stats are computed in `useChatStream.ts`.
 - Failed sends are saved as `chat_errors` rows (`ChatInput/ChatInput.tsx` -> `save_chat_error`; migration `m20261022_000001`), so they survive a reload. Whether a failed send is still sent as context on the next turn was not re-checked.

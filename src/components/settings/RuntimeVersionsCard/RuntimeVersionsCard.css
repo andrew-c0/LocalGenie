@@ -1,0 +1,12 @@
+.runtime-versions-card__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalS);
+}
+
+.runtime-versions-card__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--spacingHorizontalM);
+}

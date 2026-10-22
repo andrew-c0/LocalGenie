@@ -30,6 +30,10 @@
   width: 100%;
 }
 
+.model-settings__hint {
+  color: var(--colorNeutralForeground3);
+}
+
 .model-settings__textarea {
   width: 100%;
   min-height: 120px;

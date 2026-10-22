@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ChatSession, GenerationStats, Message } from "../types";
+import type { ChatSession, GenerationStats, Message, ServerSettings } from "../types";
 import { chatErrorContent } from "../utils/chatError";
+import { DEFAULT_SERVER_SETTINGS } from "../utils/modelSettings";
 
 /** Valid message roles — used to validate DB values at runtime. */
 const VALID_ROLES = new Set<Message["role"]>(["user", "assistant", "system"]);
@@ -190,6 +191,21 @@ export async function getPreference<T = string>(key: string): Promise<T | null> 
 /** Store a preference as JSON, so `getPreference` returns the same type it was given. */
 export async function setPreference(key: string, value: unknown, type = "string"): Promise<void> {
   await invoke("set_preference", { key, value: JSON.stringify(value), prefType: type });
+}
+
+/** App-wide server settings (Application & Runtime). Falls back to the defaults when unset. */
+export async function getServerSettings(): Promise<ServerSettings> {
+  const origins = await getPreference<string>("server_origins").catch(() => null);
+  const keepalive = await getPreference<number>("server_keepalive").catch(() => null);
+  return {
+    origins: origins ?? DEFAULT_SERVER_SETTINGS.origins,
+    keepalive: keepalive ?? DEFAULT_SERVER_SETTINGS.keepalive,
+  };
+}
+
+export async function saveServerSettings(settings: ServerSettings): Promise<void> {
+  await setPreference("server_origins", settings.origins, "string");
+  await setPreference("server_keepalive", settings.keepalive, "number");
 }
 
 // ─── Downloaded model metadata ─────────────────────────────────────

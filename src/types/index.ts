@@ -62,6 +62,7 @@ export interface ServerStatus {
   models: string[];
 }
 
+/** Per-request sampling settings, sent with each chat completion. */
 export interface GenerationSettings {
   temperature?: number;
   topP?: number;
@@ -71,10 +72,52 @@ export interface GenerationSettings {
   presencePenalty?: number;
   frequencyPenalty?: number;
   maxTokens?: number;
-  nctx?: number;
-  systemPrompt?: string;
+  seed?: number;
+  /** Thinking mode, sent as `enable_think`. Thinking stays inline in the reply text. */
   think?: boolean;
+  /** GBNF grammar for constrained output. Empty means unconstrained. */
+  grammarString?: string;
+  systemPrompt?: string;
 }
+
+/**
+ * Model load parameters. Sent with the warmup and with every chat request; the server reloads the
+ * model when they change, so a model is always used with the parameters it was loaded with.
+ */
+export interface ModelLoadParams {
+  nctx?: number;
+  ngl?: number;
+  /** NPU, GPU, CPU, or an explicit device list. */
+  compute?: string;
+  /** HTP power mode, for example "burst". Empty means the server default. */
+  powerMode?: string;
+  /** Speculative decoding type (llama.cpp only). Empty means off. */
+  specType?: string;
+  specDraftModel?: string;
+  specNMax?: number;
+  specNMin?: number;
+  specPMin?: number;
+}
+
+/** Everything saved for one model in `model_settings`. */
+export type ModelLoadSettings = ModelLoadParams;
+
+export type StoredModelSettings = GenerationSettings & ModelLoadSettings;
+
+/** Runtime versions reported by `geniex version`. Null when the CLI does not report one. */
+export interface RuntimeVersions {
+  llamaCpp: string | null;
+  qairt: string | null;
+}
+
+/** App-wide server settings (Application & Runtime). Applied when the server starts. */
+export interface ServerSettings {
+  origins: string;
+  keepalive: number;
+}
+
+/** Settings for one chat request: sampling plus the load parameters the server keys its cache on. */
+export type ChatSettings = GenerationSettings & ModelLoadParams;
 
 export interface ConfigEntry {
   key: string;

@@ -6,8 +6,9 @@ import * as geniex from "../../services/geniex";
 import { serverBaseUrl } from "../../services/geniex";
 import { useChatStore } from "../../stores/chatStore";
 import { defaultSettings, useModelStore } from "../../stores/modelStore";
-import type { Message } from "../../types";
+import type { Message, StoredModelSettings } from "../../types";
 import { chatErrorContent } from "../../utils/chatError";
+import { chatSettingsFor, engineOf, modelSettingsKey } from "../../utils/modelSettings";
 import { toast } from "../../utils/toast";
 import "./ChatInput.css";
 
@@ -50,16 +51,20 @@ export default function ChatInput() {
       const rawModelId = useModelStore.getState().activeModelId;
 
       try {
-        let settings = { ...defaultSettings };
-        if (rawModelId) {
-          const baseName = rawModelId.includes(":") ? rawModelId.split(":")[0] : rawModelId;
+        const key = rawModelId ? modelSettingsKey(rawModelId) : null;
+        let stored: StoredModelSettings = { ...defaultSettings };
+        if (key) {
           try {
-            const saved = await db.loadModelSettings(baseName);
-            if (saved) settings = { ...settings, ...JSON.parse(saved) };
+            const saved = await db.loadModelSettings(key);
+            if (saved) stored = { ...defaultSettings, ...JSON.parse(saved) };
           } catch {
             // use defaults
           }
         }
+        const model = key
+          ? useModelStore.getState().models.find((m) => modelSettingsKey(m.name) === key)
+          : undefined;
+        const settings = chatSettingsFor(stored, engineOf(model), useModelStore.getState().compute);
 
         // Pass the model name if set, otherwise auto-detect from server
         const baseUrl = serverBaseUrl(serverPort);

@@ -5,7 +5,7 @@ Tauri 2 desktop UI (React 19 + TS frontend in `src/`, Rust backend in `src-tauri
 ## Read first
 - `memories/repo/codebase-map.md` - architecture, commands, events, DB, flows (start here)
 - `memories/geniex-cli-reference.md` - full `geniex` CLI flags (kept as written; updated when the CLI changes)
-- `memories/repo/` - the one source for repo knowledge and explanations of changes: `known-issues.md`, `cli-update.md`, `db-architecture.md`, `manual-checklist.md`, `code-quality.md`
+- `memories/repo/` - the one source for repo knowledge and explanations of changes: `known-issues.md`, `cli-update.md`, `db-architecture.md`, `manual-checklist.md`, `code-quality.md`, `geniex-server-behaviour.md` (GenieX server facts LocalGenie depends on)
 - Rules and agents live in `.claude/` (former `.github/` copies are in `.claude/archive/github/`, not loaded)
 
 ## Agents and routing

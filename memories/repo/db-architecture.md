@@ -8,7 +8,7 @@
 ## Primary tables
 - `chat_sessions`: session metadata
 - `messages`: chat messages tied to a session
-- `model_settings`: per-model generation parameters
+- `model_settings`: one JSON row per model (`model_id` = name without `:precision`), holding generation and load settings (`load_model_settings` / `save_model_settings`)
 - `user_preferences`: key-value app settings such as `server_port`
 - `downloaded_models`: GGUF models imported into GenieX (`name` primary key; precision, context_size, param_count, repo_url, model_card, timestamps). Written by `import_gguf`, read by the model page.
 

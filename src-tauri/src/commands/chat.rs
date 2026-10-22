@@ -1,8 +1,9 @@
 use tauri::{AppHandle, Emitter, State};
 
 use super::chat_helpers::{
-    build_chat_body, chat_done_payload, finish_reason_from_chunk, is_first_output, no_output_error,
-    resolve_model_for_server, strip_precision, ChatMessage, GenerationSettings,
+    apply_load_params, build_chat_body, chat_done_payload, finish_reason_from_chunk,
+    is_first_output, no_output_error, resolve_model_for_server, strip_precision, ChatMessage,
+    GenerationSettings, ModelLoadParams,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -58,6 +59,7 @@ pub async fn load_model(
     state: State<'_, super::AppState>,
     model: String,
     base_url: Option<String>,
+    load: Option<ModelLoadParams>,
 ) -> Result<super::server::ServerStatus, String> {
     let resolved_base = base_url.unwrap_or_else(|| super::constants::DEFAULT_BASE_URL.into());
     let clean_model = strip_precision(&model);
@@ -75,12 +77,14 @@ pub async fn load_model(
         .unwrap_or(super::constants::DEFAULT_PORT);
 
     let url = format!("{}/v1/chat/completions", resolved_base);
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": clean_model,
         "messages": [{"role": "user", "content": "hi"}],
         "max_tokens": 1,
         "stream": false,
     });
+    // The warmup must load with the same parameters as chat, or the first message reloads the model.
+    apply_load_params(&mut body, &load.unwrap_or_default());
 
     let response = state
         .http_client

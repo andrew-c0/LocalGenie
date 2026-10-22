@@ -1,0 +1,10 @@
+.server-runtime-card__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalM);
+}
+
+.server-runtime-card__actions {
+  display: flex;
+  justify-content: flex-end;
+}

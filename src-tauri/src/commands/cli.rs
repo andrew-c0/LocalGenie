@@ -210,3 +210,74 @@ pub async fn config_list() -> Result<Vec<ConfigEntry>, String> {
         })
         .collect())
 }
+
+/// Runtime versions reported by `geniex version`. Each is None when the CLI does not report it.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeVersions {
+    pub llama_cpp: Option<String>,
+    pub qairt: Option<String>,
+}
+
+/// Parse `geniex version` output such as `LlamaCPP Runtime Hash:  e467e5b`.
+fn parse_runtime_versions(stdout: &str) -> RuntimeVersions {
+    let mut versions = RuntimeVersions::default();
+    for line in stdout.lines() {
+        let Some((label, value)) = line.split_once(':') else {
+            continue;
+        };
+        let value = value.trim();
+        if value.is_empty() {
+            continue;
+        }
+        match label.trim() {
+            "LlamaCPP Runtime Hash" => versions.llama_cpp = Some(value.to_string()),
+            "QAIRT Runtime Version" => versions.qairt = Some(value.to_string()),
+            _ => {}
+        }
+    }
+    versions
+}
+
+/// Read the llama.cpp and QAIRT runtime versions from `geniex version`.
+#[tauri::command]
+pub async fn get_runtime_versions() -> Result<RuntimeVersions, String> {
+    if !platform_supported() {
+        return Err(platform_unsupported_err());
+    }
+    let output = timeout(
+        Duration::from_secs(CLI_PROBE_TIMEOUT_SECS),
+        Command::new(resolve_geniex_executable())
+            .args(["version"])
+            .output(),
+    )
+    .await
+    .map_err(|_| "geniex version timed out".to_string())?
+    .map_err(|e| format!("Failed to run geniex version: {e}"))?;
+    if !output.status.success() {
+        return Err("geniex version failed".to_string());
+    }
+    Ok(parse_runtime_versions(&String::from_utf8_lossy(
+        &output.stdout,
+    )))
+}
+
+#[cfg(test)]
+mod runtime_version_tests {
+    use super::parse_runtime_versions;
+
+    #[test]
+    fn parses_llama_cpp_hash_and_qairt_version() {
+        let out = "GenieX CLI Version:     v0.9.3\nQAIRT Runtime Version:  2.50\nLlamaCPP Runtime Hash:  e467e5b\n";
+        let v = parse_runtime_versions(out);
+        assert_eq!(v.llama_cpp.as_deref(), Some("e467e5b"));
+        assert_eq!(v.qairt.as_deref(), Some("2.50"));
+    }
+
+    #[test]
+    fn missing_lines_leave_versions_unset() {
+        let v = parse_runtime_versions("GenieX CLI Version:     v0.9.3\n");
+        assert!(v.llama_cpp.is_none());
+        assert!(v.qairt.is_none());
+    }
+}

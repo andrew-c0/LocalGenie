@@ -53,6 +53,7 @@ pub fn run() {
             chat::unload_all_models,
             // CLI utilities
             cli::check_geniex_installed,
+            cli::get_runtime_versions,
             commands::download::download_file,
             commands::download::cancel_download,
             import::delete_directory,

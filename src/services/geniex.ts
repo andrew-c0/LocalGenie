@@ -1,9 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AihubModel,
+  ChatSettings,
   ConfigEntry,
-  GenerationSettings,
   ModelInfo,
+  ModelLoadParams,
+  RuntimeVersions,
   SearchModel,
   ServerLogLine,
   ServerStartOptions,
@@ -71,8 +73,13 @@ export async function getServerStatus(port?: number): Promise<ServerStatus> {
 
 // ─── Model Loading ──────────────────────────────────────────────
 
-export async function loadModel(model: string, baseUrl?: string): Promise<ServerStatus> {
-  return invoke("load_model", { model, baseUrl });
+/** Load a model with the given parameters. They must match the ones chat requests send. */
+export async function loadModel(
+  model: string,
+  load?: ModelLoadParams,
+  baseUrl?: string,
+): Promise<ServerStatus> {
+  return invoke("load_model", { model, baseUrl, load });
 }
 
 export async function unloadAllModels(port?: number): Promise<ServerStatus> {
@@ -90,7 +97,7 @@ export async function unloadAllModels(port?: number): Promise<ServerStatus> {
  */
 export async function chatCompletion(
   messages: ChatMessage[],
-  settings: GenerationSettings,
+  settings: ChatSettings,
   streamId: string,
   model?: string,
   baseUrl?: string,
@@ -99,6 +106,12 @@ export async function chatCompletion(
 }
 
 // ─── CLI Utilities ──────────────────────────────────────────────
+
+/** llama.cpp runtime hash and QAIRT version from `geniex version`. */
+export async function getRuntimeVersions(): Promise<RuntimeVersions> {
+  return invoke("get_runtime_versions");
+}
+
 export async function checkGeniexInstalled(): Promise<boolean> {
   return invoke("check_geniex_installed");
 }

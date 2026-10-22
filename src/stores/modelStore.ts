@@ -3,6 +3,7 @@ import type {
   GenerationSettings,
   ModelInfo,
   SearchModel,
+  ServerSettings,
   ServerStatus,
   UpdateInfo,
 } from "../types/index.js";
@@ -29,8 +30,8 @@ interface ModelState {
   updateInfo: UpdateInfo | null;
   /** Compute target used when starting the GenieX server. */
   compute: ComputeChoice;
-  /** Compute target the running server was started with; null when unknown or stopped. */
-  serverCompute: ComputeChoice | null;
+  /** Server-start settings the running server was started with; null when unknown (external) or stopped. */
+  serverOptions: ServerSettings | null;
   /** Whether the header model-selector popover is open. */
   selectorOpen: boolean;
 
@@ -43,7 +44,7 @@ interface ModelState {
   setIsSearching: (v: boolean) => void;
   setUpdateInfo: (info: UpdateInfo | null) => void;
   setCompute: (c: ComputeChoice) => void;
-  setServerCompute: (c: ComputeChoice | null) => void;
+  setServerOptions: (o: ServerSettings | null) => void;
   setSelectorOpen: (open: boolean) => void;
 }
 
@@ -57,7 +58,7 @@ export const useModelStore = create<ModelState>((set) => ({
   activeModelId: null,
   updateInfo: null,
   compute: DEFAULT_COMPUTE,
-  serverCompute: null,
+  serverOptions: null,
   selectorOpen: false,
 
   setCliInstalled: (v) => set({ cliInstalled: v }),
@@ -87,7 +88,7 @@ export const useModelStore = create<ModelState>((set) => ({
   setIsSearching: (v) => set({ isSearching: v }),
   setUpdateInfo: (info) => set({ updateInfo: info }),
   setCompute: (compute) => set({ compute }),
-  setServerCompute: (c) => set({ serverCompute: c }),
+  setServerOptions: (o) => set({ serverOptions: o }),
 }));
 
 /** Default generation settings per model. */
@@ -97,8 +98,7 @@ export const defaultSettings: GenerationSettings = {
   topK: 40,
   minP: 0.05,
   repetitionPenalty: 1.1,
-  // maxTokens is unset by default: the server's own limit applies.
-  nctx: 4096,
-  systemPrompt: "",
+  // maxTokens and seed are unset by default: the server's own values apply.
   think: true,
+  systemPrompt: "",
 };
