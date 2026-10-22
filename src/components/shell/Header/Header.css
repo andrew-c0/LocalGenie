@@ -1,0 +1,16 @@
+/* App chrome for the top bar. Layout (row, centring, gap) comes from the Flex component. */
+.header {
+  padding: var(--spacingVerticalS) var(--spacingHorizontalM);
+  border-bottom: 1px solid var(--colorNeutralStroke2);
+  background-color: var(--colorNeutralBackground1);
+}
+
+/* Connection status: a square the height of the model dropdown, keeping the tint badge border and background. */
+.header .header__status {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: var(--borderRadiusMedium);
+  padding: 0;
+  justify-content: center;
+}

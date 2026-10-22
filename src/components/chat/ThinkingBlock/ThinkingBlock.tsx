@@ -1,37 +1,7 @@
-import { Button, makeStyles, Spinner, tokens } from "@fluentui/react-components";
+import { Button, Spinner } from "@fluentui/react-components";
 import { ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useEffect, useRef, useState } from "react";
-
-const useStyles = makeStyles({
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalXS,
-    alignItems: "flex-start",
-    width: "100%",
-    boxSizing: "border-box",
-    padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalS}`,
-    borderRadius: tokens.borderRadiusMedium,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground3,
-  },
-  toggle: {
-    color: tokens.colorNeutralForeground3,
-  },
-  body: {
-    whiteSpace: "pre-wrap",
-    overflowWrap: "anywhere",
-    maxHeight: "240px",
-    overflowY: "auto",
-    width: "100%",
-    boxSizing: "border-box",
-    padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalS}`,
-    borderLeft: `3px solid ${tokens.colorNeutralStroke1}`,
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-    lineHeight: tokens.lineHeightBase200,
-  },
-});
+import "./ThinkingBlock.css";
 
 interface ThinkingBlockProps {
   /** Reasoning text so far. */
@@ -42,7 +12,6 @@ interface ThinkingBlockProps {
 
 /** Collapsible reasoning panel shown inside a reply bubble, above the answer. Collapsed until the user opens it. */
 export function ThinkingBlock({ text, live }: ThinkingBlockProps) {
-  const styles = useStyles();
   const [expanded, setExpanded] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -54,11 +23,11 @@ export function ThinkingBlock({ text, live }: ThinkingBlockProps) {
   }, [text, live, expanded]);
 
   return (
-    <div className={styles.root}>
+    <div className="thinking-block__root">
       <Button
-        appearance="subtle"
+        appearance="subtle" /* The only instance this is used - manually edited, don't change */
         size="small"
-        className={styles.toggle}
+        className="thinking-block__toggle"
         icon={
           live ? (
             <Spinner size="tiny" />
@@ -74,7 +43,7 @@ export function ThinkingBlock({ text, live }: ThinkingBlockProps) {
         {live ? "Thinking..." : "Thought process"}
       </Button>
       {expanded && (
-        <div ref={bodyRef} className={styles.body}>
+        <div ref={bodyRef} className="thinking-block__body">
           {text || (live ? "Waiting for reasoning..." : "")}
         </div>
       )}

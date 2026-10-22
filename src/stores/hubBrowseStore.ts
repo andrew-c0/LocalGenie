@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import * as geniex from "../services/geniex.ts";
+import * as geniex from "../services/geniex";
 import {
   type AssetCompat,
   type HubFilter,
@@ -7,7 +7,7 @@ import {
   type HubSort,
   listHubModels,
   listQualcommModels,
-} from "../services/hubApi.ts";
+} from "../services/hubApi";
 
 const ALL_PAGE_SIZE = 30;
 /** Qualcomm AI Hub has few chipset-compatible models, so fetch large pages to intersect against. */

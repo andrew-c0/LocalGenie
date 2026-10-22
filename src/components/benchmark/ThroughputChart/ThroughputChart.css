@@ -1,0 +1,42 @@
+.throughput-chart__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.throughput-chart__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  color: var(--colorNeutralForeground3);
+  font-size: var(--fontSizeBase200);
+}
+
+.throughput-chart__grid-line {
+  stroke: var(--colorNeutralStroke2);
+}
+
+.throughput-chart__axis-text {
+  fill: var(--colorNeutralForeground3);
+}
+
+.throughput-chart__npu-stroke {
+  stroke: var(--colorPaletteTealForeground2);
+}
+
+.throughput-chart__gpu-stroke {
+  stroke: var(--colorPalettePurpleForeground2);
+}
+
+.throughput-chart__cpu-stroke {
+  stroke: var(--colorNeutralForeground3);
+}
+
+.throughput-chart__npu-fill {
+  fill: var(--colorPaletteTealForeground2);
+}
+
+.throughput-chart__npu-stop {
+  stop-color: var(--colorPaletteTealForeground2);
+}

@@ -1,0 +1,11 @@
+/* Items fill the popover width. Selectors are scoped to beat Fluent's own rules. */
+.model-selector .model-option {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+/* The active model is already selected: no pointer, since clicking it does nothing. */
+.model-selector .model-option--active {
+  cursor: default;
+}

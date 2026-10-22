@@ -1,0 +1,21 @@
+.chat-context-header__bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacingHorizontalS);
+  padding: var(--spacingVerticalS) var(--spacingHorizontalM);
+  border-bottom: 1px solid var(--colorNeutralStroke2);
+  background-color: var(--colorNeutralBackground1);
+}
+
+/* The conversation title takes the free space on the left and truncates with an ellipsis. */
+.chat-context-header__bar .chat-context-header__title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chat-context-header__usage {
+  display: flex;
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+}

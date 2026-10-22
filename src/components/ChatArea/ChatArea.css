@@ -1,0 +1,31 @@
+.chat-area__area {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--spacingHorizontalL);
+}
+
+.chat-area__messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalM);
+  max-width: 840px;
+  margin: 0 auto;
+}
+
+.chat-area__delimiter {
+  display: flex;
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+}
+
+.chat-area__delimiter-line {
+  flex: 1;
+}
+
+.chat-area__typing {
+  display: flex;
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+  color: var(--colorNeutralForeground3);
+}

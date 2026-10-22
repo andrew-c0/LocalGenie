@@ -1,0 +1,95 @@
+/* Flex container. Classes are set by the Flex component; utilities are for single children. */
+.flex {
+  display: flex;
+  min-width: 0;
+}
+
+.flex--row {
+  flex-direction: row;
+}
+
+.flex--column {
+  flex-direction: column;
+}
+
+.flex--wrap {
+  flex-wrap: wrap;
+}
+
+.flex--grow {
+  flex: 1 1 auto;
+}
+
+.flex-grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.flex--align-start {
+  align-items: flex-start;
+}
+.flex--align-center {
+  align-items: center;
+}
+.flex--align-end {
+  align-items: flex-end;
+}
+.flex--align-stretch {
+  align-items: stretch;
+}
+.flex--align-baseline {
+  align-items: baseline;
+}
+
+.flex--justify-start {
+  justify-content: flex-start;
+}
+.flex--justify-center {
+  justify-content: center;
+}
+.flex--justify-end {
+  justify-content: flex-end;
+}
+.flex--justify-between {
+  justify-content: space-between;
+}
+
+.flex--gap-none {
+  gap: 0;
+}
+.flex--row.flex--gap-xxs {
+  gap: var(--spacingHorizontalXXS);
+}
+.flex--column.flex--gap-xxs {
+  gap: var(--spacingVerticalXXS);
+}
+.flex--row.flex--gap-xs {
+  gap: var(--spacingHorizontalXS);
+}
+.flex--column.flex--gap-xs {
+  gap: var(--spacingVerticalXS);
+}
+.flex--row.flex--gap-s {
+  gap: var(--spacingHorizontalS);
+}
+.flex--column.flex--gap-s {
+  gap: var(--spacingVerticalS);
+}
+.flex--row.flex--gap-m {
+  gap: var(--spacingHorizontalM);
+}
+.flex--column.flex--gap-m {
+  gap: var(--spacingVerticalM);
+}
+.flex--row.flex--gap-l {
+  gap: var(--spacingHorizontalL);
+}
+.flex--column.flex--gap-l {
+  gap: var(--spacingVerticalL);
+}
+.flex--row.flex--gap-xl {
+  gap: var(--spacingHorizontalXL);
+}
+.flex--column.flex--gap-xl {
+  gap: var(--spacingVerticalXL);
+}

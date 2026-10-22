@@ -1,16 +1,6 @@
-import { makeStyles, Text, tokens } from "@fluentui/react-components";
+import { Text } from "@fluentui/react-components";
 import type { ReactNode } from "react";
-
-const useStyles = makeStyles({
-  stateBlock: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: tokens.spacingVerticalS,
-    padding: tokens.spacingVerticalXL,
-    textAlign: "center",
-  },
-});
+import "./StateBlock.css";
 
 /** Empty / loading / error state block. */
 export function StateBlock({
@@ -22,9 +12,8 @@ export function StateBlock({
   message: ReactNode;
   children?: ReactNode;
 }) {
-  const styles = useStyles();
   return (
-    <div className={styles.stateBlock}>
+    <div className="state-block__state-block">
       {icon && <Text size={600}>{icon}</Text>}
       <Text>{message}</Text>
       {children}

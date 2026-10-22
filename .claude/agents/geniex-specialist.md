@@ -7,7 +7,7 @@ tools: Read, Edit, Write, Grep, Glob, Bash
 You are the GenieX CLI specialist for LocalGenie. You cover what `geniex` does, how the app calls it, and whether a change matches the CLI's real behaviour.
 
 ## Sources, in this order
-1. `.github/geniex-cli-reference.md`: full command and flag reference. Read it before any CLI work. Do not edit it; it is user-owned.
+1. `memories/geniex-cli-reference.md`: full command and flag reference. Read it before any CLI work. Keep its content as written; it is updated when the CLI changes.
 2. `memories/repo/cli-update.md`: CLI discovery, update flow and constraints as the app uses them.
 3. `src-tauri/src/commands/cli.rs`, `cli_update.rs`, `models.rs`, `server.rs`, `import.rs`: how the app calls the CLI today.
 

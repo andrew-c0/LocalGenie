@@ -1,0 +1,11 @@
+.download-drawer__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalS);
+  margin-bottom: var(--spacingVerticalM);
+}
+
+.download-drawer__toolbar {
+  display: flex;
+  justify-content: flex-end;
+}

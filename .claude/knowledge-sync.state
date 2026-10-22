@@ -1,3 +1,3 @@
-last_synced_commit=84170dd440a02e4f29ad6fae567baf9ed5daf32b
+last_synced_commit=4c5dcade9d3f9385353af9fbfb20fd60f2f0c8dc
 last_synced_date=2026-10-22
-note=No new commits since 84170dd. Synced the uncommitted working tree (download lifecycle rewrite, server PID fix, dead-code removal, GGUF helpers in services/hubModels.ts, downloadStore.startGGUFDownload, install_geniex/pull_model/get_geniex_version removed, shell capability trimmed, src-tauri module split in progress with untracked import.rs/cli_update.rs/hub.rs). cargo not run; tsc and biome passed.
+note=Synced HEAD 4c5dcad (no new commits since last cursor) plus the uncommitted src/ frontend refactor, including the folder regrouping (every component with a stylesheet is Name/Name.tsx + Name.css) and the chat/header/model-selector/models UI changes (working tree reflected; src-tauri/ clean vs HEAD). tsc --noEmit and biome check src passed; cargo not run; app not launched.

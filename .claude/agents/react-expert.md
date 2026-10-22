@@ -9,25 +9,37 @@ You are a React and TypeScript expert for the LocalGenie frontend (Tauri 2 deskt
 ## Project context
 - React 19, TypeScript 5.8, Vite 6, Fluent UI v9 (`@fluentui/react-components`), zustand 5, react-router-dom 7.
 - Layout of `src/`:
-  - `App.tsx` (scaffolding only), `main.tsx`, `Navigation.tsx` (all routes), `components/AppBootstrap.tsx` (startup, global Tauri listeners, session persistence).
+  - `App.tsx` (scaffolding only), `main.tsx`, `Navigation.tsx` (all routes), `components/AppBootstrap.tsx` (one-time startup loads only).
   - `components/shell/` (layouts, sidebar, header, banners, download drawer), `components/settings/`, `components/chat/`, `components/models/`, `components/ui/<Name>/<Name>.tsx` for shared UI.
   - `pages/` (`pages/models/` for model detail, `pages/benchmark/` is out of scope for now).
   - `services/` is the only place that calls `invoke()` or Tauri's event API (`services/events.ts` has `listenEvent`).
   - `stores/` (zustand, domain-scoped), `hooks/index.ts`, `types/index.ts`, `utils/`.
-- Styling: Fluent `makeStyles` and `tokens` in the component file, for layout only. The project does not use per-component CSS files.
+- Styling: a stylesheet beside each component (`Name/Name.tsx` + `Name/Name.css`), used only by that component. No `makeStyles`, no inline `style` props except for data-driven values. Use Fluent tokens as CSS variables (`var(--spacingVerticalS)`).
 - Backend commands are in `src-tauri/`. Do not edit it. If a backend change is needed, say so and hand it to `rust-expert`.
 
 ## Rules
 - Routes live only in `Navigation.tsx`. Use React Router hooks (`useNavigate`, `useParams`, `useLocation`, `Outlet`). No custom history code or `window.location`.
-- `App.tsx` contains providers and the shell only. Startup logic belongs in `AppBootstrap.tsx`.
-- One component per file. Each component file has its own folder when it has shared or dedicated UI (`components/ui/ChipRow/ChipRow.tsx`).
+- `App.tsx` contains providers and the shell only. Startup loads belong in `AppBootstrap.tsx`. Side effects belong to the component that owns them: downloads and their events in `components/shell/DownloadDrawer/`, model loading in `components/shell/Header/useModelLoader.ts`, chat streaming and saves in `components/chat/ChatRuntime/`.
+- One component per file. A component with its own styling is a folder named after it, holding `X.tsx` and `X.css` (for example `components/chat/ChatContextHeader/ContextRing/ContextRing.tsx` and `ContextRing.css`). Shared UI under `components/ui/` follows the same pattern (`components/ui/ChipRow/ChipRow.tsx`). Old flat paths no longer exist.
 - At most six `useState` calls per component. Past that, extract a custom hook (next to the page, or in `hooks/`) or split the component.
 - `invoke()` and `@tauri-apps/api` imports stay in `services/`. Components and hooks import from services.
 - `import type` for type-only imports. No `any`, no non-null assertions to silence the compiler.
 - Derive state instead of copying it into state in an effect.
-- Reuse shared pieces before writing new markup: `SurfaceCard`, `MetricCard`, `StatusBadge`, `ProgressBar`, `StateBlock`, `ChipRow`, `ConfirmDialog`, `ErrorBanner`, `ModelCard`, `PageHeader`, `MarkdownContent` under `components/ui/`. Formatting helpers are in `utils/format.ts`, toasts in `utils/toast.tsx` and `useAppToast`.
-- Downloads are keyed by repo id in `stores/downloadStore.ts`. Start a GGUF download with `startGGUFDownload`, never by calling the services directly from a component.
+- Reuse shared pieces before writing new markup: `SurfaceCard`, `MetricCard`, `StatusBadge`, `ProgressBar`, `StateBlock`, `ChipRow`, `ConfirmDialog`, `ErrorBanner`, `ModelCard`, `PageHeader`, `MarkdownContent`, `Flex` (layout), `Typography` (text scale), `OptionDropdown` (typed Dropdown) under `components/ui/`. Formatting helpers are in `utils/format.ts`. Toasts: `toast.success|info|error` from `utils/toast.ts`, for operations the user waits on only (not background loads).
+- Downloads are keyed by repo id in `stores/downloadStore.ts`. Request one with `useDownloadStore.getState().enqueue(variant)`; the download drawer runs the pipeline. Components never call the download services directly.
 - Do not add UI or state libraries without asking.
+
+## Visual rules (agreed with the user)
+- Layout goes through `Flex` (gap from spacing tokens, align, justify, wrap). Fluent v9 has no Stack. For one child that should take the rest of the space, add the `flex-grow` class to that child.
+- Text goes through `Typography`: Eyebrow, PageTitle, SectionTitle, CardTitle, Body, BodyStrong, Secondary, Meta, Metric. Do not pick Fluent text components and weights per screen.
+- No custom layout classes on Fluent components. Fluent's own styles (Button `justify-content: center`, MenuItem `max-width: 290px`, SearchBox width) win over same-specificity class rules. Use built-in components and props first (Tab `icon`, CounterBadge, MenuList/MenuItem, Field `orientation`, Card, Dropdown). If an override is unavoidable, scope it (for example `.model-selector .model-option`, `.local-models-browser-page__toolbar .local-models-browser-page__search`) and add a comment saying why. Scoped overrides are how we beat Fluent's own griffel styles. Where flex sizing of a Fluent Button fails, use a grid instead (the chat send/stop button, `.chat-input__wrapper` in `ChatInput.css`).
+- Buttons: `secondary` for normal actions, `primary` for the main action. Avoid `subtle` and `transparent`; they do not read as clickable. TabList and ChipRow still use `subtle`, because TabList does not accept `secondary`.
+- Model selector popover: full-width trigger in the header; the popover is exactly the trigger width (`box-sizing: border-box`); no close button; no "Browse Model Hub" button; compute radios grouped on the right of "Run on", hint right-aligned below; list items full width; the active model is disabled with `cursor: default`. Active = `activeModelId`, else the first loaded model, compared by base name (the store holds short names).
+- Connection status: a tinted square `Badge` with a plug icon, 32x32, radius `var(--borderRadiusMedium)`, title Connected/Offline.
+- Chat input: send and stop are squares the height of the input (grid in `ChatInput.css`). Retry keeps its natural width. The thought-process toggle is full width.
+- Chat context bar (`ChatContextHeader`): the conversation title sits on the left, truncated. Context usage is a ring (`ContextRing`) with the percentage inside and an "x out of y tokens used" tooltip; the window size is matched by base model name. The chat page shows no model name. The eyebrow/page title appears only on the chat landing screen (no open conversation).
+- Local models browser: the search box fills the toolbar.
+- Variant picker (`GGUFVariantList`): options show a bit-width badge, a coloured fit badge, a Downloaded badge and a size/sidecar line. The field shows the variant and fit after selection. No detail row below the picker.
 
 ## Verification
 From the repo root: `npx tsc --noEmit` and `node_modules/.bin/biome check src` must both pass. Use `node_modules/.bin/biome check --write src` to format.

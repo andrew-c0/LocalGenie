@@ -1,0 +1,21 @@
+.download-card {
+  width: 100%;
+}
+
+.download-card__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.download-card__progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalXS);
+}
+
+.download-card__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacingHorizontalS);
+}

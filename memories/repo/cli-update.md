@@ -4,7 +4,7 @@
 - CLI update checks exist in the Rust backend and frontend service layer.
 - Update flow is installer-based: `geniex update` CLI command was found unreliable and was replaced.
 
-## Backend — `src-tauri/src/commands/cli_update.rs` (uncommitted move from `cli.rs`)
+## Backend — `src-tauri/src/commands/cli_update.rs`
 - `check_for_cli_update()` → queries GitHub API (`/repos/qualcomm/GenieX/releases/latest`), compares installed version via `version_less_than()`, returns `UpdateInfo { current_version, latest_version, update_available, release_url }`.
 - `update_geniex(app)` → full installer flow:
   1. Fetch latest release JSON from GitHub API.
@@ -17,8 +17,8 @@
 
 ## Frontend
 - `AppBootstrap.tsx` calls `checkForCliUpdate()` on init → stores in modelStore as `updateInfo`.
-- `Sidebar.tsx`: settings button moved to sidebar header next to logo (icon-only, auto-width); shows a small red dot badge when `updateInfo.update_available`.
-- `AppSettings.tsx` (settings drawer): CLI update card; `handleUpdate()` calls `updateGeniex()`, listens for progress events, then re-checks and calls `setUpdateInfo(info)` to refresh the store (NOT `setUpdateInfo(null)` — that caused a stuck "Checking for updates…" state).
+- `pages/SettingsPage/SettingsPage.tsx`: shows a red `!` badge on the "app" section and on the section content when `updateInfo.update_available` (code-verified; the Sidebar no longer shows this badge).
+- `components/AppSettings/AppSettings.tsx` (app settings section): CLI update card (`settings/CliUpdateCard/`); `handleUpdate()` calls `updateGeniex()`, listens for progress events, then re-checks and calls `setUpdateInfo(info)` to refresh the store (NOT `setUpdateInfo(null)` — that caused a stuck "Checking for updates…" state).
 
 ## Notes
 - Platform-gated to Windows ARM64 (`platform_supported()`).

@@ -1,0 +1,40 @@
+.local-models-browser-page__page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--spacingHorizontalL) var(--spacingVerticalL);
+}
+
+.local-models-browser-page__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalM);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.local-models-browser-page__toolbar {
+  display: flex;
+  gap: var(--spacingHorizontalS);
+  align-items: center;
+}
+
+.local-models-browser-page__downloads {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalS);
+}
+
+.local-models-browser-page__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--spacingHorizontalM);
+}
+
+/* The search box fills the toolbar; scoped so it wins over Fluent's fixed SearchBox width. */
+.local-models-browser-page__toolbar .local-models-browser-page__search {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}

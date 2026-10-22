@@ -1,0 +1,6 @@
+.chip-row__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacingHorizontalS);
+  align-items: center;
+}

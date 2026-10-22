@@ -1,0 +1,15 @@
+.model-card__card {
+  min-width: 0;
+}
+
+.model-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacingHorizontalM);
+}
+
+.model-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacingHorizontalS);
+}

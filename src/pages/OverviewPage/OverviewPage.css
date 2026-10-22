@@ -1,0 +1,41 @@
+.overview-page__page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--spacingHorizontalL);
+}
+
+.overview-page__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalL);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.overview-page__hero-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+}
+
+.overview-page__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--spacingHorizontalM);
+}
+
+.overview-page__capability-body {
+  padding: 0 var(--spacingHorizontalM) var(--spacingVerticalM);
+}
+
+.overview-page__banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacingHorizontalM);
+  flex-wrap: wrap;
+  padding: var(--spacingVerticalS);
+  border-radius: var(--borderRadiusMedium);
+  background-color: var(--colorNeutralBackground3);
+}

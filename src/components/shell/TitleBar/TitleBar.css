@@ -1,0 +1,78 @@
+.title-bar__bar {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  height: 32px;
+  background-color: var(--colorNeutralBackground2);
+  color: var(--colorNeutralForeground2);
+  user-select: none;
+}
+
+.title-bar__drag-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacingHorizontalXS);
+  padding-left: var(--spacingHorizontalM);
+}
+
+.title-bar__icon {
+  display: flex;
+  font-size: 14px;
+  color: var(--colorBrandForeground1);
+}
+
+.title-bar__title {
+  font-family: var(--fontFamilyBase);
+  font-size: var(--fontSizeBase200);
+  font-weight: var(--fontWeightRegular);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title-bar__controls {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+}
+
+.title-bar__control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.title-bar__control:hover {
+  background-color: var(--colorSubtleBackgroundHover);
+  color: var(--colorNeutralForeground1);
+}
+
+.title-bar__control:active {
+  background-color: var(--colorSubtleBackgroundPressed);
+}
+
+.title-bar__control:focus-visible {
+  outline: 2px solid var(--colorStrokeFocus2);
+  outline-offset: -2px;
+}
+
+.title-bar__close-control:hover {
+  background-color: #c42b1c;
+  color: var(--colorNeutralForegroundInverted);
+}
+
+.title-bar__close-control:active {
+  background-color: #c42b1c;
+  color: var(--colorNeutralForegroundInverted);
+  opacity: 0.8;
+}

@@ -1,13 +1,13 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { MainLayout } from "./components/shell/Layouts";
-import BenchmarkPlayground from "./pages/benchmark/BenchmarkPlayground";
-import PerformanceDashboard from "./pages/benchmark/PerformanceDashboard";
-import ChatPage from "./pages/ChatPage";
-import LocalModelsBrowserPage from "./pages/LocalModelsBrowserPage";
+import { MainLayout } from "./components/shell/Layouts/Layouts";
+import BenchmarkPlayground from "./pages/benchmark/BenchmarkPlayground/BenchmarkPlayground";
+import PerformanceDashboard from "./pages/benchmark/PerformanceDashboard/PerformanceDashboard";
+import ChatPage from "./pages/ChatPage/ChatPage";
+import LocalModelsBrowserPage from "./pages/LocalModelsBrowserPage/LocalModelsBrowserPage";
 import HubModelDetailRoute from "./pages/models/HubModelDetailRoute";
-import OverviewPage from "./pages/OverviewPage";
-import PromptBenchmarkPage from "./pages/PromptBenchmarkPage";
-import SettingsPage from "./pages/SettingsPage";
+import OverviewPage from "./pages/OverviewPage/OverviewPage";
+import PromptBenchmarkPage from "./pages/PromptBenchmarkPage/PromptBenchmarkPage";
+import SettingsPage from "./pages/SettingsPage/SettingsPage";
 
 /**
  * Single source of truth for the route tree. All route definitions live here;

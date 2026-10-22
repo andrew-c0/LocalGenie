@@ -1,0 +1,4 @@
+.cli-missing-banner__banner {
+  margin: var(--spacingHorizontalM);
+  margin-bottom: 0;
+}

@@ -1,13 +1,7 @@
-import { Card, CardHeader, makeStyles, Text, tokens } from "@fluentui/react-components";
+import { Card, CardHeader } from "@fluentui/react-components";
 import type { ReactNode } from "react";
-
-const useStyles = makeStyles({
-  cardBody: {
-    display: "flex",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalS,
-  },
-});
+import { CardTitle } from "../Typography/Typography";
+import "./SurfaceCard.css";
 
 /** Card container with an optional title row and action area. */
 export function SurfaceCard({
@@ -21,16 +15,15 @@ export function SurfaceCard({
   children: ReactNode;
   className?: string;
 }) {
-  const styles = useStyles();
   return (
     <Card className={className}>
       {(title || action) && (
         <CardHeader
-          header={<Text weight="semibold">{title}</Text>}
+          header={<CardTitle>{title}</CardTitle>}
           action={action ? <div>{action}</div> : undefined}
         />
       )}
-      <div className={styles.cardBody}>{children}</div>
+      <div className="surface-card__card-body">{children}</div>
     </Card>
   );
 }

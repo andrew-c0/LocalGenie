@@ -1,4 +1,4 @@
-import { Button, makeStyles, ProgressBar, Text, tokens } from "@fluentui/react-components";
+import { Button } from "@fluentui/react-components";
 import { DismissRegular } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -7,36 +7,15 @@ import { useChatStore } from "../../../stores/chatStore";
 import { useModelStore } from "../../../stores/modelStore";
 import { formatCount } from "../../../utils/format";
 import { StatusBadge } from "../../ui/StatusBadge/StatusBadge";
+import { BodyStrong, Meta } from "../../ui/Typography/Typography";
+import { ContextRing } from "./ContextRing/ContextRing";
+import "./ChatContextHeader.css";
 
 /** Rough characters-per-token ratio used to estimate how much of the window the chat fills. */
 const CHARS_PER_TOKEN = 4;
 
-const useStyles = makeStyles({
-  bar: {
-    display: "flex",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: tokens.spacingHorizontalS,
-    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground1,
-  },
-  spacer: {
-    flex: 1,
-  },
-  usage: {
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalS,
-  },
-  barTrack: {
-    width: "120px",
-  },
-});
-
 /** Context bar above the chat thread: model, server state, context usage vs. the model's window, close. */
 export function ChatContextHeader() {
-  const styles = useStyles();
   const activeSessionId = useChatStore((s) => s.activeSessionId);
   const sessions = useChatStore((s) => s.sessions);
   const navigate = useNavigate();
@@ -57,7 +36,10 @@ export function ChatContextHeader() {
     let cancelled = false;
     db.listDownloadedModels()
       .then((rows) => {
-        if (!cancelled) setContextWindow(rows.find((r) => r.name === repoId)?.context_size ?? null);
+        // The active model may be stored by short name, the database by repo id: compare base names.
+        const baseId = repoId.split("/").pop();
+        const row = rows.find((r) => r.name.split("/").pop() === baseId);
+        if (!cancelled) setContextWindow(row?.context_size ?? null);
       })
       .catch(() => {
         if (!cancelled) setContextWindow(null);
@@ -77,35 +59,27 @@ export function ChatContextHeader() {
       : null;
 
   return (
-    <div className={styles.bar}>
-      <Text weight="semibold">
-        {activeModelId ? activeModelId.split("/").pop() : "No model selected"}
-      </Text>
+    <div className="chat-context-header__bar">
       {!serverStatus.running && <StatusBadge tone="red">Server Offline</StatusBadge>}
-      <div className={styles.spacer} />
-      <div className={styles.usage}>
+      <BodyStrong truncate title={activeSession.title} className="chat-context-header__title">
+        {activeSession.title}
+      </BodyStrong>
+      <div className="chat-context-header__usage">
         {contextWindow && contextPct !== null ? (
-          <>
-            <Text size={200}>
-              Context: ~{formatCount(usedTokens)} / {formatCount(contextWindow)} tokens
-            </Text>
-            <ProgressBar
-              className={styles.barTrack}
-              value={contextPct / 100}
-              color={contextPct > 90 ? "error" : "brand"}
-              aria-label="Context usage"
-            />
-          </>
+          <ContextRing
+            percent={contextPct}
+            label={`${formatCount(usedTokens)} out of ${formatCount(contextWindow)} tokens used`}
+          />
         ) : (
-          <Text size={200}>
+          <Meta>
             {activeModelId
-              ? `Context: ~${formatCount(usedTokens)} tokens · window unknown`
-              : `Context: ~${formatCount(usedTokens)} tokens`}
-          </Text>
+              ? `~${formatCount(usedTokens)} tokens used · window unknown`
+              : `~${formatCount(usedTokens)} tokens used`}
+          </Meta>
         )}
       </div>
       <Button
-        appearance="subtle"
+        appearance="secondary"
         icon={<DismissRegular />}
         title="Close conversation"
         aria-label="Close conversation"

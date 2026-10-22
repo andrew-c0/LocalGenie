@@ -1,0 +1,38 @@
+.context-ring {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.context-ring__svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.context-ring__track,
+.context-ring__value {
+  fill: none;
+  stroke-width: 3;
+}
+
+.context-ring__track {
+  stroke: var(--colorNeutralStroke2);
+}
+
+.context-ring--brand .context-ring__value {
+  stroke: var(--colorBrandBackground);
+}
+
+.context-ring--danger .context-ring__value {
+  stroke: var(--colorPaletteRedBackground3);
+}
+
+.context-ring__text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

@@ -1,6 +1,7 @@
 ﻿import { makeStaticStyles, Toaster, tokens } from "@fluentui/react-components";
 import { MemoryRouter } from "react-router-dom";
 import AppBootstrap from "./components/AppBootstrap";
+import { APP_TOASTER_ID, ToastRegistrar } from "./components/ToastRegistrar";
 import Navigation from "./Navigation";
 
 /**
@@ -49,7 +50,8 @@ export default function App() {
     <MemoryRouter initialEntries={["/"]}>
       <AppBootstrap>
         <Navigation />
-        <Toaster toasterId="app-toaster" />
+        <Toaster toasterId={APP_TOASTER_ID} />
+        <ToastRegistrar />
       </AppBootstrap>
     </MemoryRouter>
   );

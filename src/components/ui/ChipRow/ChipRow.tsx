@@ -1,15 +1,7 @@
 import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
-import { makeStyles, Tab, TabList, tokens } from "@fluentui/react-components";
+import { Tab, TabList } from "@fluentui/react-components";
 import type { ReactNode } from "react";
-
-const useStyles = makeStyles({
-  row: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: tokens.spacingHorizontalS,
-    alignItems: "center",
-  },
-});
+import "./ChipRow.css";
 
 /** A row of selectable filters (Fluent TabList), controlled by the parent. */
 export function ChipRow<T extends string>({
@@ -26,14 +18,13 @@ export function ChipRow<T extends string>({
   /** Extra controls appended after the options (e.g. "clear" actions). */
   children?: ReactNode;
 }) {
-  const styles = useStyles();
   const handleSelect = (_event: SelectTabEvent, data: SelectTabData) => {
     const match = options.find(([id]) => id === data.value);
     if (match) onChange(match[0]);
   };
 
   return (
-    <div className={styles.row}>
+    <div className="chip-row__row">
       <TabList
         size="small"
         appearance="subtle"

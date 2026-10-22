@@ -1,0 +1,36 @@
+.thinking-block__root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalXS);
+  align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--spacingVerticalXS) var(--spacingHorizontalS);
+  border-radius: var(--borderRadiusMedium);
+  border: 1px solid var(--colorNeutralStroke2);
+  background-color: var(--colorNeutralBackground3);
+}
+
+.thinking-block__toggle {
+  color: var(--colorNeutralForeground3);
+}
+
+/* Full-width toggle, scoped so it wins over Fluent's centred button content. */
+.thinking-block__root .thinking-block__toggle {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.thinking-block__body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow-y: auto;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--spacingVerticalXS) var(--spacingHorizontalS);
+  border-left: 3px solid var(--colorNeutralStroke1);
+  color: var(--colorNeutralForeground3);
+  font-size: var(--fontSizeBase200);
+  line-height: var(--lineHeightBase200);
+}

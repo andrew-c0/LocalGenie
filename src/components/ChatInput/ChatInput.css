@@ -1,0 +1,30 @@
+.chat-input__area {
+  padding: var(--spacingVerticalS) var(--spacingHorizontalL) var(--spacingVerticalM);
+  border-top: 1px solid var(--colorNeutralStroke2);
+}
+
+/* Field and button share a row. The grid column sizes the button from its stretched height. */
+.chat-input__wrapper {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: var(--spacingHorizontalS);
+  max-width: 840px;
+  margin: 0 auto;
+}
+
+.chat-input__field {
+  min-width: 0;
+}
+
+/* Square send and stop buttons, full height of the field. Scoped so they win over Fluent's button sizing. */
+.chat-input__wrapper .chat-input__action-button {
+  align-self: stretch;
+  justify-self: stretch;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  max-width: none;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+}

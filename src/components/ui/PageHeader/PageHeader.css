@@ -1,0 +1,31 @@
+.page-header__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacingHorizontalM);
+  padding: var(--spacingVerticalL) var(--spacingHorizontalL) 0;
+}
+
+.page-header__title-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalXS);
+  min-width: 0;
+}
+
+.page-header__title {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.page-header__subtitle {
+  color: var(--colorNeutralForeground2);
+  max-width: 720px;
+}
+
+.page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+}

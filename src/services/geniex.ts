@@ -9,7 +9,7 @@ import type {
   ServerStartOptions,
   ServerStatus,
   UpdateInfo,
-} from "../types/index";
+} from "../types";
 
 /** Shape sent to the OpenAI-compatible chat completions endpoint. */
 interface ChatMessage {

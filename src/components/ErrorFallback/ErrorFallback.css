@@ -1,0 +1,10 @@
+.error-fallback__root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacingVerticalM);
+  height: 100%;
+  padding: var(--spacingHorizontalXL);
+  text-align: center;
+}

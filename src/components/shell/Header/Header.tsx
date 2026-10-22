@@ -1,44 +1,21 @@
+import { Badge, Button, Popover, PopoverTrigger } from "@fluentui/react-components";
 import {
-  Badge,
-  Button,
-  makeStyles,
-  Popover,
-  PopoverTrigger,
-  Text,
-  tokens,
-} from "@fluentui/react-components";
-import { ArrowDownloadRegular, ChevronDownRegular } from "@fluentui/react-icons";
+  ArrowDownloadRegular,
+  ChevronDownRegular,
+  PlugConnectedRegular,
+  PlugDisconnectedRegular,
+} from "@fluentui/react-icons";
 import { useState } from "react";
-import { isDownloadActive, useDownloadStore } from "../../stores/downloadStore";
-import { useModelStore } from "../../stores/modelStore";
-import DownloadDrawer from "./DownloadDrawer";
-import ModelSelectorPopover from "./ModelSelectorPopover";
+import { isDownloadActive, useDownloadStore } from "../../../stores/downloadStore";
+import { useModelStore } from "../../../stores/modelStore";
+import { Flex } from "../../ui/Flex/Flex";
+import DownloadDrawer from "../DownloadDrawer/DownloadDrawer";
+import ModelSelectorPopover from "./ModelSelectorPopover/ModelSelectorPopover";
+import { useModelLoader } from "./useModelLoader";
+import "./Header.css";
 
-const useStyles = makeStyles({
-  bar: {
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalS,
-    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground1,
-  },
-  selectorButton: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: "space-between",
-  },
-  label: {
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalM,
-    minWidth: 0,
-    overflow: "hidden",
-  },
-});
-
+/** Top bar: active model selector (which owns model loading), server status and the downloads button. */
 export default function Header() {
-  const styles = useStyles();
   const serverStatus = useModelStore((s) => s.serverStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
   const selectorOpen = useModelStore((s) => s.selectorOpen);
@@ -46,6 +23,7 @@ export default function Header() {
   const activeDownloads = useDownloadStore(
     (s) => s.downloads.filter((d) => isDownloadActive(d.status)).length,
   );
+  const { loading, error, selectModel, changeCompute, unloadAll } = useModelLoader();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const activeLabel = activeModelId
@@ -55,7 +33,7 @@ export default function Header() {
       : null;
 
   return (
-    <div className={styles.bar}>
+    <Flex align="center" gap="s" className="header">
       <Popover
         open={selectorOpen}
         onOpenChange={(_, data) => setSelectorOpen(data.open)}
@@ -63,29 +41,34 @@ export default function Header() {
       >
         <PopoverTrigger disableButtonEnhancement>
           <Button
-            appearance="subtle"
-            className={styles.selectorButton}
+            appearance="secondary"
             icon={<ChevronDownRegular />}
             iconPosition="after"
             aria-label="Switch active model"
             title="Switch active model"
+            className="flex-grow"
           >
-            <span className={styles.label}>
-              <Text weight="semibold">{activeLabel ? "Active Model:" : "Model selector:"}</Text>
-              <Text>{activeLabel ?? "no model loaded"}</Text>
-            </span>
+            {activeLabel ? `Active Model: ${activeLabel}` : "Model selector: no model loaded"}
           </Button>
         </PopoverTrigger>
-        <ModelSelectorPopover />
+        <ModelSelectorPopover
+          loading={loading}
+          error={error}
+          onSelect={selectModel}
+          onComputeChange={changeCompute}
+          onUnload={unloadAll}
+        />
       </Popover>
 
       <Badge
+        className="header__status"
+        shape="square"
         appearance="tint"
         color={serverStatus.running ? "success" : "danger"}
-        title={`GenieX server on port ${serverStatus.port}`}
-      >
-        {serverStatus.running ? "Connected" : "Offline"}
-      </Badge>
+        icon={serverStatus.running ? <PlugConnectedRegular /> : <PlugDisconnectedRegular />}
+        title={serverStatus.running ? "Connected" : "Offline"}
+        aria-label={serverStatus.running ? "Connected" : "Offline"}
+      />
 
       <Button
         appearance={activeDownloads > 0 ? "primary" : "subtle"}
@@ -98,6 +81,6 @@ export default function Header() {
       </Button>
 
       <DownloadDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
-    </div>
+    </Flex>
   );
 }

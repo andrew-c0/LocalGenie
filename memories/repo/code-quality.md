@@ -24,3 +24,9 @@
 - a11y: use semantic `<button>` for clickables, `role="presentation"` for modal backdrops with `role="dialog"` on the panel, `aria-labelledby` on Fluent `Slider` wrappers instead of `<label>` (labels without associated controls trigger `noLabelWithoutControl`).
 - Biome previously crashed on this machine (0xC0000005) with 2.5.7; user fixed it locally. On Windows/PowerShell, pipe output through `Out-String` or redirect to a file to read it reliably.
 - Verified commands: `npm run check`, `npx biome check src/` (currently 0 errors, 0 warnings), `npm run build:frontend`.
+
+## Proposed hooks (not installed; no settings written)
+Claude Code hooks that would enforce the rules above. Install only after the user approves; each is a `PostToolUse` (or `PreToolUse`) hook on `Edit|Write`.
+1. Biome on edit: file path matches `src/**/*.{ts,tsx}` -> run `node_modules/.bin/biome check <file>`; a non-zero exit is fed back to the agent.
+2. `invoke()` outside services: file path matches `src/**/*.{ts,tsx}` and does not match `src/services/**`, and the new content matches `\binvoke\(` or `from "@tauri-apps/` -> flag. (Rule: `invoke()` and `@tauri-apps/*` only in `services/`.)
+3. Inline styles: file path matches `src/**/*.tsx` and the new content matches `style=\{\{` -> flag for review. Data-driven values are allowed. Current occurrence: `components/benchmark/ThroughputChart/ThroughputChart.tsx`.

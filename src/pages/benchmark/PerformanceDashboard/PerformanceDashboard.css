@@ -1,0 +1,68 @@
+.performance-dashboard__page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalM);
+}
+
+.performance-dashboard__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+}
+
+.performance-dashboard__kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacingHorizontalM);
+}
+
+.performance-dashboard__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--spacingHorizontalM);
+  align-items: start;
+}
+
+.performance-dashboard__legend {
+  display: flex;
+  gap: var(--spacingHorizontalS);
+  font-size: var(--fontSizeBase200);
+}
+
+.performance-dashboard__legend-npu {
+  color: var(--colorPaletteTealForeground2);
+}
+
+.performance-dashboard__legend-gpu {
+  color: var(--colorPalettePurpleForeground2);
+}
+
+.performance-dashboard__legend-cpu {
+  color: var(--colorNeutralForeground3);
+}
+
+.performance-dashboard__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.performance-dashboard__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--spacingHorizontalM);
+  padding-top: var(--spacingVerticalS);
+  padding-bottom: var(--spacingVerticalS);
+  border-bottom: 1px solid var(--colorNeutralStroke2);
+}
+
+.performance-dashboard__row:last-child {
+  border-bottom: none;
+}
+
+.performance-dashboard__row-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalXS);
+  min-width: 0;
+}

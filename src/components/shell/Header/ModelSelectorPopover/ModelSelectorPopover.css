@@ -1,0 +1,40 @@
+.model-selector {
+  box-sizing: border-box;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalM);
+  padding: var(--spacingHorizontalL);
+}
+
+.model-selector__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalS);
+  overflow-y: auto;
+}
+
+.model-selector__section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--spacingVerticalS);
+}
+
+.model-selector__compute {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalS);
+}
+
+.model-selector__inline {
+  display: flex;
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+}
+
+/* The compute options sit together at the right end of the Run on row. */
+.model-selector .model-selector__run-on {
+  flex: 0 0 auto;
+  column-gap: var(--spacingHorizontalM);
+}

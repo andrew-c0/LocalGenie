@@ -13,8 +13,8 @@ You work on the LocalGenie repo as a whole. Read `CLAUDE.md` first; it has the c
 
 ## Rules
 - Reuse existing patterns before adding abstractions.
-- Do not duplicate facts across docs. `CLAUDE.md` holds the essentials, `memories/repo/` holds notes that `knowledge-sync` maintains, and `docs/` holds plans and reports.
-- `.github/` is user-owned. Read it, do not edit it.
+- Do not duplicate facts. `CLAUDE.md` holds the essentials and routing, and `memories/repo/` is the one place for repo knowledge and explanations of changes, maintained by `knowledge-sync`.
+- `memories/geniex-cli-reference.md` is kept as written. Do not reformat it.
 - Do not commit or push unless asked.
 
 ## Verification

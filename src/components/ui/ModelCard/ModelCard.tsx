@@ -1,16 +1,9 @@
-import {
-  Button,
-  Caption1,
-  Card,
-  CardFooter,
-  CardHeader,
-  makeStyles,
-  Spinner,
-  tokens,
-} from "@fluentui/react-components";
+import { Button, Card, CardFooter, CardHeader, Spinner } from "@fluentui/react-components";
 import { ChatRegular, DeleteRegular, InfoRegular } from "@fluentui/react-icons";
 import { formatCount } from "../../../utils/format";
 import { StatusBadge } from "../StatusBadge/StatusBadge";
+import { CardTitle, Meta } from "../Typography/Typography";
+import "./ModelCard.css";
 
 export interface GGUFFileOption {
   filename: string;
@@ -55,27 +48,6 @@ interface ModelCardProps {
   onDetails?: (name: string, isLocal: boolean) => void;
 }
 
-const useStyles = makeStyles({
-  card: {
-    minWidth: 0,
-  },
-  name: {
-    justifyContent: "flex-start",
-    minWidth: 0,
-    maxWidth: "100%",
-  },
-  meta: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: tokens.spacingHorizontalM,
-  },
-  actions: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: tokens.spacingHorizontalS,
-  },
-});
-
 /** Card for a single model — installed or search result. */
 export function ModelCard({
   model,
@@ -86,7 +58,6 @@ export function ModelCard({
   onRemove,
   onDetails,
 }: ModelCardProps) {
-  const styles = useStyles();
   const fmt = (n?: number) => (n == null ? "—" : formatCount(n));
   const openDetails = () => onDetails?.(model.name, isLocal);
 
@@ -103,50 +74,50 @@ export function ModelCard({
   );
 
   return (
-    <Card size="small" className={styles.card}>
+    <Card size="small" className="model-card__card">
       <CardHeader
         header={
-          <Button appearance="transparent" className={styles.name} onClick={openDetails}>
+          <CardTitle truncate wrap={false}>
             {model.name}
-          </Button>
+          </CardTitle>
         }
         action={status}
       />
 
-      <div className={styles.meta}>
+      <div className="model-card__meta">
         {model.installed ? (
           <>
-            <Caption1>Size: {model.size ?? "—"}</Caption1>
-            <Caption1>Source: {model.source ?? "—"}</Caption1>
+            <Meta>Size: {model.size ?? "—"}</Meta>
+            <Meta>Source: {model.source ?? "—"}</Meta>
             {model.precisions && model.precisions.length > 0 && (
-              <Caption1>{model.precisions.join(" / ")}</Caption1>
+              <Meta>{model.precisions.join(" / ")}</Meta>
             )}
             {model.downloadedPrecision && (
-              <Caption1>
+              <Meta>
                 Precision: <strong>{model.downloadedPrecision}</strong>
-              </Caption1>
+              </Meta>
             )}
             {model.contextSize && (
-              <Caption1>
+              <Meta>
                 Context: <strong>{model.contextSize.toLocaleString()}</strong>
-              </Caption1>
+              </Meta>
             )}
             {model.paramCount && (
-              <Caption1>
+              <Meta>
                 Params: <strong>{(model.paramCount / 1e9).toFixed(1)}B</strong>
-              </Caption1>
+              </Meta>
             )}
           </>
         ) : (
           <>
-            <Caption1>⬇ {fmt(model.downloads)}</Caption1>
-            <Caption1>❤ {fmt(model.likes)}</Caption1>
-            {model.pipelineTag && <Caption1>{model.pipelineTag}</Caption1>}
+            <Meta>⬇ {fmt(model.downloads)}</Meta>
+            <Meta>❤ {fmt(model.likes)}</Meta>
+            {model.pipelineTag && <Meta>{model.pipelineTag}</Meta>}
           </>
         )}
       </div>
 
-      <CardFooter className={styles.actions}>
+      <CardFooter className="model-card__actions">
         {isDownloading ? (
           <Button disabled icon={<Spinner size="tiny" />}>
             Pulling…

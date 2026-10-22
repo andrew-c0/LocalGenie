@@ -1,5 +1,5 @@
 import { useLocation } from "react-router-dom";
-import HubModelDetail from "./HubModelDetail";
+import HubModelDetail from "./HubModelDetail/HubModelDetail";
 
 interface HubModelDetailRouteState {
   isLocal?: boolean;

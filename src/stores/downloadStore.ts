@@ -1,8 +1,17 @@
 import { create } from "zustand";
-import { deleteDirectory, downloadFile, importGGUF } from "../services/download";
 import type { GGUFFile } from "../services/hubModels";
 
-export type DownloadStatus = "downloading" | "importing" | "finished" | "error" | "cancelled";
+/**
+ * `queued` = requested by the app, not yet picked up by the download drawer.
+ * The drawer owns the pipeline; other components only enqueue and read state.
+ */
+export type DownloadStatus =
+  | "queued"
+  | "downloading"
+  | "importing"
+  | "finished"
+  | "error"
+  | "cancelled";
 
 /** One GGUF file to fetch from a Hugging Face repo, with its sidecars (mmproj, mtp, …). */
 export interface GGUFVariant {
@@ -31,6 +40,8 @@ export interface DownloadItem {
 
 interface DownloadState {
   downloads: DownloadItem[];
+  /** Queue a GGUF variant for download. Ignored while the same repo is already active. */
+  enqueue: (variant: GGUFVariant) => void;
   /** Insert or update a download entry (keeps existing fields). */
   upsert: (item: Partial<DownloadItem> & { id: string }) => void;
   /** Patch progress fields for an active download. */
@@ -42,13 +53,26 @@ interface DownloadState {
   clearFinished: () => void;
 }
 
-/** True while bytes are arriving or the CLI is importing them. */
+/** True while queued, downloading or importing. */
 export function isDownloadActive(status: DownloadStatus | undefined): boolean {
-  return status === "downloading" || status === "importing";
+  return status === "queued" || status === "downloading" || status === "importing";
 }
 
-export const useDownloadStore = create<DownloadState>((set) => ({
+export const useDownloadStore = create<DownloadState>((set, get) => ({
   downloads: [],
+  enqueue: (variant) => {
+    const repoId = variant.repoId;
+    if (isDownloadActive(get().downloads.find((d) => d.id === repoId)?.status)) return;
+    get().upsert({
+      id: repoId,
+      label: repoId,
+      variant,
+      status: "queued",
+      error: undefined,
+      finishedAt: undefined,
+      startedAt: Date.now(),
+    });
+  },
   upsert: (item) =>
     set((state) => {
       const existing = state.downloads.find((d) => d.id === item.id);
@@ -98,53 +122,3 @@ export const useDownloadStore = create<DownloadState>((set) => ({
       downloads: state.downloads.filter((d) => isDownloadActive(d.status)),
     })),
 }));
-
-const hfFileUrl = (repoId: string, filename: string) =>
-  `https://huggingface.co/${repoId}/resolve/main/${filename}`;
-
-const baseName = (path: string) => path.split("/").pop() ?? path;
-
-/**
- * Download a GGUF variant, import it into the GenieX cache, then fetch its sidecars.
- * Resuming a cancelled download calls this again; the backend continues from the partial file.
- * Failures are recorded on the entry rather than thrown, so the drawer shows them.
- */
-export async function startGGUFDownload(variant: GGUFVariant): Promise<void> {
-  const { repoId, main, sidecars } = variant;
-  const store = useDownloadStore.getState();
-  // A second start for the same repo would fail in the backend and mark the running entry as failed.
-  if (isDownloadActive(store.downloads.find((d) => d.id === repoId)?.status)) return;
-
-  store.upsert({
-    id: repoId,
-    label: repoId,
-    variant,
-    status: "downloading",
-    error: undefined,
-    finishedAt: undefined,
-    startedAt: Date.now(),
-  });
-
-  const fileName = baseName(main.filename);
-  try {
-    const downloadedPath = await downloadFile(repoId, hfFileUrl(repoId, main.filename), fileName);
-    // The backend emits model-pull-start/complete around the import and sets the status.
-    const modelDir = await importGGUF(downloadedPath, repoId, fileName, main.precision);
-    await deleteDirectory(modelDir);
-
-    for (const sidecar of sidecars) {
-      await downloadFile(
-        repoId,
-        hfFileUrl(repoId, sidecar.filename),
-        baseName(sidecar.filename),
-      ).catch(() => undefined);
-    }
-  } catch (err) {
-    const message = String(err);
-    if (message.includes("cancelled")) {
-      store.setStatus(repoId, "cancelled");
-    } else {
-      store.setStatus(repoId, "error", message);
-    }
-  }
-}

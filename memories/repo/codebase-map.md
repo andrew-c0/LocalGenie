@@ -1,60 +1,81 @@
 # Codebase map
 
-Snapshot: base commit `84170dd` (2026-10-20) plus a large **uncommitted** working tree (2026-10-22). Treat the working tree as current; nothing from it is committed. The `src-tauri/` backend was still being split into modules when this was written (`commands/import.rs`, `cli_update.rs`, `hub.rs` are new and untracked). At this sync `tsc --noEmit` and Biome passed on `src/`; `cargo check` was not run and nothing was launched.
+Snapshot: HEAD `4c5dcad` (2026-10-22) plus a large **uncommitted** frontend refactor under `src/` (the working tree, `git status`, is the source of truth). `src-tauri/` has no uncommitted changes. At this sync `npx tsc --noEmit` and `biome check src` passed; `cargo check` was not run and the app was not launched.
 
-Maintained by the `knowledge-sync` agent. Facts only; rules live in `.github/github-instructions.md`, history in git.
+Maintained by the `knowledge-sync` agent. Facts only; rules live in `CLAUDE.md` and `.claude/`, history in git.
 
 ## Product
 - LocalGenie = Tauri 2 desktop UI over Qualcomm's GenieX CLI (`geniex`), which runs local LLMs on CPU/GPU/NPU. Primary target: Windows ARM64.
 - Model path for Hugging Face GGUF: the app downloads the file itself (`download_file`, resumable via `<file>.part` + HTTP Range), then imports it with `geniex pull <repo>:<precision> --model-hub localfs --local-path <dir>` (`import_gguf`). Hub pulls are no longer used by the app.
 - Qualcomm AI Hub code is legacy-in-progress, not to be expanded: `list_aihub_models`, `AihubModel`, `ModelInfo.source = "aihub"`, the "qualcomm" browse area (HF `author=qualcomm` intersected with `geniex model list`, `compatibleNames`). The compat badge input `assetCompat` is never populated (no caller of `setAssetCompat`).
-- No tests yet (vitest installed, no test files). README is a stub. Backlog: `tasks.md` (user-owned).
+- Unit tests: vitest (`npm test`), files `*.test.ts` in `utils/` and `services/database.test.ts`. No UI tests. Backlog: `tasks.md` (user-owned).
 
 ## Stack
-React 19 + TS 5.8 + Vite 6, Fluent UI v9 (`@fluentui/react-components`), zustand 5, react-router-dom 7 (MemoryRouter), react-markdown + rehype-highlight. Biome for lint/format. Rust: tauri 2, tauri-plugin-shell (used only for `open` of URLs), sea-orm 1 (SQLite), tokio, reqwest, sysinfo. Dev port 1420; GenieX server default port 18181.
+React 19 + TS 5.8 + Vite 6, Fluent UI v9 (`@fluentui/react-components`), zustand 5, react-router-dom 7 (MemoryRouter), react-markdown + rehype-highlight. Biome for lint/format. Rust: tauri 2 (`tray-icon` feature; `tray.rs`), tauri-plugin-shell (capability `shell:allow-open` only; the GenieX CLI is run from Rust, not via the shell plugin), sea-orm 1 (SQLite), tokio, reqwest, sysinfo. Dev port 1420; GenieX server default port 18181.
+Window: frameless (`decorations: false`, background `#292929`); the custom `shell/TitleBar/TitleBar.tsx` provides the chrome. Window-control permissions are in `src-tauri/capabilities/default.json`.
 CSP (`src-tauri/tauri.conf.json`): `connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*` only. Webview `fetch` to huggingface.co is therefore not allowed as configured (see known-issues). Rust-side `reqwest` calls are not subject to CSP.
 
 ## Frontend (`src/`)
-- `main.tsx`: `FluentProvider theme={webDarkTheme}` wraps `ErrorBoundary` (fallback `ErrorFallback.tsx`). `App.tsx` is scaffolding: MemoryRouter -> `AppBootstrap` -> `Navigation` + Toaster. `App.css` and `theme.ts` are gone.
-- `components/AppBootstrap.tsx`: startup load (CLI check, sessions, models, server status/port, CLI update check), global Tauri listeners, debounced persistence of changed sessions.
-- `Navigation.tsx`: all routes. `/` Overview, `/models` LocalModelsBrowserPage, `/models/:repoId` HubModelDetail (via `HubModelDetailRoute`), `/chat`, `/prompt-benchmark` (index -> `playground`, `dashboard`), `/settings`; `/benchmark` redirects; `*` -> `/`. All under `MainLayout`.
-- `components/shell/`: `Layouts.tsx` (MainLayout, `CliMissingBanner` links to the GenieX releases page), `Sidebar`, `Header` (renders `ModelSelectorPopover`), `ModelSelectorPopover`, `ModelOptionButton`, `DownloadDrawer`, `DownloadItemCard`, `DownloadStatusBadge`.
-- `components/ui/`: `primitives.tsx`, `ChipRow`, `ConfirmDialog`, `ErrorBanner`, `PageHeader`, `ModelCard`, `MarkdownContent`. Other: `components/models/HubModelBrowser.tsx`, `components/chat/*`, `components/benchmark/*`, `components/AppSettings.tsx`, `ModelSettings.tsx`.
-- `pages/models/`: `HubModelDetail.tsx`, `useHubModelDetail.ts` (data hooks). GGUF grouping is in `services/hubModels.ts`. `docs/fluent-ui-migration.md` places `ggufGroups.ts` under `pages/models/`; that file does not exist.
-- Stores (`stores/`): `chatStore`, `modelStore`, `hubBrowseStore` (HF browse state and cache), `downloadStore` (download entries + `startGGUFDownload(variant)`), `benchmarkStore` (in-memory).
-- Services (`services/`, the only `invoke()` callers; verified by grep): `geniex.ts` (CLI, server, chat, update), `database.ts`, `download.ts` (`downloadFile`, `cancelDownload`, `importGGUF`, `deleteDirectory`), `system.ts`, `hubApi.ts` (HF REST via `fetch`: models, model info, file tree, README; `AssetCompat` type only), `hubModels.ts` (GGUF file listing and grouping).
-- `utils/gguf.ts` parses GGUF filenames (spec in `memories/external/gguf/gguf.md`). `utils/format.ts`, `utils/toast.tsx`. `hooks/index.ts`: `useTauriEvent` (one listener per event name, handler in a ref), `useDebouncedCallback`, `useAppToast`.
+- `main.tsx`: `FluentProvider theme={webDarkTheme}` wraps `ErrorBoundary` (fallback `ErrorFallback/ErrorFallback.tsx`).
+- Folder rule: a component with its own styling is a folder named after it, holding `X.tsx` and `X.css` (for example `components/ChatInput/ChatInput.tsx`). Components without styles stay flat or get a folder. Old flat paths no longer exist.
+- `App.tsx`: scaffolding only. MemoryRouter -> `AppBootstrap` -> `Navigation` + `Toaster` (id `app-toaster`) + `ToastRegistrar`.
+- `components/AppBootstrap.tsx`: one-time startup loads only (CLI installed, saved sessions, models, server port and status, CLI update check). No listeners, no persistence.
+- `Navigation.tsx`: all routes, all under `MainLayout`: `/` Overview; `/models` (local), `/models/browse` (HF browser), `/models/:repoId` (`HubModelDetailRoute`); `/chat`, `/chat/:sessionId`; `/prompt-benchmark` (index -> `playground`, `dashboard`); `/settings` -> `/settings/app`, `/settings/:section`; `/benchmark` redirects; `*` -> `/`.
+- `components/shell/`:
+  - `Layouts/Layouts.tsx` `MainLayout`: TitleBar, Sidebar, CliMissingBanner, Header, `<Outlet/>`, CloseGuard, and `ChatRuntime` (mounted here, not in the chat page, so a reply keeps streaming on other pages).
+  - `Sidebar/Sidebar.tsx`: vertical Fluent `TabList` for page nav (`CounterBadge` on Models), server footer.
+  - `Header/Header.tsx`: model selector (Popover + `ModelSelectorPopover`), connection `Badge`, Downloads button, and `DownloadDrawer`.
+  - `Header/useModelLoader.ts`: select/load, compute change (restarts the server), unload, `server-stopped` listener. Owns all model-lifecycle actions.
+  - `Header/ModelSelectorPopover/`: `ModelSelectorPopover.tsx` (presentational; actions come in as props), `ModelOptionButton/ModelOptionButton.tsx`.
+  - `DownloadDrawer/`: `DownloadDrawer.tsx` (UI), `useDownloadManager.ts` (Tauri listeners, starts queued entries), `downloadPipeline.ts` (download -> import -> sidecars, `refreshAfterImport`), `DownloadItemCard/DownloadItemCard.tsx`, `DownloadStatusBadge.tsx`.
+  - `CliMissingBanner/CliMissingBanner.tsx` (links to the GenieX releases page), `CloseGuard.tsx`, `TitleBar/TitleBar.tsx`.
+- `components/chat/`: `ChatRuntime/` (`ChatRuntime.tsx` renders nothing and mounts `useChatStream.ts` and `useSessionPersistence.ts`), `SessionList/` (vertical TabList; delete button for the active conversation), `ThinkingBlock/`, `ChatContextHeader/` (context bar: title on the left; usage ring `ContextRing/` with the window matched by base model name from the downloaded-model row; close button).
+- `components/`: `ChatInput/ChatInput.tsx` (send/stop, stream id, failed-send handling), `ChatArea/ChatArea.tsx`, `MessageBubble/MessageBubble.tsx`, `ModelSettings/ModelSettings.tsx`, `AppSettings/AppSettings.tsx`, `settings/` (`CliUpdateCard`, `ServerLogsCard`, `ServerPortCard`, each a folder), `benchmark/*` (folders), `models/` (`HubModelBrowser/HubModelBrowser.tsx`, `GGUFVariantList.tsx`: quantization picker on `OptionDropdown`).
+- `components/ui/` (shared, one folder per component): `Flex` (layout), `Typography` (text scale), `OptionDropdown` (typed Fluent Dropdown), `ChipRow`, `ConfirmDialog`, `ErrorBanner`, `MarkdownContent`, `MetricCard`, `ModelCard`, `PageHeader`, `ProgressBar`, `StateBlock`, `StatusBadge`, `SurfaceCard`. Use-rules: `.claude/agents/react-expert.md`.
+- `components/ToastRegistrar.tsx`: renders nothing; routes `utils/toast` calls to the Fluent Toaster.
+- `pages/`: one folder per page (`ChatPage/ChatPage.tsx`, `OverviewPage/`, `SettingsPage/`, `LocalModelsBrowserPage/`, `PromptBenchmarkPage/`); `pages/models/`: `HubModelDetail/HubModelDetail.tsx` (`handleDownload` calls `enqueue`), `HubModelDetailRoute.tsx`, `useHubModelDetail.ts` (data hooks, incl. `useDownloadedPrecisions`).
+- Stores (`stores/`, state only): `chatStore`, `modelStore` (compute, serverCompute, selectorOpen), `hubBrowseStore` (HF browse state and cache), `downloadStore` (entries, `DownloadStatus` incl. `queued`, `enqueue(variant)`, `isDownloadActive`), `benchmarkStore` (in-memory).
+- Services (`services/`, the only `invoke()`/event-API callers; verified by grep): `geniex.ts` (CLI, server, chat, update), `database.ts`, `download.ts` (`downloadFile`, `cancelDownload`, `importGGUF`, `deleteDirectory`), `events.ts` (`listenEvent`), `window.ts`, `system.ts`, `hubApi.ts` (HF REST via `fetch`: models, model info, file tree, README, `fetchContextLength`), `hubModels.ts` (GGUF file listing and grouping).
+- `utils/`: `toast.ts` (`toast.success|info|error`; no-op until `ToastRegistrar` mounts), `gguf.ts` (filename parsing; spec in `memories/external/gguf/gguf.md`), `format.ts`, `modelFamily.ts`, `thinking.ts`, `chatError.ts`, `async.ts`.
+- `hooks/index.ts`: `useTauriEvent` only (one listener per event name, handler in a ref).
 
 ## Backend (`src-tauri/src/`)
-- `lib.rs`: opens `geniex.db` in the app data dir, runs migrations, manages `AppState` and `DownloadRegistry`, registers commands, kills the server PID on window destroy.
-- `commands/` (one domain per module): `models` (list, list_aihub, remove, clean, set_type), `hub` (search_models), `server` (start/stop/status, PID tracking), `chat` + `chat_helpers` (load_model, unload_all_models, chat_completion, cancel), `cli` (check installed, config get/set/list, `resolve_geniex_executable`), `cli_update` (check_for_cli_update, update_geniex), `download` (download_file, cancel_download), `import` (import_gguf, delete_directory), `database`, `system` (memory), `constants`.
-- Entities: `chat_sessions`, `messages`, `model_settings`, `user_preferences`, `downloaded_models` (name PK; precision, context_size, param_count, repo_url, model_card, timestamps). Migrations: `m20260730_000001_create_tables`, `m20261007_000001_downloaded_models`, `m20261020_000001_add_repo_columns`. No migration added in the working tree.
+- `lib.rs`: opens `geniex.db` in the app data dir, runs migrations, manages `AppState` and `DownloadRegistry`, registers commands, kills the server PID on window destroy. Modules also include `gguf.rs` and `tray.rs`.
+- `commands/` (one domain per module): `models` (list, list_aihub, remove, clean, set_type), `hub` (search_models), `server` (start/stop/status, PID tracking), `chat` + `chat_helpers` (load_model, unload_all_models, chat_completion, cancel), `cli` (check installed, config get/set/list, `resolve_geniex_executable`), `cli_update` (check_for_cli_update, update_geniex), `download` (download_file, cancel_download), `import` (import_gguf, delete_directory), `database` (sessions, messages, chat errors, settings, downloaded models), `logs`, `system` (memory), `constants`.
+- Entities: `chat_session`, `message`, `chat_error`, `model_setting`, `user_preference`, `downloaded_model` (name PK; precision, context_size, param_count, repo_url, model_card, timestamps).
+- Migrations: `m20260730_000001_create_tables`, `m20261007_000001_downloaded_models`, `m20261020_000001_add_repo_columns`, `m20261022_000001_message_finish_and_errors` (`messages.finish_reason`, `chat_errors` table), `m20261022_000002_message_stats`.
 
-## Events (verified by grep)
-- `download-progress` `{ id, file, received, total, speed }`, `{ ..., complete: true }`, `{ id, file, cancelled: true }`. `id` = Hugging Face repo id (download id). Replaces `asset-download-progress` (removed).
-- `model-pull-start | model-pull-progress | model-pull-complete` `{ model }`: emitted only by `import_gguf` (GenieX local import). Hub pull events are gone.
-- `chat-chunk` `{ content }`, `chat-done` (no payload; per-response stats are computed in the frontend), `server-stopped` (no payload), `server-log` `{ stream, message }` (emitted; no listener in `src/`), `geniex-update-progress` `{ message }`.
+## Events (verified by grep of `emit`/listeners)
+- `download-progress` `{ id, file, received, total, speed }`, `{ ..., complete: true }`, `{ id, file, cancelled: true }`. `id` = Hugging Face repo id (download id).
+- `model-pull-start` `{ model }`, `model-pull-progress` `{ model, message }`, `model-pull-complete` `{ model }`: emitted by `import_gguf` only (GenieX local import). Listened to in `useDownloadManager.ts`.
+- `chat-chunk` `{ streamId, content }`; `chat-done` `{ streamId, finishReason }` (also emitted on user cancel, with `finishReason` `cancelled`). Stats are computed in the frontend (`useChatStream.ts`).
+- `server-stopped` (no payload; `useModelLoader`), `server-log` `ServerLogLine` (`ServerLogsCard`), `geniex-update-progress` `{ message }` (`CliUpdateCard`).
 
-## IPC contract changes in the working tree (uncommitted)
-- `download_file(download_id, url, file_name)`: new `download_id` first arg; `precision` arg removed.
+## IPC contract (committed; backend and `services/` agree at HEAD)
+- `download_file(download_id, url, file_name)`: `download_id` first; no `precision` argument.
 - `cancel_download(download_id)`: matches the drawer entry id.
-- Removed commands: `pull_model`, `install_geniex`, `get_geniex_version`. Frontend wrappers removed as well.
+- Removed: `pull_model`, `install_geniex`, `get_geniex_version` (backend and frontend wrappers).
 - `import_gguf(local_path, repo_id, filename, precision)` returns the import folder; `delete_directory(path)` is limited to paths inside the Downloads folder.
-- Command names of `check_for_cli_update`, `update_geniex`, `search_models`, `delete_directory`, `import_gguf` are unchanged (only their Rust module moved).
+- `save_chat_error`, `delete_chat_error` (used by `ChatInput/ChatInput.tsx`, `services/database.ts`).
+- Unchanged names: `check_for_cli_update`, `update_geniex`, `search_models`, `delete_directory`, `import_gguf`.
 
 ## Key flows
-- GGUF download (`downloadStore.startGGUFDownload`, entry keyed by repo id): `download_file` (`.part`, Range resume, refuses a second download of the same id, cancel via `cancel_download`) -> `import_gguf` (move into `<Downloads>/<base-model>/`, `geniex pull ... --model-hub localfs`, README fetch best-effort, `upsert_downloaded_model`) -> `delete_directory(<folder>)` -> sidecar files downloaded best-effort. Status: `downloading` -> `importing` (`model-pull-start`) -> `finished` (`model-pull-complete`, which refreshes the model list); `cancelled` or `error` otherwise. Resume = start again; the `.part` file is reused.
-- Chat: `start_server` (spawns `geniex serve`; PID cleared when the child exits) -> `load_model` (1-token warmup request; checks the model is listed) -> `chat_completion` streams `chat-chunk` -> `chat-done`. Sessions saved debounced via `database.ts`, only those that changed.
+- GGUF download: `HubModelDetail` -> `downloadStore.enqueue(variant)` (status `queued`) -> `useDownloadManager` effect -> `runGGUFDownload` (`downloadPipeline.ts`): `download_file` (`.part`, Range resume, cancel via `cancel_download`) -> `import_gguf` (`model-pull-start` sets `importing`) -> `delete_directory(<folder>)` -> sidecars (best-effort). `model-pull-complete` sets `finished` and runs `refreshAfterImport` (downloaded-model row from Hub `context_length` or DB fallback, then CLI model list refresh). Cancel of a queued entry removes it; of an active entry calls `cancel_download`. Resume = `enqueue` again; the `.part` file is reused. Other failures set `error`.
+- Model load (header): `start_server` if not running (restarted when the compute target differs from the running server) -> `load_model` (1-token warmup request; checks the model is listed) -> active model. Unload = stop the server (`unload_all_models`; the only unload mechanism).
+- Chat: `ChatInput` sends with a `streamId`; `chat-chunk`/`chat-done` are matched to `chatStore.activeStream` by id, so tokens go to the session that started the stream. Sessions are saved debounced (500 ms, changed sessions only) by `useSessionPersistence`, flushed on unmount. A failed send adds an error message and saves a `chat_errors` row.
+- Toasts: only for operations the user waited on (download start/finish/cancel/fail, model load/switch/unload, chat failure, model removal, model settings saved). Not used for background list or conversation loads.
 - CLI update: installer-based, see `cli-update.md`.
 
 ## Docs/agents landscape
-- `.github/github-instructions.md` (rules + routing), `.github/agents/*`, `.github/skills/*`, `.github/geniex-cli-reference.md` (user-owned; not edited here).
-- `memories/repo/*` project notes; `memories/external/*` HF Hub OpenAPI + GGUF spec (large, read on demand).
-- `docs/` (uncommitted): `code-scan-2026-10-22.md` (findings), `fix-plan.md` (phases; status section), `fluent-ui-migration.md` (open items).
-- `.claude/agents/knowledge-sync.md` keeps these files current; cursor in `.claude/knowledge-sync.state`.
+- `memories/repo/*`: the one source for repo knowledge and explanations of changes. Maintained by `knowledge-sync`.
+- `memories/geniex-cli-reference.md`: full `geniex` CLI flags. Kept as written; updated by hand when the CLI changes.
+- `memories/external/*`: HF Hub OpenAPI and GGUF spec (large, read on demand).
+- `CLAUDE.md`: essentials and routing. `tasks.md` at the root: backlog written by the user for other sessions.
+- `.claude/agents/*` and `.claude/skills/*`: working rules (`react-expert.md` has the visual rules).
+- `.claude/archive/github/`: former `.github/` rule and agent copies, kept for reference, not loaded.
+- `.claude/agents/knowledge-sync.md` keeps `memories/repo/*` current; cursor in `.claude/knowledge-sync.state`.
 
 ## Known doc drift (not fixed here)
-- `.github/geniex-cli-reference.md` and `.github/agents/geniex-specialist-agent.md` describe `geniex pull` as the model lifecycle. That is accurate for the CLI but the app no longer uses hub pulls. User-owned; report only.
-- `src/stores/hubBrowseStore.ts` comments (around lines 41-42 and 205) still mention `release_assets.json` and release-asset zips, which were removed. Code comment in `src/` (not editable in this sync).
-- `docs/fluent-ui-migration.md` open item 8 and `docs/fix-plan.md` "Known follow-ups" are dated handoff notes; they are not maintained by this sync.
-- Mid-refactor: `commands/mod.rs` declares `hub`, `import`, `cli_update`; the new files are untracked. Verify `cargo check` before trusting the backend layout.
+- `components/ui/Typography` is not yet used everywhere: about 96 lines in `src/` still mention Fluent `Text`/`Caption1`/`Body1`/`Title3`/`Subtitle1` (rough grep count, includes imports).
+- `components/shell/CliMissingBanner/CliMissingBanner.tsx` and `pages/models/HubModelDetail/HubModelDetail.tsx` import `open` from `@tauri-apps/plugin-shell` directly, against the "Tauri calls only in `services/`" rule (code-verified; present at HEAD too). Not fixed here.
+- `components/shell/Header/ModelSelectorPopover/ModelSelectorPopover.css` has unused `.model-selector__list`, `__section`, `__compute`, `__inline` rules.

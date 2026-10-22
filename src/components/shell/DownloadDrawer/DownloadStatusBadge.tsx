@@ -4,16 +4,18 @@ import {
   ArrowDownloadRegular,
   ArrowImportRegular,
   CheckmarkRegular,
+  ClockRegular,
   PauseRegular,
   WarningRegular,
 } from "@fluentui/react-icons";
 import type { ReactElement } from "react";
-import type { DownloadStatus } from "../../stores/downloadStore";
+import type { DownloadStatus } from "../../../stores/downloadStore";
 
 const CONFIG: Record<
   DownloadStatus,
   { icon: ReactElement; color: NonNullable<BadgeProps["color"]>; label: string }
 > = {
+  queued: { icon: <ClockRegular />, color: "informative", label: "Queued" },
   downloading: { icon: <ArrowDownloadRegular />, color: "brand", label: "Downloading" },
   importing: { icon: <ArrowImportRegular />, color: "informative", label: "Importing" },
   finished: { icon: <CheckmarkRegular />, color: "success", label: "Finished" },
