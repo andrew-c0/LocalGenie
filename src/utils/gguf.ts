@@ -6,13 +6,13 @@
  *
  *   `[<Sidecar>-]<BaseName>[-<SizeLabel>][-<FineTune>][-<Version>][-<Precision>][-<Shard>].gguf`
  *
- * A sidecar marker (`mmproj` / `mtp`) may appear at the start, middle or end,
+ * A sidecar marker (`mmproj` / `mtp` / `dflash`) may appear at the start, middle or end,
  * e.g. `mmproj-F16.gguf` or `gemma-4-E4B-it-mmproj.gguf`.
  */
 
 /** Result of parsing a GGUF filename. */
 export interface GGUFParseResult {
-  sidecar: "mmproj" | "mtp" | null;
+  sidecar: "mmproj" | "mtp" | "dflash" | null;
   /**
    * Model name without the sidecar, precision and shard tokens lowercased, e.g.
    * `gemma-4-e4b-it`. Files with the same stem belong to the same model.
@@ -27,7 +27,7 @@ export interface GGUFParseResult {
 
 const EXTENSION = /\.gguf$/i;
 const SHARD_SUFFIX = /-(\d{5}-of-\d{5})$/i;
-const SIDECAR_TOKEN = /(?<=^|[-_])(mmproj|mtp)(?=[-_]|$)/i;
+const SIDECAR_TOKEN = /(?<=^|[-_])(mmproj|mtp|dflash)(?=[-_]|$)/i;
 const SIZE_LABEL =
   /(?<=^|[-_])((?:\d+x)?\d+(?:\.\d+)?[A-Za-z](?:-[A-Za-z]+\d+(?:\.\d+)?[A-Za-z]+)?)(?=[-_.]|$)/;
 /**

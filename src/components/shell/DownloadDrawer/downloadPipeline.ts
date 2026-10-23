@@ -13,9 +13,11 @@ const hfFileUrl = (repoId: string, filename: string) =>
 const baseName = (path: string) => path.split("/").pop() ?? path;
 
 /**
- * Run the GGUF pipeline for a queued variant: download, import into the GenieX cache, then
- * fetch sidecars. Resuming calls this again; the backend continues from the partial file.
- * Failures are recorded on the entry rather than thrown, so the drawer shows them.
+ * Run the GGUF pipeline for a queued variant: download sidecars and the main file, then import
+ * into the GenieX cache. Sidecars come first because the import moves them into the model folder
+ * with the main file; GenieX copies only what is in that folder. Resuming calls this again; the
+ * backend continues from the partial files. Failures are recorded on the entry rather than thrown,
+ * so the drawer shows them.
  */
 export async function runGGUFDownload(variant: GGUFVariant): Promise<void> {
   const { repoId, main, sidecars } = variant;
@@ -27,18 +29,30 @@ export async function runGGUFDownload(variant: GGUFVariant): Promise<void> {
 
   const fileName = baseName(main.filename);
   try {
-    const downloadedPath = await downloadFile(repoId, hfFileUrl(repoId, main.filename), fileName);
-    // The backend emits model-pull-start/complete around the import and sets the status.
-    const modelDir = await importGGUF(downloadedPath, repoId, fileName, main.precision);
-    await deleteDirectory(modelDir);
-
+    const sidecarPaths: string[] = [];
     for (const sidecar of sidecars) {
-      await downloadFile(
+      const path = await downloadFile(
         repoId,
         hfFileUrl(repoId, sidecar.filename),
         baseName(sidecar.filename),
-      ).catch(() => undefined);
+      ).catch((err: unknown) => {
+        // A cancel must stop the whole pipeline; any other sidecar failure is skipped.
+        if (String(err).includes("cancelled")) throw err;
+        return undefined;
+      });
+      if (path) sidecarPaths.push(path);
     }
+
+    const downloadedPath = await downloadFile(repoId, hfFileUrl(repoId, main.filename), fileName);
+    // The backend emits model-pull-start/complete around the import and sets the status.
+    const modelDir = await importGGUF(
+      downloadedPath,
+      repoId,
+      fileName,
+      main.precision,
+      sidecarPaths,
+    );
+    await deleteDirectory(modelDir);
   } catch (err) {
     const message = String(err);
     if (message.includes("cancelled")) {

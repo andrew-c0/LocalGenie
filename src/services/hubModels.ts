@@ -40,8 +40,9 @@ export function convertToGGUFFiles(entries: HubFileEntry[]): GGUFFile[] {
 
 /**
  * Group GGUF files: each non-sidecar file is its own group. A sidecar (mmproj, mtp)
- * is attached to every variant whose model name matches it, e.g.
- * `gemma-4-E4B-it-mmproj.gguf` → `gemma-4-E4B_q4_0-it.gguf`.
+ * belongs to every variant whose model name matches it, e.g.
+ * `gemma-4-E4B-it-mmproj.gguf` → `gemma-4-E4B_q4_0-it.gguf`. Each variant gets one sidecar
+ * per kind (see `pickSidecars`).
  */
 export function groupGGUFFiles(files: GGUFFile[]): GGUFGroup[] {
   const mainFiles: GGUFFile[] = [];
@@ -61,17 +62,29 @@ export function groupGGUFFiles(files: GGUFFile[]): GGUFGroup[] {
   mainFiles.sort((a, b) => (a.size ?? 0) - (b.size ?? 0));
 
   // Each main file gets its own group
-  const groups: GGUFGroup[] = mainFiles.map((main) => ({ main, sidecars: [] }));
+  return mainFiles.map((main) => {
+    const stem = parseGGUFFilename(main.filename)?.stem;
+    const matching = sidecarFiles.filter((s) => parseGGUFFilename(s.filename)?.stem === stem);
+    return { main, sidecars: pickSidecars(main, matching) };
+  });
+}
 
-  for (const sidecar of sidecarFiles) {
-    const stem = parseGGUFFilename(sidecar.filename)?.stem;
-    if (!stem) continue;
-    for (const g of groups) {
-      if (parseGGUFFilename(g.main.filename)?.stem === stem) g.sidecars.push(sidecar);
-    }
+/**
+ * One sidecar per kind (mmproj, mtp) for a variant: the one whose precision matches the variant,
+ * else the smallest. A variant gets one projector, so GenieX never sees several to choose from.
+ */
+function pickSidecars(main: GGUFFile, candidates: GGUFFile[]): GGUFFile[] {
+  const picked: GGUFFile[] = [];
+  for (const kind of ["mmproj", "mtp"] as const) {
+    const ofKind = candidates.filter((s) => parseGGUFFilename(s.filename)?.sidecar === kind);
+    if (ofKind.length === 0) continue;
+    const exact = ofKind.find((s) => s.precision.toLowerCase() === main.precision.toLowerCase());
+    const smallest = [...ofKind].sort(
+      (a, b) => (a.size ?? Number.MAX_SAFE_INTEGER) - (b.size ?? Number.MAX_SAFE_INTEGER),
+    )[0];
+    picked.push(exact ?? smallest);
   }
-
-  return groups;
+  return picked;
 }
 
 /** Human label for a grouped GGUF variant, e.g. "Q4_0 — 4.2B". */

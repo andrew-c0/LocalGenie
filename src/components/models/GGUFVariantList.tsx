@@ -6,15 +6,13 @@ import { precisionInfo, type RamFit } from "../../services/hubApi";
 import type { GGUFGroup } from "../../services/hubModels";
 import { variantLabel } from "../../services/hubModels";
 import { formatBytes } from "../../utils/format";
+import { parseGGUFFilename } from "../../utils/gguf";
+import { bitsBadgeColor } from "../../utils/quantBadge";
 import { Flex } from "../ui/Flex/Flex";
 import { OptionDropdown } from "../ui/OptionDropdown/OptionDropdown";
 import { Meta } from "../ui/Typography/Typography";
 
 type BadgeColor = NonNullable<BadgeProps["color"]>;
-
-/** Quantization width → badge colour (lower bits = more compressed). */
-const bitsBadgeColor = (bits: number): BadgeColor =>
-  bits <= 4 ? "success" : bits <= 6 ? "warning" : bits <= 8 ? "informative" : "important";
 
 const FIT_BADGE: Record<RamFit["level"], BadgeColor> = {
   fits: "success",
@@ -61,18 +59,24 @@ export function GGUFVariantList({
     const fit = fitFor(group);
     const isDownloaded = downloadedPrecisions.has(group.main.precision ?? "");
     const bits = precisionInfo(group.main.precision).bitsPerWeight ?? 4;
-    const sidecars = group.sidecars.length;
+    const sidecarKinds = [
+      ...new Set(group.sidecars.map((s) => parseGGUFFilename(s.filename)?.sidecar).filter(Boolean)),
+    ];
     const fitText = fit ? fit.label : "fit unknown";
     return {
       value: group.main.filename,
       label: variantLabel(group),
       selectedLabel: `${variantLabel(group)} · ${fitText}`,
       content: (
-        <Flex direction="column" gap="xxs">
+        // Fluent's option wrapper shrinks to its content, so the row takes the full width itself.
+        <Flex align="center" justify="between" gap="s" wrap style={{ width: "100%" }}>
           <Flex align="center" gap="s" wrap>
-            <Badge appearance="outline" color={bitsBadgeColor(bits)}>
-              {variantLabel(group)}
-            </Badge>
+            {/* Fixed-width slot so the fit badges line up in one column across rows. */}
+            <span style={{ display: "inline-block", minWidth: "7.5rem" }}>
+              <Badge appearance="outline" color={bitsBadgeColor(bits)}>
+                {group.main.precision}
+              </Badge>
+            </span>
             {fit ? (
               <Badge appearance="tint" color={FIT_BADGE[fit.level]}>
                 {fit.label}
@@ -90,7 +94,7 @@ export function GGUFVariantList({
           </Flex>
           <Meta>
             {formatBytes(group.main.size)}
-            {sidecars > 0 ? ` · +${sidecars} sidecar` : ""}
+            {sidecarKinds.map((kind) => ` · + ${kind}`).join("")}
           </Meta>
         </Flex>
       ),

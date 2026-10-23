@@ -17,15 +17,17 @@ export async function cancelDownload(downloadId: string): Promise<void> {
 }
 
 /** Import a downloaded GGUF file into the GenieX model cache.
- *  The file is moved into a folder named after the base model, then registered with
- *  `geniex pull --model-hub localfs`. Returns that folder. */
+ *  The file and each of `sidecarPaths` (already-downloaded sidecars, e.g. an mmproj) are moved
+ *  into a folder named after the base model, then registered with `geniex pull --model-hub localfs`.
+ *  Returns that folder. */
 export async function importGGUF(
   localPath: string,
   repoId: string,
   filename: string,
   precision: string,
+  sidecarPaths: string[],
 ): Promise<string> {
-  return invoke("import_gguf", { localPath, repoId, filename, precision });
+  return invoke("import_gguf", { localPath, repoId, filename, precision, sidecarPaths });
 }
 
 /** Delete a folder or file inside the Downloads folder. */

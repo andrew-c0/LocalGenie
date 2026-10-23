@@ -67,6 +67,19 @@ describe("groupGGUFFiles", () => {
     expect(groups[0].sidecars.map((s) => s.filename)).toEqual(["gemma-4-E4B-it-mmproj.gguf"]);
   });
 
+  it("never lists a DFlash draft as a variant, nor attaches it to one", () => {
+    const groups = groupGGUFFiles([
+      file("gemma-4-26B-A4B-it-Q8_0.gguf", 26_000_000_000),
+      file("dflash-gemma-4-26B-A4B-it-Q8_0.gguf", 470_000_000),
+      file("mmproj-gemma-4-26B-A4B-it-Q8_0.gguf", 810_000_000),
+    ]);
+
+    expect(groups.map((g) => g.main.precision)).toEqual(["Q8_0"]);
+    expect(groups[0].sidecars.map((s) => s.filename)).toEqual([
+      "mmproj-gemma-4-26B-A4B-it-Q8_0.gguf",
+    ]);
+  });
+
   it("does not list an mmproj without a matching model as a variant", () => {
     const groups = groupGGUFFiles([
       file("mmproj-F16.gguf", 900_000_000),
@@ -77,7 +90,7 @@ describe("groupGGUFFiles", () => {
     expect(groups[0].sidecars).toHaveLength(0);
   });
 
-  it("lists every quant of a model with the sidecars that belong to all of them", () => {
+  it("lists every quant of a model, each with one projector: the matching precision or the smallest", () => {
     const groups = groupGGUFFiles([
       file("Ternary-Bonsai-2-27B-F16.gguf", 53_000_000_000),
       file("Ternary-Bonsai-2-27B-PQ2_0.gguf", 7_200_000_000),
@@ -87,12 +100,27 @@ describe("groupGGUFFiles", () => {
     ]);
 
     expect(groups.map((g) => g.main.precision)).toEqual(["PTQ1_0", "PQ2_0", "F16"]);
+    // No quant matches either projector, so each gets the smaller Q8_0 one.
     for (const g of groups) {
-      expect(g.sidecars.map((s) => s.filename)).toEqual([
-        "Ternary-Bonsai-2-27B-mmproj-BF16.gguf",
-        "Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf",
-      ]);
+      expect(g.sidecars.map((s) => s.filename)).toEqual(["Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf"]);
     }
+  });
+
+  it("gives a variant the projector whose precision matches it", () => {
+    const groups = groupGGUFFiles([
+      file("SmolVLM-256M-Instruct-Q8_0.gguf", 175_000_000),
+      file("SmolVLM-256M-Instruct-f16.gguf", 328_000_000),
+      file("mmproj-SmolVLM-256M-Instruct-Q8_0.gguf", 104_000_000),
+      file("mmproj-SmolVLM-256M-Instruct-f16.gguf", 190_000_000),
+    ]);
+
+    expect(groups.map((g) => g.main.precision)).toEqual(["Q8_0", "f16"]);
+    expect(groups[0].sidecars.map((s) => s.filename)).toEqual([
+      "mmproj-SmolVLM-256M-Instruct-Q8_0.gguf",
+    ]);
+    expect(groups[1].sidecars.map((s) => s.filename)).toEqual([
+      "mmproj-SmolVLM-256M-Instruct-f16.gguf",
+    ]);
   });
 
   it("orders variants by size and attaches a sidecar to every variant of its model", () => {

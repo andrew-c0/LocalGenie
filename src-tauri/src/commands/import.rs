@@ -1,6 +1,8 @@
 use sea_orm::DatabaseConnection;
 use tauri::{AppHandle, Emitter, State};
 
+use std::path::Path;
+
 use super::download::{download_dir, ensure_inside_downloads, validate_file_name};
 use super::{database, AppState};
 
@@ -24,9 +26,13 @@ pub async fn delete_directory(path: String) -> Result<(), String> {
 
 /// Import an already-downloaded GGUF file into the GenieX model cache.
 ///
-/// The file is moved into `<Downloads>/<base-model>/` and registered with
+/// The file, and each sidecar (e.g. a multimodal projector), is moved into
+/// `<Downloads>/<base-model>/` before it is registered with
 /// `geniex pull <repo>:<precision> --model-hub localfs --local-path <dir>`.
+/// GenieX copies only what is in that folder, so sidecars must be moved in first.
 /// The model card is fetched best-effort; a missing README does not fail the import.
+// Each argument is a separate Tauri IPC field; bundling them would change the frontend contract.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn import_gguf(
     app: AppHandle,
@@ -36,6 +42,7 @@ pub async fn import_gguf(
     repo_id: String,
     filename: String,
     precision: String,
+    sidecar_paths: Vec<String>,
 ) -> Result<String, String> {
     // Extract base model name from repo_id (e.g., "qualcomm/Qwen3-4B-Instruct" -> "Qwen3-4B-Instruct")
     let base_model_name = repo_id.split('/').next_back().unwrap_or(&repo_id);
@@ -43,12 +50,26 @@ pub async fn import_gguf(
     validate_file_name(&filename)?;
 
     let source = ensure_inside_downloads(&local_path)?;
+    // Validate every sidecar before anything moves, so a bad path leaves the main file in place.
+    let mut sidecars = Vec::with_capacity(sidecar_paths.len());
+    for path in &sidecar_paths {
+        let from = ensure_inside_downloads(path)?;
+        let name = sidecar_file_name(&from)?;
+        sidecars.push((from, name));
+    }
     let downloads_dir = download_dir().ok_or("Could not resolve downloads directory")?;
     let target_dir = downloads_dir.join(base_model_name);
 
     tokio::fs::create_dir_all(&target_dir)
         .await
         .map_err(|e| format!("Failed to create target directory: {e}"))?;
+
+    for (from, name) in &sidecars {
+        let to = target_dir.join(name);
+        tokio::fs::rename(from, &to)
+            .await
+            .map_err(|e| format!("Failed to move sidecar {name} to base model folder: {e}"))?;
+    }
 
     let new_path = target_dir.join(&filename);
     tokio::fs::rename(&source, &new_path)
@@ -136,4 +157,33 @@ pub async fn import_gguf(
     );
 
     Ok(target_dir.to_string_lossy().into_owned())
+}
+
+/// The bare file name a sidecar keeps inside the model folder. Rejects paths with no usable name.
+fn sidecar_file_name(path: &Path) -> Result<String, String> {
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| format!("Invalid sidecar path: {}", path.display()))?;
+    validate_file_name(name)?;
+    Ok(name.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sidecar_file_name;
+    use std::path::Path;
+
+    #[test]
+    fn keeps_the_basename_of_a_sidecar() {
+        let name = sidecar_file_name(Path::new("C:/Users/me/Downloads/mmproj-F16.gguf"));
+        assert_eq!(name.as_deref(), Ok("mmproj-F16.gguf"));
+    }
+
+    #[test]
+    fn rejects_paths_without_a_usable_file_name() {
+        for bad in ["C:/", "/", "C:/Users/me/Downloads/.."] {
+            assert!(sidecar_file_name(Path::new(bad)).is_err(), "{bad} should be rejected");
+        }
+    }
 }
