@@ -21,16 +21,12 @@
   justify-content: flex-start;
 }
 
+/* The body is markdown, rendered with the same MarkdownContent styles as the reply. Only the frame is set here. */
 .thinking-block__body {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
   max-height: 240px;
   overflow-y: auto;
   width: 100%;
   box-sizing: border-box;
   padding: var(--spacingVerticalXS) var(--spacingHorizontalS);
   border-left: 3px solid var(--colorNeutralStroke1);
-  color: var(--colorNeutralForeground3);
-  font-size: var(--fontSizeBase200);
-  line-height: var(--lineHeightBase200);
 }

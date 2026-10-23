@@ -1,6 +1,7 @@
 import { Button, Spinner } from "@fluentui/react-components";
 import { ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useEffect, useRef, useState } from "react";
+import { MarkdownContent } from "../../ui/MarkdownContent/MarkdownContent";
 import "./ThinkingBlock.css";
 
 interface ThinkingBlockProps {
@@ -44,7 +45,7 @@ export function ThinkingBlock({ text, live }: ThinkingBlockProps) {
       </Button>
       {expanded && (
         <div ref={bodyRef} className="thinking-block__body">
-          {text || (live ? "Waiting for reasoning..." : "")}
+          {text ? <MarkdownContent>{text}</MarkdownContent> : live && "Waiting for reasoning..."}
         </div>
       )}
     </div>

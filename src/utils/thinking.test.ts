@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
+import cases from "../../shared/thinking-cases.json";
 import { parseThinking } from "./thinking";
+
+describe("parseThinking shared cases", () => {
+  // The same inputs and expected values are checked by the Rust test in capability_scan.rs.
+  it.each(cases)("$name", ({ input, expected }) => {
+    expect(parseThinking(input)).toEqual(expected);
+  });
+});
 
 describe("parseThinking", () => {
   it("returns the whole text as answer when there is no thinking block", () => {
@@ -64,6 +72,53 @@ describe("parseThinking", () => {
     expect(parseThinking("Just a plain answer.")).toEqual({
       thinking: "",
       answer: "Just a plain answer.",
+      thinkingOpen: false,
+    });
+  });
+
+  it("parses a Gemma channel block", () => {
+    const parsed = parseThinking("<|channel>thought\nCheck.<channel|>Four.");
+    expect(parsed.thinking).toBe("Check.");
+    expect(parsed.answer).toBe("Four.");
+    expect(parsed.thinkingOpen).toBe(false);
+  });
+
+  it("holds back a partial Gemma open tag", () => {
+    expect(parseThinking("Sure <|chan").answer).toBe("Sure");
+  });
+
+  it("reads the Harmony analysis channel as thinking and strips the final-channel markers", () => {
+    const parsed = parseThinking(
+      "<|channel|>analysis<|message|>Plan.<|end|><|start|>assistant<|channel|>final<|message|>Four.<|return|>",
+    );
+    expect(parsed.thinking).toBe("Plan.");
+    expect(parsed.answer).toBe("Four.");
+    expect(parsed.thinkingOpen).toBe(false);
+  });
+
+  it("does not read a Harmony final channel as an implicit thinking block", () => {
+    const parsed = parseThinking("<|channel|>final<|message|>Four.<|end|>");
+    expect(parsed.thinking).toBe("");
+    expect(parsed.answer).toBe("Four.");
+  });
+
+  it("treats text before a non-think close tag as thinking when the open tag was in the prompt", () => {
+    const parsed = parseThinking("Plan first.</reasoning>Four.");
+    expect(parsed.thinking).toBe("Plan first.");
+    expect(parsed.answer).toBe("Four.");
+    expect(parsed.thinkingOpen).toBe(false);
+  });
+
+  it("reports an unclosed [THINK] block as still open", () => {
+    const parsed = parseThinking("[THINK]Weighing");
+    expect(parsed.thinking).toBe("Weighing");
+    expect(parsed.thinkingOpen).toBe(true);
+  });
+
+  it("ignores an empty think block", () => {
+    expect(parseThinking("<think>\n</think>Four.")).toEqual({
+      thinking: "",
+      answer: "Four.",
       thinkingOpen: false,
     });
   });
