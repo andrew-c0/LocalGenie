@@ -18,7 +18,7 @@ LocalGenie is a Tauri 2 desktop client for Qualcomm GenieX local inference. It w
 6. CLI updates: a badge on the sidebar settings button; the update runs from the App Settings drawer (installer download, launch, version polling).
 
 ## Current state (2026-10-23)
-- Committed up to 6068a81 (model settings extensions, GenieX knowledge). The working tree holds uncommitted work on model settings storage, system prompt blocks, the missing-file banner, native context and streaming. See `codebase-map.md` for the exact state.
+- Committed up to 1b5d554 (per-model settings storage, system prompt blocks, native context, streaming). The working tree holds uncommitted work on the per-model settings scan (model capabilities: probes, stored results, selector badges), sidecar downloads before import, and the loaded-model list from `/status`. See `codebase-map.md` for the exact state.
 - Model loading and chat completion still carry the GenieX warmup/server response risk (`known-issues.md`).
 - The Playground measures live streaming TTFT and throughput; the dashboard "Run Benchmark" is UI only (no benchmark backend).
 - Qualcomm AI Hub code is legacy and will be reworked later.

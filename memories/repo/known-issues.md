@@ -1,6 +1,6 @@
 # Known issues
 
-Status labels: **code-verified** = read in the source (committed in 6068a81 or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in this sync.
+Status labels: **code-verified** = read in the source (committed up to 1b5d554 or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in this sync. Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
 
 ## Active
 - Model load/chat hangs: the GenieX warmup request in `load_model` may never get a response. The warmup carries the model's load params (committed in 6068a81), so it matches chat. Not re-validated (runtime-unverified).
@@ -10,6 +10,10 @@ Status labels: **code-verified** = read in the source (committed in 6068a81 or i
 - Context size from the Hub now reads only `gguf.context_length` (code-verified in `hubApi.ts`). The earlier `max_position_embeddings` / `max_sequence_length` fallback is gone, so models without GGUF metadata fall back to the DB row (possibly null).
 - `HubModelDetail` loads downloaded precisions once per repo (`useDownloadedPrecisions` in `pages/models/useHubModelDetail.ts`, keyed on `repoId`), so "Load & Chat" does not appear until the page is reopened after an import (code-verified; runtime-unverified).
 - Typed event payloads and typed errors are not in place; UI matches on error text (`utils/chatError.ts`).
+- Qwen3.5 thinking probe needs the 1024-token budget: at 200 tokens the closing tag is not reached (reported; the 200 cap is `THINK_MAX_TOKENS`, the stream cap `THINK_STREAM_MAX_TOKENS` = 1024, `capability_scan.rs`).
+- Active badge clipped: in the model selector, a row that is active, not loaded and has four capability icons overflows the 120px capabilities cell (reported; `ModelOptionButton.tsx`, uncommitted CSS). Not fixed.
+- Vision and audio probes match whole words only (`has_word`), so a reply that names the colour or number only inside another word does not count (uncommitted; `capability_scan.rs` tests `names_match_whole_words_only`).
+- Earlier cache overwrite (a second quant of the same repo replaced the first in the cache) was not reproduced in isolation. The observed loss was explained by a manual removal (reported). Treat as unconfirmed.
 
 ## UI follow-ups
 - Header Downloads button still uses `appearance="subtle"` (`Header/Header.tsx`), against the agreed visual rule (secondary/primary).
@@ -31,8 +35,8 @@ Status labels: **code-verified** = read in the source (committed in 6068a81 or i
 - Migration `m20261020_000001` (`add_repo_columns`) ignores every `ALTER TABLE` error. `delete_session` runs two statements without a transaction.
 - Security: `update_geniex` runs the downloaded installer without checking the release asset digest.
 - Tauri calls outside `services/`: `CliMissingBanner` and `HubModelDetail` import `open` from `@tauri-apps/plugin-shell` directly.
-- Stale comments: `import_gguf` mentions a copy fallback that does not exist; `UpdateInfo` in `cli.rs` is called a re-export.
-- Chat streaming cost: `updateLastAssistantMessage` still rebuilds the message and `contextChars` on each flush. Chunks are now written once per animation frame (uncommitted, `useChatStream.ts`), so the rate is lower; the rebuild itself is unchanged (code-verified).
+- Stale comments: `UpdateInfo` in `cli.rs` is called a re-export.
+- Chat streaming cost: `updateLastAssistantMessage` still rebuilds the message and `contextChars` on each flush. Chunks are written once per animation frame (`useChatStream.ts`, committed in 1b5d554), so the rate is lower; the rebuild itself is unchanged (code-verified).
 - `DEFAULT_BASE_URL` duplicates `DEFAULT_PORT` in `constants.rs`. `package.json` has an `allowScripts` field, which is not a standard npm field.
 
 ## Operational notes
@@ -41,8 +45,10 @@ Status labels: **code-verified** = read in the source (committed in 6068a81 or i
 - The running server PID is cleared when the `geniex serve` child exits, so a crashed server can be started again (code-verified in `server.rs`; runtime-unverified).
 
 ## Resolved (code-verified; runtime-unverified)
-- Every stop or unload was reported as `server-stopped`, so a user unload looked like a crash. Now only an unexpected child exit emits it (uncommitted: `commands/server.rs`, PID cleared before the kill).
-- A load with no saved context window used a fixed 4096. It now uses the model's native `context_size` (uncommitted: `resolveLoadParams`, `loadNativeContext`).
+- Every stop or unload was reported as `server-stopped`, so a user unload looked like a crash. Now only an unexpected child exit emits it (committed in 1b5d554: `commands/server.rs`, PID cleared before the kill).
+- A load with no saved context window used a fixed 4096. It now uses the model's native `context_size` (committed in 1b5d554: `resolveLoadParams`, `loadNativeContext`).
+- The loaded-model list came from `/v1/models`, which lists every cached model, so cached models showed as loaded. It now reads `GET /status` `models[].id` (uncommitted: `server.rs` `fetch_loaded_models`; code-verified against the GenieX `status` handler; runtime-unverified in the app).
+- Sidecars (mmproj) were downloaded after the import, but the import doc comment says GenieX copies only what is in the model folder, so they were not in the folder when GenieX read it. Sidecars are now downloaded first and moved into the folder by `import_gguf` (uncommitted: `downloadPipeline.ts`, `import.rs`; runtime-unverified).
 - Settings `nctx` and `think` had no effect. Now `nctx` and the other load params go to `load_model` and every chat request, and `think` is sent as `enable_think` (committed in 6068a81: `commands/chat_helpers.rs`, `utils/modelSettings.ts`, `Header/useModelLoader.ts`). Reported live run (not re-run by knowledge-sync): against `geniex serve` v0.9.3 with `unsloth/Qwen3.5-0.8B-GGUF` Q8_K_XL, a warmup then a chat with identical params did not reload, and a changed `nctx` did reload.
 - Chat events carry `streamId`; `useChatStream` applies them only to the active stream, so a stream keeps its session when the user switches chats (`chat-chunk`/`chat-done` in `ChatRuntime/useChatStream.ts`). The stream also keeps running on other pages, since `ChatRuntime` is mounted in `MainLayout`.
 - Per-response stats (TTFT, total time, token count, prompt chars) are saved with the message (`messages` columns from `m20261022_000002`; `database.rs`, `services/database.ts`), so they survive a reload. Stats are computed in `useChatStream.ts`.
