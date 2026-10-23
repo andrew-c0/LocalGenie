@@ -10,6 +10,11 @@
   gap: var(--spacingHorizontalXS);
 }
 
-.setting-field__reason {
+.setting-field__reason,
+.setting-field__note {
   color: var(--colorNeutralForeground3);
+}
+
+.setting-field__warning {
+  color: var(--colorPaletteDarkOrangeForeground1);
 }

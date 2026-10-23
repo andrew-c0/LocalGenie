@@ -20,11 +20,12 @@ import {
   Textarea,
 } from "@fluentui/react-components";
 import { SaveRegular } from "@fluentui/react-icons";
-import { useCallback, useEffect, useState } from "react";
-import * as db from "../../services/database";
-import { reloadModel } from "../../services/modelLoad";
-import { defaultSettings, useModelStore } from "../../stores/modelStore";
-import type { StoredModelSettings } from "../../types";
+import { useEffect, useState } from "react";
+import { getModelCapabilities } from "../../services/models";
+import { useModelStore } from "../../stores/modelStore";
+import type { ModelCapabilities } from "../../types";
+import { capabilityMap, isRejected, rejectedReason } from "../../utils/capabilityStatus";
+import { capabilityRows, settingWarnings, thinkingNote } from "../../utils/modelCapabilities";
 import {
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_LOAD_SETTINGS,
@@ -34,74 +35,61 @@ import {
   modelSettingsKey,
   POWER_MODES,
   SPEC_TYPES,
-  sameModel,
 } from "../../utils/modelSettings";
-import { withSystemBlocks } from "../../utils/systemPrompt";
-import { toast } from "../../utils/toast";
+import { type SettingsAction, settingsButtons } from "../../utils/settingsButtons";
+import { Flex } from "../ui/Flex/Flex";
+import { ProgressBar } from "../ui/ProgressBar/ProgressBar";
+import { SurfaceCard } from "../ui/SurfaceCard/SurfaceCard";
 import { Body } from "../ui/Typography/Typography";
 import SettingField from "./SettingField/SettingField";
 import SystemPromptEditor from "./SystemPromptEditor/SystemPromptEditor";
+import { useCapabilityScan } from "./useCapabilityScan";
+import { useModelSettingsForm } from "./useModelSettingsForm";
 import "./ModelSettings.css";
+
+/** Upper bound for the context window when the model's own length is not known. */
+const MAX_CONTEXT_WINDOW = 131072;
 
 export default function ModelSettings() {
   const activeModelId = useModelStore((s) => s.activeModelId);
   const downloadedModels = useModelStore((s) => s.models);
   const headerCompute = useModelStore((s) => s.compute);
 
-  // Manual pick from the dropdown. Null means "follow the active model".
+  // The model the user picked from the dropdown. Loading a model never changes what is shown, so
+  // the page stays still while the server loads.
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
-  // When the active model changes (loaded or switched), drop a stale manual pick.
-  const [trackedActiveId, setTrackedActiveId] = useState(activeModelId);
-  if (trackedActiveId !== activeModelId) {
-    setTrackedActiveId(activeModelId);
-    setSelectedModel(null);
+  // Chosen once, when the page first has a model to show: the loaded one, else the first downloaded.
+  const [startModel, setStartModel] = useState<string | null>(null);
+  const startCandidate = activeModelId ?? downloadedModels[0]?.name ?? null;
+  if (startModel === null && startCandidate !== null) {
+    setStartModel(startCandidate);
   }
-  const displayModel = selectedModel ?? activeModelId;
+  const displayModel = selectedModel ?? startModel;
   const settingsKey = displayModel ? modelSettingsKey(displayModel) : null;
 
-  const [settings, setSettings] = useState<StoredModelSettings>({ ...defaultSettings });
-  const [nativeContext, setNativeContext] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [capabilities, setCapabilities] = useState<ModelCapabilities | null>(null);
+  const [capabilitiesError, setCapabilitiesError] = useState<string | null>(null);
+  const form = useModelSettingsForm(displayModel ?? "", settingsKey ?? "");
+  const { settings, update, nativeContext, pending } = form;
+  const scan = useCapabilityScan(settingsKey ?? "");
 
-  // Load saved settings and the model's own context window whenever the selected model changes
+  // Read the model file's capabilities. A reply for a model that is no longer shown is dropped.
   useEffect(() => {
     if (!settingsKey) return;
-    db.loadModelSettings(settingsKey)
-      .then((saved) => setSettings(withSystemBlocks({ ...defaultSettings, ...saved })))
-      .catch(() => {});
-    db.loadNativeContext(settingsKey)
-      .then(setNativeContext)
-      .catch(() => setNativeContext(null));
+    let current = true;
+    setCapabilities(null);
+    setCapabilitiesError(null);
+    getModelCapabilities(settingsKey)
+      .then((caps) => {
+        if (current) setCapabilities(caps);
+      })
+      .catch((err: unknown) => {
+        if (current) setCapabilitiesError(String(err));
+      });
+    return () => {
+      current = false;
+    };
   }, [settingsKey]);
-
-  const handleSave = useCallback(async () => {
-    if (!settingsKey || !displayModel) return;
-    setSaving(true);
-    let saved = false;
-    try {
-      await db.saveModelSettings(settingsKey, settings);
-      saved = true;
-    } catch (err) {
-      console.error("Failed to save model settings:", err);
-    }
-    if (saved) toast.success("Model settings saved");
-
-    // Load parameters only apply at load time, so a loaded model is reloaded to pick them up.
-    const isLoaded = !!activeModelId && sameModel(activeModelId, displayModel);
-    if (saved && isLoaded) {
-      try {
-        await reloadModel(displayModel);
-        toast.success("Model reloaded", "It now uses the saved settings.");
-      } catch (err) {
-        toast.error("Model failed to reload", String(err));
-      }
-    }
-    setSaving(false);
-  }, [settingsKey, settings, displayModel, activeModelId]);
-
-  const update = <K extends keyof StoredModelSettings>(key: K, value: StoredModelSettings[K]) => {
-    setSettings((prev) => ({ ...prev, [key]: value }));
-  };
 
   if (!displayModel || !settingsKey) return null;
 
@@ -109,6 +97,7 @@ export default function ModelSettings() {
   const engine = engineOf(model);
   const compute = settings.compute ?? headerCompute;
 
+  const warnings = settingWarnings(engine, settings);
   const reason = {
     compute: loadSettingDisabledReason("compute", engine, compute),
     nctx: loadSettingDisabledReason("nctx", engine, compute),
@@ -120,6 +109,41 @@ export default function ModelSettings() {
   const temperature = settings.temperature ?? 0.7;
   const topP = settings.topP ?? 0.9;
   const minP = settings.minP ?? 0.05;
+  const caps = capabilityMap(scan.entries);
+  const buttons = settingsButtons({
+    loadedModel: activeModelId,
+    selectedModel: displayModel,
+    scanning: scan.phase === "scanning",
+  });
+  // Any save or scan waits while another one runs, including a scan of another model.
+  const blocked = pending !== null || scan.busy;
+  const runAction: Record<SettingsAction, () => void> = {
+    save: () => form.save(),
+    saveAndLoad: () => form.saveAndLoad(),
+    scan: () => scan.start(),
+    reloadAndScan: () => scan.reloadAndScan(),
+    cancelScan: scan.cancel,
+  };
+
+  const saveButtons = buttons.filter((b) => b.action === "save" || b.action === "saveAndLoad");
+  const scanButtons = buttons.filter((b) => b.action !== "save" && b.action !== "saveAndLoad");
+  const renderButton = (button: (typeof buttons)[number]) => (
+    <Button
+      key={button.action}
+      appearance={button.appearance}
+      icon={
+        button.action === pending ? (
+          <Spinner size="tiny" />
+        ) : button.action === "save" || button.action === "saveAndLoad" ? (
+          <SaveRegular />
+        ) : undefined
+      }
+      disabled={button.action !== "cancelScan" && blocked}
+      onClick={runAction[button.action]}
+    >
+      {button.label}
+    </Button>
+  );
 
   return (
     <div className="model-settings__root">
@@ -142,13 +166,77 @@ export default function ModelSettings() {
         </Field>
       )}
 
-      {activeModelId && displayModel && !sameModel(displayModel, activeModelId) && (
-        <MessageBar intent="warning">
-          <MessageBarBody>
-            Editing settings for a model not currently loaded on the server.
-          </MessageBarBody>
-        </MessageBar>
-      )}
+      <SurfaceCard title="Model">
+        {capabilities ? (
+          <dl className="model-settings__facts">
+            {capabilityRows(capabilities, caps).map((row) => (
+              <div key={row.label} className="model-settings__fact">
+                <dt>
+                  <Body className="model-settings__fact-label">{row.label}</Body>
+                </dt>
+                <dd>
+                  <Body>{row.value}</Body>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        ) : capabilitiesError ? (
+          <MessageBar intent="warning">
+            <MessageBarBody>Could not read the model file: {capabilitiesError}</MessageBarBody>
+          </MessageBar>
+        ) : (
+          <Spinner size="tiny" label="Reading the model file…" />
+        )}
+        <Body className="model-settings__hint">
+          Thinking, tool calls, vision and audio show Supported, Not supported or Not tested, from
+          the latest scan.
+        </Body>
+      </SurfaceCard>
+
+      <Divider />
+
+      <section className="model-settings__section">
+        <Subtitle1>Available settings</Subtitle1>
+        <Body className="model-settings__hint">
+          Tests each setting with a few short requests, using a fixed test setup rather than your
+          saved settings. Reload &amp; Scan unloads every model, then loads this one with that
+          setup.
+        </Body>
+        {scan.entries.some((e) => e.stale) ? (
+          <Body className="model-settings__hint">
+            Some results are out of date because the model file or GenieX changed. Scan again to
+            refresh them.
+          </Body>
+        ) : (
+          scan.entries.length === 0 && (
+            <Body className="model-settings__hint">Not scanned yet.</Body>
+          )
+        )}
+        {scan.error && (
+          <MessageBar intent="error">
+            <MessageBarBody>{scan.error}</MessageBarBody>
+          </MessageBar>
+        )}
+        {scan.phase === "loading" && (
+          <Spinner size="tiny" label="Loading the model with the scan setup…" />
+        )}
+        {scan.phase === "scanning" &&
+          (scan.progress ? (
+            <Flex direction="column" gap="xs">
+              <ProgressBar value={(scan.progress.index / scan.progress.total) * 100} />
+              <Body>
+                Testing {scan.progress.key} ({scan.progress.index + 1} of {scan.progress.total})
+              </Body>
+            </Flex>
+          ) : (
+            <Spinner size="tiny" label="Starting the scan…" />
+          ))}
+        <Flex gap="s" wrap>
+          {scanButtons.map(renderButton)}
+        </Flex>
+      </section>
+
+      <Divider />
 
       <section className="model-settings__section">
         <Subtitle1>Load</Subtitle1>
@@ -160,6 +248,7 @@ export default function ModelSettings() {
           label="Compute"
           info="Where the model runs: NPU, GPU or CPU. Empty uses the header choice."
           disabledReason={reason.compute}
+          warning={warnings.compute}
         >
           <Dropdown
             className="model-settings__full-width"
@@ -180,12 +269,13 @@ export default function ModelSettings() {
           label="Context Window"
           info="Context length in tokens the server allocates. Larger windows use more memory."
           disabledReason={reason.nctx}
+          warning={warnings.nctx}
         >
           <SpinButton
             disabled={!!reason.nctx}
             value={settings.nctx ?? nativeContext ?? DEFAULT_CONTEXT_WINDOW}
             min={512}
-            max={131072}
+            max={nativeContext ?? MAX_CONTEXT_WINDOW}
             step={512}
             onChange={(_, data) => {
               if (data.value != null) update("nctx", data.value);
@@ -221,10 +311,12 @@ export default function ModelSettings() {
         <SettingField
           label="Temperature"
           info="Randomness. Lower gives more focused replies, higher gives more varied ones."
+          disabledReason={rejectedReason(caps.temperature)}
         >
           <div className="model-settings__slider-row">
             <Slider
               className="model-settings__slider"
+              disabled={isRejected(caps.temperature)}
               min={0}
               max={2}
               step={0.1}
@@ -238,10 +330,12 @@ export default function ModelSettings() {
         <SettingField
           label="Top P"
           info="Sample only from the smallest set of tokens whose probabilities add up to this value."
+          disabledReason={rejectedReason(caps.topP)}
         >
           <div className="model-settings__slider-row">
             <Slider
               className="model-settings__slider"
+              disabled={isRejected(caps.topP)}
               min={0}
               max={1}
               step={0.05}
@@ -255,8 +349,10 @@ export default function ModelSettings() {
         <SettingField
           label="Top K"
           info="Sample only from the K most likely next tokens. Lower is more focused."
+          disabledReason={rejectedReason(caps.topK)}
         >
           <SpinButton
+            disabled={isRejected(caps.topK)}
             value={settings.topK ?? 40}
             min={1}
             max={100}
@@ -269,10 +365,12 @@ export default function ModelSettings() {
         <SettingField
           label="Min P"
           info="Drop tokens whose probability is below this fraction of the most likely token's."
+          disabledReason={rejectedReason(caps.minP)}
         >
           <div className="model-settings__slider-row">
             <Slider
               className="model-settings__slider"
+              disabled={isRejected(caps.minP)}
               min={0}
               max={1}
               step={0.01}
@@ -286,8 +384,10 @@ export default function ModelSettings() {
         <SettingField
           label="Repetition Penalty"
           info="Lowers the chance of repeating tokens already used. 1 means no penalty."
+          disabledReason={rejectedReason(caps.repetitionPenalty)}
         >
           <SpinButton
+            disabled={isRejected(caps.repetitionPenalty)}
             value={settings.repetitionPenalty ?? 1.1}
             min={1}
             max={2}
@@ -301,8 +401,10 @@ export default function ModelSettings() {
         <SettingField
           label="Presence Penalty"
           info="Lowers the chance of any token that has already appeared, which nudges the reply toward new topics. Empty means unset."
+          disabledReason={rejectedReason(caps.presencePenalty)}
         >
           <SpinButton
+            disabled={isRejected(caps.presencePenalty)}
             value={settings.presencePenalty ?? null}
             placeholder="Unset"
             min={-2}
@@ -315,8 +417,10 @@ export default function ModelSettings() {
         <SettingField
           label="Frequency Penalty"
           info="Lowers the chance of a token in proportion to how often it has appeared. Empty means unset."
+          disabledReason={rejectedReason(caps.frequencyPenalty)}
         >
           <SpinButton
+            disabled={isRejected(caps.frequencyPenalty)}
             value={settings.frequencyPenalty ?? null}
             placeholder="Unset"
             min={-2}
@@ -335,8 +439,10 @@ export default function ModelSettings() {
         <SettingField
           label="Max Tokens"
           info="Longest reply allowed, in tokens. Empty uses the server default of 2048."
+          disabledReason={rejectedReason(caps.maxTokens)}
         >
           <SpinButton
+            disabled={isRejected(caps.maxTokens)}
             value={settings.maxTokens ?? null}
             placeholder="Unset (no limit)"
             min={256}
@@ -352,8 +458,10 @@ export default function ModelSettings() {
         <SettingField
           label="Seed"
           info="Fixes the random seed, so the same prompt and settings give the same reply. Empty means random."
+          disabledReason={rejectedReason(caps.seed)}
         >
           <SpinButton
+            disabled={isRejected(caps.seed)}
             value={settings.seed ?? null}
             placeholder="Random"
             step={1}
@@ -364,9 +472,12 @@ export default function ModelSettings() {
         <SettingField
           label="Think Mode"
           info="Lets reasoning models think before they answer. The thinking is shown above the reply."
+          note={thinkingNote(capabilities)}
+          disabledReason={rejectedReason(caps.thinking)}
         >
           <Switch
             label="Think before answering"
+            disabled={isRejected(caps.thinking)}
             checked={settings.think ?? true}
             onChange={(_, data) => update("think", data.checked)}
           />
@@ -375,9 +486,11 @@ export default function ModelSettings() {
         <SettingField
           label="Grammar"
           info="Constrains the reply to a GBNF grammar, for example to force JSON or a fixed set of answers. Empty means unconstrained."
+          disabledReason={rejectedReason(caps.grammarString)}
         >
           <Textarea
             className="model-settings__textarea"
+            disabled={isRejected(caps.grammarString)}
             value={settings.grammarString ?? ""}
             onChange={(_, data) => update("grammarString", data.value || undefined)}
             placeholder="Optional GBNF grammar…"
@@ -412,6 +525,7 @@ export default function ModelSettings() {
                 label="GPU Layers"
                 info="How many model layers run on the GPU or NPU. -1 offloads all of them."
                 disabledReason={reason.ngl}
+                warning={warnings.ngl}
               >
                 <SpinButton
                   disabled={!!reason.ngl}
@@ -430,6 +544,7 @@ export default function ModelSettings() {
                 label="Speculation Type"
                 info="Drafts tokens ahead and checks them in one pass, which can speed up generation. Off uses no speculation."
                 disabledReason={reason.spec}
+                warning={warnings.spec}
               >
                 <Dropdown
                   className="model-settings__full-width"
@@ -451,6 +566,7 @@ export default function ModelSettings() {
                 label="Draft Model"
                 info="Model that drafts the tokens for draft-* types. Use a catalogue name (org/repo:precision) or a local GGUF path."
                 disabledReason={reason.draftModel}
+                warning={warnings.draftModel}
               >
                 <Input
                   className="model-settings__full-width"
@@ -510,16 +626,12 @@ export default function ModelSettings() {
         </AccordionItem>
       </Accordion>
 
-      <div>
-        <Button
-          appearance="primary"
-          icon={saving ? <Spinner size="tiny" /> : <SaveRegular />}
-          onClick={handleSave}
-          disabled={saving}
-        >
-          {saving ? "Saving…" : "Save"}
-        </Button>
-      </div>
+      <Flex direction="column" gap="s">
+        {/* Cancel stays enabled during a scan. Every other action waits for the one in progress. */}
+        <Flex gap="s" wrap>
+          {saveButtons.map(renderButton)}
+        </Flex>
+      </Flex>
     </div>
   );
 }

@@ -6,10 +6,17 @@ import {
   loadSettingDisabledReason,
   modelSettingsKey,
   resolveLoadParams,
+  SCAN_RECIPE,
   sameModel,
   sameServerOptions,
   usesDraftModel,
 } from "./modelSettings";
+
+describe("SCAN_RECIPE", () => {
+  it("is the default context window and nothing else", () => {
+    expect(SCAN_RECIPE).toStrictEqual({ nctx: 4096 });
+  });
+});
 
 describe("context window fallback", () => {
   it("uses the model's own context window when none is saved", () => {

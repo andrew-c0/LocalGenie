@@ -21,6 +21,12 @@ export const DEFAULT_LOAD_SETTINGS: ModelLoadSettings = {
  */
 export const DEFAULT_CONTEXT_WINDOW = 4096;
 
+/**
+ * The scan's fixed load settings: GenieX's default context window, so the probes behave the same for
+ * every model, whatever the saved settings say. The Rust side has the same recipe value (nctx 4096).
+ */
+export const SCAN_RECIPE: ModelLoadParams = { nctx: 4096 };
+
 /** App-wide server defaults, used until the Application & Runtime settings are saved. */
 export const DEFAULT_SERVER_SETTINGS: ServerSettings = {
   origins: "*",

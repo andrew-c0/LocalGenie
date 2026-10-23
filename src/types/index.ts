@@ -122,6 +122,72 @@ export type ModelLoadSettings = ModelLoadParams;
 
 export type StoredModelSettings = GenerationSettings & ModelLoadSettings;
 
+/** Capability summary from `get_model_capabilities`. Null fields are ones the model file does not say. */
+export interface ModelCapabilities {
+  engine: "llama_cpp" | "qairt";
+  contextLength: number | null;
+  architecture: string | null;
+  quantisation: string | null;
+  hasVisionProjector: boolean;
+  /** From the projector file. Unverified until checked against a real projector. */
+  hasAudioEncoder: boolean | null;
+  /** Heuristic from the chat template: "likely", never a fact. */
+  thinkingHint: boolean | null;
+  /** Heuristic from the chat template: "likely", never a fact. */
+  toolCallHint: boolean | null;
+}
+
+/**
+ * Settings the settings scan tests. The sampling keys match the saved setting keys. `thinking` is
+ * the Think Mode switch, and `toolCalls` is a model fact the app does not send tools for yet.
+ */
+export type CapabilityKey =
+  | "temperature"
+  | "topP"
+  | "topK"
+  | "minP"
+  | "repetitionPenalty"
+  | "presencePenalty"
+  | "frequencyPenalty"
+  | "maxTokens"
+  | "seed"
+  | "thinking"
+  | "toolCalls"
+  | "vision"
+  | "audio"
+  | "grammarString";
+
+/**
+ * Scan result for one setting. `works`: the effect was seen. `accepted`: the server returned 200,
+ * but the effect was not checked. `rejected`: the server refused the value.
+ */
+export type CapabilityStatus = "works" | "accepted" | "rejected";
+
+/** A stored scan result. `stale` is true when the model file or the GenieX version changed since. */
+export interface CapabilityEntry {
+  key: CapabilityKey;
+  status: CapabilityStatus;
+  /** Server text for a rejection, or what was observed. */
+  detail: string | null;
+  probedAt: number;
+  stale: boolean;
+}
+
+/** What `scan_model_capabilities` returns: the model's results after the scan. */
+export interface CapabilityScanResult {
+  cancelled: boolean;
+  entries: CapabilityEntry[];
+}
+
+/** Payload of `capability-scan-progress`, sent before each setting is probed. */
+export interface CapabilityScanProgress {
+  model: string;
+  key: CapabilityKey;
+  /** Zero-based position of `key` in the scan. */
+  index: number;
+  total: number;
+}
+
 /** Runtime versions reported by `geniex version`. Null when the CLI does not report one. */
 export interface RuntimeVersions {
   llamaCpp: string | null;
