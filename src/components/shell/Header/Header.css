@@ -5,7 +5,14 @@
   background-color: var(--colorNeutralBackground1);
 }
 
-/* Connection status: a square the height of the model dropdown, keeping the tint badge border and background. */
+/* Model trigger may shrink on a narrow window so the status stays on the row. Fluent's Button has
+   no min-width of its own, so a long model name clips instead of pushing the status off. */
+.header .header__model {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Connection status:a square the height of the model dropdown, keeping the tint badge border and background. */
 .header .header__status {
   width: 32px;
   height: 32px;

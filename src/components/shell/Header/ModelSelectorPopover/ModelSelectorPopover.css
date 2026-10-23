@@ -38,3 +38,91 @@
   flex: 0 0 auto;
   column-gap: var(--spacingHorizontalM);
 }
+
+/*
+ * Installed-model table. One heading line, then the rows. The column widths are set once, here, as
+ * custom properties; the heading and every row read the same grid template so the columns line up.
+ * Change a width in this block only.
+ */
+.model-table {
+  --model-list-name-min: 12rem;
+  --model-list-quant-width: 5rem;
+  --model-list-size-width: 5.5rem;
+  /* Four 24px icons with 2px gaps take 102px of this 120px column; the cell gap is outside the icons. */
+  --model-list-caps-width: 120px;
+  --model-list-gap: var(--spacingHorizontalS);
+  --model-list-cell-gap: var(--spacingHorizontalXS);
+  --model-list-columns: minmax(var(--model-list-name-min), 1fr) var(--model-list-quant-width)
+    var(--model-list-size-width) var(--model-list-caps-width);
+
+  /* Container for the size query below. The list takes the popover width. */
+  container-type: inline-size;
+  container-name: model-table;
+  min-width: 0;
+  /* Rows clip their own cells; this keeps any stray track from adding a horizontal scrollbar. */
+  overflow-x: hidden;
+}
+
+/*
+ * The grid shared by the heading and every row. Scoped to beat Fluent's flex display on
+ * MenuGroupHeader and MenuItem content.
+ */
+.model-selector .model-table__row {
+  display: grid;
+  grid-template-columns: var(--model-list-columns);
+  column-gap: var(--model-list-gap);
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+/*
+ * Heading line. MenuGroupHeader gives the muted caption used for group titles; its own 8px side
+ * inset is set to the row inset (MenuItem pads by spacingVerticalSNudge) so the headings sit over
+ * the cells.
+ */
+.model-selector .model-table__heading {
+  padding-left: var(--spacingVerticalSNudge);
+  padding-right: var(--spacingVerticalSNudge);
+}
+
+.model-table__cell {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Model name truncates with an ellipsis. */
+.model-table__cell--name {
+  text-overflow: ellipsis;
+}
+
+/* Size right-aligned so the digits line up across rows. */
+.model-table__cell--size {
+  text-align: right;
+}
+
+/* Capabilities: icons first, then the status pushed to the right end. */
+.model-table__cell--caps {
+  display: flex;
+  align-items: center;
+  gap: var(--model-list-cell-gap);
+}
+
+/*
+ * Below the width of all four tracks, the Size column goes, its heading and cells with it.
+ * Threshold = name min 12rem + quant 5rem + size 5.5rem + caps 120px (7.5rem) = 30rem tracks,
+ * + 3 column gaps 3 x 0.5rem (spacingHorizontalS 8px) = 1.5rem,
+ * + row inline padding 2 x 0.375rem (spacingVerticalSNudge 6px) = 0.75rem,
+ * = 32.25rem, rounded up to the next half rem = 32.5rem. Keep in step with the widths above.
+ */
+@container model-table (width < 32.5rem) {
+  .model-table__list {
+    --model-list-columns: minmax(var(--model-list-name-min), 1fr) var(--model-list-quant-width)
+      var(--model-list-caps-width);
+  }
+
+  .model-table__cell--size {
+    display: none;
+  }
+}

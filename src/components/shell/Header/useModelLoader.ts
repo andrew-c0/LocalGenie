@@ -5,6 +5,7 @@ import * as geniex from "../../../services/geniex";
 import { useChatStore } from "../../../stores/chatStore";
 import { type ComputeChoice, useModelStore } from "../../../stores/modelStore";
 import type { ModelLoadSettings } from "../../../types";
+import { shortModelKey } from "../../../utils/modelKey";
 import {
   engineOf,
   modelSettingsKey,
@@ -54,8 +55,8 @@ export function useModelLoader() {
 
   /** Load a model and make it active. Starts or restarts the server first if its server settings differ. */
   const selectModel = async (name: string) => {
-    const base = name.split("/").pop() ?? name;
-    if (serverStatus.models.some((lm) => lm === base || lm.startsWith(`${base}:`))) {
+    const key = shortModelKey(name);
+    if (serverStatus.models.some((lm) => shortModelKey(lm) === key)) {
       setActiveModel(name);
       setSelectorOpen(false);
       return;
@@ -93,10 +94,10 @@ export function useModelLoader() {
       if (activeId) useChatStore.getState().setSessionModel(activeId, name);
       setSelectorOpen(false);
       const where = load.compute ? ` on ${load.compute.toUpperCase()}` : "";
-      toast.success(`Model loaded${where}`, base);
+      toast.success(`Model loaded${where}`, key);
     } catch (err) {
       setError(String(err));
-      toast.error("Model failed to load", `${base}: ${String(err)}`);
+      toast.error("Model failed to load", `${key}: ${String(err)}`);
     } finally {
       setLoading(null);
     }

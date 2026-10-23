@@ -9,3 +9,26 @@
 .model-selector .model-option--active {
   cursor: default;
 }
+
+/*
+ * Fluent's content wrapper is a flex item with min-width auto, so it would grow to fit the full row.
+ * Letting it shrink keeps the table row inside the popover; the cells clip or truncate themselves.
+ */
+.model-selector .model-option .fui-MenuItem__content {
+  min-width: 0;
+}
+
+/* Quant chip sits at the left of its column. */
+.model-table__cell--quant {
+  display: flex;
+  align-items: center;
+}
+
+/* Status (Active badge, spinner) at the right end of the capabilities column. */
+.model-option__status {
+  display: flex;
+  align-items: center;
+  gap: var(--spacingHorizontalXS);
+  margin-left: auto;
+  flex-shrink: 0;
+}

@@ -1,0 +1,41 @@
+/* The capabilities cell supplies the gap to the status area, so the icon group has no outer margin. */
+.model-capability-icons {
+  display: inline-flex;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/*
+ * Square wrapper with a border in the icon's own colour (currentColor). Same corner radius as the
+ * app's Fluent buttons.
+ */
+.model-capability-icons__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: var(--strokeWidthThin) solid currentColor;
+  border-radius: var(--borderRadiusMedium);
+  font-size: var(--fontSizeBase400);
+  cursor: default;
+}
+
+/* Fluent palette foreground tokens, so each icon keeps its contrast in light and dark themes. */
+.model-capability-icons__icon--tools {
+  color: var(--colorBrandForeground1);
+}
+
+.model-capability-icons__icon--thinking {
+  color: var(--colorPalettePurpleForeground2);
+}
+
+.model-capability-icons__icon--vision {
+  color: var(--colorPaletteGreenForeground1);
+}
+
+.model-capability-icons__icon--audio {
+  color: var(--colorPaletteDarkOrangeForeground1);
+}

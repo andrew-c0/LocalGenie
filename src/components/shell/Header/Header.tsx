@@ -26,11 +26,8 @@ export default function Header() {
   const { loading, error, selectModel, changeCompute, unloadAll } = useModelLoader();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const activeLabel = activeModelId
-    ? activeModelId.split("/").pop()
-    : serverStatus.models.length > 0
-      ? serverStatus.models[0].split("/").pop()
-      : null;
+  const activeName = activeModelId ?? serverStatus.models[0] ?? null;
+  const activeLabel = activeName ? activeName.split("/").pop() : null;
 
   return (
     <Flex align="center" gap="s" className="header">
@@ -46,7 +43,7 @@ export default function Header() {
             iconPosition="after"
             aria-label="Switch active model"
             title="Switch active model"
-            className="flex-grow"
+            className="flex-grow header__model"
           >
             {activeLabel ? `Active Model: ${activeLabel}` : "Model selector: no model loaded"}
           </Button>
