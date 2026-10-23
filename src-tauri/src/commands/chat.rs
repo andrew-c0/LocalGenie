@@ -362,7 +362,7 @@ async fn bounded<F: std::future::Future>(
 }
 
 /// Await `fut`, returning `None` as soon as the cancel flag is set.
-async fn unless_cancelled<F: std::future::Future>(
+pub(super) async fn unless_cancelled<F: std::future::Future>(
     cancel: &AtomicBool,
     fut: F,
 ) -> Option<F::Output> {

@@ -22,6 +22,12 @@ pub const SERVER_STARTUP_PROBE_DELAY_MS: u64 = 500;
 /// Timeout for quick `geniex` probes (version, config get/list), in seconds.
 pub const CLI_PROBE_TIMEOUT_SECS: u64 = 5;
 
+/// Timeout for each sampling probe request during a settings scan, in seconds. A plain request has
+/// this as its whole-request timeout. A streamed request has it for the response headers and for
+/// each chunk after them, not for the whole reply. A probe that times out is retried once, then
+/// reported as not run.
+pub const CAPABILITY_PROBE_TIMEOUT_SECS: u64 = 60;
+
 /// Timeout for `geniex config set`, in seconds.
 pub const CLI_CONFIG_SET_TIMEOUT_SECS: u64 = 10;
 

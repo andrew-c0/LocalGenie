@@ -1,0 +1,62 @@
+[
+  {
+    "name": "think block then answer",
+    "input": "<think>\nCounting.\n</think>\n\n1 2 3",
+    "expected": { "thinking": "Counting.", "answer": "1 2 3", "thinkingOpen": false }
+  },
+  {
+    "name": "implicit open with only the close tag",
+    "input": "Counting...</think>1 2 3",
+    "expected": { "thinking": "Counting...", "answer": "1 2 3", "thinkingOpen": false }
+  },
+  {
+    "name": "Gemma channel",
+    "input": "<|channel>thought\nLet me check.<channel|>The answer is 4.",
+    "expected": { "thinking": "Let me check.", "answer": "The answer is 4.", "thinkingOpen": false }
+  },
+  {
+    "name": "Harmony analysis then final",
+    "input": "<|channel|>analysis<|message|>Count to three.<|end|><|start|>assistant<|channel|>final<|message|>1 2 3<|return|>",
+    "expected": { "thinking": "Count to three.", "answer": "1 2 3", "thinkingOpen": false }
+  },
+  {
+    "name": "Harmony final only strips the markers",
+    "input": "<|channel|>final<|message|>1 2 3<|end|>",
+    "expected": { "thinking": "", "answer": "1 2 3", "thinkingOpen": false }
+  },
+  {
+    "name": "[THINK] block",
+    "input": "[THINK]Weighing options.[/THINK]Use 4.",
+    "expected": { "thinking": "Weighing options.", "answer": "Use 4.", "thinkingOpen": false }
+  },
+  {
+    "name": "reasoning tag block",
+    "input": "<reasoning>x</reasoning>y",
+    "expected": { "thinking": "x", "answer": "y", "thinkingOpen": false }
+  },
+  {
+    "name": "plain answer",
+    "input": "Paris is the capital of France.",
+    "expected": { "thinking": "", "answer": "Paris is the capital of France.", "thinkingOpen": false }
+  },
+  {
+    "name": "unclosed block while streaming",
+    "input": "<think>Let me consider the",
+    "expected": { "thinking": "Let me consider the", "answer": "", "thinkingOpen": true }
+  },
+  {
+    "name": "partial open tag at the end",
+    "input": "Sure, the answer is 4. <thi",
+    "expected": { "thinking": "", "answer": "Sure, the answer is 4.", "thinkingOpen": false }
+  },
+  {
+    "name": "partial close tag inside an open block",
+    "input": "<think>abc</thi",
+    "expected": { "thinking": "abc", "answer": "", "thinkingOpen": true }
+  },
+  {
+    "name": "empty think block is not thinking",
+    "input": "<think>  </think>1 2 3",
+    "expected": { "thinking": "", "answer": "1 2 3", "thinkingOpen": false }
+  }
+]

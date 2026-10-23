@@ -1,11 +1,14 @@
 mod commands;
 mod gguf;
 pub mod model_settings;
+pub mod model_capabilities;
 mod tray;
 
 pub mod entities;
 pub mod migrations;
 
+use commands::capabilities;
+use commands::capability_scan;
 use commands::chat;
 use commands::cli;
 use commands::cli_update;
@@ -45,6 +48,10 @@ pub fn run() {
             hub::search_models,
             models::clean_models,
             models::set_model_type,
+            capabilities::get_model_capabilities,
+            capability_scan::load_model_capabilities,
+            capability_scan::scan_model_capabilities,
+            capability_scan::cancel_capability_scan,
             // Server management
             server::start_server,
             server::stop_server,

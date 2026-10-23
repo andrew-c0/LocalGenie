@@ -1,6 +1,8 @@
 pub mod chat;
+pub mod capability_scan;
 pub mod chat_helpers;
 pub mod cli;
+pub mod capabilities;
 pub mod cli_update;
 pub mod constants;
 pub mod database;

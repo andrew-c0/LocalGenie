@@ -61,7 +61,7 @@ fn format_size(bytes: u64) -> String {
 }
 
 /// Derive the model source from its name prefix.
-fn derive_source(name: &str) -> &str {
+pub(super) fn derive_source(name: &str) -> &str {
     if name.starts_with("ai-hub-models/") || name.starts_with("qualcomm/") {
         "aihub"
     } else if name.starts_with("docker.io/") || name.contains("/ai/") {

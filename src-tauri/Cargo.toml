@@ -29,6 +29,7 @@ futures-util = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
 urlencoding = "2"
 sysinfo = "0.33"
+base64 = "0.22"
 
 [profile.release]
 panic = "abort"

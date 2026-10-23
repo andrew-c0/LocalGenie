@@ -6,6 +6,7 @@ mod m20261020_000001_add_repo_columns;
 mod m20261022_000001_message_finish_and_errors;
 mod m20261022_000002_message_stats;
 mod m20261023_000001_model_setting_values;
+mod m20261023_000002_model_capability_values;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -18,6 +19,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261022_000001_message_finish_and_errors::Migration),
             Box::new(m20261022_000002_message_stats::Migration),
             Box::new(m20261023_000001_model_setting_values::Migration),
+            Box::new(m20261023_000002_model_capability_values::Migration),
         ]
     }
 }
@@ -182,8 +184,8 @@ mod tests {
         assert_eq!(msg.token_count, Some(42));
         assert_eq!(msg.prompt_chars, Some(7));
 
-        // Two steps: the model settings migration comes after this one.
-        Migrator::down(&db, Some(2))
+        // Three steps: the model settings and capability migrations come after this one.
+        Migrator::down(&db, Some(3))
             .await
             .expect("revert stats migration");
         let after_down = columns(db.clone()).await;
@@ -212,8 +214,9 @@ mod tests {
         let tmp = TempDb::new("migrate-settings");
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
-        // Put back the old JSON row, then apply the migration again so it copies it.
-        Migrator::down(&db, Some(1))
+        // Put back the old JSON row, then apply the migrations again so it copies it.
+        // Two steps: the capability migration comes after the settings one.
+        Migrator::down(&db, Some(2))
             .await
             .expect("revert settings migration");
         db.execute(Statement::from_string(
@@ -253,6 +256,33 @@ mod tests {
             blocks,
             serde_json::json!([{ "id": "legacy-text", "kind": "text", "text": "Be brief." }])
         );
+    }
+
+    #[tokio::test]
+    async fn capability_values_store_one_row_per_key() {
+        use crate::entities::model_capability_value;
+
+        let tmp = TempDb::new("migrate-capability");
+        let db = init_database(&tmp.url()).await.expect("migrations apply");
+
+        let row = |key: &str, value: &str| model_capability_value::ActiveModel {
+            model_id: Set("org/model".into()),
+            key: Set(key.into()),
+            value: Set(value.into()),
+            updated_at: Set(1),
+        };
+        row("seed", "{}").insert(&db).await.expect("insert seed");
+        row("maxTokens", "{}").insert(&db).await.expect("insert maxTokens");
+        assert!(
+            row("seed", "{}").insert(&db).await.is_err(),
+            "model_id and key are the primary key"
+        );
+
+        let rows = model_capability_value::Entity::find()
+            .all(&db)
+            .await
+            .expect("query");
+        assert_eq!(rows.len(), 2);
     }
 
     #[tokio::test]

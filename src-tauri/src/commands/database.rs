@@ -9,6 +9,7 @@ use sea_orm::{
 use sea_orm_migration::MigratorTrait;
 use serde::{Deserialize, Serialize};
 
+use super::capability_scan;
 use crate::entities::{chat_error, chat_session, downloaded_model, message, user_preference};
 use crate::migrations::Migrator;
 use crate::model_settings;
@@ -176,6 +177,11 @@ pub async fn save_message(
     session_id: String,
     message: message::Model,
 ) -> Result<(), String> {
+    // A reply names the model that produced it, so it can be checked for thinking evidence.
+    let reply_evidence = match (message.role.as_str(), message.model_id.as_deref()) {
+        ("assistant", Some(model)) => Some((model.to_owned(), message.content.clone())),
+        _ => None,
+    };
     message::Entity::insert(message::ActiveModel {
         id: Set(message.id),
         session_id: Set(session_id.clone()),
@@ -217,6 +223,13 @@ pub async fn save_message(
         .exec(&*db)
         .await
         .map_err(|e| e.to_string())?;
+
+    // The message is saved either way. A failed capability note is logged, not returned.
+    if let Some((model, content)) = reply_evidence {
+        if let Err(e) = capability_scan::note_saved_reply(&db, &model, &content).await {
+            eprintln!("[capabilities] could not record thinking from a saved reply: {e}");
+        }
+    }
 
     Ok(())
 }

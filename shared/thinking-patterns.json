@@ -1,0 +1,80 @@
+{
+  "patterns": [
+    {
+      "name": "Qwen3, DeepSeek-R1 and most open models",
+      "open": "<think>",
+      "close": "</think>",
+      "note": "Used by the chat and the scan. Qwen3.5 puts the open tag in the prompt, so the output may hold only the close tag; the implicit-open rule covers that."
+    },
+    {
+      "name": "Gemma 4",
+      "open": "<|channel>thought",
+      "close": "<channel|>",
+      "note": "Verified from the GGUF chat template. llama.cpp may strip special tokens, so these markers may not reach the content; only a live run confirms it."
+    },
+    {
+      "name": "Harmony (gpt-oss) analysis channel",
+      "open": "<|channel|>analysis<|message|>",
+      "close": "<|end|>",
+      "note": "Unverified in a live run. gpt-oss often returns reasoning in reasoning_content, which the scan reads separately. llama.cpp may strip special tokens."
+    },
+    {
+      "name": "Magistral / Mistral reasoning",
+      "open": "[THINK]",
+      "close": "[/THINK]",
+      "note": "Unverified."
+    },
+    {
+      "name": "reasoning tags",
+      "open": "<reasoning>",
+      "close": "</reasoning>",
+      "note": "Unverified."
+    },
+    {
+      "name": "thought tags",
+      "open": "<thought>",
+      "close": "</thought>",
+      "note": "Unverified."
+    },
+    {
+      "name": "begin_of_thought tags",
+      "open": "<|begin_of_thought|>",
+      "close": "<|end_of_thought|>",
+      "note": "Unverified."
+    },
+    {
+      "name": "Seed-OSS think tags",
+      "open": "<seed:think>",
+      "close": "</seed:think>",
+      "note": "Unverified. Added from memory of the model's template."
+    },
+    {
+      "name": "Kimi-VL thinking markers",
+      "open": "◁think▷",
+      "close": "◁/think▷",
+      "note": "Unverified. The close spelling is from memory and may differ."
+    }
+  ],
+  "stripOnly": [
+    {
+      "name": "Harmony final channel",
+      "text": "<|channel|>final<|message|>",
+      "note": "Never counts as thinking. Unverified in a live run."
+    },
+    {
+      "name": "Harmony role start",
+      "text": "<|start|>assistant",
+      "note": "Never counts as thinking. Unverified in a live run."
+    },
+    {
+      "name": "Harmony return",
+      "text": "<|return|>",
+      "note": "Never counts as thinking. Unverified in a live run."
+    },
+    {
+      "name": "Harmony end",
+      "text": "<|end|>",
+      "note": "Closes the Harmony analysis block; a stray one after the final channel is removed from the answer. Unverified in a live run."
+    }
+  ]
+}

@@ -48,13 +48,15 @@ pub async fn kill_process(pid: u32) {
     }
 }
 
-/// Fetch the ids of the models the server reports at `/v1/models`.
+/// Fetch the ids (`org/repo:precision`) of the models loaded on the server, from `GET /status`.
+/// `/v1/models` is not used: it lists every cached model, loaded or not. An empty list means
+/// nothing is loaded; an error means the server does not answer.
 pub(crate) async fn fetch_loaded_models(
     client: &reqwest::Client,
     base_url: &str,
 ) -> Result<Vec<String>, String> {
     let resp = client
-        .get(format!("{base_url}/v1/models"))
+        .get(format!("{base_url}/status"))
         .timeout(std::time::Duration::from_secs(
             super::constants::HTTP_TIMEOUT_SECS,
         ))
@@ -62,17 +64,22 @@ pub(crate) async fn fetch_loaded_models(
         .await
         .map_err(|e| format!("Failed to fetch models: {e}"))?;
     if !resp.status().is_success() {
-        return Err(format!("Server returned {} for /v1/models", resp.status()));
+        return Err(format!("Server returned {} for /status", resp.status()));
     }
     let body: serde_json::Value = resp.json().await.unwrap_or_default();
-    Ok(body["data"]
+    Ok(loaded_ids(&body))
+}
+
+/// Ids from the `models` array of a `/status` body. A missing or empty array means nothing is loaded.
+fn loaded_ids(body: &serde_json::Value) -> Vec<String> {
+    body["models"]
         .as_array()
         .map(|arr| {
             arr.iter()
                 .filter_map(|m| m["id"].as_str().map(String::from))
                 .collect()
         })
-        .unwrap_or_default())
+        .unwrap_or_default()
 }
 
 fn local_base_url(port: u16) -> String {
@@ -277,5 +284,46 @@ pub async fn get_server_status(
             port: serve_port,
             models: vec![],
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::loaded_ids;
+    use serde_json::json;
+
+    #[test]
+    fn reads_loaded_ids_from_status_models() {
+        let body = json!({
+            "alive": true,
+            "models": [
+                {"id": "unsloth/gemma-4-E4B-it-GGUF:Q4_K_M", "state": "idle"},
+                {"id": "qualcomm/Qwen3-4B:W4A16", "state": "busy"}
+            ]
+        });
+        assert_eq!(
+            loaded_ids(&body),
+            vec![
+                "unsloth/gemma-4-E4B-it-GGUF:Q4_K_M",
+                "qualcomm/Qwen3-4B:W4A16"
+            ]
+        );
+    }
+
+    #[test]
+    fn empty_models_means_nothing_loaded() {
+        assert!(loaded_ids(&json!({"alive": true, "models": []})).is_empty());
+    }
+
+    #[test]
+    fn missing_models_key_means_nothing_loaded() {
+        assert!(loaded_ids(&json!({"alive": true})).is_empty());
+        assert!(loaded_ids(&json!(null)).is_empty());
+    }
+
+    #[test]
+    fn skips_entries_without_a_string_id() {
+        let body = json!({"models": [{"state": "idle"}, {"id": 7}, {"id": "org/repo:Q4"}]});
+        assert_eq!(loaded_ids(&body), vec!["org/repo:Q4"]);
     }
 }
