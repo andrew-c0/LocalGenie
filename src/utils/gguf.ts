@@ -27,7 +27,7 @@ export interface GGUFParseResult {
 
 const EXTENSION = /\.gguf$/i;
 const SHARD_SUFFIX = /-(\d{5}-of-\d{5})$/i;
-const SIDECAR_TOKEN = /(?<=^|[-_])(mmproj|mtp|dflash)(?=[-_]|$)/i;
+const SIDECAR_TOKEN = /(?<=^|[-_])(mmproj|mtp|dflash)(?=[-_]|$)/gi;
 const SIZE_LABEL =
   /(?<=^|[-_])((?:\d+x)?\d+(?:\.\d+)?[A-Za-z](?:-[A-Za-z]+\d+(?:\.\d+)?[A-Za-z]+)?)(?=[-_.]|$)/;
 /**
@@ -51,11 +51,7 @@ export function parseGGUFFilename(filename: string): GGUFParseResult | null {
 
   const shard = SHARD_SUFFIX.exec(filename.replace(EXTENSION, ""))?.[1] ?? null;
   const name = filename.replace(EXTENSION, "").replace(SHARD_SUFFIX, "");
-  const sidecar = (SIDECAR_TOKEN.exec(name)?.[1].toLowerCase() ?? null) as
-    | GGUFParseResult["sidecar"]
-    | null;
-  // Sidecar markers are replaced with a separator so the remaining tokens keep their boundaries.
-  const core = name.replace(SIDECAR_TOKEN, "-");
+  const { sidecar, core } = findSidecarMarker(name);
 
   // The quantization is normally the last precision-like token in the name.
   const precisions = [...core.matchAll(PRECISION_TOKEN)];
@@ -79,6 +75,27 @@ export function parseGGUFFilename(filename: string): GGUFParseResult | null {
     encoding,
     shard,
   };
+}
+
+/**
+ * A sidecar marker counts only at the edge of the name, before or after the precision, as in
+ * `mmproj-F16` or `gemma-4-E4B-it-mmproj`. A token inside the name, such as the `MTP` in
+ * `Tiel-Coder-35B-A3B-MTP-UD-IQ4_XS`, is part of the model name. `core` is the name without the marker.
+ */
+function findSidecarMarker(name: string): { sidecar: GGUFParseResult["sidecar"]; core: string } {
+  for (const match of name.matchAll(SIDECAR_TOKEN)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    const before = name.slice(0, start).replace(/[-_]/g, "");
+    const after = name.slice(end).replace(PRECISION_TOKEN, "").replace(/[-_]/g, "");
+    if (before === "" || after === "") {
+      return {
+        sidecar: match[1].toLowerCase() as GGUFParseResult["sidecar"],
+        core: `${name.slice(0, start)}-${name.slice(end)}`,
+      };
+    }
+  }
+  return { sidecar: null, core: name };
 }
 
 function trimSeparators(s: string): string {

@@ -25,6 +25,11 @@ Source: the official GenieX repo (github.com/qualcomm/GenieX, read-only), checke
 - llama.cpp keeps special tokens in the output: Gemma 4 thinking markers (`<|channel>thought` ... `<channel|>`) reach the reply content (reported live). The thinking parser in `shared/thinking-patterns.json` relies on this.
 - `enable_think` and `tools` behaviour was tested live; the settings scan's `thinking` and `toolCalls` probes (`capability_scan.rs`) are the test code. Specific findings are not recorded here.
 
+## Local GGUF import rejects `mtp` in weight filenames
+- `geniex pull <repo>:<precision> --model-hub localfs` skips any `.gguf` whose lowercased name contains `mtp` (`is_weight_gguf` in `sdk/model-manager/crates/core/src/manifest_builder.rs`, GenieX checkout, read-only). A repo whose only weight files have `mtp` in the name fails with "has no model files GenieX can load". Meant for separate MTP draft files, but it also hits a model name such as `Tiel-Coder-35B-A3B-MTP-UD-IQ4_XS.gguf`.
+- Verified on the maintainer's machine (reported): renaming the folder and file to drop the `mtp` token made the same import succeed and the model load. Workaround and status: `known-issues.md`.
+- LocalGenie's sidecar parser (`src/utils/gguf.ts` `findSidecarMarker`) treats `mtp` as a sidecar marker only at the start or end of a name, so an `MTP` inside a model name stays part of it.
+
 ## Gaps in the GenieX source (do not rely on these)
 - Volces hub: in the SDK enum (`GENIEX_HUB_VOLCES`) but not exposed by the CLI; `sdk/model-manager/crates/ffi/src/pull.rs` falls back to Hugging Face.
 - `geniex update` on Windows prints "Already up-to-date." when the installer is not code-signed, even if a newer version exists (`cli/cmd/geniex/update.go`).

@@ -3,10 +3,11 @@ import { useTauriEvent } from "../../../hooks";
 import * as db from "../../../services/database";
 import * as geniex from "../../../services/geniex";
 import { useChatStore } from "../../../stores/chatStore";
-import { type ComputeChoice, useModelStore } from "../../../stores/modelStore";
+import { COMPUTE_TARGETS, type ComputeChoice, useModelStore } from "../../../stores/modelStore";
 import type { ModelLoadSettings } from "../../../types";
 import { shortModelKey } from "../../../utils/modelKey";
 import {
+  DEFAULT_CONTEXT_WINDOW,
   engineOf,
   modelSettingsKey,
   resolveLoadParams,
@@ -35,6 +36,8 @@ export function useModelLoader() {
   const setCompute = useModelStore((s) => s.setCompute);
   const serverOptions = useModelStore((s) => s.serverOptions);
   const setServerOptions = useModelStore((s) => s.setServerOptions);
+  const setLoadedCompute = useModelStore((s) => s.setLoadedCompute);
+  const setLoadedContext = useModelStore((s) => s.setLoadedContext);
 
   /** Model name, or LOADING_UNLOAD, while an action is in progress. */
   const [loading, setLoading] = useState<string | null>(null);
@@ -89,6 +92,9 @@ export function useModelLoader() {
       const load = resolveLoadParams(saved, engineOf(model), compute, nativeContext);
       const status = await geniex.loadModel(name, load);
       setServerStatus(status);
+      setLoadedCompute(COMPUTE_TARGETS.find((c) => c === load.compute) ?? null);
+      // Without a saved or native value the server applies its default window.
+      setLoadedContext(load.nctx ?? DEFAULT_CONTEXT_WINDOW);
       setActiveModel(name);
       const activeId = useChatStore.getState().activeSessionId;
       if (activeId) useChatStore.getState().setSessionModel(activeId, name);
@@ -110,7 +116,6 @@ export function useModelLoader() {
   const changeCompute = (next: ComputeChoice) => {
     if (next === compute) return;
     setCompute(next);
-    toast.info(`Compute set to ${next.toUpperCase()}`, "Applies to the next message.");
   };
 
   /** Unload all models from the server (stops the server, the only unload mechanism). */

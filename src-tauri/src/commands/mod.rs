@@ -14,6 +14,7 @@ pub mod logs;
 pub mod models;
 pub mod server;
 pub mod system;
+pub mod system_usage;
 
 use std::sync::Mutex;
 

@@ -1,0 +1,18 @@
+/* The chart keeps a fixed height; clipping stops the axis from pushing the footer. */
+.system-usage__chart {
+  height: 80px;
+  overflow: hidden;
+}
+
+/* The graph is display-only: no cursor, hover or legend interaction. The wrapper keeps hover for the tooltip. */
+.system-usage__chart > * {
+  pointer-events: none;
+}
+
+/* Colour key for the plotted target; the colour itself is set inline from the target. */
+.system-usage__swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}

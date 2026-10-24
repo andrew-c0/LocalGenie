@@ -35,6 +35,151 @@ pub struct GgufHeader {
     pub chat_template: Option<String>,
     /// `clip.has_audio_encoder`. Only multimodal projector files carry it.
     pub has_audio_encoder: Option<bool>,
+    /// `<architecture>.block_count`: transformer layers.
+    pub block_count: Option<i64>,
+    /// `<architecture>.embedding_length`.
+    pub embedding_length: Option<i64>,
+    /// `<architecture>.attention.head_count`: query heads.
+    pub head_count: Option<i64>,
+    /// `<architecture>.attention.head_count_kv`: KV heads. Per-layer arrays are skipped, so `None`.
+    pub head_count_kv: Option<i64>,
+    /// `<architecture>.attention.key_length`: width of one key head.
+    pub key_length: Option<i64>,
+    /// `<architecture>.attention.value_length`: width of one value head.
+    pub value_length: Option<i64>,
+    /// `<architecture>.full_attention_interval`: in hybrid models only every Nth layer keeps a KV cache.
+    pub full_attention_interval: Option<i64>,
+    /// `<architecture>.attention.head_count_kv` as a per-layer array. Zero means the layer keeps no cache.
+    pub head_count_kv_per_layer: Option<Vec<i64>>,
+    /// `<architecture>.attention.sliding_window`: tokens kept by sliding-window layers.
+    pub sliding_window: Option<i64>,
+    /// `<architecture>.attention.sliding_window_pattern`: per layer, `true` for a sliding-window layer.
+    pub sliding_window_pattern: Option<Vec<bool>>,
+    /// `<architecture>.attention.kv_lora_rank`: latent attention, whose cache layout is not modelled.
+    pub kv_lora_rank: Option<i64>,
+}
+
+/// Architecture-prefixed integer keys the app reads. The prefix is the architecture from the header.
+const ARCH_INTEGER_SUFFIXES: [&str; 10] = [
+    ".attention.sliding_window",
+    ".attention.kv_lora_rank",
+    ".full_attention_interval",
+    ".context_length",
+    ".block_count",
+    ".embedding_length",
+    ".attention.head_count",
+    ".attention.head_count_kv",
+    ".attention.key_length",
+    ".attention.value_length",
+];
+
+/// Architecture-prefixed array keys the app reads (per-layer values).
+const ARCH_ARRAY_SUFFIXES: [&str; 2] = [".attention.head_count_kv", ".attention.sliding_window_pattern"];
+
+/// Bytes per cached element for the KV cache, assuming an f16 cache (keys and values).
+const KV_BYTES_PER_ELEMENT: u64 = 2;
+
+impl GgufHeader {
+    /// KV-cache size in bytes for `n_ctx` tokens, assuming an f16 cache. This is the memory the
+    /// cache reserves for the whole window, not what the conversation has filled so far.
+    /// `None` when the header lacks the layer count or head sizes, or the numbers do not fit.
+    pub fn kv_cache_bytes(&self, n_ctx: u64) -> Option<u64> {
+        // Latent attention stores a compressed cache whose layout this formula does not describe.
+        if self.kv_lora_rank.is_some() {
+            return None;
+        }
+        let block_count = u64::try_from(self.block_count?).ok()?;
+        let key_width = match self.key_length {
+            Some(width) => width,
+            None => self.embedding_length?.checked_div(self.head_count?)?,
+        };
+        let value_width = self.value_length.unwrap_or(key_width);
+        let bytes_per_head_token = u64::try_from(key_width.checked_add(value_width)?)
+            .ok()?
+            .checked_mul(KV_BYTES_PER_ELEMENT)?;
+
+        let mut total = 0_u64;
+        for (layer, kv_heads) in self.kv_heads_per_layer(block_count)?.into_iter().enumerate() {
+            if kv_heads == 0 {
+                continue;
+            }
+            let tokens = match self.window_for(layer)? {
+                Some(window) => n_ctx.min(window),
+                None => n_ctx,
+            };
+            let layer_bytes = kv_heads
+                .checked_mul(bytes_per_head_token)?
+                .checked_mul(tokens)?;
+            total = total.checked_add(layer_bytes)?;
+        }
+        Some(total)
+    }
+
+    /// KV heads of each layer. Zero means the layer keeps no cache (a recurrent layer).
+    fn kv_heads_per_layer(&self, block_count: u64) -> Option<Vec<u64>> {
+        if let Some(per_layer) = &self.head_count_kv_per_layer {
+            if per_layer.len() as u64 != block_count {
+                return None;
+            }
+            return per_layer
+                .iter()
+                .map(|heads| u64::try_from(*heads).ok())
+                .collect();
+        }
+        let kv_heads = u64::try_from(self.head_count_kv?).ok()?;
+        // Hybrid models (attention mixed with recurrent layers) keep a cache only in every Nth layer.
+        let interval = self
+            .full_attention_interval
+            .filter(|interval| *interval > 1)
+            .map(u64::try_from)
+            .transpose()
+            .ok()?;
+        Some(
+            (0..block_count)
+                .map(|layer| match interval {
+                    Some(n) if (layer + 1) % n != 0 => 0,
+                    _ => kv_heads,
+                })
+                .collect(),
+        )
+    }
+
+    /// Sliding window of a layer: `Some(Some(window))` for a sliding-window layer, `Some(None)` for a
+    /// full-context layer. `None` when a window is set without a per-layer pattern, since the layer kinds are unknown.
+    fn window_for(&self, layer: usize) -> Option<Option<u64>> {
+        let Some(window) = self.sliding_window else {
+            return Some(None);
+        };
+        let window = u64::try_from(window).ok()?;
+        let pattern = self.sliding_window_pattern.as_ref()?;
+        Some(if *pattern.get(layer)? {
+            Some(window)
+        } else {
+            None
+        })
+    }
+}
+
+/// Read an array of integers or booleans, stored as `i64` (booleans as 0 or 1). Other element types
+/// are skipped and give `None`.
+fn read_array<R: Read>(r: &mut R) -> Result<Option<Vec<i64>>, String> {
+    let element_type = read_u32(r)?;
+    let count = read_u64(r)?;
+    if !(is_integer(element_type) || element_type == TYPE_BOOL) {
+        for _ in 0..count {
+            skip_value(r, element_type)?;
+        }
+        return Ok(None);
+    }
+    let mut values = Vec::with_capacity(usize::try_from(count.min(4096)).unwrap_or(0));
+    for _ in 0..count {
+        values.push(if element_type == TYPE_BOOL {
+            i64::from(read_bool(r)?)
+        } else {
+            read_integer(r, element_type)?
+        });
+    }
+    Ok(Some(values))
 }
 
 /// Read the metadata keys the app uses in one pass over the header. Tensors are never read.
@@ -56,7 +201,8 @@ pub fn read_header(path: &Path) -> Result<GgufHeader, String> {
     let kv_count = read_u64(&mut reader)?;
 
     let mut header = GgufHeader::default();
-    let mut context_lengths: Vec<(String, i64)> = Vec::new();
+    let mut arch_integers: Vec<(String, i64)> = Vec::new();
+    let mut arch_arrays: Vec<(String, Vec<i64>)> = Vec::new();
     for _ in 0..kv_count {
         let key = read_string(&mut reader)?;
         let ty = read_u32(&mut reader)?;
@@ -68,22 +214,46 @@ pub fn read_header(path: &Path) -> Result<GgufHeader, String> {
             header.chat_template = read_capped_string(&mut reader, MAX_CHAT_TEMPLATE_BYTES)?;
         } else if key == "clip.has_audio_encoder" && ty == TYPE_BOOL {
             header.has_audio_encoder = Some(read_bool(&mut reader)?);
-        } else if key.ends_with(".context_length") && is_integer(ty) {
+        } else if is_integer(ty) && ARCH_INTEGER_SUFFIXES.iter().any(|suffix| key.ends_with(suffix)) {
             let value = read_integer(&mut reader, ty)?;
-            context_lengths.push((key, value));
+            arch_integers.push((key, value));
+        } else if ty == TYPE_ARRAY && ARCH_ARRAY_SUFFIXES.iter().any(|suffix| key.ends_with(suffix)) {
+            if let Some(values) = read_array(&mut reader)? {
+                arch_arrays.push((key, values));
+            }
         } else {
             skip_value(&mut reader, ty)?;
         }
     }
 
-    // The architecture can appear after its context key, so the lookup waits until the whole header is read.
-    header.context_length = header.architecture.as_ref().and_then(|architecture| {
-        let wanted = format!("{architecture}.context_length");
-        context_lengths
+    // The architecture can appear after its keys, so the lookup waits until the whole header is read.
+    let lookup = |suffix: &str| {
+        let wanted = format!("{}{suffix}", header.architecture.as_deref()?);
+        arch_integers
             .iter()
             .find(|(key, _)| *key == wanted)
             .map(|(_, value)| *value)
-    });
+    };
+    header.context_length = lookup(".context_length");
+    header.block_count = lookup(".block_count");
+    header.embedding_length = lookup(".embedding_length");
+    header.head_count = lookup(".attention.head_count");
+    header.head_count_kv = lookup(".attention.head_count_kv");
+    header.key_length = lookup(".attention.key_length");
+    header.value_length = lookup(".attention.value_length");
+    header.full_attention_interval = lookup(".full_attention_interval");
+    header.sliding_window = lookup(".attention.sliding_window");
+    header.kv_lora_rank = lookup(".attention.kv_lora_rank");
+    let lookup_array = |suffix: &str| {
+        let wanted = format!("{}{suffix}", header.architecture.as_deref()?);
+        arch_arrays
+            .iter()
+            .find(|(key, _)| *key == wanted)
+            .map(|(_, values)| values.clone())
+    };
+    header.head_count_kv_per_layer = lookup_array(".attention.head_count_kv");
+    header.sliding_window_pattern = lookup_array(".attention.sliding_window_pattern")
+        .map(|values| values.into_iter().map(|value| value != 0).collect());
     Ok(header)
 }
 
@@ -244,6 +414,23 @@ pub(crate) mod test_support {
         buf
     }
 
+    /// An array entry of integers (`TYPE_INT32`) or booleans (`TYPE_BOOL`), one value per element.
+    pub fn kv_array(key: &str, element_type: u32, values: &[i64]) -> Vec<u8> {
+        let mut buf = Vec::new();
+        push_string(&mut buf, key);
+        buf.extend_from_slice(&TYPE_ARRAY.to_le_bytes());
+        buf.extend_from_slice(&element_type.to_le_bytes());
+        buf.extend_from_slice(&(values.len() as u64).to_le_bytes());
+        for value in values {
+            if element_type == TYPE_BOOL {
+                buf.push(u8::from(*value != 0));
+            } else {
+                buf.extend_from_slice(&(*value as i32).to_le_bytes());
+            }
+        }
+        buf
+    }
+
     /// A GGUF v3 header holding the given key-value entries and no tensors.
     pub fn build_header(entries: &[Vec<u8>]) -> Vec<u8> {
         let mut buf = Vec::new();
@@ -260,7 +447,7 @@ pub(crate) mod test_support {
 
 #[cfg(test)]
 mod tests {
-    use super::test_support::{build_header, kv_bool, kv_string, kv_u32};
+    use super::test_support::{build_header, kv_array, kv_bool, kv_string, kv_u32};
     use super::*;
 
     /// A header with an array (skipped), the architecture string, and `<arch>.context_length`.
@@ -346,6 +533,122 @@ mod tests {
         assert_eq!(got.context_length, Some(40960));
         assert_eq!(got.chat_template, None);
         assert_eq!(got.has_audio_encoder, None);
+    }
+
+    #[test]
+    fn kv_cache_bytes_uses_layers_kv_heads_and_head_widths() {
+        // 2 layers x 2 KV heads x (16 key + 16 value) elements x 2 bytes = 256 bytes per token.
+        let header = build_header(&[
+            kv_string("general.architecture", "llama"),
+            kv_u32("llama.block_count", 2),
+            kv_u32("llama.embedding_length", 64),
+            kv_u32("llama.attention.head_count", 4),
+            kv_u32("llama.attention.head_count_kv", 2),
+        ]);
+        let path = write_temp("localgenie-test-kv.gguf", &header);
+        let got = read_header(&path);
+        let _ = std::fs::remove_file(&path);
+        let got = got.expect("header parses");
+        assert_eq!(got.block_count, Some(2));
+        assert_eq!(got.head_count_kv, Some(2));
+        assert_eq!(got.kv_cache_bytes(1000), Some(256_000));
+    }
+
+    #[test]
+    fn kv_cache_bytes_counts_only_the_attention_layers_of_a_hybrid_model() {
+        // 8 layers with an attention layer every 4th: 2 attention layers, not 8.
+        // 2 layers x 2 KV heads x (16 + 16) elements x 2 bytes = 256 bytes per token.
+        let header = build_header(&[
+            kv_string("general.architecture", "qwen35"),
+            kv_u32("qwen35.block_count", 8),
+            kv_u32("qwen35.embedding_length", 64),
+            kv_u32("qwen35.attention.head_count", 4),
+            kv_u32("qwen35.attention.head_count_kv", 2),
+            kv_u32("qwen35.full_attention_interval", 4),
+        ]);
+        let path = write_temp("localgenie-test-kv-hybrid.gguf", &header);
+        let got = read_header(&path);
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(got.expect("header parses").kv_cache_bytes(1000), Some(256_000));
+    }
+
+    /// Read a header built from `entries` and return its KV-cache size for `n_ctx`.
+    fn kv_bytes_of(entries: &[Vec<u8>], name: &str, n_ctx: u64) -> Option<u64> {
+        let path = write_temp(name, &build_header(entries));
+        let got = read_header(&path);
+        let _ = std::fs::remove_file(&path);
+        got.expect("header parses").kv_cache_bytes(n_ctx)
+    }
+
+    #[test]
+    fn kv_cache_bytes_counts_per_layer_kv_heads_and_skips_recurrent_layers() {
+        // Layers 1 and 3 keep no cache. 2 + 2 heads x 32 elements x 2 bytes = 256 bytes per token.
+        let entries = [
+            kv_string("general.architecture", "custom"),
+            kv_u32("custom.block_count", 4),
+            kv_u32("custom.embedding_length", 64),
+            kv_u32("custom.attention.head_count", 4),
+            kv_array("custom.attention.head_count_kv", TYPE_INT32, &[2, 0, 2, 0]),
+        ];
+        assert_eq!(kv_bytes_of(&entries, "localgenie-test-kv-per-layer.gguf", 1000), Some(256_000));
+    }
+
+    #[test]
+    fn kv_cache_bytes_caps_sliding_window_layers_at_the_window() {
+        // Layer 0 slides over 512 tokens, layer 1 keeps the full 1000. 2 heads x 32 x 2 = 128 bytes per token.
+        let entries = [
+            kv_string("general.architecture", "custom"),
+            kv_u32("custom.block_count", 2),
+            kv_u32("custom.embedding_length", 64),
+            kv_u32("custom.attention.head_count", 4),
+            kv_u32("custom.attention.head_count_kv", 2),
+            kv_u32("custom.attention.sliding_window", 512),
+            kv_array("custom.attention.sliding_window_pattern", TYPE_BOOL, &[1, 0]),
+        ];
+        assert_eq!(
+            kv_bytes_of(&entries, "localgenie-test-kv-window.gguf", 1000),
+            Some((512 + 1000) * 128)
+        );
+    }
+
+    #[test]
+    fn kv_cache_bytes_is_none_for_a_window_without_a_pattern() {
+        let entries = [
+            kv_string("general.architecture", "custom"),
+            kv_u32("custom.block_count", 2),
+            kv_u32("custom.embedding_length", 64),
+            kv_u32("custom.attention.head_count", 4),
+            kv_u32("custom.attention.head_count_kv", 2),
+            kv_u32("custom.attention.sliding_window", 512),
+        ];
+        assert_eq!(kv_bytes_of(&entries, "localgenie-test-kv-window-unknown.gguf", 1000), None);
+    }
+
+    #[test]
+    fn kv_cache_bytes_is_none_for_latent_attention() {
+        let entries = [
+            kv_string("general.architecture", "custom"),
+            kv_u32("custom.block_count", 2),
+            kv_u32("custom.embedding_length", 64),
+            kv_u32("custom.attention.head_count", 4),
+            kv_u32("custom.attention.head_count_kv", 2),
+            kv_u32("custom.attention.kv_lora_rank", 128),
+        ];
+        assert_eq!(kv_bytes_of(&entries, "localgenie-test-kv-mla.gguf", 1000), None);
+    }
+
+    #[test]
+    fn kv_cache_bytes_is_none_without_the_kv_head_count() {
+        let header = build_header(&[
+            kv_string("general.architecture", "llama"),
+            kv_u32("llama.block_count", 2),
+            kv_u32("llama.embedding_length", 64),
+            kv_u32("llama.attention.head_count", 4),
+        ]);
+        let path = write_temp("localgenie-test-kv-missing.gguf", &header);
+        let got = read_header(&path);
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(got.expect("header parses").kv_cache_bytes(1000), None);
     }
 
     #[test]

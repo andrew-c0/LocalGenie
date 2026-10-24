@@ -36,6 +36,21 @@ pub async fn get_model_capabilities(model_name: String) -> Result<ModelCapabilit
     summary_for(&model_name).await
 }
 
+/// Memory the KV cache reserves for `n_ctx` tokens, computed from the model's GGUF header.
+/// `None` when the model has no GGUF weights or the header lacks the attention sizes.
+#[tauri::command]
+pub async fn get_context_memory(model_name: String, n_ctx: u64) -> Result<Option<u64>, String> {
+    let folder = model_folder(&model_name)?;
+    tokio::task::spawn_blocking(move || {
+        let Some(main) = scan_folder(&folder).main else {
+            return Ok(None);
+        };
+        Ok(gguf::read_header(&main.path)?.kv_cache_bytes(n_ctx))
+    })
+    .await
+    .map_err(|e| format!("Context memory read failed: {e}"))?
+}
+
 /// Summary for a model name. The settings scan reads the template hints from the same summary.
 pub(super) async fn summary_for(model_name: &str) -> Result<ModelCapabilities, String> {
     let folder = model_folder(model_name)?;

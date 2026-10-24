@@ -31,6 +31,12 @@ urlencoding = "2"
 sysinfo = "0.33"
 base64 = "0.22"
 
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_System_Performance",
+] }
+
 [profile.release]
 panic = "abort"
 codegen-units = 1

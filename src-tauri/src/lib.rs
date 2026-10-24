@@ -20,6 +20,7 @@ use commands::logs;
 use commands::models;
 use commands::server;
 use commands::system;
+use commands::system_usage;
 use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
@@ -49,6 +50,7 @@ pub fn run() {
             models::clean_models,
             models::set_model_type,
             capabilities::get_model_capabilities,
+            capabilities::get_context_memory,
             capability_scan::load_model_capabilities,
             capability_scan::scan_model_capabilities,
             capability_scan::cancel_capability_scan,
@@ -78,6 +80,7 @@ pub fn run() {
             // System
             system::get_system_memory,
             system::get_platform_info,
+            system_usage::get_system_usage,
             // Files (system prompt attachments)
             files::pick_text_file,
             files::read_text_file,

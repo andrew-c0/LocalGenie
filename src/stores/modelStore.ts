@@ -36,6 +36,10 @@ interface ModelState {
   selectorOpen: boolean;
   /** Chipset name from the CLI host probe, read once at startup. Null when unknown. */
   chipset: string | null;
+  /** Compute target the loaded model was loaded on. Null when no model was loaded by this app. */
+  loadedCompute: ComputeChoice | null;
+  /** Context window (tokens) the loaded model was loaded with. Null when no model was loaded by this app. */
+  loadedContext: number | null;
 
   setCliInstalled: (v: boolean) => void;
   setChipset: (chipset: string | null) => void;
@@ -48,6 +52,8 @@ interface ModelState {
   setUpdateInfo: (info: UpdateInfo | null) => void;
   setCompute: (c: ComputeChoice) => void;
   setServerOptions: (o: ServerSettings | null) => void;
+  setLoadedCompute: (c: ComputeChoice | null) => void;
+  setLoadedContext: (n: number | null) => void;
   setSelectorOpen: (open: boolean) => void;
 }
 
@@ -64,6 +70,8 @@ export const useModelStore = create<ModelState>((set) => ({
   serverOptions: null,
   selectorOpen: false,
   chipset: null,
+  loadedCompute: null,
+  loadedContext: null,
 
   setCliInstalled: (v) => set({ cliInstalled: v }),
   setChipset: (chipset) => set({ chipset }),
@@ -81,7 +89,14 @@ export const useModelStore = create<ModelState>((set) => ({
           activeModelId = firstModel; // otherwise fall back to first loaded
         }
       }
-      return { serverStatus: status, activeModelId };
+      // Nothing loaded means no compute target to report.
+      const loaded = status.models.length > 0;
+      return {
+        serverStatus: status,
+        activeModelId,
+        loadedCompute: loaded ? state.loadedCompute : null,
+        loadedContext: loaded ? state.loadedContext : null,
+      };
     }),
   setServerPort: (port) =>
     set((state) => ({
@@ -94,6 +109,8 @@ export const useModelStore = create<ModelState>((set) => ({
   setUpdateInfo: (info) => set({ updateInfo: info }),
   setCompute: (compute) => set({ compute }),
   setServerOptions: (o) => set({ serverOptions: o }),
+  setLoadedCompute: (c) => set({ loadedCompute: c }),
+  setLoadedContext: (n) => set({ loadedContext: n }),
 }));
 
 /** Default generation settings per model. */

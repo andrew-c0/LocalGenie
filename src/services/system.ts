@@ -12,6 +12,27 @@ export async function getSystemMemory(): Promise<SystemMemoryInfo> {
   return invoke("get_system_memory");
 }
 
+/** Utilization in percent over the last sample. `gpu` and `npu` are null when the host has no such device. */
+export interface SystemUsage {
+  cpu: number;
+  gpu: number | null;
+  npu: number | null;
+  /** Physical memory in use, in bytes. */
+  memoryUsedBytes: number;
+  /** Total physical memory, in bytes. */
+  memoryTotalBytes: number;
+  /** Resident memory of the GenieX server and its child processes, in bytes. Null when no server is tracked. */
+  modelMemoryBytes: number | null;
+}
+
+/**
+ * Sample CPU, GPU, NPU and memory. Takes about one second, which paces a polling loop. `port` is the
+ * GenieX server port, used to find the server when the app did not start it.
+ */
+export async function getSystemUsage(port: number): Promise<SystemUsage> {
+  return invoke("get_system_usage", { port });
+}
+
 let platformInfo: Promise<PlatformInfo> | null = null;
 
 /** OS, architecture and RAM. Read once per session and then reused. */

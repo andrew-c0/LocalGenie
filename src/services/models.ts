@@ -7,6 +7,14 @@ import type {
 } from "../types";
 
 /**
+ * Bytes the KV cache reserves for `nCtx` tokens, computed from the model's GGUF header. Resolves to
+ * null when the model has no GGUF weights or its header lacks the attention sizes.
+ */
+export async function getContextMemory(modelName: string, nCtx: number): Promise<number | null> {
+  return invoke("get_context_memory", { modelName, nCtx });
+}
+
+/**
  * Capability summary for a downloaded model, read from its GGUF files in the GenieX cache.
  * Takes the model name (`org/repo`, an optional `:precision` is ignored). Rejects when the model
  * file cannot be read.

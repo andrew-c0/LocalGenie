@@ -1,5 +1,5 @@
 import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
-import { Button, Caption1, CounterBadge, Tab, TabList, Text } from "@fluentui/react-components";
+import { Button, CounterBadge, Tab, TabList } from "@fluentui/react-components";
 import {
   ChatRegular,
   CubeRegular,
@@ -11,9 +11,8 @@ import {
 import type { ReactElement } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useModelStore } from "../../../stores/modelStore";
+import { SystemUsage } from "../SystemUsage/SystemUsage";
 import "./Sidebar.css";
-
-const APP_VERSION = "v0.1.0";
 
 const NAV_ITEMS: { to: string; label: string; icon: ReactElement }[] = [
   { to: "/", label: "Overview", icon: <GridRegular /> },
@@ -31,12 +30,11 @@ function activeNavValue(pathname: string): string {
   return match ? match.to : "/";
 }
 
-/** App navigation sidebar: the page tabs, the installed-model count and the server footer. */
+/** App navigation sidebar: the page tabs, the installed-model count and the usage chart footer. */
 export default function Sidebar() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const models = useModelStore((s) => s.models);
-  const serverStatus = useModelStore((s) => s.serverStatus);
 
   const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
     navigate(String(data.value));
@@ -65,12 +63,7 @@ export default function Sidebar() {
       </TabList>
 
       <div className="sidebar__footer">
-        <Text size={200}>
-          {serverStatus.running
-            ? `Server :${serverStatus.port} · ${serverStatus.models.length} loaded`
-            : "Server offline"}
-        </Text>
-        <Caption1>{APP_VERSION} · Local Runtime</Caption1>
+        <SystemUsage />
       </div>
     </aside>
   );

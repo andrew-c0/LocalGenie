@@ -67,6 +67,17 @@ describe("groupGGUFFiles", () => {
     expect(groups[0].sidecars.map((s) => s.filename)).toEqual(["gemma-4-E4B-it-mmproj.gguf"]);
   });
 
+  it("keeps an MTP token inside the model name as part of the name, so each file is a variant", () => {
+    const groups = groupGGUFFiles([
+      file("Tiel-Coder-35B-A3B-MTP-UD-IQ4_XS.gguf", 18_000_000_000),
+      file("Tiel-Coder-35B-A3B-MTP-UD-Q2_K_XL.gguf", 12_000_000_000),
+      file("mmproj-BF16.gguf", 902_000_000),
+    ]);
+
+    expect(groups.map((g) => g.main.precision)).toEqual(["Q2_K_XL", "IQ4_XS"]);
+    expect(groups.every((g) => g.sidecars.length === 0)).toBe(true);
+  });
+
   it("never lists a DFlash draft as a variant, nor attaches it to one", () => {
     const groups = groupGGUFFiles([
       file("gemma-4-26B-A4B-it-Q8_0.gguf", 26_000_000_000),
