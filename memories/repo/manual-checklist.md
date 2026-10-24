@@ -33,12 +33,15 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] `npm run build` produces MSI + NSIS bundles under `src-tauri/target/release/bundle/`.
 - [ ] App launches from the built bundle and the server connects on the configured port (default `18181`).
 
-## Chat attachments (uncommitted work, not yet run)
+## Chat attachments (not yet run)
 
 - [ ] Attach menu: Image and Audio are disabled until the model's settings scan confirms vision or audio; Text file is always enabled. Up to 4 files per message.
 - [ ] Send an image and an mp3 clip (mp3 is not verified with the server; see known-issues). The reply uses the content; a wav clip is the verified path.
 - [ ] Send a text file, then a second message: the model still has the file, and the context ring shows the file arc.
-- [ ] Move a sent file, then send again: the send stops with "Message not sent" and the input keeps its text.
+- [ ] Move a sent file, then send again: the send goes ahead without that file, and a "Files not sent" toast names it. The toast repeats on each send.
+- [ ] Delete that message (hover the bubble, trash icon, confirm): the message and every later one leave the chat and do not come back after a reload. The next send has no warning and the model no longer gets the file.
+- [ ] Delete a user message in the middle of a chat, then an assistant message: each confirm removes it and all after it, and the context ring drops accordingly. A cancelled confirm changes nothing.
+- [ ] Retry and Delete buttons appear only on hover or keyboard focus, and Retry is absent on a message whose file has no stored path.
 - [ ] Open a tile, then "Open location": Explorer opens the folder with the file selected.
 - [ ] Retry on the last user message re-sends its files; a reply that reports counts shows the exact total in the ring.
 

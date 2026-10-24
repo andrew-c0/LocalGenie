@@ -1,6 +1,6 @@
 # Known issues
 
-Status labels: **code-verified** = read in the source (committed up to be3d0b4 or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-25 sync. Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
+Status labels: **code-verified** = read in the source (committed up to 694a036, or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-25 sync. Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
 
 ## Active
 - Model load/chat hangs: the GenieX warmup request in `load_model` may never get a response. The warmup carries the model's load params (committed in 6068a81), so it matches chat. Not re-validated (runtime-unverified).
@@ -15,10 +15,10 @@ Status labels: **code-verified** = read in the source (committed up to be3d0b4 o
 - Active badge clipped: in the model selector, a row that is active, not loaded and has four capability icons overflows the 120px capabilities cell (reported; `ModelOptionButton.tsx` and its CSS). Not fixed.
 - Vision and audio probes match whole words only (`has_word`), so a reply that names the colour or number only inside another word does not count (`capability_scan.rs` tests `names_match_whole_words_only`).
 
-## Chat attachments (uncommitted; code-verified, runtime-unverified)
+## Chat attachments (code-verified, runtime-unverified)
 - mp3 input is not verified with the server. The chat path sends `input_audio` with `format` `mp3` when the file is an mp3; GenieX accepts the format name and writes a temp file (code-read). The audio scan probe uses wav, so wav is the only format the scan has exercised.
-- Retry and send need stored paths. A message saved before paths were kept (a ref with no `path`) cannot be resent: Retry is hidden, and every later send in that session stops with "Message not sent", because the history is rebuilt from all of its files. No UI deletes a single message (Retry removes only the messages after its point), so the session stays blocked until it is deleted (code-read; not run).
-- A stored file that was moved or deleted blocks every later send and Retry in its session in the same way. Its tile shows "no longer at its path" when opened.
+- A message saved before paths were kept (a ref with no `path`) has no Retry button, and every send in its session warns "Files not sent" and leaves that file out, because the history is rebuilt from all messages. The warning repeats on each send until that message is deleted (Delete on the bubble, with every later message; `MessageBubble.tsx` `removeFrom`). The model does not see the file in the meantime (code-read; not run).
+- A stored file that was moved or deleted is left out of every later send and Retry in its session the same way: the send goes ahead, a "Files not sent" toast names it, and the toast repeats until its message is deleted. Its tile shows "no longer at its path" when opened.
 - Text files are re-read from disk on every later turn. The first send uses the copy read at attach time, so an edit made after that changes what the model gets from the next turn on.
 - Context total: text files are an estimate (characters / 4) until a reply reports counts; after that, the server's exact total covers them and only later files are estimated. Images and audio have no token estimate, so they count only in the exact total after a reply.
 - The usage stream is unverified in a live run. GenieX sends the usage chunk when `include_usage` is set (code-read). Without counts (a stopped reply, or no usage chunk), the total falls back to the estimate from the last counted reply.
@@ -34,7 +34,7 @@ Status labels: **code-verified** = read in the source (committed up to be3d0b4 o
 - Hardware telemetry (NPU/VRAM, thermals, bandwidth, power) has no backend source; pages show "unavailable".
 - Syntax highlighting: `rehype-highlight` runs only with `allowHtml`, and no highlight.js theme is imported.
 - Page padding choice is undecided.
-- The UI has not been run since the Fluent migration, the frontend changes since 1b5d554, or the uncommitted attachment work (runtime-unverified).
+- The UI has not been run since the Fluent migration, the frontend changes since 1b5d554, or the chat attachment and delete-message work (runtime-unverified).
 
 ## Open follow-ups (migrated from the 2026-10-22 repo scan; verify before fixing)
 - Cancel registry leak: an error mid-stream returns before the request is removed from `CANCEL_FLAGS` in `commands/chat.rs`. Use a drop guard.
