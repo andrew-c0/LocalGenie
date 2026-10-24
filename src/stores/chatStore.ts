@@ -27,6 +27,8 @@ interface ChatState {
   updateMessageStats: (sessionId: string, messageId: string, stats: Message["stats"]) => void;
   updateMessageUsage: (sessionId: string, messageId: string, usage: ReplyUsage) => void;
   updateMessageFinishReason: (sessionId: string, messageId: string, finishReason: string) => void;
+  /** Removes the message and every message after it. */
+  removeMessagesFrom: (sessionId: string, messageId: string) => void;
   removeMessagesAfter: (sessionId: string, messageId: string) => void;
   setStreaming: (streaming: boolean) => void;
   setActiveStream: (stream: ActiveStream | null) => void;
@@ -149,6 +151,23 @@ export const useChatStore = create<ChatState>((set) => ({
         return {
           ...s,
           messages: s.messages.map((m) => (m.id === messageId ? { ...m, finishReason } : m)),
+        };
+      }),
+    }));
+  },
+
+  removeMessagesFrom: (sessionId: string, messageId: string) => {
+    set((state) => ({
+      sessions: state.sessions.map((s) => {
+        if (s.id !== sessionId) return s;
+        const idx = s.messages.findIndex((m) => m.id === messageId);
+        if (idx < 0) return s;
+        const kept = s.messages.slice(0, idx);
+        return {
+          ...s,
+          messages: kept,
+          contextChars: calcContextChars(kept),
+          updatedAt: Date.now(),
         };
       }),
     }));

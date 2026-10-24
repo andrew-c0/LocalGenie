@@ -52,45 +52,73 @@ const MAX_INPUT_ROWS = 5;
 /** Attach menu entries, in menu order. */
 const ATTACH_KINDS: AttachmentKind[] = ["image", "audio", "text"];
 
+/** Files of a stored message that were read again, and the names of those that are no longer there. */
+interface StoredFiles {
+  files: PendingAttachment[];
+  unavailable: string[];
+}
+
 /**
- * Read a stored message's files again from their paths. Throws when a file has no stored path or is
- * no longer on the device.
+ * Read a stored message's files again from their paths. A file with no stored path, or no longer on
+ * the device, is left out and named in `unavailable`. A file that is there but cannot be read still
+ * throws.
  */
-async function readStoredFiles(refs: AttachmentRef[]): Promise<PendingAttachment[]> {
+async function readStoredFiles(refs: AttachmentRef[]): Promise<StoredFiles> {
   const files: PendingAttachment[] = [];
+  const unavailable: string[] = [];
   for (const ref of refs) {
-    if (!ref.path) throw new Error(`${ref.name} has no stored path, so it cannot be sent again.`);
-    if (!(await systemService.fileExists(ref.path))) {
-      throw new Error(`${ref.name} is no longer at its path on this device.`);
+    if (!ref.path || !(await systemService.fileExists(ref.path))) {
+      unavailable.push(ref.name);
+      continue;
     }
     files.push({ ...(await readAttachment(ref.path)), id: ref.id });
   }
-  return files;
+  return { files, unavailable };
+}
+
+/** Tells the user which files the model will not see because they are no longer on the device. */
+function warnUnavailable(names: string[]) {
+  toast.info(
+    "Files not sent",
+    `No longer on this device: ${names.join(", ")}. The model will not see them. Delete the message to stop this warning.`,
+  );
 }
 
 /** A chat message as the server takes it. */
 type ApiMessage = { role: "user" | "assistant" | "system"; content: ChatMessageContent };
 
+/** Chat history for the server, and the names of stored files it had to leave out. */
+interface History {
+  history: ApiMessage[];
+  unavailable: string[];
+}
+
 /**
  * Chat history for the server. Every user message's files are read again from their paths, so the
  * model has them on every turn. `fresh` gives the files of the message being sent, which are already
- * in memory. Throws when a stored file is missing.
+ * in memory. Files no longer on the device are left out and named in `unavailable`.
  */
 async function historyFor(
   messages: Message[],
   fresh?: { messageId: string; files: PendingAttachment[] },
-): Promise<ApiMessage[]> {
+): Promise<History> {
   const history: ApiMessage[] = [];
+  const unavailable: string[] = [];
   for (const m of messages) {
     const role = m.role as ApiMessage["role"];
     if (m.role !== "user" || !m.attachments?.length) {
       history.push({ role, content: m.content });
       continue;
     }
-    const files = fresh?.messageId === m.id ? fresh.files : await readStoredFiles(m.attachments);
-    history.push({ role, content: userMessageContent(m.content, files) });
+    if (fresh?.messageId === m.id) {
+      history.push({ role, content: userMessageContent(m.content, fresh.files) });
+      continue;
+    }
+    const stored = await readStoredFiles(m.attachments);
+    unavailable.push(...stored.unavailable);
+    history.push({ role, content: userMessageContent(m.content, stored.files) });
   }
-  return history;
+  return { history, unavailable };
 }
 
 /**
@@ -289,20 +317,21 @@ export default function ChatInput() {
     if (!(await modelTakesFiles(sent.flatMap((m) => m.attachments ?? [])))) return;
 
     // Built before the input is cleared, so a missing file leaves the message in the box.
-    let apiMessages: ApiMessage[];
+    let built: History;
     try {
-      apiMessages = await historyFor(sent, { messageId: userMsg.id, files });
+      built = await historyFor(sent, { messageId: userMsg.id, files });
     } catch (err) {
       toast.error("Message not sent", String(err));
       return;
     }
+    if (built.unavailable.length > 0) warnUnavailable(built.unavailable);
 
     setText("");
     setPending([]);
     addMessage(activeSessionId, userMsg);
     await db.saveMessage(activeSessionId, userMsg).catch(() => {});
 
-    await doSend(activeSessionId, apiMessages);
+    await doSend(activeSessionId, built.history);
   }, [text, pending, activeSessionId, isStreaming, serverStatus.running, addMessage, doSend]);
 
   /** Stop the currently streaming model response. */
@@ -327,13 +356,14 @@ export default function ChatInput() {
       const upToRetry = current.messages.slice(0, idx + 1);
       if (!(await modelTakesFiles(upToRetry.flatMap((m) => m.attachments ?? [])))) return;
 
-      let apiMessages: ApiMessage[];
+      let built: History;
       try {
-        apiMessages = await historyFor(upToRetry);
+        built = await historyFor(upToRetry);
       } catch (err) {
         toast.error("Retry cancelled", String(err));
         return;
       }
+      if (built.unavailable.length > 0) warnUnavailable(built.unavailable);
 
       // Remove every message after the retry point, from the store and the database.
       const store = useChatStore.getState();
@@ -348,7 +378,7 @@ export default function ChatInput() {
           else db.deleteMessage(msg.id).catch(() => {});
         }
       }
-      await doSend(sessionId, apiMessages);
+      await doSend(sessionId, built.history);
     },
     [doSend],
   );

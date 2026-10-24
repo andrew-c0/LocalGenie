@@ -8,6 +8,21 @@
   flex-direction: row-reverse;
 }
 
+/* Hover or keyboard focus on the message reveals its actions, on the outer side of the bubble. */
+.message-bubble__actions {
+  display: flex;
+  flex-direction: column;
+  align-self: center;
+  gap: var(--spacingVerticalXXS);
+  opacity: 0;
+  transition: opacity 120ms ease-in-out;
+}
+
+.message-bubble__row:hover .message-bubble__actions,
+.message-bubble__row:focus-within .message-bubble__actions {
+  opacity: 1;
+}
+
 .message-bubble__bubble {
   display: flex;
   flex-direction: column;
