@@ -36,3 +36,14 @@
   align-items: center;
   justify-content: center;
 }
+
+/* Text files in the context: a second arc after the chat text, in its own colour. */
+.context-ring__file {
+  fill: none;
+  stroke-width: 3;
+  stroke: var(--colorPaletteGreenForeground1);
+}
+
+.context-ring__file-tip {
+  color: var(--colorNeutralForeground3);
+}

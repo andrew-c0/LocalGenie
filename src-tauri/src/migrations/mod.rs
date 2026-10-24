@@ -7,6 +7,8 @@ mod m20261022_000001_message_finish_and_errors;
 mod m20261022_000002_message_stats;
 mod m20261023_000001_model_setting_values;
 mod m20261023_000002_model_capability_values;
+mod m20261024_000001_message_attachments;
+mod m20261025_000001_message_usage;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -20,6 +22,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20261022_000002_message_stats::Migration),
             Box::new(m20261023_000001_model_setting_values::Migration),
             Box::new(m20261023_000002_model_capability_values::Migration),
+            Box::new(m20261024_000001_message_attachments::Migration),
+            Box::new(m20261025_000001_message_usage::Migration),
         ]
     }
 }
@@ -29,7 +33,9 @@ mod tests {
     use super::Migrator;
     use crate::commands::database::init_database;
     use crate::entities::{chat_error, chat_session, message, model_setting_value};
-    use sea_orm::{ActiveModelTrait, ConnectionTrait, DatabaseBackend, EntityTrait, Set, Statement};
+    use sea_orm::{
+        ActiveModelTrait, ConnectionTrait, DatabaseBackend, EntityTrait, Set, Statement,
+    };
     use sea_orm_migration::MigratorTrait;
 
     /// Fresh database file in the temp dir, removed when the test ends.
@@ -169,6 +175,9 @@ mod tests {
             total_time_ms: Set(Some(900)),
             token_count: Set(Some(42)),
             prompt_chars: Set(Some(7)),
+            attachments: Set(None),
+            prompt_tokens: Set(None),
+            completion_tokens: Set(None),
         }
         .insert(&db)
         .await
@@ -184,8 +193,8 @@ mod tests {
         assert_eq!(msg.token_count, Some(42));
         assert_eq!(msg.prompt_chars, Some(7));
 
-        // Three steps: the model settings and capability migrations come after this one.
-        Migrator::down(&db, Some(3))
+        // Five steps: the model settings, capability, attachment and usage migrations come after this one.
+        Migrator::down(&db, Some(5))
             .await
             .expect("revert stats migration");
         let after_down = columns(db.clone()).await;
@@ -215,8 +224,8 @@ mod tests {
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
         // Put back the old JSON row, then apply the migrations again so it copies it.
-        // Two steps: the capability migration comes after the settings one.
-        Migrator::down(&db, Some(2))
+        // Four steps: the capability, attachment and usage migrations come after the settings one.
+        Migrator::down(&db, Some(4))
             .await
             .expect("revert settings migration");
         db.execute(Statement::from_string(
@@ -236,10 +245,8 @@ mod tests {
             .all(&db)
             .await
             .expect("query");
-        let stored: std::collections::HashMap<String, String> = rows
-            .into_iter()
-            .map(|r| (r.key, r.value))
-            .collect();
+        let stored: std::collections::HashMap<String, String> =
+            rows.into_iter().map(|r| (r.key, r.value)).collect();
 
         assert_eq!(stored.get("temperature").map(String::as_str), Some("0.2"));
         assert_eq!(stored.get("think").map(String::as_str), Some("false"));
@@ -272,7 +279,10 @@ mod tests {
             updated_at: Set(1),
         };
         row("seed", "{}").insert(&db).await.expect("insert seed");
-        row("maxTokens", "{}").insert(&db).await.expect("insert maxTokens");
+        row("maxTokens", "{}")
+            .insert(&db)
+            .await
+            .expect("insert maxTokens");
         assert!(
             row("seed", "{}").insert(&db).await.is_err(),
             "model_id and key are the primary key"
@@ -283,6 +293,52 @@ mod tests {
             .await
             .expect("query");
         assert_eq!(rows.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn attachments_are_stored_as_json_text() {
+        let tmp = TempDb::new("migrate-attachments");
+        let db = init_database(&tmp.url()).await.expect("migrations apply");
+
+        chat_session::ActiveModel {
+            id: Set("s1".into()),
+            title: Set("t".into()),
+            model_id: Set(None),
+            context_chars: Set(0),
+            created_at: Set(1),
+            updated_at: Set(1),
+        }
+        .insert(&db)
+        .await
+        .expect("insert session");
+
+        let json = r#"[{"id":"a1","kind":"image","name":"dot.png","size":4}]"#;
+        message::ActiveModel {
+            id: Set("m1".into()),
+            session_id: Set("s1".into()),
+            role: Set("user".into()),
+            content: Set("what is this?".into()),
+            model_id: Set(None),
+            created_at: Set(2),
+            finish_reason: Set(None),
+            time_to_first_token_ms: Set(None),
+            total_time_ms: Set(None),
+            token_count: Set(None),
+            prompt_chars: Set(None),
+            attachments: Set(Some(json.into())),
+            prompt_tokens: Set(None),
+            completion_tokens: Set(None),
+        }
+        .insert(&db)
+        .await
+        .expect("insert message with attachments");
+
+        let msg = message::Entity::find_by_id("m1")
+            .one(&db)
+            .await
+            .expect("query")
+            .expect("row exists");
+        assert_eq!(msg.attachments.as_deref(), Some(json));
     }
 
     #[tokio::test]

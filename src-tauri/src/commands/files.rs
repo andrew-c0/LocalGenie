@@ -8,7 +8,7 @@ use tokio::sync::oneshot;
 pub const MAX_TEXT_FILE_BYTES: u64 = 512 * 1024;
 
 /// Extensions accepted for system prompt attachments.
-const TEXT_EXTENSIONS: &[&str] = &["txt", "md"];
+pub(super) const TEXT_EXTENSIONS: &[&str] = &["txt", "md"];
 
 /// Open a native file dialog limited to text files. Returns the chosen absolute path, or `None`
 /// when the user cancels.
@@ -49,7 +49,7 @@ pub async fn file_exists(path: String) -> Result<bool, String> {
 
 /// Checks the extension, size and content before reading. Kept separate from the command so it
 /// can be tested without a Tauri app.
-fn read_checked(path: &Path) -> Result<String, String> {
+pub(super) fn read_checked(path: &Path) -> Result<String, String> {
     let extension = path
         .extension()
         .and_then(|e| e.to_str())

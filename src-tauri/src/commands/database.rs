@@ -194,6 +194,9 @@ pub async fn save_message(
         total_time_ms: Set(message.total_time_ms),
         token_count: Set(message.token_count),
         prompt_chars: Set(message.prompt_chars),
+        attachments: Set(message.attachments),
+        prompt_tokens: Set(message.prompt_tokens),
+        completion_tokens: Set(message.completion_tokens),
     })
     .on_conflict(
         OnConflict::column(message::Column::Id)
@@ -208,6 +211,9 @@ pub async fn save_message(
                 message::Column::TotalTimeMs,
                 message::Column::TokenCount,
                 message::Column::PromptChars,
+                message::Column::Attachments,
+                message::Column::PromptTokens,
+                message::Column::CompletionTokens,
             ])
             .to_owned(),
     )

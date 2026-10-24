@@ -33,7 +33,52 @@ export interface Message {
   finishReason?: string;
   /** True for an error shown in the chat. Stored in `chat_errors`, not in `messages`. */
   isError?: boolean;
+  /** Files sent with a user message. Names only; the contents are not kept after the send. */
+  attachments?: AttachmentRef[];
+  /** Exact token counts the server reported for this reply. Missing when it was stopped or is older. */
+  usage?: ReplyUsage;
 }
+
+/** Token counts the server reports for one reply. The prompt count covers the whole request. */
+export interface ReplyUsage {
+  promptTokens: number;
+  completionTokens: number;
+}
+
+/** What the attach menu picks: an image, an audio clip, or a text file. */
+export type AttachmentKind = "image" | "audio" | "text";
+
+/** An attachment as stored with its message. */
+export interface AttachmentRef {
+  id: string;
+  kind: AttachmentKind;
+  name: string;
+  size: number;
+  /** Where the file was read from. Missing on refs saved before paths were kept. */
+  path?: string;
+  /** Text files: characters sent with the message, file delimiters included. Counted in the context ring. */
+  chars?: number;
+}
+
+/** A file read by the Rust `read_attachment` command. Media carry `data` (base64); text carries `text`. */
+export interface AttachmentFile {
+  kind: AttachmentKind;
+  name: string;
+  size: number;
+  path: string;
+  mime: string | null;
+  data: string | null;
+  text: string | null;
+}
+
+/** One part of a chat message whose content is an array. */
+export type ChatContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } }
+  | { type: "input_audio"; input_audio: { data: string; format: "wav" | "mp3" } };
+
+/** Content of a chat message sent to the server: plain text, or parts when media is attached. */
+export type ChatMessageContent = string | ChatContentPart[];
 
 export interface GenerationStats {
   /** ms from send to first token */

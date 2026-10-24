@@ -81,7 +81,12 @@ export function useChatStream() {
     if (frameRef.current === null) frameRef.current = requestAnimationFrame(flush);
   });
 
-  useTauriEvent<{ streamId: string; finishReason: string | null }>("chat-done", (payload) => {
+  useTauriEvent<{
+    streamId: string;
+    finishReason: string | null;
+    promptTokens: number | null;
+    completionTokens: number | null;
+  }>("chat-done", (payload) => {
     // Write everything received so far, so the final message holds the whole reply.
     flush();
 
@@ -120,6 +125,15 @@ export function useChatStream() {
       store.updateMessageFinishReason(activeId, lastMsg.id, payload.finishReason);
     }
 
+    // The server's exact counts for this reply, when it reported them.
+    const usage =
+      payload.promptTokens !== null && payload.completionTokens !== null
+        ? { promptTokens: payload.promptTokens, completionTokens: payload.completionTokens }
+        : undefined;
+    if (lastMsg.role === "assistant" && usage) {
+      store.updateMessageUsage(activeId, lastMsg.id, usage);
+    }
+
     if (lastMsg.role === "assistant" && lastMsg.content) {
       const stats: GenerationStats = { timeToFirstToken, totalTime, tokenCount, promptChars };
       store.updateMessageStats(activeId, lastMsg.id, stats);
@@ -128,6 +142,7 @@ export function useChatStream() {
       const finalMsg: Message = {
         ...lastMsg,
         ...(payload.finishReason ? { finishReason: payload.finishReason } : {}),
+        ...(usage ? { usage } : {}),
         stats,
       };
       db.saveMessage(activeId, finalMsg).catch(() => undefined);

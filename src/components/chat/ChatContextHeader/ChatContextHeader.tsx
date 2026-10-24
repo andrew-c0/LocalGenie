@@ -5,15 +5,13 @@ import { useNavigate } from "react-router-dom";
 import * as db from "../../../services/database";
 import { useChatStore } from "../../../stores/chatStore";
 import { useModelStore } from "../../../stores/modelStore";
+import { contextUsageOf } from "../../../utils/contextUsage";
 import { formatCount } from "../../../utils/format";
 import { modelSettingsKey } from "../../../utils/modelSettings";
 import { StatusBadge } from "../../ui/StatusBadge/StatusBadge";
 import { BodyStrong, Meta } from "../../ui/Typography/Typography";
 import { ContextRing } from "./ContextRing/ContextRing";
 import "./ChatContextHeader.css";
-
-/** Rough characters-per-token ratio used to estimate how much of the window the chat fills. */
-const CHARS_PER_TOKEN = 4;
 
 /** Context bar above the chat thread: model, server state, context usage vs. the model's window, close. */
 export function ChatContextHeader() {
@@ -51,11 +49,13 @@ export function ChatContextHeader() {
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   if (!activeSession) return null;
 
-  const usedTokens = Math.round((activeSession.contextChars ?? 0) / CHARS_PER_TOKEN);
-  const contextPct =
-    contextWindow && contextWindow > 0
-      ? Math.min(100, Math.round((usedTokens / contextWindow) * 100))
-      : null;
+  // The server's exact count of the last reply, plus an estimate for what came after it. Text files
+  // are drawn in their own colour.
+  const { total: usedTokens, fileTokens, exact } = contextUsageOf(activeSession.messages);
+  const textTokens = usedTokens - fileTokens;
+  const fileLine = fileTokens > 0 ? `${formatCount(fileTokens)} from attached files` : undefined;
+  const hasWindow = contextWindow !== null && contextWindow > 0;
+  const shown = `${exact ? "" : "~"}${formatCount(usedTokens)}`;
 
   return (
     <div className="chat-context-header__bar">
@@ -64,16 +64,18 @@ export function ChatContextHeader() {
         {activeSession.title}
       </BodyStrong>
       <div className="chat-context-header__usage">
-        {contextWindow && contextPct !== null ? (
+        {contextWindow && hasWindow ? (
           <ContextRing
-            percent={contextPct}
-            label={`${formatCount(usedTokens)} out of ${formatCount(contextWindow)} tokens used`}
+            textPercent={(textTokens / contextWindow) * 100}
+            filePercent={(fileTokens / contextWindow) * 100}
+            label={`${shown} / ${formatCount(contextWindow)} tokens used`}
+            fileLabel={fileLine}
           />
         ) : (
           <Meta>
-            {activeModelId
-              ? `~${formatCount(usedTokens)} tokens used · window unknown`
-              : `~${formatCount(usedTokens)} tokens used`}
+            {[`${shown} tokens used`, activeModelId ? "window unknown" : undefined, fileLine]
+              .filter(Boolean)
+              .join(" · ")}
           </Meta>
         )}
       </div>

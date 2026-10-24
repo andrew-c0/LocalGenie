@@ -7,6 +7,7 @@ mod tray;
 pub mod entities;
 pub mod migrations;
 
+use commands::attachments;
 use commands::capabilities;
 use commands::capability_scan;
 use commands::chat;
@@ -81,6 +82,10 @@ pub fn run() {
             system::get_system_memory,
             system::get_platform_info,
             system_usage::get_system_usage,
+            // Chat attachments (image, audio, text picked for a message)
+            attachments::pick_attachment,
+            attachments::read_attachment,
+            attachments::reveal_attachment,
             // Files (system prompt attachments)
             files::pick_text_file,
             files::read_text_file,

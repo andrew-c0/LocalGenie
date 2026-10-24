@@ -4,6 +4,7 @@ import { useChatStore } from "../../stores/chatStore";
 import type { Message } from "../../types";
 import { formatDuration, formatTokPerSec } from "../../utils/format";
 import { parseThinking } from "../../utils/thinking";
+import { AttachmentList } from "../chat/AttachmentList/AttachmentList";
 import { ThinkingBlock } from "../chat/ThinkingBlock/ThinkingBlock";
 import { Flex } from "../ui/Flex/Flex";
 import { MarkdownContent } from "../ui/MarkdownContent/MarkdownContent";
@@ -27,7 +28,15 @@ export default function MessageBubble({
   const isAssistant = message.role === "assistant";
   const setRetryFromMessageId = useChatStore((s) => s.setRetryFromMessageId);
 
-  const showRetry = isUser && isLastUserMessage && !isStreaming && message.content.trim();
+  const hasAttachments = (message.attachments?.length ?? 0) > 0;
+  // Files saved before paths were kept cannot be read again, so their message cannot be retried.
+  const filesCanBeResent = (message.attachments ?? []).every((file) => !!file.path);
+  const showRetry =
+    isUser &&
+    isLastUserMessage &&
+    !isStreaming &&
+    filesCanBeResent &&
+    (message.content.trim() || hasAttachments);
 
   const stats = isAssistant ? message.stats : undefined;
   const reply = isAssistant ? parseThinking(message.content) : null;
@@ -36,7 +45,10 @@ export default function MessageBubble({
     <div className={`${"message-bubble__row"} ${isUser ? "message-bubble__row-user" : ""}`}>
       <Avatar name={isUser ? "User" : "AI"} size={32} color={isUser ? "neutral" : "brand"} />
       <div className={`${"message-bubble__bubble"} ${isUser ? "message-bubble__bubble-user" : ""}`}>
-        {isUser && <Body1 className="message-bubble__pre">{message.content}</Body1>}
+        {isUser && hasAttachments && <AttachmentList attachments={message.attachments ?? []} />}
+        {isUser && message.content && (
+          <Body1 className="message-bubble__pre">{message.content}</Body1>
+        )}
         {reply && (reply.thinking || reply.thinkingOpen) && (
           <ThinkingBlock text={reply.thinking} live={isLive && reply.thinkingOpen} />
         )}

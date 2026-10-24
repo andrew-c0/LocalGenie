@@ -2,8 +2,8 @@ use tauri::{AppHandle, Emitter, State};
 
 use super::chat_helpers::{
     apply_load_params, build_chat_body, chat_done_payload, finish_reason_from_chunk,
-    is_first_output, no_output_error, resolve_model_for_server, strip_precision, ChatMessage,
-    GenerationSettings, ModelLoadParams,
+    is_first_output, no_output_error, resolve_model_for_server, strip_precision, usage_from_chunk,
+    ChatMessage, GenerationSettings, ModelLoadParams, ReplyUsage,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -166,7 +166,7 @@ pub async fn chat_completion(
         .map(|m| {
             serde_json::json!({
                 "role": m.role,
-                "content": m.content
+                "content": m.content.clone()
             })
         })
         .collect();
@@ -249,6 +249,8 @@ pub async fn chat_completion(
     let mut chunk_count: u32 = 0;
     // Set from the server's `finish_reason` ("stop", "length", ...) when it arrives.
     let mut finish_reason: Option<String> = None;
+    // Exact token counts from the usage chunk, sent just before `[DONE]`.
+    let mut reply_usage: Option<ReplyUsage> = None;
     // False until the first content or finish_reason chunk; only then is the limit lifted.
     let mut answered = false;
 
@@ -289,7 +291,7 @@ pub async fn chat_completion(
                     eprintln!("[chat] stream complete: {chunk_count} chunks");
                     let _ = app.emit(
                         "chat-done",
-                        chat_done_payload(&stream_id, finish_reason.as_deref()),
+                        chat_done_payload(&stream_id, finish_reason.as_deref(), reply_usage),
                     );
                     return Ok(());
                 }
@@ -301,6 +303,9 @@ pub async fn chat_completion(
                     }
                     if let Some(reason) = finish_reason_from_chunk(&parsed) {
                         finish_reason = Some(reason);
+                    }
+                    if let Some(usage) = usage_from_chunk(&parsed) {
+                        reply_usage = Some(usage);
                     }
                     if let Some(choices) = parsed["choices"].as_array() {
                         for choice in choices {
@@ -335,7 +340,7 @@ pub async fn chat_completion(
     // Stream ended without `[DONE]`; report whatever finish reason was seen.
     let _ = app.emit(
         "chat-done",
-        chat_done_payload(&stream_id, finish_reason.as_deref()),
+        chat_done_payload(&stream_id, finish_reason.as_deref(), reply_usage),
     );
 
     Ok(())
@@ -344,7 +349,10 @@ pub async fn chat_completion(
 /// Tell the frontend a stream was stopped by the user.
 fn emit_cancelled(app: &AppHandle, stream_id: &str) {
     eprintln!("[chat] stream {stream_id} cancelled by user");
-    let _ = app.emit("chat-done", chat_done_payload(stream_id, Some("cancelled")));
+    let _ = app.emit(
+        "chat-done",
+        chat_done_payload(stream_id, Some("cancelled"), None),
+    );
 }
 
 /// How often a waiting request re-checks its cancel flag.

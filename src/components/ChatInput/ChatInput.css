@@ -6,11 +6,16 @@
 /* Field and button share a row. The grid column sizes the button from its stretched height. */
 .chat-input__wrapper {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: stretch;
   gap: var(--spacingHorizontalS);
   max-width: 840px;
   margin: 0 auto;
+}
+
+.chat-input__attachments {
+  max-width: 840px;
+  margin: 0 auto var(--spacingVerticalS);
 }
 
 .chat-input__field {

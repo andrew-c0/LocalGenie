@@ -1,0 +1,100 @@
+.attachment-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--spacingHorizontalS);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attachment-tile {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--colorNeutralStroke2);
+  border-radius: var(--borderRadiusMedium);
+  background-color: var(--colorNeutralBackground2);
+}
+
+.attachment-tile:hover {
+  border-color: var(--colorNeutralStroke1);
+}
+
+/* The whole tile is the preview button. The remove button sits on top of it. */
+/* The text column takes whatever the icon leaves, so a long name clips to the tile instead of
+   pushing it wider. The right padding keeps the name clear of the remove button. */
+.attachment-tile__open {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: var(--spacingVerticalS) 40px var(--spacingVerticalS) var(--spacingHorizontalM);
+  border: none;
+  border-radius: var(--borderRadiusMedium);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.attachment-tile__open:focus-visible {
+  outline: 2px solid var(--colorStrokeFocus2);
+  outline-offset: 2px;
+}
+
+.attachment-tile__icon {
+  flex-shrink: 0;
+  font-size: 24px;
+}
+
+.attachment-tile__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.attachment-tile__name,
+.attachment-tile__meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-tile__name {
+  font-weight: var(--fontWeightSemibold);
+  font-size: var(--fontSizeBase200);
+  line-height: var(--lineHeightBase200);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.attachment-tile__meta {
+  color: var(--colorNeutralForeground3);
+}
+
+.attachment-tile__remove {
+  position: absolute;
+  top: var(--spacingVerticalXXS);
+  right: var(--spacingHorizontalXXS);
+  min-width: 0;
+}
+
+/* Kind colours match the model capability icons: image is vision, audio is audio, text is the app's
+   brand colour, as for tools. */
+.attachment-kind--image {
+  color: var(--colorPaletteGreenForeground1);
+}
+
+.attachment-kind--audio {
+  color: var(--colorPaletteDarkOrangeForeground1);
+}
+
+.attachment-kind--text {
+  color: var(--colorBrandForeground1);
+}

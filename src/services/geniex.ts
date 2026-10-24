@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AihubModel,
+  ChatMessageContent,
   ChatSettings,
   ConfigEntry,
   ModelInfo,
@@ -14,9 +15,9 @@ import type {
 } from "../types";
 
 /** Shape sent to the OpenAI-compatible chat completions endpoint. */
-interface ChatMessage {
+export interface ChatMessage {
   role: "user" | "assistant" | "system";
-  content: string;
+  content: ChatMessageContent;
 }
 
 // ─── Model Management ────────────────────────────────────────────

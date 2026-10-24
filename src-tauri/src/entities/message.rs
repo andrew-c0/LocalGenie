@@ -18,6 +18,12 @@ pub struct Model {
     pub total_time_ms: Option<i64>,
     pub token_count: Option<i64>,
     pub prompt_chars: Option<i64>,
+    /// JSON array of the attachments sent with a user message: `id`, `kind`, `name`, `size`, `path`, and `chars`
+    /// for text files. Null when none.
+    pub attachments: Option<String>,
+    /// Exact counts from the server for an assistant reply: the whole prompt, and the tokens generated.
+    pub prompt_tokens: Option<i64>,
+    pub completion_tokens: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

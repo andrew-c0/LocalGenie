@@ -1,8 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AttachmentRef,
   ChatSession,
   GenerationStats,
   Message,
+  ReplyUsage,
   ServerSettings,
   StoredModelSettings,
 } from "../types";
@@ -42,6 +44,27 @@ interface DbMessageRow {
   total_time_ms: number | null;
   token_count: number | null;
   prompt_chars: number | null;
+  attachments: string | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+}
+
+/** Exact usage of a reply, when both counts are stored. */
+function toUsage(m: DbMessageRow): ReplyUsage | undefined {
+  if (m.prompt_tokens === null || m.completion_tokens === null) return undefined;
+  return { promptTokens: m.prompt_tokens, completionTokens: m.completion_tokens };
+}
+
+/** Reads the stored attachment list. Anything that is not a list of refs reads as none. */
+function toAttachments(raw: string | null): AttachmentRef[] | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return undefined;
+    return parsed as AttachmentRef[];
+  } catch {
+    return undefined;
+  }
 }
 
 /** Builds `GenerationStats` from a message row. Undefined unless all four columns are set (older rows have none). */
@@ -82,6 +105,8 @@ export async function loadSessions(): Promise<ChatSession[]> {
       timestamp: m.created_at,
       finishReason: m.finish_reason ?? undefined,
       stats: toGenerationStats(m),
+      attachments: toAttachments(m.attachments),
+      usage: toUsage(m),
     }));
     // Errors come back as their own rows; show them in time order, after the reply they belong to.
     const errors: Message[] = row.errors.map((e) => ({
@@ -142,6 +167,9 @@ export async function saveMessage(sessionId: string, message: Message): Promise<
       total_time_ms: message.stats?.totalTime ?? null,
       token_count: message.stats?.tokenCount ?? null,
       prompt_chars: message.stats?.promptChars ?? null,
+      attachments: message.attachments?.length ? JSON.stringify(message.attachments) : null,
+      prompt_tokens: message.usage?.promptTokens ?? null,
+      completion_tokens: message.usage?.completionTokens ?? null,
     },
   });
 }

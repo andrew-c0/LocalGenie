@@ -118,7 +118,7 @@ export interface CapabilityBadge {
 }
 
 /** A scan setting is confirmed only by a current "works" result. */
-function scanConfirmed(entry: CapabilityEntry | undefined): boolean {
+export function scanConfirmed(entry: CapabilityEntry | undefined): boolean {
   return entry !== undefined && !entry.stale && entry.status === "works";
 }
 

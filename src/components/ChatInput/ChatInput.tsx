@@ -1,13 +1,38 @@
-import { Button, Textarea } from "@fluentui/react-components";
-import { SendRegular, StopRegular } from "@fluentui/react-icons";
+import {
+  Button,
+  Menu,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+  Textarea,
+} from "@fluentui/react-components";
+import { AttachRegular, SendRegular, StopRegular } from "@fluentui/react-icons";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { pickAttachment, readAttachment } from "../../services/attachments";
 import * as db from "../../services/database";
 import * as geniex from "../../services/geniex";
 import { serverBaseUrl } from "../../services/geniex";
+import { loadModelCapabilities } from "../../services/models";
 import * as systemService from "../../services/system";
 import { useChatStore } from "../../stores/chatStore";
 import { defaultSettings, useModelStore } from "../../stores/modelStore";
-import type { Message, StoredModelSettings } from "../../types";
+import type {
+  AttachmentKind,
+  AttachmentRef,
+  ChatMessageContent,
+  Message,
+  StoredModelSettings,
+} from "../../types";
+import {
+  attachmentGate,
+  attachmentKindLabel,
+  attachmentRef,
+  blockedKinds,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  type PendingAttachment,
+  userMessageContent,
+} from "../../utils/attachments";
 import { chatErrorContent } from "../../utils/chatError";
 import { chatSettingsFor, engineOf, modelSettingsKey } from "../../utils/modelSettings";
 import {
@@ -17,10 +42,73 @@ import {
   withSystemBlocks,
 } from "../../utils/systemPrompt";
 import { toast } from "../../utils/toast";
+import { AttachmentList, KIND_ICON } from "../chat/AttachmentList/AttachmentList";
+import { useActiveModelEntries } from "./useActiveModelEntries";
 import "./ChatInput.css";
 
 /** The message box grows from one row up to this many rows, then scrolls. */
 const MAX_INPUT_ROWS = 5;
+
+/** Attach menu entries, in menu order. */
+const ATTACH_KINDS: AttachmentKind[] = ["image", "audio", "text"];
+
+/**
+ * Read a stored message's files again from their paths. Throws when a file has no stored path or is
+ * no longer on the device.
+ */
+async function readStoredFiles(refs: AttachmentRef[]): Promise<PendingAttachment[]> {
+  const files: PendingAttachment[] = [];
+  for (const ref of refs) {
+    if (!ref.path) throw new Error(`${ref.name} has no stored path, so it cannot be sent again.`);
+    if (!(await systemService.fileExists(ref.path))) {
+      throw new Error(`${ref.name} is no longer at its path on this device.`);
+    }
+    files.push({ ...(await readAttachment(ref.path)), id: ref.id });
+  }
+  return files;
+}
+
+/** A chat message as the server takes it. */
+type ApiMessage = { role: "user" | "assistant" | "system"; content: ChatMessageContent };
+
+/**
+ * Chat history for the server. Every user message's files are read again from their paths, so the
+ * model has them on every turn. `fresh` gives the files of the message being sent, which are already
+ * in memory. Throws when a stored file is missing.
+ */
+async function historyFor(
+  messages: Message[],
+  fresh?: { messageId: string; files: PendingAttachment[] },
+): Promise<ApiMessage[]> {
+  const history: ApiMessage[] = [];
+  for (const m of messages) {
+    const role = m.role as ApiMessage["role"];
+    if (m.role !== "user" || !m.attachments?.length) {
+      history.push({ role, content: m.content });
+      continue;
+    }
+    const files = fresh?.messageId === m.id ? fresh.files : await readStoredFiles(m.attachments);
+    history.push({ role, content: userMessageContent(m.content, files) });
+  }
+  return history;
+}
+
+/**
+ * True when the active model may take these files. The model may have changed since the files were
+ * attached, so its current scan result is checked. Otherwise a toast names what it cannot take.
+ */
+async function modelTakesFiles(files: { kind: AttachmentKind }[]): Promise<boolean> {
+  if (files.length === 0) return true;
+  const modelName = useModelStore.getState().activeModelId;
+  const entries = modelName ? await loadModelCapabilities(modelName).catch(() => []) : null;
+  const blocked = blockedKinds(files, entries);
+  if (blocked.length === 0) return true;
+  toast.error(
+    "The model cannot take these files",
+    `Not confirmed for ${blocked.map(attachmentKindLabel).join(", ")}. Run the settings scan or remove the files.`,
+  );
+  return false;
+}
 
 /** Platform details for a send: the OS probe plus the startup chipset. Null when the probe fails. */
 async function platformForSend(): Promise<PlatformSnapshot | null> {
@@ -40,6 +128,8 @@ function lastMessageOf(sessionId: string): Message | undefined {
 
 export default function ChatInput() {
   const [text, setText] = useState("");
+  /** Files picked for the next message. Sent with it, then cleared. */
+  const [pending, setPending] = useState<PendingAttachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeSessionId = useChatStore((s) => s.activeSessionId);
   const isStreaming = useChatStore((s) => s.isStreaming);
@@ -49,6 +139,8 @@ export default function ChatInput() {
   const setActiveStream = useChatStore((s) => s.setActiveStream);
   const serverStatus = useModelStore((s) => s.serverStatus);
   const serverPort = useModelStore((s) => s.serverPort);
+  const activeModelId = useModelStore((s) => s.activeModelId);
+  const modelEntries = useActiveModelEntries(activeModelId);
   const retryFromMessageId = useChatStore((s) => s.retryFromMessageId);
   const setRetryFromMessageId = useChatStore((s) => s.setRetryFromMessageId);
 
@@ -56,7 +148,7 @@ export default function ChatInput() {
   const doSend = useCallback(
     async (
       sessionId: string,
-      apiMessages: { role: "user" | "assistant" | "system"; content: string }[],
+      apiMessages: { role: "user" | "assistant" | "system"; content: ChatMessageContent }[],
     ) => {
       setStreaming(true);
       setLastSendTime(Date.now());
@@ -149,33 +241,69 @@ export default function ChatInput() {
     [addMessage, setStreaming, setLastSendTime, setActiveStream, serverPort],
   );
 
+  /** Pick a file of one kind from the attach menu and read it for the next message. */
+  const handleAttach = useCallback(
+    async (kind: AttachmentKind) => {
+      if (pending.length >= MAX_ATTACHMENTS_PER_MESSAGE) {
+        toast.info(
+          "Attachment limit",
+          `A message takes up to ${MAX_ATTACHMENTS_PER_MESSAGE} files. Remove one to add another.`,
+        );
+        return;
+      }
+      try {
+        const path = await pickAttachment(kind);
+        if (!path) return;
+        const file = await readAttachment(path);
+        setPending((files) => [...files, { ...file, id: crypto.randomUUID() }]);
+      } catch (err) {
+        toast.error("Attachment failed", String(err));
+      }
+    },
+    [pending.length],
+  );
+
+  const removePending = useCallback((id: string) => {
+    setPending((files) => files.filter((f) => f.id !== id));
+  }, []);
+
   /** Handle a normal new-message send. */
   const handleSend = useCallback(async () => {
-    if (!text.trim() || !activeSessionId || isStreaming) return;
+    const content = text.trim();
+    if ((!content && pending.length === 0) || !activeSessionId || isStreaming) return;
     if (!serverStatus.running) return;
 
-    const content = text.trim();
-    setText("");
+    const files = pending;
+    const session = useChatStore.getState().sessions.find((s) => s.id === activeSessionId);
+    if (!session) return;
 
     const userMsg: Message = {
       id: crypto.randomUUID(),
       role: "user",
       content,
       timestamp: Date.now(),
+      attachments: files.length > 0 ? files.map(attachmentRef) : undefined,
     };
+    // Every file in the chat goes to the model on each turn, so all of them are checked.
+    const sent = [...session.messages, userMsg];
+    if (!(await modelTakesFiles(sent.flatMap((m) => m.attachments ?? [])))) return;
+
+    // Built before the input is cleared, so a missing file leaves the message in the box.
+    let apiMessages: ApiMessage[];
+    try {
+      apiMessages = await historyFor(sent, { messageId: userMsg.id, files });
+    } catch (err) {
+      toast.error("Message not sent", String(err));
+      return;
+    }
+
+    setText("");
+    setPending([]);
     addMessage(activeSessionId, userMsg);
     await db.saveMessage(activeSessionId, userMsg).catch(() => {});
 
-    const session = useChatStore.getState().sessions.find((s) => s.id === activeSessionId);
-    if (!session) return;
-
-    const apiMessages = session.messages.map((m) => ({
-      role: m.role as "user" | "assistant" | "system",
-      content: m.content,
-    }));
-
     await doSend(activeSessionId, apiMessages);
-  }, [text, activeSessionId, isStreaming, serverStatus.running, addMessage, doSend]);
+  }, [text, pending, activeSessionId, isStreaming, serverStatus.running, addMessage, doSend]);
 
   /** Stop the currently streaming model response. */
   const handleStop = useCallback(async () => {
@@ -186,46 +314,52 @@ export default function ChatInput() {
     }
   }, []);
 
-  /** Handle retry. */
+  /**
+   * Send a user message again, with its history. Files are read again from their paths before
+   * anything is removed, so a missing file stops the retry with the chat unchanged.
+   */
+  const retryMessage = useCallback(
+    async (sessionId: string, messageId: string) => {
+      const current = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      const idx = current?.messages.findIndex((m) => m.id === messageId) ?? -1;
+      if (!current || idx < 0) return;
+
+      const upToRetry = current.messages.slice(0, idx + 1);
+      if (!(await modelTakesFiles(upToRetry.flatMap((m) => m.attachments ?? [])))) return;
+
+      let apiMessages: ApiMessage[];
+      try {
+        apiMessages = await historyFor(upToRetry);
+      } catch (err) {
+        toast.error("Retry cancelled", String(err));
+        return;
+      }
+
+      // Remove every message after the retry point, from the store and the database.
+      const store = useChatStore.getState();
+      const latest = store.sessions.find((s) => s.id === sessionId);
+      const latestIdx = latest?.messages.findIndex((m) => m.id === messageId) ?? -1;
+      if (!latest || latestIdx < 0) return;
+      const later = latest.messages.slice(latestIdx + 1);
+      if (later.length > 0) {
+        store.removeMessagesAfter(sessionId, messageId);
+        for (const msg of later) {
+          if (msg.isError) db.deleteChatError(msg.id).catch(() => {});
+          else db.deleteMessage(msg.id).catch(() => {});
+        }
+      }
+      await doSend(sessionId, apiMessages);
+    },
+    [doSend],
+  );
+
+  /** Handle retry. The request is cleared at once, so it runs once. */
   useEffect(() => {
     if (!retryFromMessageId || !activeSessionId || isStreaming) return;
-
-    const store = useChatStore.getState();
-    const session = store.sessions.find((s) => s.id === activeSessionId);
-    if (!session) {
-      setRetryFromMessageId(null);
-      return;
-    }
-
-    const idx = session.messages.findIndex((m) => m.id === retryFromMessageId);
-    if (idx < 0) {
-      setRetryFromMessageId(null);
-      return;
-    }
-
-    // Collect all messages after the retry point for DB cleanup
-    const messagesToRemove = session.messages.slice(idx + 1);
-    if (messagesToRemove.length > 0) {
-      store.removeMessagesAfter(activeSessionId, retryFromMessageId);
-      for (const msg of messagesToRemove) {
-        if (msg.isError) db.deleteChatError(msg.id).catch(() => {});
-        else db.deleteMessage(msg.id).catch(() => {});
-      }
-    }
-
-    const updated = useChatStore.getState().sessions.find((s) => s.id === activeSessionId);
-    if (!updated) {
-      setRetryFromMessageId(null);
-      return;
-    }
-
-    const apiMessages = updated.messages
-      .slice(0, idx + 1)
-      .map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
-
+    const messageId = retryFromMessageId;
     setRetryFromMessageId(null);
-    void doSend(activeSessionId, apiMessages);
-  }, [retryFromMessageId, activeSessionId, isStreaming, doSend, setRetryFromMessageId]);
+    void retryMessage(activeSessionId, messageId);
+  }, [retryFromMessageId, activeSessionId, isStreaming, retryMessage, setRetryFromMessageId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -252,11 +386,49 @@ export default function ChatInput() {
     el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
   }, [text]);
 
-  const isDisabled = !text.trim() || isStreaming || !serverStatus.running;
+  const isDisabled = (!text.trim() && pending.length === 0) || isStreaming || !serverStatus.running;
 
   return (
     <div className="chat-input__area">
+      {pending.length > 0 && (
+        <div className="chat-input__attachments">
+          <AttachmentList attachments={pending} onRemove={removePending} />
+        </div>
+      )}
       <div className="chat-input__wrapper">
+        <Menu positioning="above-start">
+          <MenuTrigger disableButtonEnhancement>
+            <Button
+              type="button"
+              appearance="secondary"
+              className="chat-input__action-button"
+              disabled={isStreaming}
+              title="Attach a file"
+              aria-label="Attach a file"
+            >
+              <AttachRegular />
+            </Button>
+          </MenuTrigger>
+          <MenuPopover>
+            <MenuList>
+              {/* Kinds the active model cannot take are left out, not shown disabled. */}
+              {ATTACH_KINDS.filter((kind) => attachmentGate(kind, modelEntries).allowed).map(
+                (kind) => {
+                  const Icon = KIND_ICON[kind];
+                  return (
+                    <MenuItem
+                      key={kind}
+                      icon={<Icon className={`attachment-kind--${kind}`} />}
+                      onClick={() => handleAttach(kind)}
+                    >
+                      {attachmentKindLabel(kind)}
+                    </MenuItem>
+                  );
+                },
+              )}
+            </MenuList>
+          </MenuPopover>
+        </Menu>
         <Textarea
           ref={textareaRef}
           className="chat-input__field"

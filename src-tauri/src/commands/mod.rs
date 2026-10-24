@@ -1,3 +1,4 @@
+pub mod attachments;
 pub mod chat;
 pub mod capability_scan;
 pub mod chat_helpers;

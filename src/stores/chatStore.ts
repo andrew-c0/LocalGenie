@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ActiveStream, ChatSession, Message } from "../types";
+import type { ActiveStream, ChatSession, Message, ReplyUsage } from "../types";
 
 /** Max characters used for auto-generated session titles from the first message. */
 const AUTO_TITLE_MAX_LENGTH = 50;
@@ -25,6 +25,7 @@ interface ChatState {
   addMessage: (sessionId: string, message: Message) => void;
   updateLastAssistantMessage: (sessionId: string, content: string) => void;
   updateMessageStats: (sessionId: string, messageId: string, stats: Message["stats"]) => void;
+  updateMessageUsage: (sessionId: string, messageId: string, usage: ReplyUsage) => void;
   updateMessageFinishReason: (sessionId: string, messageId: string, finishReason: string) => void;
   removeMessagesAfter: (sessionId: string, messageId: string) => void;
   setStreaming: (streaming: boolean) => void;
@@ -124,6 +125,18 @@ export const useChatStore = create<ChatState>((set) => ({
         return {
           ...s,
           messages: s.messages.map((m) => (m.id === messageId ? { ...m, stats } : m)),
+        };
+      }),
+    }));
+  },
+
+  updateMessageUsage: (sessionId: string, messageId: string, usage: ReplyUsage) => {
+    set((state) => ({
+      sessions: state.sessions.map((s) => {
+        if (s.id !== sessionId) return s;
+        return {
+          ...s,
+          messages: s.messages.map((m) => (m.id === messageId ? { ...m, usage } : m)),
         };
       }),
     }));

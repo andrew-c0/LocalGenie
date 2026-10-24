@@ -13,12 +13,12 @@ LocalGenie is a Tauri 2 desktop client for Qualcomm GenieX local inference. It w
 1. User downloads a GGUF model from Hugging Face in the app (resumable; drawer shows progress, cancel, resume).
 2. The app imports the file into GenieX (`geniex pull ... --model-hub localfs`) and records it in `downloaded_models`.
 3. User starts the local GenieX server and loads a model.
-4. User chats with streaming responses.
+4. User chats with streaming responses, and can attach images, audio clips and text files to a message (media needs a confirmed scan result for the model).
 5. Sessions and settings are persisted locally.
 6. CLI updates: a badge on the sidebar settings button; the update runs from the App Settings drawer (installer download, launch, version polling).
 
-## Current state (2026-10-23)
-- Committed up to 1b5d554 (per-model settings storage, system prompt blocks, native context, streaming). The working tree holds uncommitted work on the per-model settings scan (model capabilities: probes, stored results, selector badges), sidecar downloads before import, and the loaded-model list from `/status`. See `codebase-map.md` for the exact state.
+## Current state (2026-10-25)
+- Committed up to be3d0b4 (model capability scan and selector badges, sidecar downloads before import, loaded-model list from `/status`, system usage card). The working tree holds uncommitted chat attachments (image, audio, text), exact per-reply token counts for the context total, and the text-file arc of the context ring. See `codebase-map.md` for the exact state.
 - Model loading and chat completion still carry the GenieX warmup/server response risk (`known-issues.md`).
 - The Playground measures live streaming TTFT and throughput; the dashboard "Run Benchmark" is UI only (no benchmark backend).
 - Qualcomm AI Hub code is legacy and will be reworked later.

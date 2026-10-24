@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-/// A single message in the chat.
+/// A single message in the chat. `content` is a plain string, or an array of content parts
+/// (`text`, `image_url`, `input_audio`) for a message with attachments.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String,
-    pub content: String,
+    pub content: serde_json::Value,
 }
 
 /// Sampler / generation settings.
@@ -114,6 +115,8 @@ pub fn build_chat_body(
     let mut body = serde_json::json!({
         "messages": messages_json,
         "stream": true,
+        // The server sends a final usage chunk with the exact prompt and reply token counts.
+        "stream_options": { "include_usage": true },
     });
 
     if let Some(ref m) = model_name {
@@ -172,10 +175,37 @@ pub fn finish_reason_from_chunk(parsed: &serde_json::Value) -> Option<String> {
         .map(str::to_string)
 }
 
+/// Exact token counts the server reports for one reply. The prompt count covers the whole request:
+/// the system prompt, the history, the files and the images.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReplyUsage {
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+}
+
+/// The usage of a streamed SSE chunk, if it is the usage chunk. The chunk has `usage` and no choices.
+pub fn usage_from_chunk(parsed: &serde_json::Value) -> Option<ReplyUsage> {
+    let usage = parsed.get("usage").filter(|u| u.is_object())?;
+    Some(ReplyUsage {
+        prompt_tokens: usage["prompt_tokens"].as_u64()?,
+        completion_tokens: usage["completion_tokens"].as_u64()?,
+    })
+}
+
 /// Payload for the `chat-done` event. `finish_reason` is the server's value,
-/// or `"cancelled"` when the user stopped the stream; `None` serializes as null.
-pub fn chat_done_payload(stream_id: &str, finish_reason: Option<&str>) -> serde_json::Value {
-    serde_json::json!({ "streamId": stream_id, "finishReason": finish_reason })
+/// or `"cancelled"` when the user stopped the stream; `None` serializes as null. `usage` is null
+/// when the server did not report counts, such as after a stop.
+pub fn chat_done_payload(
+    stream_id: &str,
+    finish_reason: Option<&str>,
+    usage: Option<ReplyUsage>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "streamId": stream_id,
+        "finishReason": finish_reason,
+        "promptTokens": usage.map(|u| u.prompt_tokens),
+        "completionTokens": usage.map(|u| u.completion_tokens),
+    })
 }
 
 /// True when a streamed SSE chunk is the first real output: it carries non-empty
@@ -200,7 +230,8 @@ pub fn no_output_error(url: &str, limit_secs: u64) -> String {
 mod tests {
     use super::{
         build_chat_body, chat_done_payload, finish_reason_from_chunk, is_first_output,
-        no_output_error, strip_precision, GenerationSettings, ModelLoadParams,
+        no_output_error, strip_precision, usage_from_chunk, GenerationSettings, ModelLoadParams,
+        ReplyUsage,
     };
 
     #[test]
@@ -243,12 +274,63 @@ mod tests {
 
     #[test]
     fn done_payload_uses_camel_case_and_null_when_unset() {
-        let cancelled = chat_done_payload("s1", Some("cancelled"));
+        let cancelled = chat_done_payload("s1", Some("cancelled"), None);
         assert_eq!(cancelled["streamId"], "s1");
         assert_eq!(cancelled["finishReason"], "cancelled");
 
-        let unset = chat_done_payload("s1", None);
+        let unset = chat_done_payload("s1", None, None);
         assert!(unset["finishReason"].is_null());
+        assert!(unset["promptTokens"].is_null());
+    }
+
+    #[test]
+    fn done_payload_carries_the_exact_counts() {
+        let usage = ReplyUsage {
+            prompt_tokens: 1200,
+            completion_tokens: 80,
+        };
+        let done = chat_done_payload("s1", Some("stop"), Some(usage));
+        assert_eq!(done["promptTokens"], 1200);
+        assert_eq!(done["completionTokens"], 80);
+    }
+
+    #[test]
+    fn reads_usage_only_from_the_usage_chunk() {
+        let usage = serde_json::json!({
+            "choices": [],
+            "usage": { "prompt_tokens": 1500, "completion_tokens": 42, "total_tokens": 1542 }
+        });
+        assert_eq!(
+            usage_from_chunk(&usage),
+            Some(ReplyUsage {
+                prompt_tokens: 1500,
+                completion_tokens: 42
+            })
+        );
+
+        let text = serde_json::json!({"choices": [{"delta": {"content": "hi"}}]});
+        assert_eq!(usage_from_chunk(&text), None);
+    }
+
+    #[test]
+    fn chat_body_asks_for_the_usage_chunk() {
+        let settings = GenerationSettings {
+            temperature: None,
+            top_p: None,
+            top_k: None,
+            min_p: None,
+            repetition_penalty: None,
+            presence_penalty: None,
+            frequency_penalty: None,
+            max_tokens: None,
+            seed: None,
+            think: None,
+            grammar_string: None,
+            system_prompt: None,
+            load: ModelLoadParams::default(),
+        };
+        let body = build_chat_body(vec![], None, &settings);
+        assert_eq!(body["stream_options"]["include_usage"], true);
     }
 
     #[test]
@@ -340,7 +422,10 @@ mod tests {
         assert_eq!(body["nctx"], 8192);
         assert_eq!(body["ngl"], -1);
         assert_eq!(body["compute"], "npu");
-        assert!(body.get("power_mode").is_none(), "empty power mode is omitted");
+        assert!(
+            body.get("power_mode").is_none(),
+            "empty power mode is omitted"
+        );
         assert_eq!(body["spec_type"], "draft-mtp");
         assert_eq!(body["spec_draft_model"], "org/draft:Q4_0");
         assert_eq!(body["spec_n_max"], 3);
