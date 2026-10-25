@@ -14,25 +14,6 @@
   gap: var(--spacingVerticalM);
 }
 
-.settings-page__nav-footer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacingVerticalS);
-  margin-top: auto;
-}
-
-.settings-page__nav-footer-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacingHorizontalS);
-}
-
-.settings-page__nav-footer-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
 .settings-page__tab-content {
   display: flex;
   flex-direction: column;

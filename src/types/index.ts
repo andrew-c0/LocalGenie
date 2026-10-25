@@ -99,6 +99,8 @@ export interface ChatSession {
   contextChars: number;
   createdAt: number;
   updatedAt: number;
+  /** Pinned conversations are listed first. Stored with the session. */
+  pinned: boolean;
 }
 
 export interface ServerStatus {

@@ -8,7 +8,6 @@ import { useModelStore } from "../../../stores/modelStore";
 import { contextUsageOf } from "../../../utils/contextUsage";
 import { formatCount } from "../../../utils/format";
 import { modelSettingsKey } from "../../../utils/modelSettings";
-import { StatusBadge } from "../../ui/StatusBadge/StatusBadge";
 import { BodyStrong, Meta } from "../../ui/Typography/Typography";
 import { ContextRing } from "./ContextRing/ContextRing";
 import "./ChatContextHeader.css";
@@ -59,7 +58,6 @@ export function ChatContextHeader() {
 
   return (
     <div className="chat-context-header__bar">
-      {!serverStatus.running && <StatusBadge tone="red">Server Offline</StatusBadge>}
       <BodyStrong truncate title={activeSession.title} className="chat-context-header__title">
         {activeSession.title}
       </BodyStrong>

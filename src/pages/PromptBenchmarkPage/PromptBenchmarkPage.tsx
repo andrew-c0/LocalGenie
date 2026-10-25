@@ -1,12 +1,10 @@
 import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
-import { Divider, Tab, TabList } from "@fluentui/react-components";
+import { Tab, TabList } from "@fluentui/react-components";
 import { GaugeRegular, PlayCircleRegular } from "@fluentui/react-icons";
 import type { ReactElement } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { StatusBadge } from "../../components/ui/StatusBadge/StatusBadge";
-import { useModelStore } from "../../stores/modelStore";
 import "./PromptBenchmarkPage.css";
-import { Body, BodyStrong, Meta, SectionTitle } from "../../components/ui/Typography/Typography";
+import { BodyStrong, Meta, SectionTitle } from "../../components/ui/Typography/Typography";
 
 const SUITE_HOME = "/prompt-benchmark/playground";
 
@@ -38,8 +36,6 @@ const SECTIONS: {
 export default function PromptBenchmarkPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const serverStatus = useModelStore((s) => s.serverStatus);
-  const activeModelId = useModelStore((s) => s.activeModelId);
 
   const selected = SECTIONS.find((s) => location.pathname.startsWith(s.to))?.to ?? SUITE_HOME;
 
@@ -50,12 +46,7 @@ export default function PromptBenchmarkPage() {
   return (
     <div className="prompt-benchmark-page__page">
       <aside className="prompt-benchmark-page__nav">
-        <div>
-          <SectionTitle>Benchmark Suite</SectionTitle>
-          <Meta block>
-            {serverStatus.running ? `runtime :${serverStatus.port}` : "runtime offline"}
-          </Meta>
-        </div>
+        <SectionTitle>Benchmark Suite</SectionTitle>
 
         <TabList
           vertical
@@ -72,19 +63,6 @@ export default function PromptBenchmarkPage() {
             </Tab>
           ))}
         </TabList>
-
-        <div className="prompt-benchmark-page__nav-footer">
-          <Divider />
-          <div className="prompt-benchmark-page__nav-footer-row">
-            <div className="prompt-benchmark-page__nav-footer-text">
-              <Meta>Active Model</Meta>
-              <Body>{activeModelId ? activeModelId.split("/").pop() : "none"}</Body>
-            </div>
-          </div>
-          <StatusBadge tone={serverStatus.running ? "green" : "red"}>
-            {serverStatus.running ? "Runtime Connected" : "Runtime Offline"}
-          </StatusBadge>
-        </div>
       </aside>
 
       <section className="prompt-benchmark-page__panel">

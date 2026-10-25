@@ -55,6 +55,7 @@ pub async fn load_sessions(
     db: tauri::State<'_, DatabaseConnection>,
 ) -> Result<Vec<ChatSessionWithMessages>, String> {
     let sessions = chat_session::Entity::find()
+        .order_by_desc(chat_session::Column::Pinned)
         .order_by_desc(chat_session::Column::UpdatedAt)
         .all(&*db)
         .await
@@ -127,6 +128,7 @@ pub async fn save_session(
         context_chars: Set(session.context_chars),
         created_at: Set(session.created_at),
         updated_at: Set(session.updated_at),
+        pinned: Set(session.pinned),
     })
     .on_conflict(
         OnConflict::column(chat_session::Column::Id)
@@ -136,6 +138,7 @@ pub async fn save_session(
                 chat_session::Column::ContextChars,
                 chat_session::Column::CreatedAt,
                 chat_session::Column::UpdatedAt,
+                chat_session::Column::Pinned,
             ])
             .to_owned(),
     )

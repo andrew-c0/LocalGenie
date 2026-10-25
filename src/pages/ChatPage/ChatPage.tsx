@@ -4,9 +4,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import ChatArea from "../../components/ChatArea/ChatArea";
 import ChatInput from "../../components/ChatInput/ChatInput";
 import { ChatContextHeader } from "../../components/chat/ChatContextHeader/ChatContextHeader";
+import { ChatWelcome } from "../../components/chat/ChatWelcome/ChatWelcome";
 import MissingFileBanner from "../../components/chat/MissingFileBanner/MissingFileBanner";
 import { SessionList } from "../../components/chat/SessionList/SessionList";
-import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
 import { StateBlock } from "../../components/ui/StateBlock/StateBlock";
 import { useChatStore } from "../../stores/chatStore";
 import { useModelStore } from "../../stores/modelStore";
@@ -20,15 +20,21 @@ export default function ChatPage() {
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId?: string }>();
   const setActiveSession = useChatStore((s) => s.setActiveSession);
+  const createSession = useChatStore((s) => s.createSession);
+  const discardEmptySessions = useChatStore((s) => s.discardEmptySessions);
   const sessions = useChatStore((s) => s.sessions);
   const serverStatus = useModelStore((s) => s.serverStatus);
 
   // Sessions may still be loading when the page opens, so a missing id is shown, not redirected.
   const activeSession = sessions.find((s) => s.id === sessionId);
 
+  // An empty conversation is a draft: it goes once the user moves on without sending anything.
   useEffect(() => {
     setActiveSession(sessionId ?? null);
-  }, [sessionId, setActiveSession]);
+    discardEmptySessions(sessionId ?? null);
+  }, [sessionId, setActiveSession, discardEmptySessions]);
+
+  useEffect(() => () => discardEmptySessions(null), [discardEmptySessions]);
 
   let content: ReactNode;
   if (activeSession) {
@@ -50,17 +56,15 @@ export default function ChatPage() {
       </div>
     );
   } else {
+    const recentSessions = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3);
     content = (
-      <div className="chat-page__empty">
-        <StateBlock
-          icon="💬"
-          message={
-            serverStatus.running
-              ? "Select or create a conversation to start chatting."
-              : "Start the GenieX server to begin chatting with your loaded models."
-          }
-        />
-      </div>
+      <ChatWelcome
+        serverRunning={serverStatus.running}
+        modelCount={serverStatus.models.length}
+        recentSessions={recentSessions}
+        onNewConversation={() => navigate(`/chat/${createSession()}`)}
+        onOpenSession={(id) => navigate(`/chat/${id}`)}
+      />
     );
   }
 
@@ -69,14 +73,6 @@ export default function ChatPage() {
       <SessionList />
 
       <div className="chat-page__canvas">
-        {/* An open conversation shows its title in the context bar instead. */}
-        {!activeSession && (
-          <PageHeader
-            eyebrow="● CHAT"
-            title="Chat"
-            subtitle="Chat with your loaded models. Conversations are stored on this device."
-          />
-        )}
         <ChatContextHeader />
         {content}
       </div>

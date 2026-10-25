@@ -5,11 +5,14 @@ import {
   ChevronLeftRegular,
   ChevronRightRegular,
   DeleteRegular,
+  PinOffRegular,
+  PinRegular,
 } from "@fluentui/react-icons";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as db from "../../../services/database";
 import { useChatStore } from "../../../stores/chatStore";
+import type { ChatSession } from "../../../types";
 import { ConfirmDialog } from "../../ui/ConfirmDialog/ConfirmDialog";
 import "./SessionList.css";
 
@@ -19,10 +22,17 @@ export function SessionList() {
   const activeSessionId = useChatStore((s) => s.activeSessionId);
   const createSession = useChatStore((s) => s.createSession);
   const deleteSession = useChatStore((s) => s.deleteSession);
+  const setSessionPinned = useChatStore((s) => s.setSessionPinned);
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const activeSession = sessions.find((s) => s.id === activeSessionId);
+  // Pinned conversations first. The sort is stable, so each group keeps the store's recency order.
+  const orderedSessions = [...sessions].sort((a, b) => Number(b.pinned) - Number(a.pinned));
+
+  const handleTogglePin = (session: ChatSession) => {
+    setSessionPinned(session.id, !session.pinned);
+  };
 
   const handleDelete = async (id: string) => {
     setConfirmingDelete(false);
@@ -54,9 +64,15 @@ export function SessionList() {
             selectedValue={activeSessionId ?? undefined}
             onTabSelect={handleSelect}
           >
-            {sessions.map((session) => (
-              <Tab key={session.id} value={session.id} title={session.title}>
-                {session.title}
+            {orderedSessions.map((session) => (
+              <Tab
+                key={session.id}
+                value={session.id}
+                title={session.title}
+                className="session-list__tab"
+                icon={session.pinned ? <PinRegular /> : undefined}
+              >
+                <span className="session-list__tab-title">{session.title}</span>
               </Tab>
             ))}
           </TabList>
@@ -75,6 +91,16 @@ export function SessionList() {
           {collapsed ? null : "New Conversation"}
         </Button>
       </div>
+
+      {!collapsed && activeSession && (
+        <Button
+          appearance="secondary"
+          icon={activeSession.pinned ? <PinOffRegular /> : <PinRegular />}
+          onClick={() => handleTogglePin(activeSession)}
+        >
+          {activeSession.pinned ? "Unpin conversation" : "Pin conversation"}
+        </Button>
+      )}
 
       {!collapsed && activeSession && (
         <Button

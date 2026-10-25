@@ -9,6 +9,7 @@ mod m20261023_000001_model_setting_values;
 mod m20261023_000002_model_capability_values;
 mod m20261024_000001_message_attachments;
 mod m20261025_000001_message_usage;
+mod m20261026_000001_chat_session_pinned;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -24,6 +25,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261023_000002_model_capability_values::Migration),
             Box::new(m20261024_000001_message_attachments::Migration),
             Box::new(m20261025_000001_message_usage::Migration),
+            Box::new(m20261026_000001_chat_session_pinned::Migration),
         ]
     }
 }
@@ -77,6 +79,7 @@ mod tests {
             context_chars: Set(0),
             created_at: Set(1),
             updated_at: Set(1),
+            pinned: Set(false),
         }
         .insert(&db)
         .await
@@ -158,6 +161,7 @@ mod tests {
             context_chars: Set(0),
             created_at: Set(1),
             updated_at: Set(1),
+            pinned: Set(false),
         }
         .insert(&db)
         .await
@@ -193,8 +197,8 @@ mod tests {
         assert_eq!(msg.token_count, Some(42));
         assert_eq!(msg.prompt_chars, Some(7));
 
-        // Five steps: the model settings, capability, attachment and usage migrations come after this one.
-        Migrator::down(&db, Some(5))
+        // Six steps: the model settings, capability, attachment, usage and pinned migrations come after this one.
+        Migrator::down(&db, Some(6))
             .await
             .expect("revert stats migration");
         let after_down = columns(db.clone()).await;
@@ -224,8 +228,8 @@ mod tests {
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
         // Put back the old JSON row, then apply the migrations again so it copies it.
-        // Four steps: the capability, attachment and usage migrations come after the settings one.
-        Migrator::down(&db, Some(4))
+        // Five steps: the capability, attachment, usage and pinned migrations come after the settings one.
+        Migrator::down(&db, Some(5))
             .await
             .expect("revert settings migration");
         db.execute(Statement::from_string(
@@ -307,6 +311,7 @@ mod tests {
             context_chars: Set(0),
             created_at: Set(1),
             updated_at: Set(1),
+            pinned: Set(false),
         }
         .insert(&db)
         .await

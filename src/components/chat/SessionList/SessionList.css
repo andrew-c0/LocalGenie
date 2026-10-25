@@ -16,6 +16,21 @@
   align-items: center;
 }
 
+/* Each conversation is one row; long titles are cut off with an ellipsis. */
+.session-list__tab {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.session-list__tab-title {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .session-list__footer {
   margin-top: auto;
   display: flex;

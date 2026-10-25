@@ -28,6 +28,7 @@ interface DbSessionWithMessages {
   context_chars: number;
   created_at: number;
   updated_at: number;
+  pinned: boolean;
   messages: DbMessageRow[];
   errors: DbChatErrorRow[];
 }
@@ -123,6 +124,7 @@ export async function loadSessions(): Promise<ChatSession[]> {
       contextChars: row.context_chars,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      pinned: row.pinned,
       // Array sort is stable, so on equal timestamps the stored message stays first.
       messages: [...messages, ...errors].sort((a, b) => a.timestamp - b.timestamp),
     };
@@ -138,6 +140,7 @@ export async function saveSession(session: ChatSession): Promise<void> {
       context_chars: session.contextChars,
       created_at: session.createdAt,
       updated_at: session.updatedAt,
+      pinned: session.pinned,
     },
   });
 }

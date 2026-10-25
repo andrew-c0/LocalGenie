@@ -11,6 +11,8 @@ pub struct Model {
     pub context_chars: i64,
     pub created_at: i64,
     pub updated_at: i64,
+    /// Pinned conversations are listed first.
+    pub pinned: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

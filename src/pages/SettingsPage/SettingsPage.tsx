@@ -1,10 +1,9 @@
 import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
-import { Divider, Tab, TabList } from "@fluentui/react-components";
+import { Tab, TabList } from "@fluentui/react-components";
 import {
   BrainCircuitRegular,
   DesktopRegular,
   DocumentBulletListRegular,
-  InfoRegular,
 } from "@fluentui/react-icons";
 import type { ReactElement } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -15,7 +14,7 @@ import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
 import { StatusBadge } from "../../components/ui/StatusBadge/StatusBadge";
 import { useModelStore } from "../../stores/modelStore";
 import "./SettingsPage.css";
-import { Body, BodyStrong, Meta, SectionTitle } from "../../components/ui/Typography/Typography";
+import { BodyStrong, Meta, SectionTitle } from "../../components/ui/Typography/Typography";
 
 type SectionId = "app" | "inference" | "logs";
 
@@ -56,8 +55,6 @@ export default function SettingsPage() {
   const { section: sectionParam } = useParams<{ section: string }>();
   // Unknown sections fall back to the first one.
   const section: SectionId = SECTIONS.find((s) => s.id === sectionParam)?.id ?? "app";
-  const serverStatus = useModelStore((s) => s.serverStatus);
-  const activeModelId = useModelStore((s) => s.activeModelId);
   const updateInfo = useModelStore((s) => s.updateInfo);
 
   const updateBadge = updateInfo?.update_available ?? false;
@@ -71,12 +68,7 @@ export default function SettingsPage() {
   return (
     <div className="settings-page__page">
       <aside className="settings-page__nav">
-        <div>
-          <SectionTitle>System Configuration</SectionTitle>
-          <Meta block>
-            {serverStatus.running ? `runtime :${serverStatus.port}` : "runtime offline"}
-          </Meta>
-        </div>
+        <SectionTitle>System Configuration</SectionTitle>
 
         <TabList
           vertical
@@ -94,20 +86,6 @@ export default function SettingsPage() {
             </Tab>
           ))}
         </TabList>
-
-        <div className="settings-page__nav-footer">
-          <Divider />
-          <div className="settings-page__nav-footer-row">
-            <InfoRegular />
-            <div className="settings-page__nav-footer-text">
-              <Meta>Active Model</Meta>
-              <Body>{activeModelId ? activeModelId.split("/").pop() : "none"}</Body>
-            </div>
-          </div>
-          <StatusBadge tone={serverStatus.running ? "green" : "red"}>
-            {serverStatus.running ? "Runtime Connected" : "Runtime Offline"}
-          </StatusBadge>
-        </div>
       </aside>
 
       <section className="settings-page__panel">

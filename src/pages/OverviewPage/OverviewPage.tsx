@@ -5,12 +5,11 @@ import { SpeedList } from "../../components/benchmark/SpeedList/SpeedList";
 import { MetricCard } from "../../components/ui/MetricCard/MetricCard";
 import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
 import { StateBlock } from "../../components/ui/StateBlock/StateBlock";
-import { StatusBadge } from "../../components/ui/StatusBadge/StatusBadge";
+import { CardTitle, Meta } from "../../components/ui/Typography/Typography";
 import { useModelStore } from "../../stores/modelStore";
 import "./OverviewPage.css";
-import { Body, CardTitle, Meta } from "../../components/ui/Typography/Typography";
 
-/** Overview / capabilities dashboard. */
+/** Overview dashboard: server state, installed models and recent generation speeds. */
 export default function OverviewPage() {
   const navigate = useNavigate();
   const models = useModelStore((s) => s.models);
@@ -20,7 +19,7 @@ export default function OverviewPage() {
     <div className="overview-page__page">
       <div className="overview-page__inner">
         <PageHeader
-          eyebrow={serverStatus.running ? "● Hexagon NPU & DirectML Ready" : "● Runtime Offline"}
+          eyebrow="● OVERVIEW"
           title="Overview"
           subtitle="Run open-weights models locally on Qualcomm NPU, GPU or CPU. Zero cloud, zero API latency."
           actions={
@@ -46,15 +45,10 @@ export default function OverviewPage() {
         <div className="overview-page__grid">
           <MetricCard
             label="Server Status"
-            badge={
-              <StatusBadge tone={serverStatus.running ? "green" : "red"}>
-                {serverStatus.running ? "Running" : "Stopped"}
-              </StatusBadge>
-            }
-            value={serverStatus.running ? "Online" : "Offline"}
+            value={serverStatus.running ? "Running" : "Stopped"}
             sub={
               serverStatus.running
-                ? `Listening on 127.0.0.1:${serverStatus.port}`
+                ? `${serverStatus.models.length} loaded on server`
                 : "Start the server from the model selector"
             }
           />
@@ -74,43 +68,6 @@ export default function OverviewPage() {
             }
             progressColor="cyan"
           />
-          <MetricCard
-            label="Hardware Telemetry"
-            badge={<StatusBadge tone="purple">Unavailable</StatusBadge>}
-            value="—"
-            unit="NPU / VRAM / Temp"
-            sub="Live hardware metrics require backend telemetry support"
-          />
-        </div>
-
-        <div className="overview-page__grid">
-          <Card>
-            <CardHeader header={<CardTitle>🔒 100% Offline Privacy</CardTitle>} />
-            <div className="overview-page__capability-body">
-              <Body>
-                Context windows, prompts, and vector embeddings reside strictly in local memory.
-                Zero telemetry outbound.
-              </Body>
-            </div>
-          </Card>
-          <Card>
-            <CardHeader header={<CardTitle>⚡ Native NPU Acceleration</CardTitle>} />
-            <div className="overview-page__capability-body">
-              <Body>
-                DirectML and Qualcomm Hexagon paths deliver sub-12ms time-to-first-token latency on
-                supported hardware.
-              </Body>
-            </div>
-          </Card>
-          <Card>
-            <CardHeader header={<CardTitle>✳ Open Weights Ingestion</CardTitle>} />
-            <div className="overview-page__capability-body">
-              <Body>
-                Native support for GGUF and ONNX archives from Hugging Face and Qualcomm AI Hub with
-                automatic quantization.
-              </Body>
-            </div>
-          </Card>
         </div>
 
         <Card>
@@ -120,11 +77,6 @@ export default function OverviewPage() {
           />
           <SpeedList />
         </Card>
-
-        <div className="overview-page__banner">
-          <Body>🛡 Windows sandbox isolation active. 0 outbound network requests allowed.</Body>
-          <Body>127.0.0.1:{serverStatus.port} (localhost)</Body>
-        </div>
 
         {models.length === 0 && (
           <StateBlock

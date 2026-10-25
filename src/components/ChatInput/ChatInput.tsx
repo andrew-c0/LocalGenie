@@ -329,6 +329,9 @@ export default function ChatInput() {
     setText("");
     setPending([]);
     addMessage(activeSessionId, userMsg);
+    // The conversation is stored with its first prompt, so its row must exist before the message.
+    const stored = useChatStore.getState().sessions.find((s) => s.id === activeSessionId);
+    if (stored) await db.saveSession(stored).catch(() => {});
     await db.saveMessage(activeSessionId, userMsg).catch(() => {});
 
     await doSend(activeSessionId, built.history);

@@ -17,7 +17,10 @@ export function useSessionPersistence() {
     const flush = () => {
       timer = undefined;
       for (const session of useChatStore.getState().sessions) {
-        if (dirty.has(session.id)) db.saveSession(session).catch(() => undefined);
+        // A conversation is stored once it has a message; an empty new chat stays in memory only.
+        if (dirty.has(session.id) && session.messages.length > 0) {
+          db.saveSession(session).catch(() => undefined);
+        }
       }
       dirty.clear();
     };

@@ -36,9 +36,13 @@ interface ChatState {
   setLastSendTime: (time: number) => void;
   loadSessions: (sessions: ChatSession[]) => void;
   setSessionModel: (sessionId: string, modelId: string) => void;
+  /** Pins or unpins a conversation. Leaves updatedAt alone so the list order by recency holds. */
+  setSessionPinned: (sessionId: string, pinned: boolean) => void;
+  /** Drops empty conversations (no messages yet), except `keepId`. Nothing is stored for them. */
+  discardEmptySessions: (keepId: string | null) => void;
 }
 
-export const useChatStore = create<ChatState>((set) => ({
+export const useChatStore = create<ChatState>((set, get) => ({
   sessions: [],
   activeSessionId: null,
   isStreaming: false,
@@ -47,6 +51,10 @@ export const useChatStore = create<ChatState>((set) => ({
   lastSendTime: 0,
 
   createSession: (modelId?: string) => {
+    // One empty draft at a time: a new conversation opens the existing empty one.
+    const draft = get().sessions.find((s) => s.messages.length === 0);
+    if (draft) return draft.id;
+
     const id = crypto.randomUUID();
     const now = Date.now();
     const session: ChatSession = {
@@ -57,6 +65,7 @@ export const useChatStore = create<ChatState>((set) => ({
       contextChars: 0,
       createdAt: now,
       updatedAt: now,
+      pinned: false,
     };
     set((state) => ({
       sessions: [session, ...state.sessions],
@@ -216,6 +225,18 @@ export const useChatStore = create<ChatState>((set) => ({
       sessions: state.sessions.map((s) =>
         s.id === sessionId ? { ...s, modelId, updatedAt: Date.now() } : s,
       ),
+    }));
+  },
+
+  setSessionPinned: (sessionId: string, pinned: boolean) => {
+    set((state) => ({
+      sessions: state.sessions.map((s) => (s.id === sessionId ? { ...s, pinned } : s)),
+    }));
+  },
+
+  discardEmptySessions: (keepId: string | null) => {
+    set((state) => ({
+      sessions: state.sessions.filter((s) => s.messages.length > 0 || s.id === keepId),
     }));
   },
 }));

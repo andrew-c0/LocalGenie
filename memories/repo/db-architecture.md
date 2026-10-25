@@ -6,7 +6,7 @@
 - Database access is through Tauri command handlers and typed service wrappers.
 
 ## Primary tables
-- `chat_sessions`: session metadata
+- `chat_sessions`: session metadata. `pinned` (bool, default false): pinned sessions list first. Migration `m20261026_000001_chat_session_pinned`.
 - `messages`: chat messages tied to a session. Columns: `attachments` (JSON text: the files sent with a user message, `id`, `kind`, `name`, `size`, `path`, `chars`; null when none; contents are not stored), `prompt_tokens` and `completion_tokens` (the server's exact counts for an assistant reply; null for older rows and stopped replies).
 - `model_setting_values`: one row per setting per model. PK (`model_id`, `key`); `value` is the setting's JSON text; `model_id` = name without `:precision`. Keys and their Rust types are declared in `src-tauri/src/model_settings.rs`; `save` replaces a model's keys in one transaction. Frontend sees one object per model via `load_model_settings` / `save_model_settings`.
 - `model_capability_values`: one row per scan key per model. PK (`model_id`, `key`); `value` is the result JSON (`status`, `detail`, `probedAt`, `fingerprint`, `source`). Written only by `model_capabilities::save`, which applies the write-once rule (a `works` row is never overwritten by a non-works result and never removed). Migration `m20261023_000002_model_capability_values`.

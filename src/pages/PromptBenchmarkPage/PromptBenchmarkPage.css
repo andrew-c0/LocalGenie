@@ -14,25 +14,6 @@
   gap: var(--spacingVerticalM);
 }
 
-.prompt-benchmark-page__nav-footer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacingVerticalS);
-  margin-top: auto;
-}
-
-.prompt-benchmark-page__nav-footer-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacingHorizontalS);
-}
-
-.prompt-benchmark-page__nav-footer-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
 .prompt-benchmark-page__tab-content {
   display: flex;
   flex-direction: column;

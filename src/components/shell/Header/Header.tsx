@@ -63,8 +63,8 @@ export default function Header() {
         appearance="tint"
         color={serverStatus.running ? "success" : "danger"}
         icon={serverStatus.running ? <PlugConnectedRegular /> : <PlugDisconnectedRegular />}
-        title={serverStatus.running ? "Connected" : "Offline"}
-        aria-label={serverStatus.running ? "Connected" : "Offline"}
+        title={serverStatus.running ? "Running" : "Stopped"}
+        aria-label={serverStatus.running ? "Running" : "Stopped"}
       />
 
       <Button
