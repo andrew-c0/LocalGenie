@@ -1,6 +1,6 @@
 # Known issues
 
-Status labels: **code-verified** = read in the source (committed up to 694a036, or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-25 sync. Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
+Status labels: **code-verified** = read in the source (committed up to 694a036, or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-26 sync (the benchmark suite was read, not run). Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
 
 ## Active
 - Model load/chat hangs: the GenieX warmup request in `load_model` may never get a response. The warmup carries the model's load params (committed in 6068a81), so it matches chat. Not re-validated (runtime-unverified).
@@ -27,11 +27,15 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Limits (code-verified in `commands/attachments.rs`, `utils/attachments.ts`): 4 files per message, 10 MB for image and audio, 512 KB UTF-8 for text. The "Open location" action is Windows only.
 - Earlier cache overwrite (a second quant of the same repo replaced the first in the cache) was not reproduced in isolation. The observed loss was explained by a manual removal (reported). Treat as unconfirmed.
 
+## Benchmarks (committed in 63f1fbc; runtime-unverified)
+- The runner's compute and power recording (`benchmark_runner.rs` `Sampler` and `sample_usage`; `power.rs` power plan and battery) has not been verified against a live model in the app. Power is Windows only (`powercfg`, battery status); elsewhere the fields are null.
+- Bottom-left usage graph (`SystemUsage`, `get_system_usage(port)`): it follows only the server on the configured port. A server started on another port is not measured (code-verified; runtime-unverified).
+- Bandwidth, thermals and VRAM are not recorded by any run: no source exists in `src/` or `src-tauri/` (grep, 63f1fbc); the old telemetry tiles (`TelemetryValues`) were removed.
+- Overview's "Recent Generation Speeds" (`components/benchmark/SpeedList`) reads chat message stats from `chatStore`, not benchmark runs (code-verified).
+- Biome: `npx biome check src/` reports 9 format errors, pre-existing and not changed by 63f1fbc: `ModelSettings/ModelSettings.css`, `ModelSettings/ModelSettings.tsx`, `ModelSettings/SettingField/SettingField.css`, `SettingField.tsx`, `ModelSettings/useModelSettingsForm.ts`, `models/GGUFVariantList.tsx`, `shell/Layouts/Layouts.css`, `Layouts.tsx`, `ui/PageHeader/PageHeader.css`. Formatting drift only; not fixed here.
+
 ## UI follow-ups
 - Header Downloads button still uses `appearance="subtle"` (`Header/Header.tsx`), against the agreed visual rule (secondary/primary).
-- Benchmark "Run Benchmark" only toggles visual state; no backend benchmark command. Dashboard "Export" and Playground "Save Preset" are disabled.
-- Benchmark run history is in-memory only (`benchmarkStore`).
-- Hardware telemetry (NPU/VRAM, thermals, bandwidth, power) has no backend source; the benchmark tiles show "—" (no N/A badge since 7d7b1ed).
 - Syntax highlighting: `rehype-highlight` runs only with `allowHtml`, and no highlight.js theme is imported.
 - Page padding choice is undecided.
 - The UI has not been run since the Fluent migration, the frontend changes since 1b5d554, or the chat attachment and delete-message work (runtime-unverified).
@@ -57,6 +61,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - The running server PID is cleared when the `geniex serve` child exits, so a crashed server can be started again (code-verified in `server.rs`; runtime-unverified).
 
 ## Resolved (code-verified; runtime-unverified)
+- Benchmark "Run Benchmark" only toggled visual state, and run history was in memory only (`benchmarkStore`). A suite now runs through `start_benchmark_run` and each run is saved to `benchmark_runs` (63f1fbc: `commands/benchmark_runner.rs`, `commands/benchmark_runs.rs`). The Playground, Performance Dashboard and `benchmarkStore` were removed, with their disabled Export and Save Preset buttons.
 - Every stop or unload was reported as `server-stopped`, so a user unload looked like a crash. Now only an unexpected child exit emits it (committed in 1b5d554: `commands/server.rs`, PID cleared before the kill).
 - A load with no saved context window used a fixed 4096. It now uses the model's native `context_size` (committed in 1b5d554: `resolveLoadParams`, `loadNativeContext`).
 - The loaded-model list came from `/v1/models`, which lists every cached model, so cached models showed as loaded. It now reads `GET /status` `models[].id` (`server.rs` `fetch_loaded_models`; code-verified against the GenieX `status` handler; runtime-unverified in the app).

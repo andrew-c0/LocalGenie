@@ -14,6 +14,7 @@ Source: the official GenieX repo (github.com/qualcomm/GenieX, read-only), checke
 - Load parameters (`nctx`, `ngl`, `compute`, `power_mode`, `spec_*`) must be sent with the warmup and with every chat request, or the first message reloads the model (`commands/chat_helpers.rs` `apply_load_params`).
 - Origins and keepalive are server-start options only; changing them restarts the server.
 - Stopping the server is the only unload (`unload_all_models`).
+- The benchmark runner (`commands/benchmark_runner.rs`) follows the same rule: every step request carries the model's load params and the model id from `/status`.
 
 ## Chat endpoint behaviour
 - Defaults when a field is omitted (`cli/server/handler/chat.go`): `enable_think` true, `reasoning_format` "deepseek" (moves thinking to `reasoning_content`), `repetition_penalty` 1.0, `top_k` 0, `min_p` 0.

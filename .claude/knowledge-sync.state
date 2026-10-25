@@ -1,3 +1,3 @@
-last_synced_commit=7d7b1edf25fd6f2db4ac259df92e759ddac3821b
-last_synced_date=2026-10-25
-note=Synced to HEAD 7d7b1ed (covers a87f363 docs for message deletion, de2b82e scrim behind the model selector, 94f6182 merge, 7d7b1ed chat welcome, conversation pinning, first-prompt storage, Running/Stopped wording, telemetry removal). Working tree was clean. cargo/tsc/vitest not run by knowledge-sync.
+last_synced_commit=63f1fbc35324057b8caca62fe08cdf555cc443ef
+last_synced_date=2026-10-26
+note=Synced to HEAD 63f1fbc (covers 3a4e460 sync docs, aed4984 react-expert Running/Stopped alignment, 63f1fbc benchmark suite: Benchmarks area, Rust runner, benchmark tables m20261027-m20261029, power.rs, benchmark events, scan_model_capabilities baseUrl). Working tree was clean at start. Doc edits from this sync are uncommitted in the working tree. cargo/tsc/vitest not run; biome check src/ run (9 pre-existing format errors). The app was not run.
