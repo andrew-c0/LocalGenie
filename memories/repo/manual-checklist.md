@@ -49,9 +49,11 @@ Run through these checks manually after building or deploying the app. Automated
 
 - [ ] All 6 views render and switch via the sidebar: Overview, Models, Chat & Playground, Benchmarks, Prompt Bench, Settings — without losing active session or server status.
 - [ ] Chat: streaming updates in place, `chat-done` records generation stats, retry removes later messages in both Zustand and SQLite.
+- [ ] Chat welcome: `/chat` with no open conversation shows the status (Running/Stopped) and up to 3 recent conversations; New conversation twice opens the same empty draft; leaving an empty draft leaves nothing in the list after a reload; the first send stores it.
+- [ ] Pin: a pinned conversation lists first and keeps its place after a reload; unpin returns it to recency order.
 - [ ] Models: search → download → import → progress → completion refresh; cancel and resume from the drawer; duplicate click is ignored; Load & Chat sets active model; remove confirmation works; repo filter chips behave.
 - [ ] Settings: port save/probe persists; CLI update card reflects `updateInfo` (badge on sidebar settings entry is currently gone — settings moved to a page, verify update badge UX still acceptable).
 - [ ] Prompt Benchmark: `Ctrl+Enter` executes a real streaming run against the local server; TTFT/throughput values change between runs; recent runs list updates.
-- [ ] Benchmark page: ranking populated from real chat stats only (no fabricated numbers); bandwidth/thermal cards show "—/N/A".
+- [ ] Benchmark page: ranking populated from real chat stats only (no fabricated numbers); bandwidth/thermal tiles show "—".
 - [ ] Responsive: sidebar collapses to icon rail ≤860px; model grid 3→2→1 columns; settings rows stack; chat session list hides on narrow widths.
 - [ ] Keyboard: Escape closes model-remove dialog; nav items are real buttons (focusable); sliders are labelled via `aria-labelledby`.

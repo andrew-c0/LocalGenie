@@ -31,7 +31,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Header Downloads button still uses `appearance="subtle"` (`Header/Header.tsx`), against the agreed visual rule (secondary/primary).
 - Benchmark "Run Benchmark" only toggles visual state; no backend benchmark command. Dashboard "Export" and Playground "Save Preset" are disabled.
 - Benchmark run history is in-memory only (`benchmarkStore`).
-- Hardware telemetry (NPU/VRAM, thermals, bandwidth, power) has no backend source; pages show "unavailable".
+- Hardware telemetry (NPU/VRAM, thermals, bandwidth, power) has no backend source; the benchmark tiles show "—" (no N/A badge since 7d7b1ed).
 - Syntax highlighting: `rehype-highlight` runs only with `allowHtml`, and no highlight.js theme is imported.
 - Page padding choice is undecided.
 - The UI has not been run since the Fluent migration, the frontend changes since 1b5d554, or the chat attachment and delete-message work (runtime-unverified).
