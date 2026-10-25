@@ -1,4 +1,5 @@
 import { Outlet } from "react-router-dom";
+import { useModelStore } from "../../../stores/modelStore";
 import { ChatRuntime } from "../../chat/ChatRuntime/ChatRuntime";
 import CliMissingBanner from "../CliMissingBanner/CliMissingBanner";
 import CloseGuard from "../CloseGuard";
@@ -14,6 +15,8 @@ import "./Layouts.css";
  * sits here too, so a reply keeps streaming and saving while the user is on another page.
  */
 export function MainLayout() {
+  const selectorOpen = useModelStore((s) => s.selectorOpen);
+
   return (
     <div className="layout">
       <TitleBar />
@@ -23,6 +26,8 @@ export function MainLayout() {
           <CliMissingBanner />
           <Header />
           <Outlet />
+          {/* Dims the header and page while the model selector is open. The sidebar stays clear. */}
+          {selectorOpen && <div className="layout__scrim" aria-hidden="true" />}
         </div>
       </div>
       <CloseGuard />

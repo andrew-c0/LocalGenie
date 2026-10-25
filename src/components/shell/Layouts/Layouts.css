@@ -15,9 +15,26 @@
 }
 
 .layout__main {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+}
+
+/* Shade over the header and page while the model selector is open. The title bar and sidebar sit
+   outside this column, so they stay clear. The popover is portaled to <body>, so it sits above. */
+.layout__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background-color: rgba(0, 0, 0, 0.7);
+  animation: layout-scrim-in 120ms ease-out;
+}
+
+@keyframes layout-scrim-in {
+  from {
+    opacity: 0;
+  }
 }
