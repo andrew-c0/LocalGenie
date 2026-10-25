@@ -1,0 +1,37 @@
+.suite-run {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalS);
+  padding-top: var(--spacingVerticalM);
+  border-top: 1px solid var(--colorNeutralStroke2);
+}
+
+.suite-run__actions {
+  display: flex;
+  gap: var(--spacingHorizontalS);
+}
+
+.suite-run__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fontSizeBase200);
+}
+
+.suite-run__table th,
+.suite-run__table td {
+  text-align: left;
+  padding: var(--spacingVerticalXS) var(--spacingHorizontalS);
+  border-bottom: 1px solid var(--colorNeutralStroke2);
+  overflow-wrap: anywhere;
+}
+
+.suite-run__table th {
+  color: var(--colorNeutralForeground2);
+  font-weight: var(--fontWeightSemibold);
+}
+
+.suite-run__progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalXS);
+}

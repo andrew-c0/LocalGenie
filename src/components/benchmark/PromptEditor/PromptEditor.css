@@ -1,0 +1,50 @@
+.prompt-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalM);
+}
+
+.prompt-editor__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalS);
+}
+
+.prompt-editor__keyword-entry {
+  display: flex;
+  gap: var(--spacingHorizontalS);
+}
+
+.prompt-editor__keyword-entry > :first-child {
+  flex: 1;
+}
+
+.prompt-editor__keywords {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalXS);
+}
+
+.prompt-editor__keyword {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacingVerticalXS) var(--spacingHorizontalS);
+  border-radius: var(--borderRadiusMedium);
+  background: var(--colorNeutralBackground3);
+}
+
+.prompt-editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+  flex-wrap: wrap;
+}
+
+.prompt-editor__actions > :first-child:not(:last-child) {
+  margin-right: auto;
+}

@@ -10,6 +10,10 @@ mod m20261023_000002_model_capability_values;
 mod m20261024_000001_message_attachments;
 mod m20261025_000001_message_usage;
 mod m20261026_000001_chat_session_pinned;
+mod m20261027_000001_create_benchmark_tables;
+mod m20261028_000001_benchmark_run_counters;
+mod m20261028_000002_benchmark_prompt_text;
+mod m20261029_000001_benchmark_run_power;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -26,6 +30,10 @@ impl MigratorTrait for Migrator {
             Box::new(m20261024_000001_message_attachments::Migration),
             Box::new(m20261025_000001_message_usage::Migration),
             Box::new(m20261026_000001_chat_session_pinned::Migration),
+            Box::new(m20261027_000001_create_benchmark_tables::Migration),
+            Box::new(m20261028_000001_benchmark_run_counters::Migration),
+            Box::new(m20261028_000002_benchmark_prompt_text::Migration),
+            Box::new(m20261029_000001_benchmark_run_power::Migration),
         ]
     }
 }
@@ -197,8 +205,8 @@ mod tests {
         assert_eq!(msg.token_count, Some(42));
         assert_eq!(msg.prompt_chars, Some(7));
 
-        // Six steps: the model settings, capability, attachment, usage and pinned migrations come after this one.
-        Migrator::down(&db, Some(6))
+        // Ten steps: the model settings, capability, attachment, usage, pinned, benchmark, counter, text and power migrations come after this one.
+        Migrator::down(&db, Some(10))
             .await
             .expect("revert stats migration");
         let after_down = columns(db.clone()).await;
@@ -228,8 +236,8 @@ mod tests {
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
         // Put back the old JSON row, then apply the migrations again so it copies it.
-        // Five steps: the capability, attachment, usage and pinned migrations come after the settings one.
-        Migrator::down(&db, Some(5))
+        // Nine steps: the capability, attachment, usage, pinned, benchmark, counter, text and power migrations come after the settings one.
+        Migrator::down(&db, Some(9))
             .await
             .expect("revert settings migration");
         db.execute(Statement::from_string(
@@ -344,6 +352,162 @@ mod tests {
             .expect("query")
             .expect("row exists");
         assert_eq!(msg.attachments.as_deref(), Some(json));
+    }
+
+    #[tokio::test]
+    async fn benchmark_tables_keep_history_and_block_prompt_in_use() {
+        use crate::entities::{
+            benchmark_file, benchmark_prompt, benchmark_prompt_file, benchmark_run,
+            benchmark_run_step, benchmark_suite, benchmark_suite_step,
+        };
+        use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+
+        let tmp = TempDb::new("migrate-benchmark");
+        let db = init_database(&tmp.url()).await.expect("migrations apply");
+
+        benchmark_prompt::ActiveModel {
+            id: Set("p1".into()),
+            name: Set("Capital".into()),
+            description: Set(None),
+            text: Set("Capital of France?".into()),
+            match_rule: Set("all".into()),
+            run_count: Set(0),
+            created_at: Set(1),
+            updated_at: Set(1),
+        }
+        .insert(&db)
+        .await
+        .expect("insert prompt");
+
+        benchmark_file::ActiveModel {
+            id: Set("f1".into()),
+            name: Set("notes.txt".into()),
+            kind: Set("text".into()),
+            size: Set(Some(4)),
+            chars: Set(Some(4)),
+            stored_path: Set("benchmark-files/f1/notes.txt".into()),
+            sha256: Set("ab".into()),
+            created_at: Set(1),
+        }
+        .insert(&db)
+        .await
+        .expect("insert file");
+
+        benchmark_prompt_file::ActiveModel {
+            prompt_id: Set("p1".into()),
+            position: Set(0),
+            file_id: Set("f1".into()),
+        }
+        .insert(&db)
+        .await
+        .expect("attach file to prompt");
+
+        benchmark_suite::ActiveModel {
+            id: Set("s1".into()),
+            name: Set("Smoke".into()),
+            description: Set(None),
+            mode: Set("conversation".into()),
+            warmup_runs: Set(1),
+            repetitions: Set(2),
+            run_count: Set(0),
+            created_at: Set(1),
+            updated_at: Set(1),
+        }
+        .insert(&db)
+        .await
+        .expect("insert suite");
+
+        benchmark_suite_step::ActiveModel {
+            id: Set("st1".into()),
+            suite_id: Set("s1".into()),
+            position: Set(0),
+            prompt_id: Set("p1".into()),
+        }
+        .insert(&db)
+        .await
+        .expect("add step");
+
+        benchmark_run::ActiveModel {
+            id: Set("r1".into()),
+            suite_id: Set(Some("s1".into())),
+            suite_name: Set("Smoke".into()),
+            model_name: Set("org/model".into()),
+            model_key: Set("org/model".into()),
+            compute: Set("npu".into()),
+            mode: Set("conversation".into()),
+            warmup_runs: Set(1),
+            repetitions: Set(2),
+            status: Set("completed".into()),
+            started_at: Set(2),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await
+        .expect("insert run");
+
+        benchmark_run_step::ActiveModel {
+            id: Set("rs1".into()),
+            run_id: Set("r1".into()),
+            position: Set(0),
+            repetition_index: Set(0),
+            is_warmup: Set(true),
+            prompt_name: Set("Capital".into()),
+            prompt_text: Set("Capital of France?".into()),
+            total_ms: Set(Some(900)),
+            status: Set("completed".into()),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await
+        .expect("insert run step");
+
+        // A prompt used by a suite step cannot be deleted.
+        assert!(
+            benchmark_prompt::Entity::delete_by_id("p1")
+                .exec(&db)
+                .await
+                .is_err(),
+            "prompt in use must not be deleted"
+        );
+
+        // Deleting the suite removes its steps, clears the run's suite link and keeps the run.
+        benchmark_suite::Entity::delete_by_id("s1")
+            .exec(&db)
+            .await
+            .expect("delete suite");
+        assert!(benchmark_suite_step::Entity::find_by_id("st1")
+            .one(&db)
+            .await
+            .expect("query")
+            .is_none());
+        let run = benchmark_run::Entity::find_by_id("r1")
+            .one(&db)
+            .await
+            .expect("query")
+            .expect("run kept");
+        assert_eq!(run.suite_id, None);
+        assert_eq!(run.suite_name, "Smoke");
+        assert!(benchmark_run_step::Entity::find_by_id("rs1")
+            .one(&db)
+            .await
+            .expect("query")
+            .is_some());
+
+        // With no suite using it, the prompt can go; its file link goes with it.
+        benchmark_prompt::Entity::delete_by_id("p1")
+            .exec(&db)
+            .await
+            .expect("delete unused prompt");
+        assert!(benchmark_prompt_file::Entity::find()
+            .all(&db)
+            .await
+            .expect("query")
+            .is_empty());
+        assert!(benchmark_file::Entity::find_by_id("f1")
+            .one(&db)
+            .await
+            .expect("query")
+            .is_some(), "the file row is removed by the app, not the database");
     }
 
     #[tokio::test]

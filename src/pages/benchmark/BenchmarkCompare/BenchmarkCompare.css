@@ -1,0 +1,30 @@
+.benchmark-compare {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalM);
+}
+
+.benchmark-compare__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--spacingHorizontalM);
+}
+
+.benchmark-compare__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fontSizeBase200);
+}
+
+.benchmark-compare__table th,
+.benchmark-compare__table td {
+  text-align: left;
+  padding: var(--spacingVerticalXS) var(--spacingHorizontalS);
+  border-bottom: 1px solid var(--colorNeutralStroke2);
+}
+
+.benchmark-compare__actions {
+  display: flex;
+  gap: var(--spacingHorizontalS);
+}

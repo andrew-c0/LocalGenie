@@ -90,7 +90,7 @@ export function useModelLoader() {
 
       const nativeContext = await db.loadNativeContext(modelSettingsKey(name)).catch(() => null);
       const load = resolveLoadParams(saved, engineOf(model), compute, nativeContext);
-      const status = await geniex.loadModel(name, load);
+      const status = await geniex.loadModel(name, load, geniex.serverBaseUrl(serverPort));
       setServerStatus(status);
       setLoadedCompute(COMPUTE_TARGETS.find((c) => c === load.compute) ?? null);
       // Without a saved or native value the server applies its default window.

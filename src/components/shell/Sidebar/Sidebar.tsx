@@ -18,7 +18,7 @@ const NAV_ITEMS: { to: string; label: string; icon: ReactElement }[] = [
   { to: "/", label: "Overview", icon: <GridRegular /> },
   { to: "/models", label: "Models", icon: <CubeRegular /> },
   { to: "/chat", label: "Chat & Playground", icon: <ChatRegular /> },
-  { to: "/prompt-benchmark", label: "Benchmarks", icon: <PlayCircleRegular /> },
+  { to: "/benchmarks", label: "Benchmarks", icon: <PlayCircleRegular /> },
   { to: "/settings", label: "Settings", icon: <SettingsRegular /> },
 ];
 

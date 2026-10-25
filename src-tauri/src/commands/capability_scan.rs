@@ -1314,13 +1314,16 @@ pub async fn scan_model_capabilities(
     db: State<'_, DatabaseConnection>,
     model: String,
     load: Option<ModelLoadParams>,
+    base_url: Option<String>,
 ) -> Result<ScanResult, String> {
     // The caller's load parameters do not reach the probes. See the doc comment above.
     let _ = load;
     let _guard = ScanGuard::begin()?;
     let name = strip_precision(&model).to_string();
 
-    let loaded = fetch_loaded_models(&state.http_client, DEFAULT_BASE_URL)
+    // The server the app is configured for. The default applies only when none is given.
+    let base = base_url.unwrap_or_else(|| DEFAULT_BASE_URL.to_string());
+    let loaded = fetch_loaded_models(&state.http_client, &base)
         .await
         .map_err(|e| format!("GenieX server is not reachable: {e}"))?;
     if !is_loaded(&loaded, &name) {
@@ -1342,7 +1345,7 @@ pub async fn scan_model_capabilities(
 
     let session = Session {
         client: &state.http_client,
-        url: format!("{DEFAULT_BASE_URL}/v1/chat/completions"),
+        url: format!("{base}/v1/chat/completions"),
         model: name.clone(),
         load: probe_recipe(),
         hints,

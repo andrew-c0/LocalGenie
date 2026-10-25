@@ -40,9 +40,11 @@ pub async fn get_system_usage(state: State<'_, AppState>, port: u16) -> Result<S
         .map_err(|e| format!("system usage probe failed: {e}"))
 }
 
-/// The server process: the one the app started, else the owner of the listener on `port`.
-fn sample_usage(tracked_pid: Option<u32>, port: u16) -> SystemUsage {
-    let server_pid = tracked_pid.or_else(|| listeners::owner_of_listener(port));
+/// The server process: the owner of the listener on `port`, else the one the app started.
+pub(super) fn sample_usage(tracked_pid: Option<u32>, port: u16) -> SystemUsage {
+    // The process listening on the port is the server that answers requests. The pid the app
+    // started can be a launcher that is not in the server's process tree, so it is only the fallback.
+    let server_pid = listeners::owner_of_listener(port).or(tracked_pid);
     let mut sys = sysinfo::System::new();
     sys.refresh_cpu_usage();
     let engines = engines::EngineSample::begin();
@@ -340,3 +342,4 @@ mod tests {
         assert_eq!(listeners::owner_of_listener(port), Some(std::process::id()));
     }
 }
+

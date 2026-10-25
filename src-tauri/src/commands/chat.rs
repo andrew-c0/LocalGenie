@@ -1,5 +1,6 @@
 use tauri::{AppHandle, Emitter, State};
 
+use tauri::Manager;
 use super::chat_helpers::{
     apply_load_params, build_chat_body, chat_done_payload, finish_reason_from_chunk,
     is_first_output, no_output_error, resolve_model_for_server, strip_precision, usage_from_chunk,
@@ -57,10 +58,12 @@ pub async fn cancel_chat_completion() -> Result<(), String> {
 #[tauri::command]
 pub async fn load_model(
     state: State<'_, super::AppState>,
+    run_state: State<'_, super::benchmark_runner::BenchmarkRunState>,
     model: String,
     base_url: Option<String>,
     load: Option<ModelLoadParams>,
 ) -> Result<super::server::ServerStatus, String> {
+    super::benchmark_runner::ensure_no_active_run(&run_state)?;
     let resolved_base = base_url.unwrap_or_else(|| super::constants::DEFAULT_BASE_URL.into());
     let clean_model = strip_precision(&model);
 
@@ -133,8 +136,10 @@ pub async fn load_model(
 #[tauri::command]
 pub async fn unload_all_models(
     state: tauri::State<'_, super::AppState>,
+    run_state: tauri::State<'_, super::benchmark_runner::BenchmarkRunState>,
     port: Option<u16>,
 ) -> Result<super::server::ServerStatus, String> {
+    super::benchmark_runner::ensure_no_active_run(&run_state)?;
     eprintln!("[unload] stopping server to unload all models");
     super::server::stop_server(state, port).await
 }
@@ -151,6 +156,7 @@ pub async fn chat_completion(
     base_url: Option<String>,
     stream_id: String,
 ) -> Result<(), String> {
+    super::benchmark_runner::ensure_no_active_run(&app.state())?;
     let resolved_base = base_url.unwrap_or_else(|| super::constants::DEFAULT_BASE_URL.into());
     let url = format!("{}/v1/chat/completions", resolved_base);
 

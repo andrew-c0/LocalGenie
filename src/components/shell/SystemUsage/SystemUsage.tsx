@@ -8,16 +8,13 @@ import { useContextMemory } from "./useContextMemory";
 import { useContextWindow } from "./useContextWindow";
 import { USAGE_HISTORY_LENGTH, USAGE_SAMPLE_SECONDS, useSystemUsage } from "./useSystemUsage";
 import "./SystemUsage.css";
+import { COMPUTE_COLOR } from "../../../utils/computeColors";
 
 const CHART_WIDTH = 176;
 const CHART_HEIGHT = 80;
 const TARGET_LABEL = { cpu: "CPU", gpu: "GPU", npu: "NPU" } as const;
 /** Stroke per target: CPU cyan, GPU orange, NPU magenta. */
-const LINE_COLOR = {
-  cpu: "#36afd8",
-  gpu: "#e8833a",
-  npu: "#b552c5",
-} as const;
+const LINE_COLOR = COMPUTE_COLOR;
 const CHART_TOOLTIP = `Last ${USAGE_HISTORY_LENGTH} s · sampled every ${USAGE_SAMPLE_SECONDS} s`;
 const BYTES_PER_GB = 1_073_741_824;
 

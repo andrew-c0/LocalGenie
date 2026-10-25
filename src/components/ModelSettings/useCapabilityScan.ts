@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTauriEvent } from "../../hooks";
+import { serverBaseUrl } from "../../services/geniex";
 import { reloadModel } from "../../services/modelLoad";
 import {
   cancelCapabilityScan,
   loadModelCapabilities,
   scanModelCapabilities,
 } from "../../services/models";
+import { useModelStore } from "../../stores/modelStore";
 import type { CapabilityEntry, CapabilityScanProgress } from "../../types";
 import { SCAN_RECIPE } from "../../utils/modelSettings";
 import { toast } from "../../utils/toast";
@@ -82,7 +84,8 @@ export function useCapabilityScan(modelKey: string): CapabilityScanState {
   /** Runs one scan on the loaded model and stores its results. Rejects on failure. */
   const scanLoaded = useCallback(async (): Promise<void> => {
     // The fixed scan recipe, not the saved settings: every model is probed the same way.
-    const result = await scanModelCapabilities(modelKey, SCAN_RECIPE);
+    const baseUrl = serverBaseUrl(useModelStore.getState().serverPort);
+    const result = await scanModelCapabilities(modelKey, SCAN_RECIPE, baseUrl);
     setStored({ model: modelKey, entries: result.entries });
     if (result.cancelled) {
       toast.info("Scan cancelled", "Settings tested so far were saved.");

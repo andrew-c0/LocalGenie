@@ -8,6 +8,11 @@ pub mod entities;
 pub mod migrations;
 
 use commands::attachments;
+use commands::benchmark_files;
+use commands::benchmark_prompts;
+use commands::benchmark_runner;
+use commands::benchmark_runs;
+use commands::benchmark_suites;
 use commands::capabilities;
 use commands::capability_scan;
 use commands::chat;
@@ -36,12 +41,23 @@ pub fn run() {
 
             let db = tauri::async_runtime::block_on(database::init_database(&db_url))?;
 
+            // Remove benchmark files that no prompt uses (left behind by a crash or an
+            // unsaved editor). A failure here is logged; the app still starts.
+            let benchmark_root = db_dir.join(benchmark_files::STORE_DIR);
+            if let Err(e) = tauri::async_runtime::block_on(benchmark_files::sweep_orphans(
+                &db,
+                &benchmark_root,
+            )) {
+                eprintln!("[benchmark] startup sweep failed: {e}");
+            }
+
             app.manage(db);
             tray::init(app)?;
             Ok(())
         })
         .manage(commands::AppState::default())
         .manage(commands::download::DownloadRegistry::default())
+        .manage(commands::benchmark_runner::BenchmarkRunState::default())
         .invoke_handler(tauri::generate_handler![
             // Model management
             models::list_models,
@@ -86,6 +102,21 @@ pub fn run() {
             attachments::pick_attachment,
             attachments::read_attachment,
             attachments::reveal_attachment,
+            // Benchmark library (prompts and their files)
+            benchmark_files::import_benchmark_file,
+            benchmark_files::discard_benchmark_file,
+            benchmark_prompts::list_benchmark_prompts,
+            benchmark_prompts::save_benchmark_prompt,
+            benchmark_prompts::delete_benchmark_prompt,
+            benchmark_suites::list_benchmark_suites,
+            benchmark_suites::save_benchmark_suite,
+            benchmark_suites::delete_benchmark_suite,
+            benchmark_runner::start_benchmark_run,
+            benchmark_runner::cancel_benchmark_run,
+            benchmark_runs::list_benchmark_runs,
+            benchmark_runs::save_benchmark_export,
+            benchmark_runs::save_benchmark_image,
+            benchmark_runs::open_benchmark_export,
             // Files (system prompt attachments)
             files::pick_text_file,
             files::read_text_file,

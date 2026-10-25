@@ -1,4 +1,9 @@
 pub mod attachments;
+pub mod benchmark_files;
+pub mod benchmark_runner;
+pub mod benchmark_runs;
+pub mod benchmark_prompts;
+pub mod benchmark_suites;
 pub mod chat;
 pub mod capability_scan;
 pub mod chat_helpers;
@@ -12,6 +17,7 @@ pub mod files;
 pub mod hub;
 pub mod import;
 pub mod logs;
+pub mod power;
 pub mod models;
 pub mod server;
 pub mod system;

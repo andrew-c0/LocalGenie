@@ -38,9 +38,10 @@ export async function loadModelCapabilities(modelName: string): Promise<Capabili
  */
 export async function scanModelCapabilities(
   modelName: string,
-  load?: ModelLoadParams,
+  load: ModelLoadParams | undefined,
+  baseUrl: string,
 ): Promise<CapabilityScanResult> {
-  return invoke("scan_model_capabilities", { model: modelName, load });
+  return invoke("scan_model_capabilities", { model: modelName, load, baseUrl });
 }
 
 /** Asks the running scan to stop before its next setting. */

@@ -1,12 +1,15 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { MainLayout } from "./components/shell/Layouts/Layouts";
-import BenchmarkPlayground from "./pages/benchmark/BenchmarkPlayground/BenchmarkPlayground";
-import PerformanceDashboard from "./pages/benchmark/PerformanceDashboard/PerformanceDashboard";
+import BenchmarkPage from "./pages/BenchmarkPage/BenchmarkPage";
+import BenchmarkCompare from "./pages/benchmark/BenchmarkCompare/BenchmarkCompare";
+import BenchmarkPrompts from "./pages/benchmark/BenchmarkPrompts/BenchmarkPrompts";
+import BenchmarkRun from "./pages/benchmark/BenchmarkRun/BenchmarkRun";
+import BenchmarkRuns from "./pages/benchmark/BenchmarkRuns/BenchmarkRuns";
+import BenchmarkSuites from "./pages/benchmark/BenchmarkSuites/BenchmarkSuites";
 import ChatPage from "./pages/ChatPage/ChatPage";
 import LocalModelsBrowserPage from "./pages/LocalModelsBrowserPage/LocalModelsBrowserPage";
 import HubModelDetailRoute from "./pages/models/HubModelDetailRoute";
 import OverviewPage from "./pages/OverviewPage/OverviewPage";
-import PromptBenchmarkPage from "./pages/PromptBenchmarkPage/PromptBenchmarkPage";
 import SettingsPage from "./pages/SettingsPage/SettingsPage";
 
 /**
@@ -17,7 +20,7 @@ import SettingsPage from "./pages/SettingsPage/SettingsPage";
  * - `/models` local library, `/models/browse` Hugging Face browser, `/models/:repoId` detail
  * - `/chat` default content, `/chat/:sessionId` one conversation
  * - `/settings/:section`
- * - `/prompt-benchmark/playground|dashboard` (benchmark area)
+ * - `/benchmarks/prompts|suites|run|runs|compare` (benchmark area)
  */
 export default function Navigation() {
   return (
@@ -29,12 +32,16 @@ export default function Navigation() {
         <Route path="/models/:repoId" element={<HubModelDetailRoute />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:sessionId" element={<ChatPage />} />
-        <Route path="/benchmark" element={<Navigate to="/prompt-benchmark" replace />} />
-        <Route path="/prompt-benchmark" element={<PromptBenchmarkPage />}>
-          <Route index element={<Navigate to="playground" replace />} />
-          <Route path="playground" element={<BenchmarkPlayground />} />
-          <Route path="dashboard" element={<PerformanceDashboard />} />
+        <Route path="/benchmarks" element={<BenchmarkPage />}>
+          <Route index element={<Navigate to="prompts" replace />} />
+          <Route path="prompts" element={<BenchmarkPrompts />} />
+          <Route path="suites" element={<BenchmarkSuites />} />
+          <Route path="run" element={<BenchmarkRun />} />
+          <Route path="runs" element={<BenchmarkRuns />} />
+          <Route path="compare" element={<BenchmarkCompare />} />
         </Route>
+        <Route path="/benchmark" element={<Navigate to="/benchmarks" replace />} />
+        <Route path="/prompt-benchmark/*" element={<Navigate to="/benchmarks" replace />} />
         <Route path="/settings" element={<Navigate to="/settings/app" replace />} />
         <Route path="/settings/:section" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

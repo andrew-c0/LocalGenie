@@ -49,7 +49,7 @@ export async function reloadModel(name: string, load?: ModelLoadParams): Promise
 
   const params = load ?? (await savedLoadParams(name));
 
-  const status = await geniex.loadModel(name, params);
+  const status = await geniex.loadModel(name, params, geniex.serverBaseUrl(port));
   store().setServerStatus(status);
   store().setActiveModel(name);
   const activeId = useChatStore.getState().activeSessionId;

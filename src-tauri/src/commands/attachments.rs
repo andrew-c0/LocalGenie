@@ -144,7 +144,7 @@ fn reveal_in_explorer(_file: &Path) -> Result<(), String> {
 }
 
 /// The kind an extension belongs to, or None when no attachment kind takes it.
-fn kind_of_extension(extension: &str) -> Option<AttachmentKind> {
+pub(super) fn kind_of_extension(extension: &str) -> Option<AttachmentKind> {
     [
         AttachmentKind::Image,
         AttachmentKind::Audio,
@@ -167,7 +167,7 @@ fn mime_for(extension: &str) -> &'static str {
 
 /// Checks the kind, size and content, then reads the file. Kept separate from the command so it
 /// can be tested without a Tauri app.
-fn read_attachment_file(path: &Path) -> Result<AttachmentFile, String> {
+pub(super) fn read_attachment_file(path: &Path) -> Result<AttachmentFile, String> {
     let extension = path
         .extension()
         .and_then(|e| e.to_str())
