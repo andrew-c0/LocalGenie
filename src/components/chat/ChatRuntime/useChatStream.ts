@@ -55,6 +55,7 @@ export function useChatStream() {
       content: pending.text,
       timestamp: Date.now(),
       modelId: session.modelId ?? undefined,
+      compute: stream.compute,
     };
     store.addMessage(activeId, assistantMsg);
     // Persist immediately so the message survives app restarts mid-stream.

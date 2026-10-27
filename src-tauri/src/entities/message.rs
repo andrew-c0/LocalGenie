@@ -24,6 +24,12 @@ pub struct Model {
     /// Exact counts from the server for an assistant reply: the whole prompt, and the tokens generated.
     pub prompt_tokens: Option<i64>,
     pub completion_tokens: Option<i64>,
+    /// `text` for a chat message, `system` for a system line such as a model change.
+    pub kind: String,
+    /// The type of a system line, such as `model_changed`. Null for chat messages.
+    pub system_type: Option<String>,
+    /// The compute target (`npu`, `gpu` or `cpu`) an assistant reply was generated on. Null when not kept.
+    pub compute: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

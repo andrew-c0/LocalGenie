@@ -29,6 +29,8 @@ interface ChatState {
   deleteSession: (id: string) => void;
   setActiveSession: (id: string | null) => void;
   addMessage: (sessionId: string, message: Message) => void;
+  /** Inserts a message just before the message with `beforeId`. Does nothing when that message is not there. */
+  insertMessageBefore: (sessionId: string, beforeId: string, message: Message) => void;
   updateLastAssistantMessage: (sessionId: string, content: string) => void;
   updateMessageStats: (sessionId: string, messageId: string, stats: Message["stats"]) => void;
   updateMessageUsage: (sessionId: string, messageId: string, usage: ReplyUsage) => void;
@@ -97,6 +99,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setActiveSession: (id: string | null) => {
     set({ activeSessionId: id });
+  },
+
+  insertMessageBefore: (sessionId: string, beforeId: string, message: Message) => {
+    set((state) => ({
+      sessions: state.sessions.map((s) => {
+        if (s.id !== sessionId) return s;
+        const index = s.messages.findIndex((m) => m.id === beforeId);
+        if (index < 0) return s;
+        return {
+          ...s,
+          messages: [...s.messages.slice(0, index), message, ...s.messages.slice(index)],
+        };
+      }),
+    }));
   },
 
   addMessage: (sessionId: string, message: Message) => {

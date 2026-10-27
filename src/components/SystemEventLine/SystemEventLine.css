@@ -1,0 +1,21 @@
+/* A system line sits in the middle of the thread: muted, on one row, with a rule on each side. */
+.system-event {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacingHorizontalS);
+  margin: var(--spacingVerticalS) 0;
+  color: var(--colorNeutralForeground3);
+}
+
+.system-event::before,
+.system-event::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--colorNeutralStroke2);
+}
+
+.system-event__icon {
+  flex: 0 0 auto;
+}

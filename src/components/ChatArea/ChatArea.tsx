@@ -1,9 +1,11 @@
-import { Caption1, Divider, Spinner } from "@fluentui/react-components";
+import { Caption1, Spinner } from "@fluentui/react-components";
 import { useEffect, useRef } from "react";
 import { useChatStore } from "../../stores/chatStore";
 import type { Message } from "../../types";
+import { isSystemEvent } from "../../utils/systemEvents";
 import { parseThinking } from "../../utils/thinking";
 import MessageBubble from "../MessageBubble/MessageBubble";
+import SystemEventLine from "../SystemEventLine/SystemEventLine";
 import "./ChatArea.css";
 
 /**
@@ -52,25 +54,16 @@ export default function ChatArea() {
     }
   }
 
-  /** Build message list with model delimiters inserted when modelId changes. */
+  /** Build the message list. System lines (such as a model change) are drawn as lines, not bubbles. */
   const renderedMessages: React.ReactNode[] = [];
-  let prevModelId: string | undefined;
 
   const lastMsgId = session.messages[session.messages.length - 1]?.id;
 
   for (const msg of session.messages) {
-    // Show delimiter when the assistant's model changes
-    if (msg.role === "assistant" && msg.modelId && msg.modelId !== prevModelId) {
-      const shortName = msg.modelId.split("/").pop() ?? msg.modelId;
-      renderedMessages.push(
-        <div key={`delimiter-${msg.id}`} className="chat-area__delimiter">
-          <Divider className="chat-area__delimiter-line" />
-          <Caption1>{shortName}</Caption1>
-          <Divider className="chat-area__delimiter-line" />
-        </div>,
-      );
+    if (isSystemEvent(msg)) {
+      renderedMessages.push(<SystemEventLine key={msg.id} message={msg} />);
+      continue;
     }
-    if (msg.modelId) prevModelId = msg.modelId;
 
     renderedMessages.push(
       <MessageBubble

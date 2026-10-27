@@ -1,4 +1,5 @@
 import type { Message } from "../types";
+import { isSystemEvent } from "./systemEvents";
 
 /** Rough characters-per-token ratio used to estimate how much of the window the chat fills. */
 export const CHARS_PER_TOKEN = 4;
@@ -44,7 +45,8 @@ export function contextUsageOf(messages: Message[]): ContextUsage {
 
   const usage = anchor >= 0 ? messages[anchor].usage : undefined;
   const base = usage ? usage.promptTokens + usage.completionTokens : 0;
-  const since = messages.slice(anchor + 1);
+  // System lines are not sent to the model, so they add nothing to the context.
+  const since = messages.slice(anchor + 1).filter((m) => !isSystemEvent(m));
   const sinceChars = since.reduce((sum, m) => sum + m.content.length, 0);
   const total = base + Math.round(sinceChars / CHARS_PER_TOKEN) + fileTokensOf(since);
 

@@ -10,6 +10,7 @@ import {
 import { AttachRegular, SendRegular, StopRegular } from "@fluentui/react-icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pickAttachment, readAttachment } from "../../services/attachments";
+import { modelChangeLine, saveSystemLine, sendTargetFor } from "../../services/chatEvents";
 import * as db from "../../services/database";
 import * as geniex from "../../services/geniex";
 import { serverBaseUrl } from "../../services/geniex";
@@ -36,6 +37,7 @@ import {
 import { chatErrorContent } from "../../utils/chatError";
 import { applyChatOverrides } from "../../utils/chatOverrides";
 import { chatSettingsFor, engineOf, modelSettingsKey } from "../../utils/modelSettings";
+import { isSystemEvent } from "../../utils/systemEvents";
 import {
   composeSystemPrompt,
   localTimeZone,
@@ -106,6 +108,8 @@ async function historyFor(
   const history: ApiMessage[] = [];
   const unavailable: string[] = [];
   for (const m of messages) {
+    // System lines are shown in the chat only; the model never receives them.
+    if (isSystemEvent(m)) continue;
     const role = m.role as ApiMessage["role"];
     if (m.role !== "user" || !m.attachments?.length) {
       history.push({ role, content: m.content });
@@ -231,6 +235,9 @@ export default function ChatInput() {
           systemPrompt: composed.prompt,
         };
 
+        // The reply records the compute target it was generated on.
+        setActiveStream({ streamId, sessionId, compute: settings.compute });
+
         // Pass the model name if set, otherwise auto-detect from server
         const baseUrl = serverBaseUrl(serverPort);
         await geniex.chatCompletion(
@@ -334,6 +341,12 @@ export default function ChatInput() {
 
     setText("");
     setPending([]);
+    // A prompt sent on another model or compute target is preceded by a line that says so.
+    const sentModelId = useModelStore.getState().activeModelId;
+    if (sentModelId) {
+      const line = modelChangeLine(session.messages, await sendTargetFor(sentModelId), userMsg);
+      if (line) saveSystemLine(activeSessionId, line, null);
+    }
     addMessage(activeSessionId, userMsg);
     // The conversation is stored with its first prompt, so its row must exist before the message.
     const stored = useChatStore.getState().sessions.find((s) => s.id === activeSessionId);
@@ -386,6 +399,18 @@ export default function ChatInput() {
           if (msg.isError) db.deleteChatError(msg.id).catch(() => {});
           else db.deleteMessage(msg.id).catch(() => {});
         }
+      }
+      // A retry runs on the model loaded now. If that differs from the reply before the prompt, the
+      // change is shown before the prompt, as for a new prompt.
+      const retried = current.messages[idx];
+      const activeModelId = useModelStore.getState().activeModelId;
+      if (activeModelId) {
+        const line = modelChangeLine(
+          current.messages.slice(0, idx),
+          await sendTargetFor(activeModelId),
+          retried,
+        );
+        if (line) saveSystemLine(sessionId, line, retried.id);
       }
       await doSend(sessionId, built.history);
     },

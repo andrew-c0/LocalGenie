@@ -179,12 +179,29 @@ pub async fn delete_session(
 
 // ─── Messages ──────────────────────────────────────────────────────
 
+/// A chat message is `text` with no system type. A system line is `system` and needs a type made of
+/// lowercase letters and underscores. Anything else is refused, so a bad row never reaches the history.
+fn check_message_kind(message: &message::Model) -> Result<(), String> {
+    match (message.kind.as_str(), message.system_type.as_deref()) {
+        ("text", None) => Ok(()),
+        ("text", Some(_)) => Err("a chat message cannot have a system type".to_owned()),
+        ("system", Some(kind))
+            if !kind.is_empty() && kind.chars().all(|c| c.is_ascii_lowercase() || c == '_') =>
+        {
+            Ok(())
+        }
+        ("system", _) => Err("a system message needs a system type".to_owned()),
+        (other, _) => Err(format!("unknown message kind: {other}")),
+    }
+}
+
 #[tauri::command]
 pub async fn save_message(
     db: tauri::State<'_, DatabaseConnection>,
     session_id: String,
     message: message::Model,
 ) -> Result<(), String> {
+    check_message_kind(&message)?;
     // A reply names the model that produced it, so it can be checked for thinking evidence.
     let reply_evidence = match (message.role.as_str(), message.model_id.as_deref()) {
         ("assistant", Some(model)) => Some((model.to_owned(), message.content.clone())),
@@ -205,6 +222,9 @@ pub async fn save_message(
         attachments: Set(message.attachments),
         prompt_tokens: Set(message.prompt_tokens),
         completion_tokens: Set(message.completion_tokens),
+        kind: Set(message.kind),
+        system_type: Set(message.system_type),
+        compute: Set(message.compute),
     })
     .on_conflict(
         OnConflict::column(message::Column::Id)
@@ -222,6 +242,9 @@ pub async fn save_message(
                 message::Column::Attachments,
                 message::Column::PromptTokens,
                 message::Column::CompletionTokens,
+                message::Column::Kind,
+                message::Column::SystemType,
+                message::Column::Compute,
             ])
             .to_owned(),
     )
@@ -448,4 +471,46 @@ fn now_millis() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod message_kind_tests {
+    use super::check_message_kind;
+    use crate::entities::message;
+
+    fn message(kind: &str, system_type: Option<&str>) -> message::Model {
+        message::Model {
+            id: "m".into(),
+            session_id: "s".into(),
+            role: "system".into(),
+            content: "{}".into(),
+            model_id: None,
+            created_at: 0,
+            finish_reason: None,
+            time_to_first_token_ms: None,
+            total_time_ms: None,
+            token_count: None,
+            prompt_chars: None,
+            attachments: None,
+            prompt_tokens: None,
+            completion_tokens: None,
+            kind: kind.into(),
+            system_type: system_type.map(str::to_owned),
+            compute: None,
+        }
+    }
+
+    #[test]
+    fn accepts_chat_messages_and_typed_system_lines() {
+        assert!(check_message_kind(&message("text", None)).is_ok());
+        assert!(check_message_kind(&message("system", Some("model_changed"))).is_ok());
+    }
+
+    #[test]
+    fn refuses_untyped_system_lines_and_typed_chat_messages() {
+        assert!(check_message_kind(&message("system", None)).is_err());
+        assert!(check_message_kind(&message("system", Some("Model Changed"))).is_err());
+        assert!(check_message_kind(&message("text", Some("model_changed"))).is_err());
+        assert!(check_message_kind(&message("other", None)).is_err());
+    }
 }

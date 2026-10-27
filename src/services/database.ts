@@ -50,6 +50,9 @@ interface DbMessageRow {
   attachments: string | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;
+  kind: string;
+  system_type: string | null;
+  compute: string | null;
 }
 
 /** Exact usage of a reply, when both counts are stored. */
@@ -110,6 +113,9 @@ export async function loadSessions(): Promise<ChatSession[]> {
       stats: toGenerationStats(m),
       attachments: toAttachments(m.attachments),
       usage: toUsage(m),
+      kind: m.kind === "system" ? "system" : "text",
+      systemType: m.system_type ?? undefined,
+      compute: m.compute ?? undefined,
     }));
     // Errors come back as their own rows; show them in time order, after the reply they belong to.
     const errors: Message[] = row.errors.map((e) => ({
@@ -179,6 +185,9 @@ export async function saveMessage(sessionId: string, message: Message): Promise<
       attachments: message.attachments?.length ? JSON.stringify(message.attachments) : null,
       prompt_tokens: message.usage?.promptTokens ?? null,
       completion_tokens: message.usage?.completionTokens ?? null,
+      kind: message.kind ?? "text",
+      system_type: message.systemType ?? null,
+      compute: message.compute ?? null,
     },
   });
 }

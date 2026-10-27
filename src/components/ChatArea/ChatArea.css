@@ -13,16 +13,6 @@
   margin: 0 auto;
 }
 
-.chat-area__delimiter {
-  display: flex;
-  align-items: center;
-  gap: var(--spacingHorizontalS);
-}
-
-.chat-area__delimiter-line {
-  flex: 1;
-}
-
 .chat-area__typing {
   display: flex;
   align-items: center;

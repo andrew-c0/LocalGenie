@@ -33,6 +33,12 @@ export interface Message {
   finishReason?: string;
   /** True for an error shown in the chat. Stored in `chat_errors`, not in `messages`. */
   isError?: boolean;
+  /** `system` for a line the app adds, such as a model change. Those are never sent to the model. */
+  kind?: "text" | "system";
+  /** The type of a system line, such as `model_changed`. Sets how the line is drawn. */
+  systemType?: string;
+  /** The compute target (`npu`, `gpu` or `cpu`) an assistant reply was generated on. */
+  compute?: string;
   /** Files sent with a user message. Names only; the contents are not kept after the send. */
   attachments?: AttachmentRef[];
   /** Exact token counts the server reported for this reply. Missing when it was stopped or is older. */
@@ -308,6 +314,8 @@ export interface DownloadedModelMeta {
 export interface ActiveStream {
   streamId: string;
   sessionId: string;
+  /** The compute target of the request, recorded on the reply. */
+  compute?: string;
 }
 
 /** One line of `geniex serve` output, as sent by the backend. */

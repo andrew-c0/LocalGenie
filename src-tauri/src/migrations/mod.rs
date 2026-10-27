@@ -15,6 +15,8 @@ mod m20261028_000001_benchmark_run_counters;
 mod m20261028_000002_benchmark_prompt_text;
 mod m20261029_000001_benchmark_run_power;
 mod m20261030_000001_chat_session_overrides;
+mod m20261031_000001_message_kind;
+mod m20261032_000001_message_compute;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -36,6 +38,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20261028_000002_benchmark_prompt_text::Migration),
             Box::new(m20261029_000001_benchmark_run_power::Migration),
             Box::new(m20261030_000001_chat_session_overrides::Migration),
+            Box::new(m20261031_000001_message_kind::Migration),
+            Box::new(m20261032_000001_message_compute::Migration),
         ]
     }
 }
@@ -194,6 +198,9 @@ mod tests {
             attachments: Set(None),
             prompt_tokens: Set(None),
             completion_tokens: Set(None),
+            kind: Set("text".into()),
+            system_type: Set(None),
+            compute: Set(None),
         }
         .insert(&db)
         .await
@@ -209,8 +216,8 @@ mod tests {
         assert_eq!(msg.token_count, Some(42));
         assert_eq!(msg.prompt_chars, Some(7));
 
-        // Eleven steps: the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power and chat overrides migrations come after this one.
-        Migrator::down(&db, Some(11))
+        // Thirteen steps: the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind and message compute migrations come after this one.
+        Migrator::down(&db, Some(13))
             .await
             .expect("revert stats migration");
         let after_down = columns(db.clone()).await;
@@ -240,8 +247,8 @@ mod tests {
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
         // Put back the old JSON row, then apply the migrations again so it copies it.
-        // Ten steps: the capability, attachment, usage, pinned, benchmark, counter, text, power and chat overrides migrations come after the settings one.
-        Migrator::down(&db, Some(10))
+        // Twelve steps: the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind and message compute migrations come after the settings one.
+        Migrator::down(&db, Some(12))
             .await
             .expect("revert settings migration");
         db.execute(Statement::from_string(
@@ -346,6 +353,9 @@ mod tests {
             attachments: Set(Some(json.into())),
             prompt_tokens: Set(None),
             completion_tokens: Set(None),
+            kind: Set("text".into()),
+            system_type: Set(None),
+            compute: Set(None),
         }
         .insert(&db)
         .await
