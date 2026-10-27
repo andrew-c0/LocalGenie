@@ -28,6 +28,9 @@ pub struct ModelCapabilities {
     pub thinking_hint: Option<bool>,
     /// Heuristic from the chat template. `None` when there is no template.
     pub tool_call_hint: Option<bool>,
+    /// The chat template reads the think token, so thinking needs it in the prompt (`enable_think`
+    /// alone does nothing for such a template).
+    pub think_token: bool,
 }
 
 /// Summary for one model, looked up by its GenieX name (`org/repo`, optionally `:precision`).
@@ -224,6 +227,7 @@ fn build_capabilities(
         has_audio_encoder,
         thinking_hint: template.map(mentions_thinking),
         tool_call_hint: template.map(mentions_tool_calls),
+        think_token: template.is_some_and(|t| t.contains(super::chat_helpers::THINK_TOKEN)),
     })
 }
 
@@ -391,6 +395,7 @@ mod tests {
                 has_audio_encoder: Some(true),
                 thinking_hint: Some(true),
                 tool_call_hint: Some(true),
+                think_token: false,
             }
         );
     }
@@ -411,6 +416,7 @@ mod tests {
                 has_audio_encoder: None,
                 thinking_hint: None,
                 tool_call_hint: None,
+                think_token: false,
             }
         );
     }

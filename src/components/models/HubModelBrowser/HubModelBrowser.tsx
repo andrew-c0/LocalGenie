@@ -1,36 +1,15 @@
 import type { DropdownProps } from "@fluentui/react-components";
-import {
-  Button,
-  Caption1,
-  Dropdown,
-  Option,
-  SearchBox,
-  Spinner,
-  Switch,
-  ToggleButton,
-} from "@fluentui/react-components";
-import {
-  ArrowSortRegular,
-  ChevronDownRegular,
-  ChevronRightRegular,
-  DismissRegular,
-} from "@fluentui/react-icons";
+import { Button, Dropdown, Option, SearchBox, Spinner, Switch } from "@fluentui/react-components";
+import { ArrowSortRegular, ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { AssetCompat } from "../../../services/hubApi";
-import {
-  type HubFilter,
-  type HubSort,
-  LIBRARY_CHIPS,
-  LICENSE_CHIPS,
-  modelTagChips,
-  PIPELINE_TAG_CHIPS,
-  QUANTIZATION_CHIPS,
-} from "../../../services/hubApi";
-import { useHubBrowseStore } from "../../../stores/hubBrowseStore";
+import type { AssetCompat, HubSort } from "../../../services/hubApi";
+import { activeFacetCount, useHubBrowseStore } from "../../../stores/hubBrowseStore";
+import { baseModelOf, facetSummaryFromModel } from "../../../utils/hubModelInfo";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { ModelCard, type ModelCardData } from "../../ui/ModelCard/ModelCard";
 import { StateBlock } from "../../ui/StateBlock/StateBlock";
+import { HubFacetPanel } from "./HubFacetPanel/HubFacetPanel";
 import "./HubModelBrowser.css";
 
 /** Badge for a Qualcomm tile based on learned compatibility info. */
@@ -53,20 +32,13 @@ const SORT_OPTIONS: [HubSort, string][] = [
   ["createdAt", "Newest"],
 ];
 
-const CHIP_GROUPS: [string, readonly string[], HubFilter["type"]][] = [
-  ["Task", PIPELINE_TAG_CHIPS, "pipeline_tag"],
-  ["Library", LIBRARY_CHIPS, "library"],
-  ["License", LICENSE_CHIPS, "license"],
-  ["Quantization", QUANTIZATION_CHIPS, "quantization"],
-];
-
 interface Props {
   /** Which hub area to browse — controlled by the parent page tabs. */
   area: "qualcomm" | "all";
   downloading: Set<string>;
 }
 
-/** Hugging Face browse area with sorting, filter chips and cursor pagination. */
+/** Hugging Face browse area with sorting, facet filters and cursor pagination. */
 export default function HubModelBrowser({ area, downloading }: Props) {
   const s = useHubBrowseStore();
   const navigate = useNavigate();
@@ -84,8 +56,10 @@ export default function HubModelBrowser({ area, downloading }: Props) {
     if (storeArea !== area) setArea(area);
   }, [area, storeArea, setArea]);
 
-  const activeFilterCount = s.filters.length;
+  const activeFilterCount = activeFacetCount(s.facets);
   const sortLabel = SORT_OPTIONS.find(([value]) => value === s.sort)?.[1] ?? "";
+  // "Base models only" is applied to the loaded page: the Hub has no filter for it.
+  const shown = s.facets.baseOnly ? s.models.filter((m) => baseModelOf(m.tags) === null) : s.models;
 
   const handleSortSelect: DropdownProps["onOptionSelect"] = (_, data) => {
     const next = SORT_OPTIONS.find(([value]) => value === data.optionValue);
@@ -156,33 +130,7 @@ export default function HubModelBrowser({ area, downloading }: Props) {
             )}
           </div>
 
-          {CHIP_GROUPS.map(([label, values, type]) => (
-            <fieldset
-              key={type}
-              className="hub-model-browser__group"
-              aria-label={`${label} filters`}
-            >
-              <Caption1 className="hub-model-browser__group-label">{label}</Caption1>
-              {values.map((value) => (
-                <ToggleButton
-                  key={value}
-                  size="small"
-                  checked={s.filters.some((f) => f.type === type && f.value === value)}
-                  onClick={() => s.toggleFilter({ type, value })}
-                >
-                  {value}
-                </ToggleButton>
-              ))}
-            </fieldset>
-          ))}
-
-          {activeFilterCount > 0 && (
-            <div>
-              <Button appearance="secondary" icon={<DismissRegular />} onClick={s.clearFilters}>
-                Clear {activeFilterCount} filter(s)
-              </Button>
-            </div>
-          )}
+          <HubFacetPanel />
         </div>
       )}
 
@@ -190,11 +138,11 @@ export default function HubModelBrowser({ area, downloading }: Props) {
 
       {s.isLoading ? (
         <StateBlock icon="⏳" message="Loading models from Hugging Face…" />
-      ) : s.models.length === 0 ? (
+      ) : shown.length === 0 ? (
         <StateBlock icon="🔍" message="No models match the current filters." />
       ) : (
         <div className="hub-model-browser__grid">
-          {s.models.map((m) => {
+          {shown.map((m) => {
             const openDetail = () =>
               navigate(`/models/${encodeURIComponent(m.id)}`, { state: { isLocal: false } });
             const cardData: ModelCardData = {
@@ -202,7 +150,7 @@ export default function HubModelBrowser({ area, downloading }: Props) {
               installed: false,
               downloads: m.downloads,
               likes: m.likes,
-              pipelineTag: modelTagChips(m)[0],
+              facets: facetSummaryFromModel(m),
               badge:
                 area === "qualcomm" && compatibleNames
                   ? compatBadge(assetCompat[m.id], compatibleNames.has(m.id))

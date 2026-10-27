@@ -1,18 +1,21 @@
 # Known issues
 
-Status labels: **code-verified** = read in the source (committed up to 694a036, or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-26 or 2026-10-27 syncs (the benchmark suite and the chat settings were read, not run). Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
+Status labels: **code-verified** = read in the source (committed up to 694a036, or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-26, 2026-10-27 or 2026-10-28 syncs (the benchmark suite and the chat settings were read, not run). Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
 
 ## Active
 - Model load/chat hangs: the GenieX warmup request in `load_model` may never get a response. The warmup carries the model's load params (committed in 6068a81), so it matches chat. Not re-validated (runtime-unverified).
 - Normal chat depends on a successful model load.
 - Known gaps (GenieX limits, not LocalGenie bugs): no per-model unload (only stopping the server unloads; see `geniex-server-behaviour.md`); the GenieX chat endpoint ignores `stop`, so LocalGenie has no stop-sequence setting (code-verified).
-- Webview `fetch` to `huggingface.co` (`hubApi.ts`, incl. `fetchContextLength` used by `downloadPipeline.ts`) is not allowed by the CSP `connect-src` as configured (code-verified against `tauri.conf.json`). Runtime-unverified; the Hub browser and import metadata may fail. Moving these to Rust is the candidate fix.
+- Webview `fetch` to `huggingface.co` (`hubApi.ts`, incl. `fetchContextLength` used by `downloadPipeline.ts`) is not listed in the CSP `connect-src` in `tauri.conf.json`, yet the Hub browser works in the app (reported 2026-10-28: the filters load results). The reason is not established; the policy as written suggests it should be blocked. Treat as a question, not a bug, until checked in the webview console.
 - Context size from the Hub now reads only `gguf.context_length` (code-verified in `hubApi.ts`). The earlier `max_position_embeddings` / `max_sequence_length` fallback is gone, so models without GGUF metadata fall back to the DB row (possibly null).
 - `HubModelDetail` loads downloaded precisions once per repo (`useDownloadedPrecisions` in `pages/models/useHubModelDetail.ts`, keyed on `repoId`), so "Load & Chat" does not appear until the page is reopened after an import (code-verified; runtime-unverified).
 - Local import fails for GGUF repos whose weight files contain `mtp` in the name (GenieX `is_weight_gguf` skips them; "has no model files GenieX can load"). Workaround: rename the folder and files to remove the `mtp` token, then import. The fix belongs to GenieX (see `geniex-server-behaviour.md`); LocalGenie does not change it (reported, verified on one machine).
 - Typed event payloads and typed errors are not in place; UI matches on error text (`utils/chatError.ts`).
 - Qwen3.5 thinking probe needs the 1024-token budget: at 200 tokens the closing tag is not reached (reported; the 200 cap is `THINK_MAX_TOKENS`, the stream cap `THINK_STREAM_MAX_TOKENS` = 1024, `capability_scan.rs`).
 - Active badge clipped: in the model selector, a row that is active, not loaded and has four capability icons overflows the 120px capabilities cell (reported; `ModelOptionButton.tsx` and its CSS). Not fixed.
+- Think token for templates that read it (Gemma 4 style, `<|think|>`): sent in the system turn only when the stored GGUF summary has `think_token`, and stripped from every message when thinking is off (code-read; `chat_helpers.rs` tests cover the string handling; uncommitted; runtime-unverified in this sync).
+- Hub facets and the filter panel (uncommitted; code-read, runtime-unverified): the filters are sent as Hub tags and `num_parameters`, and the tag catalogue comes from `/api/models-tags-by-type`. The Hub's tag and filter semantics are not checked against a live response in this sync.
+- Fixed: the local model lookups in `pages/models/useHubModelDetail.ts` matched rows with a substring test (`repoId.includes(name)`). They now match the exact id or the id with a precision suffix (`isSameRepo`).
 - Vision and audio probes match whole words only (`has_word`), so a reply that names the colour or number only inside another word does not count (`capability_scan.rs` tests `names_match_whole_words_only`).
 
 ## Chat attachments (code-verified, runtime-unverified)

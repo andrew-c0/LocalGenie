@@ -31,10 +31,10 @@ export interface HubModel {
   gguf?: { architecture?: string; context_length?: number; total?: number };
 }
 
-/** One active filter chip. Encoded as `filter=<type>:<value>` on the wire. */
-export interface HubFilter {
-  type: "pipeline_tag" | "library" | "license" | "quantization";
-  value: string;
+/** Parameter-count bounds in billions. An unset bound is open-ended. */
+export interface ParamRange {
+  min?: number;
+  max?: number;
 }
 
 export interface HubQuery {
@@ -45,7 +45,9 @@ export interface HubQuery {
   sort?: HubSort;
   /** true = ascending, false (default) = descending. */
   ascending?: boolean;
-  filters?: HubFilter[];
+  /** Tags, each sent as `filter=<tag>`. Repeated filters are ANDed by the Hub. */
+  tags?: string[];
+  numParams?: ParamRange;
   /** Page size (max 1000). */
   limit?: number;
   /** Cursor from a previous response's `Link` header for pagination. */
@@ -58,36 +60,6 @@ export interface HubPage {
   nextCursor: string | null;
 }
 
-/** Well-known chip values surfaced in the Qualcomm AI Hub browse UI. */
-export const PIPELINE_TAG_CHIPS = [
-  "text-generation",
-  "text2text-generation",
-  "image-text-to-text",
-  "feature-extraction",
-  "image-classification",
-  "object-detection",
-] as const;
-
-export const LIBRARY_CHIPS = ["transformers", "llama.cpp", "onnx", "gguf", "pytorch"] as const;
-
-export const LICENSE_CHIPS = ["apache-2.0", "mit", "llama3.2", "gemma", "qwen", "other"] as const;
-
-export const QUANTIZATION_CHIPS = ["4-bit", "8-bit", "quantized"] as const;
-
-/**
- * Map a filter chip to the actual tag value the HF API `filter` param expects.
- * HF filters are plain tags: pipeline tags as-is, libraries as-is, licenses
- * prefixed with `license:`, quantization as-is.
- */
-function filterToTag(f: HubFilter): string {
-  switch (f.type) {
-    case "license":
-      return `license:${f.value}`;
-    default:
-      return f.value;
-  }
-}
-
 /** Build query string for GET /api/models. */
 function buildQuery(q: HubQuery): string {
   const params = new URLSearchParams();
@@ -95,10 +67,25 @@ function buildQuery(q: HubQuery): string {
   if (q.author) params.set("author", q.author);
   if (q.sort) params.set("sort", q.sort);
   params.set("direction", q.ascending ? "1" : "-1");
-  for (const f of q.filters ?? []) params.append("filter", filterToTag(f));
+  for (const tag of q.tags ?? []) params.append("filter", tag);
+  const range = numParamsValue(q.numParams);
+  if (range) params.set("num_parameters", range);
+  // With `expand[]` the Hub returns only the expanded fields, so the card fields are listed too:
+  // counts and tags, plus the sizes and GGUF metadata for the card facets.
+  for (const field of ["downloads", "likes", "tags", "lastModified", "gated", "safetensors", "gguf"]) {
+    params.append("expand[]", field);
+  }
   params.set("limit", String(q.limit ?? 30));
   if (q.cursor) params.set("cursor", q.cursor);
   return params.toString();
+}
+
+/** `num_parameters` value such as `min:1B,max:4B`; null when neither bound is set. */
+function numParamsValue(range: ParamRange | undefined): string | null {
+  const parts: string[] = [];
+  if (range?.min != null) parts.push(`min:${range.min}B`);
+  if (range?.max != null) parts.push(`max:${range.max}B`);
+  return parts.length > 0 ? parts.join(",") : null;
 }
 
 /** Extract the pagination cursor from the `Link` response header. */
@@ -208,20 +195,53 @@ export function listQualcommModels(query: Omit<HubQuery, "author">): Promise<Hub
   return listHubModels({ ...query, author: "qualcomm" });
 }
 
-/** Extract chip-worthy tags from a model's tag list for card display. */
-export function modelTagChips(model: HubModel): string[] {
-  const chips: string[] = [];
-  if (model.pipeline_tag) chips.push(model.pipeline_tag);
-  if (model.library_name) chips.push(model.library_name);
-  for (const tag of model.tags ?? []) {
-    if (
-      /^(4-bit|8-bit|quantized)$/.test(tag) ||
-      /^(apache-2\.0|mit|llama[\d.]*|gemma|qwen[\d.]*|other)$/.test(tag)
-    ) {
-      chips.push(tag);
-    }
+/** One value of the filter catalogue: `id` is the tag sent to the API. */
+export interface HubTag {
+  id: string;
+  label: string;
+}
+
+/** Filter values the Hub publishes, per type. */
+export interface HubTagCatalogue {
+  pipeline: HubTag[];
+  library: HubTag[];
+  /** Licence ids without the `license:` prefix. */
+  license: string[];
+}
+
+interface RawTag {
+  id: string;
+  label?: string;
+}
+
+let tagCatalogue: Promise<HubTagCatalogue> | null = null;
+
+/**
+ * GET /api/models-tags-by-type: the pipeline, library and licence values. Fetched once per session;
+ * a failed fetch is not cached, so the next call tries again.
+ */
+export function listHubTags(): Promise<HubTagCatalogue> {
+  if (!tagCatalogue) {
+    tagCatalogue = fetchHubTags().catch((err: unknown) => {
+      tagCatalogue = null;
+      throw err;
+    });
   }
-  return [...new Set(chips)].slice(0, 5);
+  return tagCatalogue;
+}
+
+async function fetchHubTags(): Promise<HubTagCatalogue> {
+  const res = await fetch(`${HUB_BASE}/api/models-tags-by-type`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(`Hugging Face API error ${res.status}: ${res.statusText}`);
+  const raw = (await res.json()) as Record<string, RawTag[] | undefined>;
+  const toTag = (t: RawTag): HubTag => ({ id: t.id, label: t.label ?? t.id });
+  return {
+    pipeline: (raw.pipeline_tag ?? []).map(toTag),
+    library: (raw.library ?? []).map(toTag),
+    license: (raw.license ?? []).map((t) => t.id.replace(/^license:/, "")),
+  };
 }
 
 // ─── Precision metadata & System RAM fit ─────────────────────────

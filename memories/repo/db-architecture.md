@@ -17,7 +17,8 @@
 - `model_capability_values`: one row per scan key per model. PK (`model_id`, `key`); `value` is the result JSON (`status`, `detail`, `probedAt`, `fingerprint`, `source`). Written only by `model_capabilities::save`, which applies the write-once rule (a `works` row is never overwritten by a non-works result and never removed). Migration `m20261023_000002_model_capability_values`.
 - `model_settings` (legacy, unused): the old one-JSON-row-per-model table. Kept by migration `m20261023_000001_model_setting_values` (which copies it into `model_setting_values`) so the data stays recoverable; no entity.
 - `user_preferences`: key-value app settings such as `server_port`
-- `downloaded_models`: GGUF models imported into GenieX (`name` primary key; precision, context_size, param_count, repo_url, model_card, timestamps). Written by `import_gguf`, read by the model page.
+- `downloaded_models`: GGUF models imported into GenieX (`name` primary key; precision, context_size, param_count, repo_url, model_card, timestamps). Written by `import_gguf` and `upsert_downloaded_model`, read by the model page.
+  - `facets` (text, null; migration `m20261033_000001_downloaded_model_facets`, uncommitted): the Hub facet summary as a JSON object (`task`, `library`, `license`, `paramCount`, `paramCountApproximate`, `baseRelation`, `baseRepo`, `quantBits`; shape in `utils/hubModelInfo.ts`). Null for rows saved before it. The write is checked to be a JSON object (`validate_facets`).
 
 ## Patterns
 - Use `MigrationTrait` for versioned schema changes.

@@ -1,0 +1,36 @@
+.hub-facet-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--spacingVerticalM) var(--spacingHorizontalM);
+  align-items: start;
+}
+
+.hub-facet-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalXS);
+  min-width: 0;
+}
+
+/* Model tree and the clear button take a full row. */
+.hub-facet-panel__wide {
+  grid-column: 1 / -1;
+}
+
+.hub-facet-panel__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+}
+
+.hub-facet-panel__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacingHorizontalS);
+}
+
+.hub-facet-panel__grow {
+  flex: 1 1 180px;
+  min-width: 0;
+}

@@ -206,6 +206,18 @@ pub async fn chat_completion(
         eprintln!("[chat] WARNING: no model resolved");
     }
 
+    // A template such as Gemma 4's reads the think token in the prompt, not the `enable_think` field.
+    let token_template = match model_name.as_deref() {
+        Some(name) => super::capabilities::summary_for(name)
+            .await
+            .map(|summary| summary.think_token)
+            .unwrap_or(false),
+        None => false,
+    };
+    if token_template {
+        super::chat_helpers::set_think_token(&mut messages_json, settings.think == Some(true));
+    }
+
     let body = build_chat_body(messages_json, model_name, &settings);
 
     // Time-to-first-output limit. It covers the wait for response headers and the

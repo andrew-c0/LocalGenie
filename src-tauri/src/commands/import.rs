@@ -25,6 +25,7 @@ pub async fn import_gguf(
     filename: String,
     precision: String,
     sidecar_names: Vec<String>,
+    facets: Option<String>,
 ) -> Result<(), String> {
     // The folder is one name under Downloads, so nothing outside it can be reached.
     validate_file_name(&folder)?;
@@ -32,6 +33,7 @@ pub async fn import_gguf(
     for name in &sidecar_names {
         validate_file_name(name)?;
     }
+    database::validate_facets(facets.as_deref())?;
     // Not canonicalised: on Windows that adds a `\\?\` prefix the GenieX CLI may not accept.
     let dir = download_dir()
         .ok_or("Could not resolve downloads directory")?
@@ -110,6 +112,7 @@ pub async fn import_gguf(
         None,
         Some(repo_url),
         model_card,
+        facets,
     )
     .await
     {

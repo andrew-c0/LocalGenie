@@ -30,21 +30,6 @@
   gap: var(--spacingVerticalS);
 }
 
-.hub-model-browser__group {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--spacingHorizontalS);
-  border: none;
-  margin: 0;
-  padding: 0;
-  min-width: 0;
-}
-
-.hub-model-browser__group-label {
-  min-width: 80px;
-}
-
 .hub-model-browser__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

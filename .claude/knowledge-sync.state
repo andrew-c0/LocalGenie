@@ -1,3 +1,3 @@
-last_synced_commit=961d1678b196c3ad092cdb89ee4bff2ba9b6d36b
-last_synced_date=2026-10-27
-note=Synced to HEAD 961d167 (covers 5eda325 sync docs, a4e164e checkpoint, 961d167 system lines and chat settings). Doc edits from this sync are uncommitted. Untracked tasks-ordered.md (user file) not read or touched. cargo/tsc/vitest not run; the app not run.
+last_synced_commit=f4f819279d349119707ed97fc0ef49f90846c892
+last_synced_date=2026-10-28
+note=Synced to HEAD f4f8192 (its only change is the docs sync to 961d167; code unchanged since 961d167). Uncommitted working tree also reflected: HF facets (utils/hubModelInfo.ts, HubFacetPanel, ModelFacetRow, hubApi tags/expand, hubBrowseStore facets, downloaded_models.facets via m20261033, import_gguf and upsert_downloaded_model facets arg) and the think token (chat_helpers, capabilities think_token, capability_scan thinking_body). Doc edits from this sync are uncommitted. Untracked tasks-ordered.md and memories/external/huggingFace/hub-api.md not read or touched. cargo/tsc/vitest not run; the app not run.

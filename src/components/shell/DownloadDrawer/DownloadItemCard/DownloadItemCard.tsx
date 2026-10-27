@@ -56,45 +56,45 @@ export function DownloadItemCard({
   if (!active) {
     return (
       <Card size="small" className="download-card">
-        <CardHeader
-          header={<Text className="download-card__label">{d.label}</Text>}
-          description={
-            <>
-              <DownloadStatusBadge status={d.status} />
-              {d.status === "error" && d.error && <Caption1>{d.error}</Caption1>}
-              {d.received > 0 && (
-                <div className="download-card__meta">
-                  <Caption1>
-                    {formatBytes(d.received)}
-                    {d.total ? ` / ${formatBytes(d.total)}` : ""}
-                  </Caption1>
-                  {d.finishedAt && <Caption1>{elapsed(d.finishedAt - d.startedAt)}</Caption1>}
-                </div>
-              )}
-            </>
-          }
-          action={
-            <>
-              {d.status === "cancelled" && d.variant && (
-                <Button
-                  appearance="secondary"
-                  icon={busy ? <Spinner size="tiny" /> : <PlayRegular />}
-                  title="Resume download"
-                  aria-label={`Resume ${d.label}`}
-                  disabled={busy}
-                  onClick={() => onResume(d.id)}
-                />
-              )}
+        <div className="download-card__header">
+          <Text className="download-card__label" title={d.label}>
+            {d.label}
+          </Text>
+          <div className="download-card__actions">
+            {d.status === "cancelled" && d.variant && (
               <Button
                 appearance="secondary"
-                icon={<DeleteRegular />}
-                title="Remove from list"
-                aria-label={`Remove ${d.label} from list`}
-                onClick={() => onRemove(d.id)}
+                size="small"
+                icon={busy ? <Spinner size="tiny" /> : <PlayRegular />}
+                title="Resume download"
+                aria-label={`Resume ${d.label}`}
+                disabled={busy}
+                onClick={() => onResume(d.id)}
               />
-            </>
-          }
-        />
+            )}
+            <Button
+              appearance="secondary"
+              size="small"
+              icon={<DeleteRegular />}
+              title="Remove from list"
+              aria-label={`Remove ${d.label} from list`}
+              onClick={() => onRemove(d.id)}
+            />
+          </div>
+        </div>
+        <div className="download-card__status">
+          <DownloadStatusBadge status={d.status} />
+          {d.received > 0 && (
+            <Caption1>
+              {formatBytes(d.received)}
+              {d.total ? ` / ${formatBytes(d.total)}` : ""}
+              {d.finishedAt ? ` · ${elapsed(d.finishedAt - d.startedAt)}` : ""}
+            </Caption1>
+          )}
+        </div>
+        {d.status === "error" && d.error && (
+          <Caption1 className="download-card__error">{d.error}</Caption1>
+        )}
       </Card>
     );
   }

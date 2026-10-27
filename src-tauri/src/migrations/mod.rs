@@ -17,6 +17,7 @@ mod m20261029_000001_benchmark_run_power;
 mod m20261030_000001_chat_session_overrides;
 mod m20261031_000001_message_kind;
 mod m20261032_000001_message_compute;
+mod m20261033_000001_downloaded_model_facets;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -40,6 +41,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261030_000001_chat_session_overrides::Migration),
             Box::new(m20261031_000001_message_kind::Migration),
             Box::new(m20261032_000001_message_compute::Migration),
+            Box::new(m20261033_000001_downloaded_model_facets::Migration),
         ]
     }
 }
@@ -216,8 +218,8 @@ mod tests {
         assert_eq!(msg.token_count, Some(42));
         assert_eq!(msg.prompt_chars, Some(7));
 
-        // Thirteen steps: the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind and message compute migrations come after this one.
-        Migrator::down(&db, Some(13))
+        // Fourteen steps: the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute and downloaded model facets migrations come after this one.
+        Migrator::down(&db, Some(14))
             .await
             .expect("revert stats migration");
         let after_down = columns(db.clone()).await;
@@ -247,8 +249,8 @@ mod tests {
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
         // Put back the old JSON row, then apply the migrations again so it copies it.
-        // Twelve steps: the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind and message compute migrations come after the settings one.
-        Migrator::down(&db, Some(12))
+        // Thirteen steps: the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute and downloaded model facets migrations come after the settings one.
+        Migrator::down(&db, Some(13))
             .await
             .expect("revert settings migration");
         db.execute(Statement::from_string(
@@ -523,6 +525,62 @@ mod tests {
             .await
             .expect("query")
             .is_some(), "the file row is removed by the app, not the database");
+    }
+
+    #[tokio::test]
+    async fn downloaded_model_facets_round_trip() {
+        use crate::entities::downloaded_model;
+
+        let tmp = TempDb::new("migrate-facets");
+        let db = init_database(&tmp.url()).await.expect("migrations apply");
+
+        let columns = |db: sea_orm::DatabaseConnection| async move {
+            let rows = db
+                .query_all(sea_orm::Statement::from_string(
+                    sea_orm::DatabaseBackend::Sqlite,
+                    "PRAGMA table_info(downloaded_models)".to_owned(),
+                ))
+                .await
+                .expect("table_info");
+            rows.iter()
+                .map(|r| r.try_get::<String>("", "name").expect("name"))
+                .collect::<Vec<_>>()
+        };
+        assert!(columns(db.clone()).await.iter().any(|c| c == "facets"));
+
+        let facets = r#"{"task":"text-generation","paramCount":7615616512,"paramCountApproximate":false,"baseRelation":"quantized","baseRepo":"Qwen/Qwen2.5-7B-Instruct","quantBits":[4]}"#;
+        downloaded_model::ActiveModel {
+            name: Set("org/model".into()),
+            precision: Set(Some("Q4_K_M".into())),
+            context_size: Set(Some(4096)),
+            param_count: Set(None),
+            created_at: Set(1),
+            updated_at: Set(1),
+            repo_url: Set(None),
+            model_card: Set(None),
+            facets: Set(Some(facets.into())),
+        }
+        .insert(&db)
+        .await
+        .expect("insert downloaded model");
+
+        let row = downloaded_model::Entity::find_by_id("org/model")
+            .one(&db)
+            .await
+            .expect("query")
+            .expect("row exists");
+        assert_eq!(row.facets.as_deref(), Some(facets));
+
+        // Reverting drops the column; reapplying brings it back as null for old rows.
+        Migrator::down(&db, Some(1)).await.expect("revert facets");
+        assert!(!columns(db.clone()).await.iter().any(|c| c == "facets"));
+        Migrator::up(&db, None).await.expect("reapply facets");
+        let row = downloaded_model::Entity::find_by_id("org/model")
+            .one(&db)
+            .await
+            .expect("query")
+            .expect("row exists");
+        assert_eq!(row.facets, None);
     }
 
     #[tokio::test]

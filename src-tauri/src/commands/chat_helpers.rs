@@ -106,6 +106,76 @@ pub fn resolve_model_for_server(model: Option<&str>) -> Option<String> {
     }
 }
 
+/// The token that switches thinking on in templates such as Gemma 4's. Those templates ignore the
+/// `enable_think` field, so the token has to be in the prompt.
+pub const THINK_TOKEN: &str = "<|think|>";
+
+/// Put the think token at the start of the system turn, where the template reads it. The first
+/// message gets the token when it is a system turn with text; otherwise a system turn is added.
+pub fn with_think_token(messages: &mut Vec<serde_json::Value>) {
+    if let Some(first) = messages.first_mut() {
+        if first["role"] == "system" {
+            if let Some(text) = first["content"].as_str() {
+                first["content"] = serde_json::json!(format!("{THINK_TOKEN}\n{text}"));
+                return;
+            }
+        }
+    }
+    messages.insert(
+        0,
+        serde_json::json!({ "role": "system", "content": THINK_TOKEN }),
+    );
+}
+
+/// Whether a message's text (plain or in content parts) contains the think token.
+fn mentions_think_token(message: &serde_json::Value) -> bool {
+    match &message["content"] {
+        serde_json::Value::String(text) => text.contains(THINK_TOKEN),
+        serde_json::Value::Array(parts) => parts.iter().any(|part| {
+            part["text"]
+                .as_str()
+                .is_some_and(|t| t.contains(THINK_TOKEN))
+        }),
+        _ => false,
+    }
+}
+
+/// Removes the think token from every message's text, so a token typed into a message or the system
+/// prompt cannot switch thinking on while the switch is off.
+pub fn strip_think_token(messages: &mut [serde_json::Value]) {
+    for message in messages.iter_mut() {
+        match message["content"].clone() {
+            serde_json::Value::String(text) if text.contains(THINK_TOKEN) => {
+                message["content"] =
+                    serde_json::json!(text.replace(THINK_TOKEN, "").trim_start_matches('\n'));
+            }
+            serde_json::Value::Array(mut parts) => {
+                for part in parts.iter_mut() {
+                    if let Some(text) = part["text"].as_str().filter(|t| t.contains(THINK_TOKEN)) {
+                        part["text"] = serde_json::json!(text
+                            .replace(THINK_TOKEN, "")
+                            .trim_start_matches('\n'));
+                    }
+                }
+                message["content"] = serde_json::Value::Array(parts);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Sets the think token for a template that reads it. On: the token is added once, unless a message
+/// already has it. Off: it is removed everywhere.
+pub fn set_think_token(messages: &mut Vec<serde_json::Value>, think: bool) {
+    if think {
+        if !messages.iter().any(mentions_think_token) {
+            with_think_token(messages);
+        }
+    } else {
+        strip_think_token(messages);
+    }
+}
+
 /// Build the JSON body for a chat completion request.
 pub fn build_chat_body(
     messages_json: Vec<serde_json::Value>,
@@ -450,5 +520,53 @@ mod tests {
         assert_eq!(settings.load.spec_type.as_deref(), Some("ngram-simple"));
         assert_eq!(settings.load.spec_n_max, Some(5));
         assert_eq!(settings.grammar_string.as_deref(), Some("root ::= \"ok\""));
+    }
+}
+
+#[cfg(test)]
+mod think_token_tests {
+    use super::*;
+
+    #[test]
+    fn think_token_goes_into_an_existing_system_turn() {
+        let mut messages = vec![
+            serde_json::json!({ "role": "system", "content": "Be brief." }),
+            serde_json::json!({ "role": "user", "content": "Hi" }),
+        ];
+        with_think_token(&mut messages);
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0]["content"], "<|think|>\nBe brief.");
+        assert_eq!(messages[1]["content"], "Hi");
+    }
+
+    #[test]
+    fn think_token_adds_a_system_turn_when_there_is_none() {
+        let mut messages = vec![serde_json::json!({ "role": "user", "content": "Hi" })];
+        with_think_token(&mut messages);
+        assert_eq!(
+            messages[0],
+            serde_json::json!({ "role": "system", "content": "<|think|>" })
+        );
+        assert_eq!(messages[1]["content"], "Hi");
+    }
+
+    #[test]
+    fn think_off_removes_the_token_everywhere() {
+        let mut messages = vec![
+            serde_json::json!({ "role": "system", "content": "<|think|>
+Be brief." }),
+            serde_json::json!({ "role": "user", "content": "<|think|> Is 221 prime?" }),
+        ];
+        set_think_token(&mut messages, false);
+        assert_eq!(messages[0]["content"], "Be brief.");
+        assert_eq!(messages[1]["content"], " Is 221 prime?");
+    }
+
+    #[test]
+    fn think_on_keeps_a_single_token_when_one_is_already_there() {
+        let mut messages = vec![serde_json::json!({ "role": "user", "content": "<|think|> Hi" })];
+        set_think_token(&mut messages, true);
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0]["content"], "<|think|> Hi");
     }
 }

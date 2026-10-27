@@ -28,6 +28,7 @@ import * as hub from "../../services/hubModels";
 import { isDownloadActive, useDownloadStore } from "../../stores/downloadStore";
 import { useModelStore } from "../../stores/modelStore";
 import { runWithConcurrency } from "../../utils/async";
+import { facetSummaryFromModel } from "../../utils/hubModelInfo";
 import { FAMILY_ALL, familyFilterOptions, matchesFamily } from "../../utils/modelFamily";
 import { toast } from "../../utils/toast";
 import "./LocalModelsBrowserPage.css";
@@ -192,8 +193,9 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
             installed: false,
             downloads: r.downloads,
             likes: r.likes,
-            pipelineTag: r.pipeline_tag,
+            facets: facetSummaryFromModel(r),
             ggufFiles: ggufCache.get(r.id),
+            downloaded: downloadedMeta.has(r.id),
           });
         }
       }

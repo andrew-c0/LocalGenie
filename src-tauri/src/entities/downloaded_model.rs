@@ -19,6 +19,9 @@ pub struct Model {
     pub repo_url: Option<String>,
     /// Full model card README content, stored for offline viewing.
     pub model_card: Option<String>,
+    /// Hugging Face facet summary as JSON text (task, parameters, library, licence, base model,
+    /// quantisation). Null when not kept.
+    pub facets: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

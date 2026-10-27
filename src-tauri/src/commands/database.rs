@@ -401,6 +401,9 @@ pub async fn set_preference(
 /// `context_size` / `param_count` are tokens / parameters (pass null when
 /// the hub metadata is unavailable).
 /// `repo_url` and `model_card` are optional metadata from Hugging Face.
+/// `facets` is the facet summary as a JSON object (text), or null.
+// Each argument is a separate Tauri IPC field, as with import_gguf.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn upsert_downloaded_model(
     db: tauri::State<'_, DatabaseConnection>,
@@ -410,7 +413,9 @@ pub async fn upsert_downloaded_model(
     param_count: Option<i64>,
     repo_url: Option<String>,
     model_card: Option<String>,
+    facets: Option<String>,
 ) -> Result<(), String> {
+    validate_facets(facets.as_deref())?;
     let now = now_millis();
     downloaded_model::Entity::insert(downloaded_model::ActiveModel {
         name: Set(name),
@@ -419,6 +424,7 @@ pub async fn upsert_downloaded_model(
         param_count: Set(param_count),
         repo_url: Set(repo_url),
         model_card: Set(model_card),
+        facets: Set(facets),
         created_at: Set(now),
         updated_at: Set(now),
     })
@@ -430,6 +436,7 @@ pub async fn upsert_downloaded_model(
                 downloaded_model::Column::ParamCount,
                 downloaded_model::Column::RepoUrl,
                 downloaded_model::Column::ModelCard,
+                downloaded_model::Column::Facets,
                 downloaded_model::Column::UpdatedAt,
             ])
             .to_owned(),
@@ -464,6 +471,17 @@ pub async fn delete_downloaded_model(
     Ok(())
 }
 
+/// Facets are stored as text the frontend reads back as an object, so anything else is refused.
+pub fn validate_facets(facets: Option<&str>) -> Result<(), String> {
+    let Some(text) = facets else {
+        return Ok(());
+    };
+    match serde_json::from_str::<serde_json::Value>(text) {
+        Ok(serde_json::Value::Object(_)) => Ok(()),
+        _ => Err("Model facets must be a JSON object".to_owned()),
+    }
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────
 
 fn now_millis() -> i64 {
@@ -471,6 +489,20 @@ fn now_millis() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod facet_tests {
+    use super::validate_facets;
+
+    #[test]
+    fn facets_accept_null_and_objects_only() {
+        assert!(validate_facets(None).is_ok());
+        assert!(validate_facets(Some(r#"{"task":"text-generation"}"#)).is_ok());
+        assert!(validate_facets(Some("[]")).is_err());
+        assert!(validate_facets(Some("\"text\"")).is_err());
+        assert!(validate_facets(Some("{not json")).is_err());
+    }
 }
 
 #[cfg(test)]

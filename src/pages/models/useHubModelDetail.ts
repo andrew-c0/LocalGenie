@@ -10,8 +10,14 @@ import {
 import { convertToGGUFFiles, groupGGUFFiles } from "../../services/hubModels";
 import type { SystemMemoryInfo } from "../../services/system";
 import { getSystemMemory } from "../../services/system";
+import { type HubFacetSummary, parseFacets } from "../../utils/hubModelInfo";
 
 /** Loads the model, its file listing, README or stored model card, and derives GGUF groups. */
+/** True when a stored name is the repo: the same id, or the id with a precision suffix (`org/repo:Q4_K_M`). */
+function isSameRepo(name: string, repoId: string): boolean {
+  return repoId === name || repoId.startsWith(`${name}:`);
+}
+
 export function useHubModelData(repoId: string, isLocal = false) {
   const [model, setModel] = useState<HubModel | null>(null);
   const [files, setFiles] = useState<HubFileEntry[]>([]);
@@ -34,7 +40,7 @@ export function useHubModelData(repoId: string, isLocal = false) {
         if (isLocal) {
           // Local model: build synthetic HubModel from DB so UI works
           const models = await db.listDownloadedModels();
-          const row = models.find((m) => m.name === repoId || repoId.includes(m.name));
+          const row = models.find((m) => isSameRepo(m.name, repoId));
           if (row) {
             setModel({
               _id: repoId,
@@ -101,7 +107,7 @@ export function useDownloadedPrecisions(repoId: string) {
         if (cancelled) return;
         const precisions = new Set(
           models
-            .filter((m) => m.name === repoId || repoId.includes(m.name))
+            .filter((m) => isSameRepo(m.name, repoId))
             .map((m) => m.precision ?? "")
             .filter((p) => p),
         );
@@ -116,6 +122,33 @@ export function useDownloadedPrecisions(repoId: string) {
   }, [repoId]);
 
   return downloadedPrecisions;
+}
+
+/** The facet summary stored when the installed model was downloaded (null for other models). */
+export function useStoredFacets(repoId: string, enabled: boolean): HubFacetSummary | null {
+  const [facets, setFacets] = useState<HubFacetSummary | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!enabled || !repoId) {
+      setFacets(null);
+      return;
+    }
+    db.listDownloadedModels()
+      .then((models) => {
+        if (cancelled) return;
+        const row = models.find((m) => isSameRepo(m.name, repoId));
+        setFacets(parseFacets(row?.facets));
+      })
+      .catch(() => {
+        if (!cancelled) setFacets(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [repoId, enabled]);
+
+  return facets;
 }
 
 /** System memory snapshot, loaded once for RAM-fit estimates. */

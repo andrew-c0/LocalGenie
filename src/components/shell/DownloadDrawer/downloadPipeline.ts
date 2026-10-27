@@ -5,6 +5,7 @@ import { fetchContextLength } from "../../../services/hubApi";
 import { type GGUFVariant, useDownloadStore } from "../../../stores/downloadStore";
 import { useModelStore } from "../../../stores/modelStore";
 import type { DownloadedModelMeta } from "../../../types";
+import { serializeFacets } from "../../../utils/hubModelInfo";
 import { toast } from "../../../utils/toast";
 
 const hfFileUrl = (repoId: string, filename: string) =>
@@ -54,7 +55,8 @@ export async function runGGUFDownload(variant: GGUFVariant): Promise<void> {
 
     await downloadFile(repoId, hfFileUrl(repoId, main.filename), folder, fileName);
     // The backend emits model-pull-start/complete around the import and sets the status.
-    await importGGUF(folder, repoId, fileName, main.precision, sidecarNames);
+    const facets = variant.facets ? serializeFacets(variant.facets) : null;
+    await importGGUF(folder, repoId, fileName, main.precision, sidecarNames, facets);
   } catch (err) {
     const message = String(err);
     if (message.includes("cancelled")) {
@@ -82,6 +84,7 @@ export async function refreshAfterImport(repoId: string): Promise<void> {
       meta.paramCount ?? null,
       meta.repoUrl ?? null,
       meta.modelCard ?? null,
+      meta.facets ?? null,
     );
   } catch {
     // metadata is a nice-to-have
@@ -108,5 +111,6 @@ async function fetchDownloadedModelMeta(repoId: string): Promise<DownloadedModel
     paramCount: row?.param_count ?? undefined,
     repoUrl: row?.repo_url ?? undefined,
     modelCard: row?.model_card ?? undefined,
+    facets: row?.facets ?? undefined,
   };
 }

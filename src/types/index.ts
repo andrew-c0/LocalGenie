@@ -308,6 +308,8 @@ export interface DownloadedModelMeta {
   paramCount?: number;
   repoUrl?: string;
   modelCard?: string;
+  /** Facet summary as JSON text (see utils/hubModelInfo). */
+  facets?: string;
 }
 
 /** The chat stream in flight, and the session its tokens belong to. */

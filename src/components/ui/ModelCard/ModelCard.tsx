@@ -1,6 +1,7 @@
-import { Button, Card, CardFooter, CardHeader, Spinner } from "@fluentui/react-components";
+import { Badge, Button, Card, CardFooter, CardHeader, Spinner } from "@fluentui/react-components";
 import { ChatRegular, DeleteRegular, InfoRegular } from "@fluentui/react-icons";
 import { formatCount } from "../../../utils/format";
+import { type HubFacetSummary, sizeLabelOf, taskLabel } from "../../../utils/hubModelInfo";
 import { StatusBadge } from "../StatusBadge/StatusBadge";
 import { CardTitle, Meta } from "../Typography/Typography";
 import "./ModelCard.css";
@@ -19,7 +20,10 @@ export interface ModelCardData {
   precisions?: string[];
   downloads?: number;
   likes?: number;
-  pipelineTag?: string;
+  /** The repo is downloaded on this device: the Hub downloads and likes line is hidden. */
+  downloaded?: boolean;
+  /** Hub facets for a search result: the card shows its task, size and licence. */
+  facets?: HubFacetSummary;
   /** Precision actually downloaded (e.g. Q4_0), from the local DB. */
   downloadedPrecision?: string;
   /** Native context length reported by the model's config (tokens), from the local DB. */
@@ -69,9 +73,7 @@ export function ModelCard({
     <StatusBadge tone="blue">Installed</StatusBadge>
   ) : model.gated ? (
     <StatusBadge>Gated</StatusBadge>
-  ) : (
-    <StatusBadge>Available</StatusBadge>
-  );
+  ) : null;
 
   return (
     <Card size="small" className="model-card__card">
@@ -110,9 +112,38 @@ export function ModelCard({
           </>
         ) : (
           <>
-            <Meta>⬇ {fmt(model.downloads)}</Meta>
-            <Meta>❤ {fmt(model.likes)}</Meta>
-            {model.pipelineTag && <Meta>{model.pipelineTag}</Meta>}
+            {!model.downloaded && (
+              <Meta>
+                ⬇ {fmt(model.downloads)} · ❤ {fmt(model.likes)}
+              </Meta>
+            )}
+            {model.facets && (
+              <div className="model-card__facets">
+                {model.facets.task && (
+                  <Badge appearance="outline" size="small">
+                    {taskLabel(model.facets.task)}
+                  </Badge>
+                )}
+                {sizeLabelOf(model.facets) && (
+                  <Badge
+                    appearance="tint"
+                    size="small"
+                    title={
+                      model.facets.paramCountApproximate
+                        ? "Approximate: from the GGUF metadata"
+                        : undefined
+                    }
+                  >
+                    {sizeLabelOf(model.facets)}
+                  </Badge>
+                )}
+                {model.facets.license && (
+                  <Badge appearance="ghost" size="small">
+                    {model.facets.license}
+                  </Badge>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -146,7 +177,7 @@ export function ModelCard({
             )}
           </>
         ) : (
-          <Button appearance="primary" icon={<InfoRegular />} onClick={openDetails}>
+          <Button appearance="secondary" size="small" icon={<InfoRegular />} onClick={openDetails}>
             Details
           </Button>
         )}

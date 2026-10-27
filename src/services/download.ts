@@ -21,13 +21,14 @@ export async function cancelDownload(downloadId: string): Promise<void> {
 /** Import a downloaded GGUF into the GenieX model cache. `folder` is the repo's download folder
  *  (inside Downloads), holding `filename` and the projector `sidecarNames`. They are registered with
  *  `geniex pull --model-hub localfs`, and the files this import used are removed after GenieX has
- *  copied them. */
+ *  copied them. `facets` is the repo's facet summary as JSON text, stored with the model. */
 export async function importGGUF(
   folder: string,
   repoId: string,
   filename: string,
   precision: string,
   sidecarNames: string[],
+  facets: string | null,
 ): Promise<void> {
-  return invoke("import_gguf", { folder, repoId, filename, precision, sidecarNames });
+  return invoke("import_gguf", { folder, repoId, filename, precision, sidecarNames, facets });
 }

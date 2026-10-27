@@ -1,4 +1,4 @@
-import { Badge, Button, Card, CardHeader } from "@fluentui/react-components";
+import { Button, Card, CardHeader } from "@fluentui/react-components";
 import {
   ArrowLeftRegular,
   ChatRegular,
@@ -11,17 +11,16 @@ import { open } from "@tauri-apps/plugin-shell";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { GGUFVariantList } from "../../../components/models/GGUFVariantList";
+import { ModelFacetRow } from "../../../components/models/ModelFacetRow";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog/ConfirmDialog";
 import { MarkdownContent } from "../../../components/ui/MarkdownContent/MarkdownContent";
 import { PageHeader } from "../../../components/ui/PageHeader/PageHeader";
 import { StateBlock } from "../../../components/ui/StateBlock/StateBlock";
-import { StatusBadge } from "../../../components/ui/StatusBadge/StatusBadge";
 import * as db from "../../../services/database";
 import * as geniex from "../../../services/geniex";
 import {
   estimateModelBytes,
   hubModelPageUrl,
-  modelTagChips,
   precisionInfo,
   ramFitForBytes,
 } from "../../../services/hubApi";
@@ -29,7 +28,13 @@ import type { GGUFGroup } from "../../../services/hubModels";
 import { isDownloadActive, useDownloadStore } from "../../../stores/downloadStore";
 import { useModelStore } from "../../../stores/modelStore";
 import { formatBytes, formatCount } from "../../../utils/format";
-import { useDownloadedPrecisions, useHubModelData, useSystemMemory } from "../useHubModelDetail";
+import { facetSummaryFromModel } from "../../../utils/hubModelInfo";
+import {
+  useDownloadedPrecisions,
+  useHubModelData,
+  useStoredFacets,
+  useSystemMemory,
+} from "../useHubModelDetail";
 import "./HubModelDetail.css";
 import { Body, CardTitle, Meta } from "../../../components/ui/Typography/Typography";
 
@@ -49,6 +54,7 @@ export default function HubModelDetail({ isLocal }: Props) {
     isLocal,
   );
   const downloadedPrecisions = useDownloadedPrecisions(repoId);
+  const storedFacets = useStoredFacets(repoId, !!isLocal);
   const systemMemory = useSystemMemory();
   const isDownloading = useDownloadStore((s) =>
     s.downloads.some((d) => d.id === repoId && isDownloadActive(d.status)),
@@ -131,8 +137,17 @@ export default function HubModelDetail({ isLocal }: Props) {
     return ramFitForBytes(neededBytes, systemMemory);
   };
 
+  // The facets are stored with the download, so the installed model page can show them later.
+  const remoteFacets = facetSummaryFromModel(model);
+  const facets = isLocal ? storedFacets : remoteFacets;
+
   const handleDownload = (group: GGUFGroup) => {
-    useDownloadStore.getState().enqueue({ repoId, main: group.main, sidecars: group.sidecars });
+    useDownloadStore.getState().enqueue({
+      repoId,
+      main: group.main,
+      sidecars: group.sidecars,
+      facets: remoteFacets,
+    });
   };
 
   const busy = isDownloading;
@@ -145,8 +160,9 @@ export default function HubModelDetail({ isLocal }: Props) {
           eyebrow={isLocal ? "● INSTALLED MODEL" : "● HUGGING FACE MODEL"}
           title={model.id}
           subtitle={[
-            `⬇ ${formatCount(model.downloads)} downloads`,
-            `❤ ${formatCount(model.likes)} likes`,
+            // The Hub's downloads and likes only mean something for a repo that is not on this device.
+            !isLocal && `⬇ ${formatCount(model.downloads)} downloads`,
+            !isLocal && `❤ ${formatCount(model.likes)} likes`,
             model.gguf?.context_length &&
               `Context ${formatCount(model.gguf.context_length)} tokens`,
             model.lastModified && `Updated ${new Date(model.lastModified).toLocaleDateString()}`,
@@ -191,15 +207,15 @@ export default function HubModelDetail({ isLocal }: Props) {
           }
         />
 
-        {(model.pipeline_tag || modelTagChips(model).length > 0) && (
-          <div className="hub-model-detail__tags">
-            {model.pipeline_tag && <StatusBadge>{model.pipeline_tag}</StatusBadge>}
-            {modelTagChips(model).map((tag) => (
-              <Badge key={tag} appearance="outline">
-                {tag}
-              </Badge>
-            ))}
-          </div>
+        {facets && (
+          <Card size="small">
+            <ModelFacetRow
+              facets={facets}
+              precisions={
+                isLocal ? [...downloadedPrecisions] : ggufGroups.map((g) => g.main.precision)
+              }
+            />
+          </Card>
         )}
 
         {!isLocal && ggufGroups.length > 0 && (

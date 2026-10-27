@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { GGUFFile } from "../services/hubModels";
+import type { HubFacetSummary } from "../utils/hubModelInfo";
 
 /**
  * `queued` = requested by the app, not yet picked up by the download drawer.
@@ -18,6 +19,8 @@ export interface GGUFVariant {
   repoId: string;
   main: GGUFFile;
   sidecars: GGUFFile[];
+  /** The repo's facets, stored with the imported model. */
+  facets?: HubFacetSummary;
 }
 
 export interface DownloadItem {

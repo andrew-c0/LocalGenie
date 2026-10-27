@@ -22,6 +22,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
 
+use super::chat_helpers::with_think_token;
+
 use super::capabilities::{self, model_folder, scan_folder};
 use super::chat::unless_cancelled;
 use super::chat_helpers::{apply_load_params, strip_precision, ModelLoadParams};
@@ -889,22 +891,24 @@ fn tool_call_count(reply: &Value) -> usize {
 
 /// Body of one thinking-probe request. Both requests send `THINKING_PROMPT` at temperature 0, so only
 /// the switch differs. The thinking-on request streams and has the larger cap; the thinking-off
-/// request is a plain request with the short cap.
-fn thinking_body(model: &str, load: &ModelLoadParams, think: bool) -> Value {
+/// request is a plain request with the short cap. With `think_token`, the thinking-on request also
+/// carries the think token, which a template such as Gemma 4's reads instead of `enable_think`.
+fn thinking_body(model: &str, load: &ModelLoadParams, think: bool, think_token: bool) -> Value {
     let max_tokens = if think {
         THINK_STREAM_MAX_TOKENS
     } else {
         THINK_MAX_TOKENS
     };
+    let mut messages = vec![json!({ "role": "user", "content": THINKING_PROMPT })];
+    if think && think_token {
+        with_think_token(&mut messages);
+    }
     request_body(
         model,
         load,
         0.0,
         &[
-            (
-                "messages",
-                json!([{ "role": "user", "content": THINKING_PROMPT }]),
-            ),
+            ("messages", json!(messages)),
             ("enable_think", json!(think)),
             ("max_tokens", json!(max_tokens)),
             ("stream", json!(think)),
@@ -914,9 +918,13 @@ fn thinking_body(model: &str, load: &ModelLoadParams, think: bool) -> Value {
 
 /// Thinking probe: the same prompt with thinking on, then off, at temperature 0.
 async fn probe_thinking(session: &Session<'_>) -> Verdict {
+    let think_token = capabilities::summary_for(&session.model)
+        .await
+        .map(|summary| summary.think_token)
+        .unwrap_or(false);
     let on = match ask_body(
         session,
-        &thinking_body(&session.model, &session.load, true),
+        &thinking_body(&session.model, &session.load, true, think_token),
         &["enable_think"],
     )
     .await
@@ -926,7 +934,7 @@ async fn probe_thinking(session: &Session<'_>) -> Verdict {
     };
     let off = match ask_body(
         session,
-        &thinking_body(&session.model, &session.load, false),
+        &thinking_body(&session.model, &session.load, false, think_token),
         &["enable_think"],
     )
     .await
@@ -1686,8 +1694,8 @@ mod tests {
     #[test]
     fn thinking_probe_uses_the_thinking_prompt_for_both_requests() {
         let load = ModelLoadParams::default();
-        let on = thinking_body("m", &load, true);
-        let off = thinking_body("m", &load, false);
+        let on = thinking_body("m", &load, true, false);
+        let off = thinking_body("m", &load, false, false);
         for body in [&on, &off] {
             assert_eq!(body["messages"][0]["content"], THINKING_PROMPT);
             assert_eq!(body["messages"].as_array().map(Vec::len), Some(1));
@@ -1703,12 +1711,12 @@ mod tests {
     #[test]
     fn thinking_on_streams_with_the_cap_and_thinking_off_does_not() {
         let load = ModelLoadParams::default();
-        let on = thinking_body("m", &load, true);
+        let on = thinking_body("m", &load, true, false);
         assert_eq!(on["stream"], true);
         assert_eq!(on["enable_think"], true);
         assert_eq!(on["max_tokens"], 1024);
 
-        let off = thinking_body("m", &load, false);
+        let off = thinking_body("m", &load, false, false);
         assert_eq!(off["stream"], false);
         assert_eq!(off["enable_think"], false);
         assert_eq!(off["max_tokens"], THINK_MAX_TOKENS);

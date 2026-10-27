@@ -2,10 +2,42 @@
   width: 100%;
 }
 
+/* History row: the name on the left, up to two lines, and the actions on the right. */
+.download-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacingHorizontalS);
+}
+
 .download-card__label {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+}
+
+.download-card__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--spacingHorizontalXS);
+}
+
+/* Status badge, then size and time on the same line, wrapping when the drawer is narrow. */
+.download-card__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+  margin-top: var(--spacingVerticalXS);
+}
+
+.download-card__error {
+  display: block;
+  margin-top: var(--spacingVerticalXS);
+  overflow-wrap: anywhere;
 }
 
 .download-card__progress {

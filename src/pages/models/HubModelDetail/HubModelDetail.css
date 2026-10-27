@@ -20,12 +20,6 @@
   gap: var(--spacingHorizontalS);
 }
 
-.hub-model-detail__tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacingHorizontalXS);
-}
-
 .hub-model-detail__align-start {
   align-self: flex-start;
 }

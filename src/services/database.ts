@@ -286,6 +286,8 @@ export interface DbDownloadedModel {
   param_count: number | null;
   repo_url: string | null;
   model_card: string | null;
+  /** Facet summary as JSON text, or null. Parse with `parseFacets`. */
+  facets: string | null;
 }
 
 export async function listDownloadedModels(): Promise<DbDownloadedModel[]> {
@@ -299,10 +301,12 @@ export async function upsertDownloadedModel(
   paramCount: number | null,
   repoUrl?: string | null,
   modelCard?: string | null,
+  facets?: string | null,
 ): Promise<void> {
   const params: Record<string, unknown> = { name, precision, contextSize, paramCount };
   if (repoUrl !== undefined) params.repoUrl = repoUrl;
   if (modelCard !== undefined) params.modelCard = modelCard;
+  if (facets !== undefined) params.facets = facets;
   await invoke("upsert_downloaded_model", params);
 }
 
