@@ -101,6 +101,24 @@ export interface ChatSession {
   updatedAt: number;
   /** Pinned conversations are listed first. Stored with the session. */
   pinned: boolean;
+  /** Settings this chat sets for itself. Keys left out use the model's settings. */
+  settingsOverrides?: ChatSettingsOverrides;
+}
+
+/**
+ * The settings a chat can override, as stored with the conversation. Only the keys a chat sets are
+ * present; a missing key uses the model's saved value. Must match `validate_chat_overrides` in Rust.
+ */
+export interface ChatSettingsOverrides {
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  minP?: number;
+  repetitionPenalty?: number;
+  maxTokens?: number;
+  seed?: number;
+  /** Replaces the model's system prompt for this chat when present, even when empty. */
+  systemBlocks?: SystemPromptBlock[];
 }
 
 export interface ServerStatus {

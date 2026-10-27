@@ -3,34 +3,16 @@ use tauri::{AppHandle, Emitter, State};
 
 use std::path::Path;
 
-use super::download::{download_dir, ensure_inside_downloads, validate_file_name};
+use super::download::{download_dir, validate_file_name};
 use super::{database, AppState};
 
-/// Delete a directory or file inside the Downloads folder (after a model import).
-#[tauri::command]
-pub async fn delete_directory(path: String) -> Result<(), String> {
-    let resolved = ensure_inside_downloads(&path)?;
-    let md = tokio::fs::metadata(&resolved)
-        .await
-        .map_err(|e| format!("Failed to read {path}: {e}"))?;
-    if md.is_dir() {
-        tokio::fs::remove_dir_all(&resolved)
-            .await
-            .map_err(|e| format!("Failed to delete directory {path}: {e}"))
-    } else {
-        tokio::fs::remove_file(&resolved)
-            .await
-            .map_err(|e| format!("Failed to delete file {path}: {e}"))
-    }
-}
-
-/// Import an already-downloaded GGUF file into the GenieX model cache.
+/// Import a repo's downloaded GGUF into the GenieX model cache.
 ///
-/// The file, and each sidecar (e.g. a multimodal projector), is moved into
-/// `<Downloads>/<base-model>/` before it is registered with
-/// `geniex pull <repo>:<precision> --model-hub localfs --local-path <dir>`.
-/// GenieX copies only what is in that folder, so sidecars must be moved in first.
-/// The model card is fetched best-effort; a missing README does not fail the import.
+/// `folder` is the repo's download folder under Downloads. It holds `filename` and the projector
+/// files in `sidecar_names`, which the download step put there. GenieX reads the whole folder, so
+/// projectors left by other variants of the repo are removed first. After GenieX has copied the
+/// files, this variant's copies are removed, and the folder too when nothing else is left in it.
+/// A failed import keeps its files, so a retry reuses them.
 // Each argument is a separate Tauri IPC field; bundling them would change the frontend contract.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
@@ -38,46 +20,30 @@ pub async fn import_gguf(
     app: AppHandle,
     state: State<'_, AppState>,
     db: State<'_, DatabaseConnection>,
-    local_path: String,
+    folder: String,
     repo_id: String,
     filename: String,
     precision: String,
-    sidecar_paths: Vec<String>,
-) -> Result<String, String> {
-    // Extract base model name from repo_id (e.g., "qualcomm/Qwen3-4B-Instruct" -> "Qwen3-4B-Instruct")
-    let base_model_name = repo_id.split('/').next_back().unwrap_or(&repo_id);
-    validate_file_name(base_model_name)?;
+    sidecar_names: Vec<String>,
+) -> Result<(), String> {
+    // The folder is one name under Downloads, so nothing outside it can be reached.
+    validate_file_name(&folder)?;
     validate_file_name(&filename)?;
-
-    let source = ensure_inside_downloads(&local_path)?;
-    // Validate every sidecar before anything moves, so a bad path leaves the main file in place.
-    let mut sidecars = Vec::with_capacity(sidecar_paths.len());
-    for path in &sidecar_paths {
-        let from = ensure_inside_downloads(path)?;
-        let name = sidecar_file_name(&from)?;
-        sidecars.push((from, name));
+    for name in &sidecar_names {
+        validate_file_name(name)?;
     }
-    let downloads_dir = download_dir().ok_or("Could not resolve downloads directory")?;
-    let target_dir = downloads_dir.join(base_model_name);
-
-    tokio::fs::create_dir_all(&target_dir)
-        .await
-        .map_err(|e| format!("Failed to create target directory: {e}"))?;
-
-    for (from, name) in &sidecars {
-        let to = target_dir.join(name);
-        tokio::fs::rename(from, &to)
-            .await
-            .map_err(|e| format!("Failed to move sidecar {name} to base model folder: {e}"))?;
+    // Not canonicalised: on Windows that adds a `\\?\` prefix the GenieX CLI may not accept.
+    let dir = download_dir()
+        .ok_or("Could not resolve downloads directory")?
+        .join(&folder);
+    if !dir.is_dir() {
+        return Err(format!("Download folder {} is missing", dir.display()));
     }
 
-    let new_path = target_dir.join(&filename);
-    tokio::fs::rename(&source, &new_path)
-        .await
-        .map_err(|e| format!("Failed to move file to base model folder: {e}"))?;
+    remove_other_projectors(&dir, &sidecar_names)?;
 
-    // Read the native context length now: the frontend deletes this folder once the import finishes.
-    let header_path = new_path.clone();
+    // Read the native context length now, before GenieX runs.
+    let header_path = dir.join(&filename);
     let context_size = match tokio::task::spawn_blocking(move || {
         crate::gguf::read_context_length(&header_path)
     })
@@ -108,7 +74,7 @@ pub async fn import_gguf(
             "--model-hub",
             "localfs",
             "--local-path",
-            &target_dir.to_string_lossy(),
+            &dir.to_string_lossy(),
         ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -150,40 +116,39 @@ pub async fn import_gguf(
         eprintln!("Failed to upsert downloaded model metadata: {e}");
     }
 
+    // GenieX has its copies now. Remove this variant's files from the download folder.
+    remove_variant_files(&dir, &filename, &sidecar_names).await;
+
     // Emitted last: listeners read the metadata row as soon as this fires.
     let _ = app.emit(
         "model-pull-complete",
         serde_json::json!({ "model": repo_id }),
     );
 
-    Ok(target_dir.to_string_lossy().into_owned())
+    Ok(())
 }
 
-/// The bare file name a sidecar keeps inside the model folder. Rejects paths with no usable name.
-fn sidecar_file_name(path: &Path) -> Result<String, String> {
-    let name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| format!("Invalid sidecar path: {}", path.display()))?;
-    validate_file_name(name)?;
-    Ok(name.to_string())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::sidecar_file_name;
-    use std::path::Path;
-
-    #[test]
-    fn keeps_the_basename_of_a_sidecar() {
-        let name = sidecar_file_name(Path::new("C:/Users/me/Downloads/mmproj-F16.gguf"));
-        assert_eq!(name.as_deref(), Ok("mmproj-F16.gguf"));
-    }
-
-    #[test]
-    fn rejects_paths_without_a_usable_file_name() {
-        for bad in ["C:/", "/", "C:/Users/me/Downloads/.."] {
-            assert!(sidecar_file_name(Path::new(bad)).is_err(), "{bad} should be rejected");
+/// Remove projector files in `dir` that are not in `keep`. GenieX picks one projector from the
+/// folder, so a projector from another variant must not sit next to this variant's.
+fn remove_other_projectors(dir: &Path, keep: &[String]) -> Result<(), String> {
+    let entries = std::fs::read_dir(dir)
+        .map_err(|e| format!("Failed to read {}: {e}", dir.display()))?;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.to_lowercase().contains("mmproj") && !keep.contains(&name) {
+            std::fs::remove_file(entry.path())
+                .map_err(|e| format!("Failed to remove {name}: {e}"))?;
         }
     }
+    Ok(())
+}
+
+/// Remove this variant's model and projector files from `dir`, then `dir` itself if it is empty.
+/// Other variants' files, such as an unfinished download, stay where they are.
+async fn remove_variant_files(dir: &Path, filename: &str, sidecar_names: &[String]) {
+    let _ = tokio::fs::remove_file(dir.join(filename)).await;
+    for name in sidecar_names {
+        let _ = tokio::fs::remove_file(dir.join(name)).await;
+    }
+    let _ = tokio::fs::remove_dir(dir).await;
 }

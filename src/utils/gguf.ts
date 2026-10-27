@@ -7,7 +7,8 @@
  *   `[<Sidecar>-]<BaseName>[-<SizeLabel>][-<FineTune>][-<Version>][-<Precision>][-<Shard>].gguf`
  *
  * A sidecar marker (`mmproj` / `mtp` / `dflash`) may appear at the start, middle or end,
- * e.g. `mmproj-F16.gguf` or `gemma-4-E4B-it-mmproj.gguf`.
+ * e.g. `mmproj-F16.gguf` or `gemma-4-E4B-it-mmproj.gguf`. An `mmproj` counts anywhere in the name,
+ * as GenieX reads it (`Model-mmproj-7B-F16.gguf`); `mtp` and `dflash` count only at an edge.
  */
 
 /** Result of parsing a GGUF filename. */
@@ -78,9 +79,10 @@ export function parseGGUFFilename(filename: string): GGUFParseResult | null {
 }
 
 /**
- * A sidecar marker counts only at the edge of the name, before or after the precision, as in
- * `mmproj-F16` or `gemma-4-E4B-it-mmproj`. A token inside the name, such as the `MTP` in
- * `Tiel-Coder-35B-A3B-MTP-UD-IQ4_XS`, is part of the model name. `core` is the name without the marker.
+ * An `mmproj` marker counts anywhere in the name, as GenieX reads it. `mtp` and `dflash` count only
+ * at the edge of the name, before or after the precision, as in `mtp-Model-F16` or `Model-mtp`. A
+ * token inside the name, such as the `MTP` in `Tiel-Coder-35B-A3B-MTP-UD-IQ4_XS`, is part of the
+ * model name. `core` is the name without the marker.
  */
 function findSidecarMarker(name: string): { sidecar: GGUFParseResult["sidecar"]; core: string } {
   for (const match of name.matchAll(SIDECAR_TOKEN)) {
@@ -88,7 +90,8 @@ function findSidecarMarker(name: string): { sidecar: GGUFParseResult["sidecar"];
     const end = start + match[0].length;
     const before = name.slice(0, start).replace(/[-_]/g, "");
     const after = name.slice(end).replace(PRECISION_TOKEN, "").replace(/[-_]/g, "");
-    if (before === "" || after === "") {
+    const isProjector = match[1].toLowerCase() === "mmproj";
+    if (isProjector || before === "" || after === "") {
       return {
         sidecar: match[1].toLowerCase() as GGUFParseResult["sidecar"],
         core: `${name.slice(0, start)}-${name.slice(end)}`,

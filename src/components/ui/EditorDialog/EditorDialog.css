@@ -1,0 +1,12 @@
+/* Wide enough for the editor on a desktop, and never wider than the window. Written twice so the
+   rule beats Fluent's own max-width on the surface. */
+.editor-dialog.editor-dialog {
+  width: min(960px, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
+}
+
+/* A long form scrolls inside the dialog; the title and buttons stay in view. */
+.editor-dialog__content {
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+}

@@ -1,4 +1,10 @@
 .library-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.library-panel--split {
   display: grid;
   grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
   gap: var(--spacingHorizontalL);
@@ -65,7 +71,7 @@
 }
 
 @media (max-width: 720px) {
-  .library-panel {
+  .library-panel--split {
     grid-template-columns: minmax(0, 1fr);
   }
 }

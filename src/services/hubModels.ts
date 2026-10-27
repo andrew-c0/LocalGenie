@@ -12,7 +12,7 @@ export interface GGUFFile {
   size?: number;
 }
 
-/** Grouped GGUF files: main file + its associated sidecars (mmproj, mtp, etc.) */
+/** Grouped GGUF files: main file + its projector (mmproj), if it has one. */
 export interface GGUFGroup {
   main: GGUFFile;
   sidecars: GGUFFile[];
@@ -39,10 +39,9 @@ export function convertToGGUFFiles(entries: HubFileEntry[]): GGUFFile[] {
 }
 
 /**
- * Group GGUF files: each non-sidecar file is its own group. A sidecar (mmproj, mtp)
- * belongs to every variant whose model name matches it, e.g.
- * `gemma-4-E4B-it-mmproj.gguf` → `gemma-4-E4B_q4_0-it.gguf`. Each variant gets one sidecar
- * per kind (see `pickSidecars`).
+ * Group GGUF files: each non-sidecar file is its own group. A projector (mmproj) belongs to every
+ * variant whose model name matches it, e.g. `gemma-4-E4B-it-mmproj.gguf` →
+ * `gemma-4-E4B_q4_0-it.gguf`. Each variant gets one projector (see `pickSidecars`).
  */
 export function groupGGUFFiles(files: GGUFFile[]): GGUFGroup[] {
   const mainFiles: GGUFFile[] = [];
@@ -51,40 +50,45 @@ export function groupGGUFFiles(files: GGUFFile[]): GGUFGroup[] {
   for (const f of files) {
     const parsed = parseGGUFFilename(f.filename);
     if (!parsed) continue;
-    if (parsed.sidecar) {
+    if (parsed.sidecar === "mmproj") {
       sidecarFiles.push(f);
-    } else {
+    } else if (!parsed.sidecar) {
       mainFiles.push(f);
     }
+    // MTP and DFlash files are not downloaded: GenieX does not import them with the model.
   }
 
   // Sort main files by size, ascending
   mainFiles.sort((a, b) => (a.size ?? 0) - (b.size ?? 0));
 
+  // A projector without a model name (`mmproj-F16.gguf`) belongs to the repo's model when the repo
+  // has one model. With several models in one repo it could belong to any of them, so it is not used.
+  const singleModel = new Set(mainFiles.map((f) => parseGGUFFilename(f.filename)?.stem)).size === 1;
+
   // Each main file gets its own group
   return mainFiles.map((main) => {
     const stem = parseGGUFFilename(main.filename)?.stem;
-    const matching = sidecarFiles.filter((s) => parseGGUFFilename(s.filename)?.stem === stem);
-    return { main, sidecars: pickSidecars(main, matching) };
+    const own = sidecarFiles.filter((s) => parseGGUFFilename(s.filename)?.stem === stem);
+    const generic = singleModel
+      ? sidecarFiles.filter((s) => parseGGUFFilename(s.filename)?.stem === "")
+      : [];
+    return { main, sidecars: pickSidecars(main, own, generic) };
   });
 }
 
 /**
- * One sidecar per kind (mmproj, mtp) for a variant: the one whose precision matches the variant,
- * else the smallest. A variant gets one projector, so GenieX never sees several to choose from.
+ * The projector for a variant: one file, the one whose precision matches the variant, else the
+ * smallest. A variant gets one projector, so GenieX never sees several to choose from. A projector
+ * named for the model wins over a generic one.
  */
-function pickSidecars(main: GGUFFile, candidates: GGUFFile[]): GGUFFile[] {
-  const picked: GGUFFile[] = [];
-  for (const kind of ["mmproj", "mtp"] as const) {
-    const ofKind = candidates.filter((s) => parseGGUFFilename(s.filename)?.sidecar === kind);
-    if (ofKind.length === 0) continue;
-    const exact = ofKind.find((s) => s.precision.toLowerCase() === main.precision.toLowerCase());
-    const smallest = [...ofKind].sort(
-      (a, b) => (a.size ?? Number.MAX_SAFE_INTEGER) - (b.size ?? Number.MAX_SAFE_INTEGER),
-    )[0];
-    picked.push(exact ?? smallest);
-  }
-  return picked;
+function pickSidecars(main: GGUFFile, own: GGUFFile[], generic: GGUFFile[]): GGUFFile[] {
+  const candidates = own.length > 0 ? own : generic;
+  if (candidates.length === 0) return [];
+  const exact = candidates.find((s) => s.precision.toLowerCase() === main.precision.toLowerCase());
+  const smallest = [...candidates].sort(
+    (a, b) => (a.size ?? Number.MAX_SAFE_INTEGER) - (b.size ?? Number.MAX_SAFE_INTEGER),
+  )[0];
+  return [exact ?? smallest];
 }
 
 /** Human label for a grouped GGUF variant, e.g. "Q4_0 — 4.2B". */

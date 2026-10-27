@@ -4,6 +4,7 @@ import type {
   BenchmarkPrompt,
   BenchmarkPromptInput,
   BenchmarkRunRequest,
+  BenchmarkRunStep,
   BenchmarkRunSummary,
   BenchmarkSuite,
   BenchmarkSuiteInput,
@@ -57,6 +58,11 @@ export async function startBenchmarkRun(request: BenchmarkRunRequest): Promise<v
 /** Every benchmark run, newest first, with its figures. */
 export async function listBenchmarkRuns(): Promise<BenchmarkRunSummary[]> {
   return invoke("list_benchmark_runs");
+}
+
+/** Every step of one run, in pass order, with the model's reply for each. */
+export async function getBenchmarkRunSteps(runId: string): Promise<BenchmarkRunStep[]> {
+  return invoke("get_benchmark_run_steps", { runId });
 }
 
 /** Ask where to save and write `content` there. Resolves to the saved path, or null when cancelled. */

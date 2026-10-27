@@ -1,7 +1,14 @@
 import { LineChart, VerticalBarChart } from "@fluentui/react-charts";
 import { useEffect, useRef, useState } from "react";
 import type { ComputeTarget } from "../../../types";
-import type { Group, RunSeries, TimeSeries } from "../../../utils/compare";
+import {
+  type CompareMetric,
+  chartValue,
+  exactCallout,
+  type Group,
+  type RunSeries,
+  type TimeSeries,
+} from "../../../utils/compare";
 import { COMPUTE_COLOR } from "../../../utils/computeColors";
 import "./CompareChart.css";
 
@@ -34,6 +41,8 @@ interface CompareChartProps {
   groups: Group[];
   runSeries: RunSeries[];
   timeSeries: TimeSeries[];
+  /** The figure charted. The millisecond metrics are drawn in seconds, with exact ms on hover. */
+  metric: CompareMetric;
   /** Name of the figure, shown as the title and the axis label. */
   metricLabel: string;
 }
@@ -48,6 +57,7 @@ export function CompareChart({
   groups,
   runSeries,
   timeSeries,
+  metric,
   metricLabel,
 }: CompareChartProps) {
   const boxRef = useRef<HTMLDivElement>(null);
@@ -64,7 +74,8 @@ export function CompareChart({
             yAxisTitle={metricLabel}
             data={groups.map((g) => ({
               x: g.key,
-              y: g.mean,
+              y: chartValue(metric, g.mean),
+              yAxisCalloutData: exactCallout(metric, g.mean),
               legend: g.key,
               color: colorByCompute
                 ? COMPUTE_COLOR[g.key.toLowerCase() as ComputeTarget]
@@ -85,7 +96,8 @@ export function CompareChart({
                 color: COMPUTE_COLOR[s.compute],
                 data: s.points.map((p) => ({
                   x: p.x,
-                  y: p.y,
+                  y: chartValue(metric, p.y),
+                  yAxisCalloutData: exactCallout(metric, p.y),
                   xAxisCalloutData: p.label,
                 })),
               })),
@@ -103,7 +115,11 @@ export function CompareChart({
               lineChartData: timeSeries.map((s) => ({
                 legend: s.legend,
                 color: COMPUTE_COLOR[s.compute],
-                data: s.points.map((p) => ({ x: p.x, y: p.y })),
+                data: s.points.map((p) => ({
+                  x: p.x,
+                  y: chartValue(metric, p.y),
+                  yAxisCalloutData: exactCallout(metric, p.y),
+                })),
               })),
             }}
           />

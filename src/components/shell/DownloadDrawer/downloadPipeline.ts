@@ -1,5 +1,5 @@
 import * as db from "../../../services/database";
-import { deleteDirectory, downloadFile, importGGUF } from "../../../services/download";
+import { downloadFile, importGGUF } from "../../../services/download";
 import * as geniex from "../../../services/geniex";
 import { fetchContextLength } from "../../../services/hubApi";
 import { type GGUFVariant, useDownloadStore } from "../../../stores/downloadStore";
@@ -13,11 +13,19 @@ const hfFileUrl = (repoId: string, filename: string) =>
 const baseName = (path: string) => path.split("/").pop() ?? path;
 
 /**
- * Run the GGUF pipeline for a queued variant: download sidecars and the main file, then import
- * into the GenieX cache. Sidecars come first because the import moves them into the model folder
- * with the main file; GenieX copies only what is in that folder. Resuming calls this again; the
- * backend continues from the partial files. Failures are recorded on the entry rather than thrown,
- * so the drawer shows them.
+ * The download folder for a repo, under Downloads: `owner/name` becomes `owner--name`. Every file of
+ * the repo lands here, so two repos that ship the same file name (such as `mmproj-F16.gguf`) never
+ * share a file.
+ */
+export function repoFolder(repoId: string): string {
+  return repoId.replace("/", "--");
+}
+
+/**
+ * Run the GGUF pipeline for a queued variant: download the projector and the main file into the
+ * repo's folder, then import that folder into the GenieX cache. Resuming calls this again; the
+ * backend continues from the partial files and keeps the finished ones. Failures are recorded on
+ * the entry rather than thrown, so the drawer shows them.
  */
 export async function runGGUFDownload(variant: GGUFVariant): Promise<void> {
   const { repoId, main, sidecars } = variant;
@@ -27,32 +35,26 @@ export async function runGGUFDownload(variant: GGUFVariant): Promise<void> {
   store.setStatus(repoId, "downloading");
   toast.info("Download started", repoId);
 
+  const folder = repoFolder(repoId);
   const fileName = baseName(main.filename);
   try {
-    const sidecarPaths: string[] = [];
+    const sidecarNames: string[] = [];
     for (const sidecar of sidecars) {
-      const path = await downloadFile(
-        repoId,
-        hfFileUrl(repoId, sidecar.filename),
-        baseName(sidecar.filename),
-      ).catch((err: unknown) => {
-        // A cancel must stop the whole pipeline; any other sidecar failure is skipped.
-        if (String(err).includes("cancelled")) throw err;
-        return undefined;
-      });
-      if (path) sidecarPaths.push(path);
+      const name = baseName(sidecar.filename);
+      await downloadFile(repoId, hfFileUrl(repoId, sidecar.filename), folder, name).then(
+        () => sidecarNames.push(name),
+        (err: unknown) => {
+          // A cancel must stop the whole pipeline; any other projector failure is skipped, with a
+          // warning, so the model imports without it.
+          if (String(err).includes("cancelled")) throw err;
+          toast.error("Projector not downloaded", `${name}: ${String(err)}`);
+        },
+      );
     }
 
-    const downloadedPath = await downloadFile(repoId, hfFileUrl(repoId, main.filename), fileName);
+    await downloadFile(repoId, hfFileUrl(repoId, main.filename), folder, fileName);
     // The backend emits model-pull-start/complete around the import and sets the status.
-    const modelDir = await importGGUF(
-      downloadedPath,
-      repoId,
-      fileName,
-      main.precision,
-      sidecarPaths,
-    );
-    await deleteDirectory(modelDir);
+    await importGGUF(folder, repoId, fileName, main.precision, sidecarNames);
   } catch (err) {
     const message = String(err);
     if (message.includes("cancelled")) {

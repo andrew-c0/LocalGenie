@@ -45,16 +45,25 @@
   border-radius: var(--borderRadiusSmall);
 }
 
+/* Code blocks sit on a darker, bordered surface so they read apart from the text around them. */
 .markdown-content__root pre {
-  background-color: var(--colorNeutralBackground3);
-  padding: var(--spacingVerticalS);
+  background-color: var(--colorNeutralBackground1);
+  border: 1px solid var(--colorNeutralStroke2);
   border-radius: var(--borderRadiusMedium);
+  padding: var(--spacingVerticalM) var(--spacingHorizontalM);
+  margin: 0 0 var(--spacingVerticalS);
   overflow-x: auto;
+  font-family: var(--fontFamilyMonospace);
+  font-size: var(--fontSizeBase200);
+  line-height: var(--lineHeightBase200);
+  color: var(--colorNeutralForeground1);
 }
 
 .markdown-content__root pre code {
   background-color: transparent;
   padding: 0;
+  font-size: inherit;
+  white-space: pre;
 }
 
 .markdown-content__root table {
@@ -78,4 +87,62 @@
   padding-left: var(--spacingHorizontalM);
   border-left: 3px solid var(--colorNeutralStroke1);
   color: var(--colorNeutralForeground3);
+}
+
+/* Syntax colours for code blocks, set by rehype-highlight. Fluent palette tokens keep them readable
+   in both themes. */
+.markdown-content__root .hljs-comment,
+.markdown-content__root .hljs-quote {
+  color: var(--colorNeutralForeground3);
+  font-style: italic;
+}
+
+.markdown-content__root .hljs-keyword,
+.markdown-content__root .hljs-selector-tag,
+.markdown-content__root .hljs-literal {
+  color: var(--colorPalettePurpleForeground2);
+}
+
+.markdown-content__root .hljs-string,
+.markdown-content__root .hljs-regexp,
+.markdown-content__root .hljs-addition {
+  color: var(--colorPaletteGreenForeground1);
+}
+
+.markdown-content__root .hljs-number,
+.markdown-content__root .hljs-symbol,
+.markdown-content__root .hljs-bullet {
+  color: var(--colorPaletteDarkOrangeForeground1);
+}
+
+.markdown-content__root .hljs-title,
+.markdown-content__root .hljs-function .hljs-title,
+.markdown-content__root .hljs-section {
+  color: var(--colorPaletteBlueForeground2);
+}
+
+.markdown-content__root .hljs-built_in,
+.markdown-content__root .hljs-type,
+.markdown-content__root .hljs-class .hljs-title {
+  color: var(--colorPaletteTealForeground2);
+}
+
+.markdown-content__root .hljs-attr,
+.markdown-content__root .hljs-attribute,
+.markdown-content__root .hljs-variable,
+.markdown-content__root .hljs-template-variable {
+  color: var(--colorPaletteYellowForeground2);
+}
+
+.markdown-content__root .hljs-meta,
+.markdown-content__root .hljs-deletion {
+  color: var(--colorPaletteRedForeground2);
+}
+
+.markdown-content__root .hljs-emphasis {
+  font-style: italic;
+}
+
+.markdown-content__root .hljs-strong {
+  font-weight: var(--fontWeightSemibold);
 }

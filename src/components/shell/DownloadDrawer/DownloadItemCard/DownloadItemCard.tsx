@@ -22,6 +22,14 @@ function eta(remaining: number, speed: number): string {
   return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
 }
 
+/** Human-readable duration in seconds, minutes or hours. */
+function elapsed(ms: number): string {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+}
+
 interface DownloadItemCardProps {
   download: DownloadItem;
   /** Active items show progress; history items show the error and resume/remove actions. */
@@ -54,6 +62,15 @@ export function DownloadItemCard({
             <>
               <DownloadStatusBadge status={d.status} />
               {d.status === "error" && d.error && <Caption1>{d.error}</Caption1>}
+              {d.received > 0 && (
+                <div className="download-card__meta">
+                  <Caption1>
+                    {formatBytes(d.received)}
+                    {d.total ? ` / ${formatBytes(d.total)}` : ""}
+                  </Caption1>
+                  {d.finishedAt && <Caption1>{elapsed(d.finishedAt - d.startedAt)}</Caption1>}
+                </div>
+              )}
             </>
           }
           action={
@@ -87,8 +104,9 @@ export function DownloadItemCard({
       <CardHeader
         header={<Text className="download-card__label">{d.label}</Text>}
         action={
+          // The import has no cancel. Its progress is written on the meta line below.
           isImporting ? (
-            <DownloadStatusBadge status={d.status} importingProgress={d.importingProgress} />
+            <Spinner size="tiny" aria-label={`Importing ${d.label}`} />
           ) : (
             <Button
               appearance="secondary"
@@ -111,7 +129,7 @@ export function DownloadItemCard({
           </Caption1>
           <Caption1>
             {isImporting
-              ? "Importing into GenieX…"
+              ? (d.importingProgress ?? "Importing into GenieX…")
               : `${formatBytes(d.speed)}/s · ETA ${eta(remaining, d.speed)}`}
           </Caption1>
         </div>

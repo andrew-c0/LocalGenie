@@ -75,7 +75,9 @@ describe("groupGGUFFiles", () => {
     ]);
 
     expect(groups.map((g) => g.main.precision)).toEqual(["Q2_K_XL", "IQ4_XS"]);
-    expect(groups.every((g) => g.sidecars.length === 0)).toBe(true);
+    for (const g of groups) {
+      expect(g.sidecars.map((s) => s.filename)).toEqual(["mmproj-BF16.gguf"]);
+    }
   });
 
   it("never lists a DFlash draft as a variant, nor attaches it to one", () => {
@@ -91,14 +93,40 @@ describe("groupGGUFFiles", () => {
     ]);
   });
 
-  it("does not list an mmproj without a matching model as a variant", () => {
+  it("attaches a projector without a model name when the repo has one model, as in unsloth's E2B layout", () => {
+    const groups = groupGGUFFiles([
+      file("gemma-4-E2B-it-Q4_K_M.gguf", 3_100_000_000),
+      file("gemma-4-E2B-it-Q8_0.gguf", 5_000_000_000),
+      file("mmproj-BF16.gguf", 986_833_728),
+      file("mmproj-F16.gguf", 985_654_080),
+      file("mmproj-F32.gguf", 1_903_027_008),
+    ]);
+
+    expect(groups.map((g) => g.main.precision)).toEqual(["Q4_K_M", "Q8_0"]);
+    // No quant matches a projector precision, so each variant gets the smallest one.
+    for (const g of groups) {
+      expect(g.sidecars.map((s) => s.filename)).toEqual(["mmproj-F16.gguf"]);
+    }
+  });
+
+  it("does not attach a projector without a model name when the repo has several models", () => {
     const groups = groupGGUFFiles([
       file("mmproj-F16.gguf", 900_000_000),
       file("Qwen3.6-35B-A3B-UD-IQ1_M.gguf", 10_000_000_000),
+      file("Qwen3.6-4B-Q4_K_M.gguf", 2_000_000_000),
     ]);
 
-    expect(groups.map((g) => g.main.precision)).toEqual(["IQ1_M"]);
-    expect(groups[0].sidecars).toHaveLength(0);
+    expect(groups.map((g) => g.main.precision)).toEqual(["Q4_K_M", "IQ1_M"]);
+    expect(groups.every((g) => g.sidecars.length === 0)).toBe(true);
+  });
+
+  it("attaches a projector with the model name in the middle of the file name", () => {
+    const groups = groupGGUFFiles([
+      file("Model-7B-Q4_K_M.gguf", 4_000_000_000),
+      file("Model-mmproj-7B-F16.gguf", 990_000_000),
+    ]);
+
+    expect(groups[0].sidecars.map((s) => s.filename)).toEqual(["Model-mmproj-7B-F16.gguf"]);
   });
 
   it("lists every quant of a model, each with one projector: the matching precision or the smallest", () => {

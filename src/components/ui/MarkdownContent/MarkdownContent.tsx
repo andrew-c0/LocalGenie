@@ -16,7 +16,7 @@ export function MarkdownContent({ children, allowHtml = false }: MarkdownContent
     <div className="markdown-content__root">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={allowHtml ? [rehypeRaw, rehypeHighlight] : []}
+        rehypePlugins={allowHtml ? [rehypeRaw, rehypeHighlight] : [rehypeHighlight]}
         components={{
           a: (props) => <a {...props} target="_blank" rel="noopener noreferrer" />,
         }}

@@ -13,6 +13,7 @@ import { type CompareGroupBy, useBenchmarkUiStore } from "../../../stores/benchm
 import { svgToPngBase64 } from "../../../utils/chartImage";
 import {
   type CompareMetric,
+  formatChartValue,
   groupRuns,
   METRICS,
   runSeries,
@@ -171,6 +172,7 @@ export default function BenchmarkCompare() {
                 groups={groups}
                 runSeries={lines}
                 timeSeries={dated}
+                metric={metric}
                 metricLabel={label}
               />
             </div>
@@ -194,9 +196,9 @@ export default function BenchmarkCompare() {
                   <tr key={g.key}>
                     <td>{g.key}</td>
                     <td>{g.runs}</td>
-                    <td>{g.mean.toFixed(2)}</td>
-                    <td>{g.min.toFixed(2)}</td>
-                    <td>{g.max.toFixed(2)}</td>
+                    <td>{formatChartValue(metric, g.mean)}</td>
+                    <td>{formatChartValue(metric, g.min)}</td>
+                    <td>{formatChartValue(metric, g.max)}</td>
                   </tr>
                 ))}
               </tbody>

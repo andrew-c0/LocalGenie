@@ -18,6 +18,7 @@ import { ArrowDownloadRegular, DataBarVerticalRegular } from "@fluentui/react-ic
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ExportToastBody } from "../../../components/benchmark/ExportToastBody/ExportToastBody";
+import { RunResponses } from "../../../components/benchmark/RunResponses/RunResponses";
 import { ChipRow } from "../../../components/ui/ChipRow/ChipRow";
 import { ErrorBanner } from "../../../components/ui/ErrorBanner/ErrorBanner";
 import { StateBlock } from "../../../components/ui/StateBlock/StateBlock";
@@ -119,6 +120,23 @@ const COLUMNS: TableColumnDefinition<BenchmarkRunSummary>[] = [
   }),
 ];
 
+/** A column whose button opens the run's details. */
+function responsesColumn(
+  onView: (run: BenchmarkRunSummary) => void,
+): TableColumnDefinition<BenchmarkRunSummary> {
+  return createTableColumn<BenchmarkRunSummary>({
+    columnId: "details",
+    renderHeaderCell: () => "Details",
+    renderCell: (run) => (
+      <TableCellLayout>
+        <Button appearance="subtle" size="small" onClick={() => onView(run)}>
+          Details
+        </Button>
+      </TableCellLayout>
+    ),
+  });
+}
+
 /**
  * Runs as a table: sort by any column, select rows with the checkboxes, filter by compute, suite
  * and model, and export the selected rows (or every filtered row) as CSV. The selection and the
@@ -136,6 +154,8 @@ export default function BenchmarkRuns() {
   const model = useBenchmarkUiStore((s) => s.runsModel);
   const setModel = useBenchmarkUiStore((s) => s.setRunsModel);
   const [exporting, setExporting] = useState(false);
+  const [viewing, setViewing] = useState<BenchmarkRunSummary | null>(null);
+  const columns = useMemo(() => [...COLUMNS, responsesColumn(setViewing)], []);
 
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
 
@@ -260,7 +280,7 @@ export default function BenchmarkRuns() {
 
           <DataGrid
             items={filtered}
-            columns={COLUMNS}
+            columns={columns}
             sortable
             getRowId={(run) => run.id}
             selectionMode="multiselect"
@@ -291,6 +311,8 @@ export default function BenchmarkRuns() {
               )}
             </DataGridBody>
           </DataGrid>
+
+          {viewing && <RunResponses run={viewing} onClose={() => setViewing(null)} />}
         </div>
       )}
     </SurfaceCard>

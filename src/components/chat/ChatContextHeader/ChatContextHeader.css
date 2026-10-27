@@ -14,6 +14,13 @@
   min-width: 0;
 }
 
+/* Edit, settings and close, as one bordered group. */
+.chat-context-header__actions {
+  border: 1px solid var(--colorNeutralStroke1);
+  border-radius: var(--borderRadiusMedium);
+  padding: 0;
+}
+
 .chat-context-header__usage {
   display: flex;
   align-items: center;

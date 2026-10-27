@@ -1,4 +1,4 @@
-import { Badge, MenuItem, Spinner } from "@fluentui/react-components";
+import { Badge, MenuItem } from "@fluentui/react-components";
 import type { ReactNode } from "react";
 import { precisionInfo } from "../../../../../services/hubApi";
 import type { ModelInfo } from "../../../../../types";
@@ -12,9 +12,7 @@ export interface ModelOptionButtonProps {
   model: ModelInfo;
   isActive: boolean;
   loadedHere: boolean;
-  /** True while this model is being loaded. */
-  loading: boolean;
-  /** True while any other action is in progress. */
+  /** True while any model action is in progress. */
   disabled: boolean;
   onSelect: (name: string) => void;
   /** Confirmed capability icons for this row. Empty when none are confirmed or not loaded yet. */
@@ -25,14 +23,14 @@ export interface ModelOptionButtonProps {
  * One selectable installed model in the model selector popover, drawn as a table row. The cells are
  * name, quant, size and capabilities; the column widths come from the list (ModelSelectorPopover.css).
  * The capabilities cell holds the capability icons, then the status: an Active badge for an active
- * model that is not loaded on the server, or a spinner while this model loads. Loaded rows carry no
- * text status. Clicking any row that is not active loads it, or switches to it when it is loaded.
+ * model that is not loaded on the server. Loading progress is shown by the footer button, not the row.
+ * Loaded rows carry no text status. Clicking any row that is not active loads it, or switches to it
+ * when it is loaded.
  */
 export function ModelOptionButton({
   model,
   isActive,
   loadedHere,
-  loading,
   disabled,
   onSelect,
   badges = [],
@@ -73,10 +71,7 @@ export function ModelOptionButton({
         <span className="model-table__cell model-table__cell--size">{model.size}</span>
         <span className="model-table__cell model-table__cell--caps">
           <ModelCapabilityIcons badges={badges} />
-          <span className="model-option__status">
-            {trailingStatus}
-            {loading && <Spinner size="tiny" />}
-          </span>
+          <span className="model-option__status">{trailingStatus}</span>
         </span>
       </span>
     </MenuItem>

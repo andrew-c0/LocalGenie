@@ -21,16 +21,22 @@ interface LibraryPanelProps {
   items: LibraryPanelItem[] | null;
   error: string | null;
   selectedId: string | null;
-  /** The editor, or null to show `idleMessage` instead. */
-  editor: ReactNode | null;
+  /**
+   * Optional side panel for the selected item: the editor, or null to show `idleMessage`. Leave it
+   * out for a full-width list whose items open elsewhere (such as a dialog).
+   */
+  editor?: ReactNode | null;
   emptyMessage: string;
-  idleMessage: string;
+  idleMessage?: string;
   onNew?: () => void;
   onSelect: (id: string) => void;
   onRetry: () => void;
 }
 
-/** A library screen: the saved items on the left, the editor for the selected one on the right. */
+/**
+ * A library screen: the saved items, full width, or beside the editor for the selected one when an
+ * `editor` is given.
+ */
 export function LibraryPanel({
   title,
   newLabel,
@@ -44,8 +50,9 @@ export function LibraryPanel({
   onSelect,
   onRetry,
 }: LibraryPanelProps) {
+  const split = editor !== undefined;
   return (
-    <div className="library-panel">
+    <div className={split ? "library-panel library-panel--split" : "library-panel"}>
       <aside className="library-panel__list">
         <div className="library-panel__header">
           <BodyStrong>{title}</BodyStrong>
@@ -92,9 +99,11 @@ export function LibraryPanel({
         )}
       </aside>
 
-      <section className="library-panel__editor">
-        {editor ?? <StateBlock message={idleMessage} />}
-      </section>
+      {split && (
+        <section className="library-panel__editor">
+          {editor ?? <StateBlock message={idleMessage ?? ""} />}
+        </section>
+      )}
     </div>
   );
 }

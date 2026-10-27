@@ -102,6 +102,83 @@ pub async fn list_benchmark_runs(
     list_runs(&db).await
 }
 
+/// One step of a run, with the model's reply, as the runs table's response view shows it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BenchmarkRunStepDto {
+    pub id: String,
+    pub run_id: String,
+    pub position: i32,
+    pub repetition_index: i32,
+    pub is_warmup: bool,
+    pub prompt_name: String,
+    pub prompt_text: String,
+    pub output_text: Option<String>,
+    pub ttft_ms: Option<f64>,
+    pub total_ms: Option<i64>,
+    pub tokens_per_sec: Option<f64>,
+    pub prompt_tokens: Option<i64>,
+    pub completion_tokens: Option<i64>,
+    pub peak_model_memory_bytes: Option<i64>,
+    pub avg_model_memory_bytes: Option<i64>,
+    pub peak_memory_used_bytes: Option<i64>,
+    pub avg_cpu: Option<f64>,
+    pub avg_gpu: Option<f64>,
+    pub avg_npu: Option<f64>,
+    pub passed: Option<bool>,
+    pub matched_keywords: Option<i32>,
+    pub expected_keywords: Option<i32>,
+    pub status: String,
+    pub error: Option<String>,
+}
+
+impl From<benchmark_run_step::Model> for BenchmarkRunStepDto {
+    fn from(step: benchmark_run_step::Model) -> Self {
+        Self {
+            id: step.id,
+            run_id: step.run_id,
+            position: step.position,
+            repetition_index: step.repetition_index,
+            is_warmup: step.is_warmup,
+            prompt_name: step.prompt_name,
+            prompt_text: step.prompt_text,
+            output_text: step.output_text,
+            ttft_ms: step.ttft_ms,
+            total_ms: step.total_ms,
+            tokens_per_sec: step.tokens_per_sec,
+            prompt_tokens: step.prompt_tokens,
+            completion_tokens: step.completion_tokens,
+            peak_model_memory_bytes: step.peak_model_memory_bytes,
+            avg_model_memory_bytes: step.avg_model_memory_bytes,
+            peak_memory_used_bytes: step.peak_memory_used_bytes,
+            avg_cpu: step.avg_cpu,
+            avg_gpu: step.avg_gpu,
+            avg_npu: step.avg_npu,
+            passed: step.passed,
+            matched_keywords: step.matched_keywords,
+            expected_keywords: step.expected_keywords,
+            status: step.status,
+            error: step.error,
+        }
+    }
+}
+
+/// Every step of one run, in pass order: warm-up and timed passes, then the position in each pass.
+#[tauri::command]
+pub async fn get_benchmark_run_steps(
+    db: State<'_, DatabaseConnection>,
+    run_id: String,
+) -> Result<Vec<BenchmarkRunStepDto>, String> {
+    let steps = benchmark_run_step::Entity::find()
+        .filter(benchmark_run_step::Column::RunId.eq(&run_id))
+        .order_by_asc(benchmark_run_step::Column::RepetitionIndex)
+        .order_by_asc(benchmark_run_step::Column::Position)
+        .all(&*db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(steps.into_iter().map(BenchmarkRunStepDto::from).collect())
+}
+
 async fn list_runs(db: &DatabaseConnection) -> Result<Vec<BenchmarkRunSummaryDto>, String> {
     let runs = benchmark_run::Entity::find()
         .order_by_desc(benchmark_run::Column::StartedAt)

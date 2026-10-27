@@ -1,6 +1,6 @@
 import { Button, Field, Input, Radio, RadioGroup, Textarea } from "@fluentui/react-components";
 import { DeleteRegular, DismissRegular, SaveRegular } from "@fluentui/react-icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { deleteBenchmarkPrompt, saveBenchmarkPrompt } from "../../../services/benchmark";
 import type {
   AttachmentKind,
@@ -25,14 +25,16 @@ interface PromptEditorProps {
   initial: BenchmarkPrompt | null;
   onSaved: (prompt: BenchmarkPrompt) => void;
   onDeleted: (id: string) => void;
+  /** Reports whether the form differs from the saved prompt. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
  * Editor for one prompt: name, description, keywords with their rule, and files. Files are copied
  * into the library as soon as they are picked; ones not saved are discarded when the editor closes.
- * Rendered with a `key` per prompt, so switching prompts starts from a clean form.
+ * Rendered in a dialog per prompt, so each opening starts from a clean form.
  */
-export function PromptEditor({ initial, onSaved, onDeleted }: PromptEditorProps) {
+export function PromptEditor({ initial, onSaved, onDeleted, onDirtyChange }: PromptEditorProps) {
   const [id] = useState(() => initial?.id ?? crypto.randomUUID());
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -45,6 +47,25 @@ export function PromptEditor({ initial, onSaved, onDeleted }: PromptEditorProps)
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const imports = useFileImports();
+
+  const savedState = JSON.stringify({
+    name: initial?.name ?? "",
+    description: initial?.description ?? "",
+    text: initial?.text ?? "",
+    matchRule: initial?.matchRule ?? "any",
+    keywords: initial?.keywords ?? [],
+    files: (initial?.files ?? []).map((f) => f.id),
+  });
+  const draftState = JSON.stringify({
+    name,
+    description,
+    text,
+    matchRule,
+    keywords,
+    files: files.map((f) => f.id),
+  });
+  const dirty = draftState !== savedState;
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
   const addKeyword = () => {
     const keyword = keywordDraft.trim();

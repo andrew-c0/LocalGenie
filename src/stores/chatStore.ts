@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { ActiveStream, ChatSession, Message, ReplyUsage } from "../types";
+import type {
+  ActiveStream,
+  ChatSession,
+  ChatSettingsOverrides,
+  Message,
+  ReplyUsage,
+} from "../types";
 
 /** Max characters used for auto-generated session titles from the first message. */
 const AUTO_TITLE_MAX_LENGTH = 50;
@@ -38,6 +44,10 @@ interface ChatState {
   setSessionModel: (sessionId: string, modelId: string) => void;
   /** Pins or unpins a conversation. Leaves updatedAt alone so the list order by recency holds. */
   setSessionPinned: (sessionId: string, pinned: boolean) => void;
+  /** Sets the settings a chat overrides, or clears them with undefined. Saved like a pin change. */
+  setSessionOverrides: (sessionId: string, overrides: ChatSettingsOverrides | undefined) => void;
+  /** Renames a conversation. Auto-titling only replaces "New Chat", so a rename is kept. */
+  renameSession: (sessionId: string, title: string) => void;
   /** Drops empty conversations (no messages yet), except `keepId`. Nothing is stored for them. */
   discardEmptySessions: (keepId: string | null) => void;
 }
@@ -231,6 +241,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setSessionPinned: (sessionId: string, pinned: boolean) => {
     set((state) => ({
       sessions: state.sessions.map((s) => (s.id === sessionId ? { ...s, pinned } : s)),
+    }));
+  },
+
+  setSessionOverrides: (sessionId: string, overrides: ChatSettingsOverrides | undefined) => {
+    set((state) => ({
+      sessions: state.sessions.map((s) =>
+        s.id === sessionId ? { ...s, settingsOverrides: overrides } : s,
+      ),
+    }));
+  },
+
+  renameSession: (sessionId: string, title: string) => {
+    const next = title.trim();
+    if (!next) return;
+    set((state) => ({
+      sessions: state.sessions.map((s) => (s.id === sessionId ? { ...s, title: next } : s)),
     }));
   },
 

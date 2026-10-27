@@ -74,6 +74,35 @@ setting_keys! {
     SpecPMin => "specPMin": f64,
 }
 
+/// The settings a chat can override: the common sampling settings and the system prompt. Load
+/// settings and model-specific ones are left out, since a chat can switch models.
+const CHAT_OVERRIDE_KEYS: &[SettingKey] = &[
+    SettingKey::Temperature,
+    SettingKey::TopP,
+    SettingKey::TopK,
+    SettingKey::MinP,
+    SettingKey::RepetitionPenalty,
+    SettingKey::MaxTokens,
+    SettingKey::Seed,
+    SettingKey::SystemBlocks,
+];
+
+/// Checks a chat's overrides: a JSON object whose keys are all chat-overridable and whose values
+/// have the type of their setting. Nothing is stored when any check fails.
+pub fn validate_chat_overrides(text: &str) -> Result<(), String> {
+    let value: Value = serde_json::from_str(text).map_err(|e| format!("chat settings: {e}"))?;
+    let object = value
+        .as_object()
+        .ok_or("chat settings must be a JSON object")?;
+    for (name, value) in object {
+        let key = SettingKey::from_name(name)
+            .filter(|key| CHAT_OVERRIDE_KEYS.contains(key))
+            .ok_or_else(|| format!("{name} cannot be set per chat"))?;
+        key.validate(value)?;
+    }
+    Ok(())
+}
+
 /// One part of a system prompt, as the editor stores it. Mirrors `SystemPromptBlock` in the
 /// frontend's types.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -306,5 +335,14 @@ mod tests {
         let loaded = load(&db, "org/model").await.expect("load");
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded.get("seed"), Some(&json!(7)));
+    }
+
+    #[test]
+    fn chat_overrides_accept_common_settings_and_reject_load_settings() {
+        assert!(validate_chat_overrides(r#"{"temperature":0.4,"topK":20,"systemBlocks":[]}"#).is_ok());
+        assert!(validate_chat_overrides(r#"{"nctx":8192}"#).is_err());
+        assert!(validate_chat_overrides(r#"{"think":true}"#).is_err());
+        assert!(validate_chat_overrides(r#"{"temperature":"hot"}"#).is_err());
+        assert!(validate_chat_overrides("[1,2]").is_err());
     }
 }

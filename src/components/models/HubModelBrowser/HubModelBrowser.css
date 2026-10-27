@@ -11,9 +11,11 @@
   gap: var(--spacingHorizontalS);
 }
 
-.hub-model-browser__search {
-  flex: 1;
-  width: 100%;
+/* The search fills the space left after the buttons, on the same row. Fluent's SearchBox sets
+   max-width: 468px on its root, so this selector is more specific to override it. */
+.hub-model-browser__toolbar .hub-model-browser__search {
+  flex: 1 1 0;
+  width: auto;
   max-width: none;
   min-width: 240px;
 }

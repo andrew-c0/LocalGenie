@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { BenchmarkRunSummary } from "../types";
-import { groupRuns, metricValue, runSeries, timeSeries } from "./compare";
+import {
+  chartValue,
+  exactCallout,
+  formatChartValue,
+  groupRuns,
+  metricValue,
+  runSeries,
+  timeSeries,
+} from "./compare";
 
 function run(
   id: string,
@@ -41,6 +49,24 @@ function run(
     },
   };
 }
+
+describe("chart units", () => {
+  it("draws the millisecond metrics in seconds", () => {
+    expect(chartValue("ttft", 1234)).toBeCloseTo(1.234);
+    expect(chartValue("totalMs", 500)).toBeCloseTo(0.5);
+    expect(chartValue("tokensPerSec", 20)).toBe(20);
+  });
+
+  it("gives the exact milliseconds on hover for the millisecond metrics only", () => {
+    expect(exactCallout("ttft", 1234.4)).toBe("1.234 s (1234 ms)");
+    expect(exactCallout("ram", 2)).toBeUndefined();
+  });
+
+  it("formats table figures in the chart unit", () => {
+    expect(formatChartValue("totalMs", 1234)).toBe("1.234");
+    expect(formatChartValue("tokensPerSec", 20)).toBe("20.00");
+  });
+});
 
 describe("metricValue", () => {
   it("reads each figure, converting RAM to GB and keywords to a percentage", () => {
@@ -101,5 +127,16 @@ describe("runSeries", () => {
     expect(series.points.map((p) => p.x)).toEqual([1, 2, 3]);
     expect(series.points.map((p) => p.y)).toEqual([10, 20, 30]);
     expect(series.points[0].label.startsWith("Run 1 · ")).toBe(true);
+  });
+
+  it("numbers each series from run 1, whatever ran before it", () => {
+    const runs = [
+      run("cpu1", { compute: "cpu", startedAt: 1000, ttft: 10 }),
+      run("cpu2", { compute: "cpu", startedAt: 2000, ttft: 11 }),
+      run("npu1", { compute: "npu", startedAt: 3000, ttft: 20 }),
+    ];
+    const series = runSeries(runs, "ttft");
+    const npu = series.find((s) => s.compute === "npu");
+    expect(npu?.points.map((p) => p.x)).toEqual([1]);
   });
 });

@@ -13,6 +13,8 @@ pub struct Model {
     pub updated_at: i64,
     /// Pinned conversations are listed first.
     pub pinned: bool,
+    /// JSON object of the settings this chat overrides, or null when it uses the model's.
+    pub settings_overrides: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

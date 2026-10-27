@@ -34,6 +34,7 @@ import {
   userMessageContent,
 } from "../../utils/attachments";
 import { chatErrorContent } from "../../utils/chatError";
+import { applyChatOverrides } from "../../utils/chatOverrides";
 import { chatSettingsFor, engineOf, modelSettingsKey } from "../../utils/modelSettings";
 import {
   composeSystemPrompt,
@@ -200,6 +201,11 @@ export default function ChatInput() {
             // use defaults
           }
         }
+        // The chat's own overrides replace the model's settings for this conversation.
+        const chatOverrides = useChatStore
+          .getState()
+          .sessions.find((s) => s.id === sessionId)?.settingsOverrides;
+        stored = applyChatOverrides(stored, chatOverrides);
         const model = key
           ? useModelStore.getState().models.find((m) => modelSettingsKey(m.name) === key)
           : undefined;

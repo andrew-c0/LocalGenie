@@ -1,0 +1,21 @@
+.chat-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalM);
+  padding-bottom: var(--spacingVerticalXXL);
+}
+
+.chat-settings__prompt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalS);
+}
+
+.chat-settings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacingHorizontalS);
+  justify-content: flex-end;
+  padding-top: var(--spacingVerticalM);
+  border-top: 1px solid var(--colorNeutralStroke2);
+}

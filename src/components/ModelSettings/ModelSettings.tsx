@@ -37,6 +37,7 @@ import {
   SPEC_TYPES,
 } from "../../utils/modelSettings";
 import { type SettingsAction, settingsButtons } from "../../utils/settingsButtons";
+import { ConfirmDialog } from "../ui/ConfirmDialog/ConfirmDialog";
 import { Flex } from "../ui/Flex/Flex";
 import { ProgressBar } from "../ui/ProgressBar/ProgressBar";
 import { SurfaceCard } from "../ui/SurfaceCard/SurfaceCard";
@@ -69,6 +70,7 @@ export default function ModelSettings() {
 
   const [capabilities, setCapabilities] = useState<ModelCapabilities | null>(null);
   const [capabilitiesError, setCapabilitiesError] = useState<string | null>(null);
+  const [confirmingReset, setConfirmingReset] = useState(false);
   const form = useModelSettingsForm(displayModel ?? "", settingsKey ?? "");
   const { settings, update, nativeContext, pending } = form;
   const scan = useCapabilityScan(settingsKey ?? "");
@@ -630,8 +632,29 @@ export default function ModelSettings() {
         {/* Cancel stays enabled during a scan. Every other action waits for the one in progress. */}
         <Flex gap="s" wrap>
           {saveButtons.map(renderButton)}
+          <Button appearance="secondary" disabled={blocked} onClick={() => setConfirmingReset(true)}>
+            Reset to defaults
+          </Button>
         </Flex>
       </Flex>
+
+      {confirmingReset && (
+        <ConfirmDialog
+          title="Reset model settings"
+          message={
+            <>
+              Delete the saved settings for <strong>{displayModel}</strong> and restore the defaults?
+              This cannot be undone.
+            </>
+          }
+          confirmLabel="Reset"
+          onConfirm={() => {
+            setConfirmingReset(false);
+            void form.reset();
+          }}
+          onCancel={() => setConfirmingReset(false)}
+        />
+      )}
     </div>
   );
 }

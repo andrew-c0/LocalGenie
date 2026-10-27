@@ -9,6 +9,7 @@ import type {
   StoredModelSettings,
 } from "../types";
 import { chatErrorContent } from "../utils/chatError";
+import { cleanOverrides, parseStoredOverrides } from "../utils/chatOverrides";
 import { DEFAULT_SERVER_SETTINGS } from "../utils/modelSettings";
 
 /** Valid message roles — used to validate DB values at runtime. */
@@ -29,6 +30,7 @@ interface DbSessionWithMessages {
   created_at: number;
   updated_at: number;
   pinned: boolean;
+  settings_overrides: string | null;
   messages: DbMessageRow[];
   errors: DbChatErrorRow[];
 }
@@ -125,6 +127,7 @@ export async function loadSessions(): Promise<ChatSession[]> {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       pinned: row.pinned,
+      settingsOverrides: parseStoredOverrides(row.settings_overrides),
       // Array sort is stable, so on equal timestamps the stored message stays first.
       messages: [...messages, ...errors].sort((a, b) => a.timestamp - b.timestamp),
     };
@@ -141,6 +144,9 @@ export async function saveSession(session: ChatSession): Promise<void> {
       created_at: session.createdAt,
       updated_at: session.updatedAt,
       pinned: session.pinned,
+      settings_overrides: session.settingsOverrides
+        ? JSON.stringify(cleanOverrides(session.settingsOverrides))
+        : null,
     },
   });
 }

@@ -115,7 +115,6 @@ export default function ModelSelectorPopover({
     model: m,
     isActive: activeBase !== null && activeBase === (m.name.split("/").pop() ?? m.name),
     loadedHere: isLoadedOnServer(m),
-    loading: loading === m.name,
     disabled: loading !== null,
     onSelect,
   });
@@ -228,17 +227,16 @@ export default function ModelSelectorPopover({
             Manage Weights & Storage
           </Button>
         </Flex>
-        {serverStatus.running && serverStatus.models.length > 0 && (
+        {/* The footer button shows progress for any load or unload, so a load is visible here too. */}
+        {(loading !== null || (serverStatus.running && serverStatus.models.length > 0)) && (
           <Button
             appearance="secondary"
-            icon={
-              loading === LOADING_UNLOAD ? <Spinner size="tiny" /> : <PlugDisconnectedRegular />
-            }
-            title="Unload all models"
+            icon={loading !== null ? <Spinner size="tiny" /> : <PlugDisconnectedRegular />}
+            title={loading !== null ? "Working" : "Unload all models"}
             disabled={loading !== null}
             onClick={onUnload}
           >
-            Unload
+            {loading === LOADING_UNLOAD ? "Unloading…" : loading !== null ? "Loading…" : "Unload"}
           </Button>
         )}
       </Flex>

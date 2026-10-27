@@ -10,9 +10,9 @@ use sea_orm_migration::MigratorTrait;
 use serde::{Deserialize, Serialize};
 
 use super::capability_scan;
+use crate::model_settings;
 use crate::entities::{chat_error, chat_session, downloaded_model, message, user_preference};
 use crate::migrations::Migrator;
-use crate::model_settings;
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -121,6 +121,9 @@ pub async fn save_session(
     db: tauri::State<'_, DatabaseConnection>,
     session: chat_session::Model,
 ) -> Result<(), String> {
+    if let Some(overrides) = &session.settings_overrides {
+        model_settings::validate_chat_overrides(overrides)?;
+    }
     chat_session::Entity::insert(chat_session::ActiveModel {
         id: Set(session.id),
         title: Set(session.title),
@@ -129,6 +132,7 @@ pub async fn save_session(
         created_at: Set(session.created_at),
         updated_at: Set(session.updated_at),
         pinned: Set(session.pinned),
+        settings_overrides: Set(session.settings_overrides),
     })
     .on_conflict(
         OnConflict::column(chat_session::Column::Id)
@@ -139,6 +143,7 @@ pub async fn save_session(
                 chat_session::Column::CreatedAt,
                 chat_session::Column::UpdatedAt,
                 chat_session::Column::Pinned,
+                chat_session::Column::SettingsOverrides,
             ])
             .to_owned(),
     )

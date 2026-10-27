@@ -63,23 +63,6 @@ pub(super) fn validate_file_name(name: &str) -> Result<(), String> {
     }
 }
 
-/// Resolve a path and require it to sit strictly inside the Downloads folder.
-pub(super) fn ensure_inside_downloads(path: &str) -> Result<PathBuf, String> {
-    let root = download_dir().ok_or("Could not resolve a downloads directory")?;
-    let root = resolve_path(&root)?;
-    let resolved = resolve_path(Path::new(path))?;
-    if resolved == root || !resolved.starts_with(&root) {
-        return Err(format!(
-            "Refusing to touch {path}: it is outside the downloads folder"
-        ));
-    }
-    Ok(resolved)
-}
-
-fn resolve_path(path: &Path) -> Result<PathBuf, String> {
-    std::fs::canonicalize(path).map_err(|e| format!("Cannot resolve {}: {e}", path.display()))
-}
-
 /// Request cancellation of an in-flight download. The partial file is kept for resume.
 #[tauri::command]
 pub fn cancel_download(
@@ -93,7 +76,7 @@ pub fn cancel_download(
     Ok(())
 }
 
-/// Download `url` into the Downloads folder as `file_name`.
+/// Download `url` into `folder` inside the Downloads folder, as `file_name`.
 ///
 /// Bytes are written to `<file_name>.part` and renamed on success, so a partial
 /// file is never mistaken for a finished one. A later call for the same file
@@ -105,13 +88,20 @@ pub async fn download_file(
     registry: State<'_, DownloadRegistry>,
     download_id: String,
     url: String,
+    folder: String,
     file_name: String,
 ) -> Result<String, String> {
+    validate_file_name(&folder)?;
     validate_file_name(&file_name)?;
     if !url.starts_with(HF_DOWNLOAD_PREFIX) {
         return Err(format!("Downloads must come from {HF_DOWNLOAD_PREFIX}"));
     }
-    let dir = download_dir().ok_or("Could not resolve a downloads directory")?;
+    let dir = download_dir()
+        .ok_or("Could not resolve a downloads directory")?
+        .join(&folder);
+    tokio::fs::create_dir_all(&dir)
+        .await
+        .map_err(|e| format!("Failed to create {}: {e}", dir.display()))?;
     let target = dir.join(&file_name);
 
     if target.is_file() {

@@ -15,6 +15,8 @@ export interface ModelSettingsForm {
   /** The model's own context length, or null when it is not known. */
   nativeContext: number | null;
   pending: SaveAction | null;
+  /** Deletes the model's saved settings and puts the form back to the defaults. */
+  reset: () => Promise<void>;
   /** Writes the settings and tells the user to reload the model to use them. */
   save: () => Promise<void>;
   /** Writes the settings, then reloads the model with them. Does not reload when the write failed. */
@@ -49,6 +51,19 @@ export function useModelSettingsForm(model: string, settingsKey: string): ModelS
     },
     [],
   );
+
+  /** Deletes the model's saved settings and puts the form back to the defaults. */
+  const reset = useCallback(async () => {
+    if (!settingsKey || pending) return;
+    try {
+      // An empty object removes every saved key for the model (see `model_settings::save`).
+      await db.saveModelSettings(settingsKey, {});
+      setSettings({ ...defaultSettings });
+      toast.success("Model settings reset", "The saved settings were deleted.");
+    } catch (err) {
+      toast.error("Model settings not reset", String(err));
+    }
+  }, [settingsKey, pending]);
 
   /** Writes the settings. Returns false when the write failed, after showing the error. */
   const write = useCallback(async (): Promise<boolean> => {
@@ -90,5 +105,5 @@ export function useModelSettingsForm(model: string, settingsKey: string): ModelS
     }
   }, [model, settingsKey, pending, write]);
 
-  return { settings, update, nativeContext, pending, save, saveAndLoad };
+  return { settings, update, nativeContext, pending, reset, save, saveAndLoad };
 }

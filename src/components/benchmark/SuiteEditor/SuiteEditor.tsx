@@ -17,7 +17,7 @@ import {
   DismissRegular,
   SaveRegular,
 } from "@fluentui/react-icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { deleteBenchmarkSuite, saveBenchmarkSuite } from "../../../services/benchmark";
 import type {
   AttachmentKind,
@@ -54,6 +54,8 @@ interface SuiteEditorProps {
   prompts: BenchmarkPrompt[];
   onSaved: (suite: BenchmarkSuite) => void;
   onDeleted: (id: string) => void;
+  /** Reports whether the form differs from the saved suite. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function stepsOf(suite: BenchmarkSuite | null): EditorStep[] {
@@ -63,9 +65,15 @@ function stepsOf(suite: BenchmarkSuite | null): EditorStep[] {
 /**
  * Editor for one suite (a test run definition): name, mode, warmup and repetitions, and the
  * ordered steps. Each step is a prompt plus optional extra files.
- * Rendered with a `key` per suite, so switching suites starts from a clean form.
+ * Rendered in a dialog per suite, so each opening starts from a clean form.
  */
-export function SuiteEditor({ initial, prompts, onSaved, onDeleted }: SuiteEditorProps) {
+export function SuiteEditor({
+  initial,
+  prompts,
+  onSaved,
+  onDeleted,
+  onDirtyChange,
+}: SuiteEditorProps) {
   const [id] = useState(() => initial?.id ?? crypto.randomUUID());
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -77,6 +85,31 @@ export function SuiteEditor({ initial, prompts, onSaved, onDeleted }: SuiteEdito
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const imports = useFileImports();
+
+  const stepIds = (list: EditorStep[]) =>
+    list.map((step) => ({
+      id: step.id,
+      promptId: step.promptId,
+      files: step.files.map((f) => f.id),
+    }));
+  const savedState = JSON.stringify({
+    name: initial?.name ?? "",
+    description: initial?.description ?? "",
+    mode: initial?.mode ?? "conversation",
+    warmupRuns: initial?.warmupRuns ?? 1,
+    repetitions: initial?.repetitions ?? 3,
+    steps: stepIds(stepsOf(initial)),
+  });
+  const draftState = JSON.stringify({
+    name,
+    description,
+    mode,
+    warmupRuns,
+    repetitions,
+    steps: stepIds(steps),
+  });
+  const dirty = draftState !== savedState;
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
   const promptById = (promptId: string) => prompts.find((p) => p.id === promptId);
 

@@ -14,8 +14,9 @@
   gap: var(--spacingVerticalXS);
 }
 
+/* Size and time, and speed and ETA, each on its own line. */
 .download-card__meta {
   display: flex;
-  justify-content: space-between;
-  gap: var(--spacingHorizontalS);
+  flex-direction: column;
+  gap: var(--spacingVerticalXS);
 }
