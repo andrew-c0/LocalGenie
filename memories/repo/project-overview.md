@@ -17,8 +17,8 @@ LocalGenie is a Tauri 2 desktop client for Qualcomm GenieX local inference. It w
 5. Sessions and settings are persisted locally.
 6. CLI updates: a badge on the sidebar settings button; the update runs from the App Settings drawer (installer download, launch, version polling).
 
-## Current state (2026-10-26)
-- Committed up to 63f1fbc (benchmark suite: Benchmarks area with prompt library, suites, a Rust-run benchmark over the loaded model, saved runs and compare charts; earlier: model capability scan and selector badges, sidecar downloads before import, loaded-model list from `/status`, system usage card, chat attachments (image, audio, text), exact per-reply token counts, deleting a message with the ones after it, chat welcome view, conversation pinning). The working tree was clean at the last sync. See `codebase-map.md` for the exact state.
+## Current state (2026-10-27)
+- Committed up to 961d167: per-conversation settings (`ChatSettingsDrawer`, `chat_sessions.settings_overrides`), model and compute change lines in the chat, a per-repo download folder (projector and model are downloaded into it, then imported; `delete_directory` removed), and run step replies in the Runs tab. Earlier, at 63f1fbc (benchmark suite: Benchmarks area with prompt library, suites, a Rust-run benchmark over the loaded model, saved runs and compare charts; earlier: model capability scan and selector badges, sidecar downloads before import, loaded-model list from `/status`, system usage card, chat attachments (image, audio, text), exact per-reply token counts, deleting a message with the ones after it, chat welcome view, conversation pinning). The working tree was clean at the last sync. See `codebase-map.md` for the exact state.
 - Model loading and chat completion still carry the GenieX warmup/server response risk (`known-issues.md`).
 - Benchmarks (`/benchmarks`) run suites through the Rust runner; the old Playground and dashboard are removed. Compute and power recording are not yet checked against a live model (`known-issues.md`).
 - Qualcomm AI Hub code is legacy and will be reworked later.

@@ -1,6 +1,6 @@
 # Known issues
 
-Status labels: **code-verified** = read in the source (committed up to 694a036, or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-26 sync (the benchmark suite was read, not run). Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
+Status labels: **code-verified** = read in the source (committed up to 694a036, or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-26 or 2026-10-27 syncs (the benchmark suite and the chat settings were read, not run). Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
 
 ## Active
 - Model load/chat hangs: the GenieX warmup request in `load_model` may never get a response. The warmup carries the model's load params (committed in 6068a81), so it matches chat. Not re-validated (runtime-unverified).
@@ -34,6 +34,10 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Overview's "Recent Generation Speeds" (`components/benchmark/SpeedList`) reads chat message stats from `chatStore`, not benchmark runs (code-verified).
 - Biome: `npx biome check src/` reports 9 format errors, pre-existing and not changed by 63f1fbc: `ModelSettings/ModelSettings.css`, `ModelSettings/ModelSettings.tsx`, `ModelSettings/SettingField/SettingField.css`, `SettingField.tsx`, `ModelSettings/useModelSettingsForm.ts`, `models/GGUFVariantList.tsx`, `shell/Layouts/Layouts.css`, `Layouts.tsx`, `ui/PageHeader/PageHeader.css`. Formatting drift only; not fixed here.
 
+## Chat settings, system lines and download folders (961d167 range; code-verified, runtime-unverified)
+- Per-conversation settings, the model-change system lines, the per-repo download folder and the import cleanup have not been run in the app.
+- The GGUF download folder is shared by every variant of a repo. The import removes every `mmproj*` file in the folder that is not the variant's own projector (`remove_other_projectors`), so two variants of one repo must not be imported with projectors in the same folder at once. The queue keys downloads by repo, so this is not expected to happen (code-read only).
+
 ## UI follow-ups
 - Header Downloads button still uses `appearance="subtle"` (`Header/Header.tsx`), against the agreed visual rule (secondary/primary).
 - Syntax highlighting: `rehype-highlight` runs only with `allowHtml`, and no highlight.js theme is imported.
@@ -65,7 +69,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Every stop or unload was reported as `server-stopped`, so a user unload looked like a crash. Now only an unexpected child exit emits it (committed in 1b5d554: `commands/server.rs`, PID cleared before the kill).
 - A load with no saved context window used a fixed 4096. It now uses the model's native `context_size` (committed in 1b5d554: `resolveLoadParams`, `loadNativeContext`).
 - The loaded-model list came from `/v1/models`, which lists every cached model, so cached models showed as loaded. It now reads `GET /status` `models[].id` (`server.rs` `fetch_loaded_models`; code-verified against the GenieX `status` handler; runtime-unverified in the app).
-- Sidecars (mmproj) were downloaded after the import, but the import doc comment says GenieX copies only what is in the model folder, so they were not in the folder when GenieX read it. Sidecars are now downloaded first and moved into the folder by `import_gguf` (`downloadPipeline.ts`, `import.rs`; runtime-unverified).
+- Sidecars (mmproj) were downloaded after the import, but the import doc comment says GenieX copies only what is in the model folder, so they were not in the folder when GenieX read it. Sidecars are now downloaded first into the repo's download folder, and `import_gguf` imports that folder (`downloadPipeline.ts`, `import.rs`; runtime-unverified). Later the move step and `delete_directory` were removed (961d167 range); the folder is now cleaned up by the import itself.
 - Settings `nctx` and `think` had no effect. Now `nctx` and the other load params go to `load_model` and every chat request, and `think` is sent as `enable_think` (committed in 6068a81: `commands/chat_helpers.rs`, `utils/modelSettings.ts`, `Header/useModelLoader.ts`). Reported live run (not re-run by knowledge-sync): against `geniex serve` v0.9.3 with `unsloth/Qwen3.5-0.8B-GGUF` Q8_K_XL, a warmup then a chat with identical params did not reload, and a changed `nctx` did reload.
 - Chat events carry `streamId`; `useChatStream` applies them only to the active stream, so a stream keeps its session when the user switches chats (`chat-chunk`/`chat-done` in `ChatRuntime/useChatStream.ts`). The stream also keeps running on other pages, since `ChatRuntime` is mounted in `MainLayout`.
 - Per-response stats (TTFT, total time, token count, prompt chars) are saved with the message (`messages` columns from `m20261022_000002`; `database.rs`, `services/database.ts`), so they survive a reload. Stats are computed in `useChatStream.ts`.
