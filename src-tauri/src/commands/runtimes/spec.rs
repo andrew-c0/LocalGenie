@@ -4,8 +4,10 @@ use std::path::{Path, PathBuf};
 
 use super::release::{Release, ReleaseAsset};
 
-/// GitHub repository that publishes the runtime archives. Change this one line to move the source.
-pub const RUNTIMES_REPO: &str = "andrew-c0/localgenie-runtimes";
+/// Our fork of stable-diffusion.cpp. Upstream ships no Windows ARM64 build, so the fork's release
+/// workflow publishes one. A runtime with an official ARM64 release points at the official repo
+/// instead; a runtime without one gets its own fork or repo.
+pub const SD_CPP_REPO: &str = "andrew-c0/stable-diffusion.cpp";
 
 /// One optional runtime the app can install.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -23,11 +25,11 @@ pub struct RuntimeSpec {
     pub exe_relative_path: &'static str,
 }
 
-/// stable-diffusion.cpp, built for Windows ARM64 by our own runtimes release.
+/// stable-diffusion.cpp, built for Windows ARM64 by the fork's release workflow.
 pub const SD_CPP: RuntimeSpec = RuntimeSpec {
     id: "sd-cpp",
     display_name: "stable-diffusion.cpp",
-    repo: RUNTIMES_REPO,
+    repo: SD_CPP_REPO,
     asset_contains: &["sd", "windows-arm64"],
     asset_suffix: ".zip",
     exe_relative_path: "sd-cli.exe",
@@ -82,7 +84,7 @@ mod tests {
             .collect();
         parse_release(
             &serde_json::json!({ "tag_name": "t", "assets": assets }),
-            RUNTIMES_REPO,
+            SD_CPP_REPO,
         )
         .expect("release parses")
     }
@@ -106,7 +108,7 @@ mod tests {
 
     #[test]
     fn finds_spec_by_id_and_rejects_unknown_ids() {
-        assert_eq!(find_spec("sd-cpp").map(|s| s.repo), Ok(RUNTIMES_REPO));
+        assert_eq!(find_spec("sd-cpp").map(|s| s.repo), Ok(SD_CPP_REPO));
         assert!(find_spec("../etc").is_err());
     }
 
