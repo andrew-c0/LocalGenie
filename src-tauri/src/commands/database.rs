@@ -482,6 +482,50 @@ pub fn validate_facets(facets: Option<&str>) -> Result<(), String> {
     }
 }
 
+/// Where a downloaded model came from. Kept in its facets JSON under `source`, set by the import
+/// command (not derived from the name). Same vocabulary as `ModelInfo.source`.
+pub const SOURCE_HF: &str = "hf";
+pub const SOURCE_AIHUB: &str = "aihub";
+
+/// Facets JSON with `source` set to `source`. Null facets become an object holding only the source.
+/// Anything that is not a JSON object is refused.
+pub fn facets_with_source(facets: Option<&str>, source: &str) -> Result<String, String> {
+    let mut map = match facets {
+        None => serde_json::Map::new(),
+        Some(text) => match serde_json::from_str::<serde_json::Value>(text) {
+            Ok(serde_json::Value::Object(map)) => map,
+            _ => return Err("Model facets must be a JSON object".to_owned()),
+        },
+    };
+    map.insert(
+        "source".to_owned(),
+        serde_json::Value::String(source.to_owned()),
+    );
+    serde_json::to_string(&map).map_err(|e| e.to_string())
+}
+
+/// The stored source in a facets JSON text, or None when there is none (rows from before the
+/// source was kept, or an unknown value).
+pub fn source_of_facets(facets: Option<&str>) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(facets?).ok()?;
+    match value.get("source")?.as_str()? {
+        s @ (SOURCE_HF | SOURCE_AIHUB) => Some(s.to_owned()),
+        _ => None,
+    }
+}
+
+/// Stored source for every downloaded model that has one, keyed by the model name.
+pub async fn stored_sources(db: &DatabaseConnection) -> Result<HashMap<String, String>, String> {
+    let rows = downloaded_model::Entity::find()
+        .all(db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|r| source_of_facets(r.facets.as_deref()).map(|s| (r.name, s)))
+        .collect())
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────
 
 fn now_millis() -> i64 {
@@ -493,7 +537,27 @@ fn now_millis() -> i64 {
 
 #[cfg(test)]
 mod facet_tests {
-    use super::validate_facets;
+    use super::{facets_with_source, source_of_facets, validate_facets, SOURCE_AIHUB, SOURCE_HF};
+
+    #[test]
+    fn source_is_written_into_facets_and_read_back() {
+        let null = facets_with_source(None, SOURCE_HF).unwrap();
+        assert_eq!(source_of_facets(Some(&null)).as_deref(), Some("hf"));
+
+        let kept = facets_with_source(Some(r#"{"library":"gguf"}"#), SOURCE_AIHUB).unwrap();
+        assert_eq!(source_of_facets(Some(&kept)).as_deref(), Some("aihub"));
+        assert!(kept.contains("\"library\":\"gguf\""));
+        assert!(validate_facets(Some(&kept)).is_ok());
+    }
+
+    #[test]
+    fn source_refuses_non_object_facets_and_unknown_values() {
+        assert!(facets_with_source(Some("[1]"), SOURCE_HF).is_err());
+        assert!(facets_with_source(Some("not json"), SOURCE_HF).is_err());
+        assert_eq!(source_of_facets(None), None);
+        assert_eq!(source_of_facets(Some(r#"{"library":"gguf"}"#)), None);
+        assert_eq!(source_of_facets(Some(r#"{"source":"docker"}"#)), None);
+    }
 
     #[test]
     fn facets_accept_null_and_objects_only() {

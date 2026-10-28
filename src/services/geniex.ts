@@ -1,6 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
-  AihubModel,
   ChatMessageContent,
   ChatSettings,
   ConfigEntry,
@@ -40,11 +39,6 @@ export async function setModelType(model: string, modelType: string): Promise<vo
 
 export async function searchModels(query: string): Promise<SearchModel[]> {
   return invoke("search_models", { query });
-}
-
-/** Qualcomm AI Hub models that GenieX can run on this chipset (`geniex model list`). */
-export async function listAihubModels(): Promise<AihubModel[]> {
-  return invoke("list_aihub_models");
 }
 
 // ─── Server Management ───────────────────────────────────────────

@@ -8,6 +8,7 @@ import BenchmarkRuns from "./pages/benchmark/BenchmarkRuns/BenchmarkRuns";
 import BenchmarkSuites from "./pages/benchmark/BenchmarkSuites/BenchmarkSuites";
 import ChatPage from "./pages/ChatPage/ChatPage";
 import LocalModelsBrowserPage from "./pages/LocalModelsBrowserPage/LocalModelsBrowserPage";
+import AihubModelDetail from "./pages/models/AihubModelDetail/AihubModelDetail";
 import HubModelDetailRoute from "./pages/models/HubModelDetailRoute";
 import OverviewPage from "./pages/OverviewPage/OverviewPage";
 import SettingsPage from "./pages/SettingsPage/SettingsPage";
@@ -17,7 +18,8 @@ import SettingsPage from "./pages/SettingsPage/SettingsPage";
  * `App.tsx` only mounts providers, global listeners and this component.
  *
  * Submenus are sub-routes, so each view has its own URL:
- * - `/models` local library, `/models/browse` Hugging Face browser, `/models/:repoId` detail
+ * - `/models` local library, `/models/browse` Hugging Face browser, `/models/aihub` Qualcomm AI Hub
+ *   catalog, `/models/aihub/:id` its detail, `/models/:repoId` Hugging Face detail
  * - `/chat` default content, `/chat/:sessionId` one conversation
  * - `/settings/:section`
  * - `/benchmarks/prompts|suites|run|runs|compare` (benchmark area)
@@ -29,6 +31,8 @@ export default function Navigation() {
         <Route path="/" element={<OverviewPage />} />
         <Route path="/models" element={<LocalModelsBrowserPage tab="local" />} />
         <Route path="/models/browse" element={<LocalModelsBrowserPage tab="all" />} />
+        <Route path="/models/aihub" element={<LocalModelsBrowserPage tab="aihub" />} />
+        <Route path="/models/aihub/:id" element={<AihubModelDetail />} />
         <Route path="/models/:repoId" element={<HubModelDetailRoute />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:sessionId" element={<ChatPage />} />

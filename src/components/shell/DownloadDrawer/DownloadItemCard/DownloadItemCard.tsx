@@ -52,6 +52,7 @@ export function DownloadItemCard({
   const pct = d.total ? d.received / d.total : 0;
   const remaining = d.total ? d.total - d.received : 0;
   const isImporting = d.status === "importing";
+  const canResume = d.status === "cancelled" && (!!d.variant || !!d.aihub);
 
   if (!active) {
     return (
@@ -61,7 +62,7 @@ export function DownloadItemCard({
             {d.label}
           </Text>
           <div className="download-card__actions">
-            {d.status === "cancelled" && d.variant && (
+            {canResume && (
               <Button
                 appearance="secondary"
                 size="small"

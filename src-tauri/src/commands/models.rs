@@ -1,6 +1,8 @@
+use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use std::process::Stdio;
 use std::time::Duration;
+use tauri::State;
 use tokio::process::Command;
 use tokio::time::timeout;
 
@@ -72,18 +74,31 @@ pub(super) fn derive_source(name: &str) -> &str {
 }
 
 /// List all locally downloaded models using `geniex list --format json`.
+///
+/// `source` comes from the import that stored the model (`downloaded_models` facets). The name
+/// guess (`derive_source`) is only for models with no stored source, such as rows from before it was kept.
 #[tauri::command]
-pub async fn list_models() -> Result<Vec<ModelInfo>, String> {
+pub async fn list_models(db: State<'_, DatabaseConnection>) -> Result<Vec<ModelInfo>, String> {
     let stdout = run_geniex(&["list", "--format", "json"], "list models").await?;
 
     let raw: Vec<GeniexListModel> = serde_json::from_str(&stdout)
         .map_err(|e| format!("Failed to parse `geniex list` JSON: {e}"))?;
+    let stored = match super::database::stored_sources(&db).await {
+        Ok(map) => map,
+        Err(e) => {
+            eprintln!("Could not read stored model sources: {e}");
+            Default::default()
+        }
+    };
 
     Ok(raw
         .into_iter()
         .map(|m| ModelInfo {
             size: m.size.map(format_size).unwrap_or_else(|| "unknown".into()),
-            source: derive_source(&m.name).to_string(),
+            source: stored
+                .get(&m.name)
+                .cloned()
+                .unwrap_or_else(|| derive_source(&m.name).to_string()),
             precisions: m.precisions.unwrap_or_default(),
             name: m.name,
         })

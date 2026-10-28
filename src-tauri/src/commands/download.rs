@@ -7,8 +7,10 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::io::AsyncWriteExt;
 
 const USER_AGENT: &str = "LocalGenie/0.1";
-/// Downloads may only be requested from this host.
+/// Downloads may only be requested from these prefixes: Hugging Face (GGUF files) and the public
+/// AI Hub asset bucket (QAIRT zips).
 const HF_DOWNLOAD_PREFIX: &str = "https://huggingface.co/";
+const AIHUB_DOWNLOAD_PREFIX: &str = "https://qaihub-public-assets.s3.us-west-2.amazonaws.com/";
 
 /// In-flight downloads, keyed by download id (the Hugging Face repo id).
 pub struct DownloadRegistry {
@@ -54,6 +56,11 @@ impl DownloadRegistry {
     }
 }
 
+/// True for a URL under one of the allowed download prefixes.
+fn is_allowed_download_url(url: &str) -> bool {
+    url.starts_with(HF_DOWNLOAD_PREFIX) || url.starts_with(AIHUB_DOWNLOAD_PREFIX)
+}
+
 /// Accept only a bare file name: no separators, no `..`, no root.
 pub(super) fn validate_file_name(name: &str) -> Result<(), String> {
     let mut parts = Path::new(name).components();
@@ -86,6 +93,7 @@ pub fn cancel_download(
 pub async fn download_file(
     app: AppHandle,
     registry: State<'_, DownloadRegistry>,
+    aihub: State<'_, super::aihub::AihubCache>,
     download_id: String,
     url: String,
     folder: String,
@@ -93,8 +101,14 @@ pub async fn download_file(
 ) -> Result<String, String> {
     validate_file_name(&folder)?;
     validate_file_name(&file_name)?;
-    if !url.starts_with(HF_DOWNLOAD_PREFIX) {
-        return Err(format!("Downloads must come from {HF_DOWNLOAD_PREFIX}"));
+    if !is_allowed_download_url(&url) {
+        return Err(format!(
+            "Downloads must come from {HF_DOWNLOAD_PREFIX} or {AIHUB_DOWNLOAD_PREFIX}"
+        ));
+    }
+    // AI Hub URLs are narrowed further: only this device's asset zips of models opened in the app.
+    if url.starts_with(AIHUB_DOWNLOAD_PREFIX) {
+        super::aihub::check_asset_download(&aihub, &url).await?;
     }
     let dir = download_dir()
         .ok_or("Could not resolve a downloads directory")?
@@ -269,6 +283,19 @@ mod tests {
     #[test]
     fn accepts_bare_file_names() {
         assert!(validate_file_name("model-Q4_0.gguf").is_ok());
+    }
+
+    #[test]
+    fn allows_only_hugging_face_and_ai_hub_asset_urls() {
+        use super::is_allowed_download_url;
+        assert!(is_allowed_download_url(
+            "https://huggingface.co/owner/repo/resolve/main/model.gguf"
+        ));
+        assert!(is_allowed_download_url(
+            "https://qaihub-public-assets.s3.us-west-2.amazonaws.com/a/b.zip"
+        ));
+        assert!(!is_allowed_download_url("https://example.com/model.zip"));
+        assert!(!is_allowed_download_url("http://huggingface.co/x.gguf"));
     }
 
     #[test]

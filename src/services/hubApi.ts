@@ -3,7 +3,6 @@
  * for browsing models inside the app. Based on the Hub OpenAPI spec
  * (memories/external/huggingFace/hub-api-endpoints.json).
  *
- * The Qualcomm AI Hub area always applies `author=qualcomm`.
  */
 
 const HUB_BASE = "https://huggingface.co";
@@ -40,7 +39,7 @@ export interface ParamRange {
 export interface HubQuery {
   /** Free-text search. */
   search?: string;
-  /** Restrict to an author/org, e.g. "qualcomm". */
+  /** Restrict to an author/org, e.g. "TheBloke". */
   author?: string;
   sort?: HubSort;
   /** true = ascending, false (default) = descending. */
@@ -179,20 +178,9 @@ export async function fetchHubModelReadme(repoId: string, rev = "main"): Promise
   return res.text();
 }
 
-/**
- * Release-asset compatibility for a repo. Nothing records it yet; the removed
- * release_assets.json helpers are in git history (before the cleanup commit).
- */
-export type AssetCompat = "universal" | "chipset" | "none" | "unknown";
-
 /** URL of the model page on huggingface.co. */
 export function hubModelPageUrl(repoId: string): string {
   return `${HUB_BASE}/${repoId}`;
-}
-
-/** Convenience: browse Qualcomm AI Hub models (always author=qualcomm). */
-export function listQualcommModels(query: Omit<HubQuery, "author">): Promise<HubPage> {
-  return listHubModels({ ...query, author: "qualcomm" });
 }
 
 /** One value of the filter catalogue: `id` is the tag sent to the API. */

@@ -23,12 +23,27 @@ export interface GGUFVariant {
   facets?: HubFacetSummary;
 }
 
+/** One QAIRT zip from Qualcomm AI Hub: what the pipeline downloads and then imports. */
+export interface AihubDownload {
+  /** GenieX name, `qualcomm/<display name>`. It is also the download id. */
+  modelName: string;
+  /** Public AI Hub asset URL. */
+  downloadUrl: string;
+  /** Download folder under Downloads, and the zip's file name in it. */
+  folder: string;
+  zipName: string;
+  precision: string;
+  facets: HubFacetSummary;
+}
+
 export interface DownloadItem {
-  /** Unique key per download (repo ID for model downloads). */
+  /** Unique key per download (repo ID for model downloads; GenieX name for AI Hub zips). */
   id: string;
   label: string;
   /** What to fetch, kept so a cancelled download can be resumed. */
   variant?: GGUFVariant;
+  /** AI Hub zip to fetch and import, kept so a cancelled download can be resumed. */
+  aihub?: AihubDownload;
   received: number;
   total: number | null;
   /** Bytes per second (smoothed). */
@@ -45,6 +60,10 @@ interface DownloadState {
   downloads: DownloadItem[];
   /** Queue a GGUF variant for download. Ignored while the same repo is already active. */
   enqueue: (variant: GGUFVariant) => void;
+  /** Queue an AI Hub zip. Ignored while the same model is already active. */
+  enqueueAihub: (download: AihubDownload) => void;
+  /** Queue a cancelled or failed entry again; its fetch and import are kept on the entry. */
+  requeue: (id: string) => void;
   /** Insert or update a download entry (keeps existing fields). */
   upsert: (item: Partial<DownloadItem> & { id: string }) => void;
   /** Patch progress fields for an active download. */
@@ -70,6 +89,32 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
       id: repoId,
       label: repoId,
       variant,
+      aihub: undefined,
+      status: "queued",
+      error: undefined,
+      finishedAt: undefined,
+      startedAt: Date.now(),
+    });
+  },
+  enqueueAihub: (download) => {
+    const id = download.modelName;
+    if (isDownloadActive(get().downloads.find((d) => d.id === id)?.status)) return;
+    get().upsert({
+      id,
+      label: id,
+      aihub: download,
+      variant: undefined,
+      status: "queued",
+      error: undefined,
+      finishedAt: undefined,
+      startedAt: Date.now(),
+    });
+  },
+  requeue: (id) => {
+    const item = get().downloads.find((d) => d.id === id);
+    if (!item || (!item.variant && !item.aihub) || isDownloadActive(item.status)) return;
+    get().upsert({
+      id,
       status: "queued",
       error: undefined,
       finishedAt: undefined,

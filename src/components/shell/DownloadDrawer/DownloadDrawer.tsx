@@ -23,7 +23,7 @@ interface Props {
  * pipeline (see `useDownloadManager`); other components only enqueue downloads in the store.
  */
 export default function DownloadDrawer({ open, onClose }: Props) {
-  const { downloads, cancelling, cancel, enqueue, remove, clearFinished } = useDownloadManager();
+  const { downloads, cancelling, cancel, requeue, remove, clearFinished } = useDownloadManager();
 
   /** A queued entry has no backend download yet, so cancelling it just removes it. */
   const handleCancel = (id: string) => {
@@ -33,10 +33,7 @@ export default function DownloadDrawer({ open, onClose }: Props) {
   };
 
   /** Resume a cancelled download: queue it again and the backend continues from the partial file. */
-  const handleResume = (id: string) => {
-    const variant = downloads.find((d) => d.id === id)?.variant;
-    if (variant) enqueue(variant);
-  };
+  const handleResume = (id: string) => requeue(id);
 
   const active = downloads.filter((d) => isDownloadActive(d.status));
   const past = downloads.filter(

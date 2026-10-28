@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-shell";
 import type { PlatformInfo } from "../types";
 
 /** Host memory figures reported by the Rust `get_system_memory` command. */
@@ -59,4 +60,9 @@ export async function readTextFile(path: string): Promise<string> {
 /** Whether a file is still present at this path. */
 export async function fileExists(path: string): Promise<boolean> {
   return invoke("file_exists", { path });
+}
+
+/** Open an http(s) link in the system browser. */
+export async function openExternal(url: string): Promise<void> {
+  await open(url);
 }

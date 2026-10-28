@@ -10,6 +10,8 @@ name = "local_genie_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]
+prost-build = "0.14"
+protox = "0.10"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
@@ -32,6 +34,7 @@ urlencoding = "2"
 sysinfo = "0.33"
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+prost = "0.14"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [

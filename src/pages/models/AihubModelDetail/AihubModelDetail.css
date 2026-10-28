@@ -1,0 +1,20 @@
+.aihub-detail__page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--spacingHorizontalL) var(--spacingVerticalL);
+}
+
+/* Page content column, centred. Layout itself is Flex; only the width is set here. */
+.aihub-detail__inner {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.aihub-detail__precision {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalXXS);
+  padding: var(--spacingVerticalS) 0;
+  border-bottom: 1px solid var(--colorNeutralStroke2);
+}

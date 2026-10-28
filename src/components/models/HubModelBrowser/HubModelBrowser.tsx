@@ -3,7 +3,7 @@ import { Button, Dropdown, Option, SearchBox, Spinner, Switch } from "@fluentui/
 import { ArrowSortRegular, ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { AssetCompat, HubSort } from "../../../services/hubApi";
+import type { HubSort } from "../../../services/hubApi";
 import { activeFacetCount, useHubBrowseStore } from "../../../stores/hubBrowseStore";
 import { baseModelOf, facetSummaryFromModel } from "../../../utils/hubModelInfo";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
@@ -11,18 +11,6 @@ import { ModelCard, type ModelCardData } from "../../ui/ModelCard/ModelCard";
 import { StateBlock } from "../../ui/StateBlock/StateBlock";
 import { HubFacetPanel } from "./HubFacetPanel/HubFacetPanel";
 import "./HubModelBrowser.css";
-
-/** Badge for a Qualcomm tile based on learned compatibility info. */
-function compatBadge(
-  compat: AssetCompat | undefined,
-  npuReady: boolean,
-): { tone: "green" | "default"; label: string } {
-  if (npuReady) return { tone: "green", label: "NPU ready" };
-  if (compat === "universal") return { tone: "green", label: "Universal assets" };
-  if (compat === "chipset") return { tone: "green", label: "Chipset assets" };
-  if (compat === "none") return { tone: "default", label: "No compatible assets" };
-  return { tone: "default", label: "Check assets" };
-}
 
 const SORT_OPTIONS: [HubSort, string][] = [
   ["downloads", "Most downloads"],
@@ -33,28 +21,19 @@ const SORT_OPTIONS: [HubSort, string][] = [
 ];
 
 interface Props {
-  /** Which hub area to browse — controlled by the parent page tabs. */
-  area: "qualcomm" | "all";
   downloading: Set<string>;
 }
 
-/** Hugging Face browse area with sorting, facet filters and cursor pagination. */
-export default function HubModelBrowser({ area, downloading }: Props) {
+/** Hugging Face browse with sorting, facet filters and cursor pagination. */
+export default function HubModelBrowser({ downloading }: Props) {
   const s = useHubBrowseStore();
   const navigate = useNavigate();
-  const compatibleNames = useHubBrowseStore((st) => st.compatibleNames);
-  const assetCompat = useHubBrowseStore((st) => st.assetCompat);
-  const { models, isLoading, error, refresh, area: storeArea, setArea } = s;
+  const { models, isLoading, error, refresh } = s;
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     if (models.length === 0 && !isLoading && !error) void refresh();
   }, [models.length, isLoading, error, refresh]);
-
-  // Re-fetch when the parent switches area.
-  useEffect(() => {
-    if (storeArea !== area) setArea(area);
-  }, [area, storeArea, setArea]);
 
   const activeFilterCount = activeFacetCount(s.facets);
   const sortLabel = SORT_OPTIONS.find(([value]) => value === s.sort)?.[1] ?? "";
@@ -71,11 +50,7 @@ export default function HubModelBrowser({ area, downloading }: Props) {
       <div className="hub-model-browser__toolbar">
         <SearchBox
           className="hub-model-browser__search"
-          placeholder={
-            area === "qualcomm"
-              ? "Search Qualcomm AI Hub models…"
-              : "Search all Hugging Face models…"
-          }
+          placeholder="Search all Hugging Face models…"
           aria-label="Search Hugging Face models"
           value={s.search}
           onChange={(_, data) => s.setSearch(data.value)}
@@ -120,14 +95,12 @@ export default function HubModelBrowser({ area, downloading }: Props) {
             >
               {s.ascending ? "Asc" : "Desc"}
             </Button>
-            {area === "all" && (
-              <Switch
-                label="GGUF only"
-                checked={s.ggufOnly}
-                onChange={(_, data) => s.setGgufOnly(data.checked)}
-                title="Show only models with GGUF weights (runnable by GenieX)"
-              />
-            )}
+            <Switch
+              label="GGUF only"
+              checked={s.ggufOnly}
+              onChange={(_, data) => s.setGgufOnly(data.checked)}
+              title="Show only models with GGUF weights (runnable by GenieX)"
+            />
           </div>
 
           <HubFacetPanel />
@@ -151,10 +124,6 @@ export default function HubModelBrowser({ area, downloading }: Props) {
               downloads: m.downloads,
               likes: m.likes,
               facets: facetSummaryFromModel(m),
-              badge:
-                area === "qualcomm" && compatibleNames
-                  ? compatBadge(assetCompat[m.id], compatibleNames.has(m.id))
-                  : undefined,
               gated: m.gated ? true : undefined,
             };
             return (
