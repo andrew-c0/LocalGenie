@@ -19,7 +19,7 @@
 - `user_preferences`: key-value app settings such as `server_port`
 - `downloaded_models`: GGUF models imported into GenieX (`name` primary key; precision, context_size, param_count, repo_url, model_card, timestamps). Written by `import_gguf` and `upsert_downloaded_model`, read by the model page.
   - `facets` (text, null; migration `m20261033_000001_downloaded_model_facets`, committed 2122ed2): the Hub facet summary as a JSON object (`task`, `library`, `license`, `paramCount`, `paramCountApproximate`, `baseRelation`, `baseRepo`, `quantBits`; shape in `utils/hubModelInfo.ts`). Null for rows saved before it. The write is checked to be a JSON object (`validate_facets`).
-  - `facets.source` (uncommitted): `hf` or `aihub`, written by `import_gguf` and `import_aihub_zip` (`facets_with_source`), read by `list_models` (`stored_sources`). Rows without it fall back to the name guess. AI Hub rows have `library` `QAIRT`. No new migration for it.
+  - `facets.source` (committed in 7664d01): `hf` or `aihub`, written by `import_gguf` and `import_aihub_zip` (`facets_with_source`), read by `list_models` (`stored_sources`). Rows without it fall back to the name guess. AI Hub rows have `library` `QAIRT`. No new migration for it.
 
 ## Patterns
 - Use `MigrationTrait` for versioned schema changes.

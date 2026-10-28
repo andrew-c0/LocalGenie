@@ -18,11 +18,14 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Fixed: the local model lookups in `pages/models/useHubModelDetail.ts` matched rows with a substring test (`repoId.includes(name)`). They now match the exact id or the id with a precision suffix (`isSameRepo`).
 - Vision and audio probes match whole words only (`has_word`), so a reply that names the colour or number only inside another word does not count (`capability_scan.rs` tests `names_match_whole_words_only`).
 
-## Qualcomm AI Hub tab (uncommitted; code-read 2026-10-28, runtime-unverified)
+## Qualcomm AI Hub tab (committed 7664d01..55219bc; code-read 2026-10-28, runtime-unverified)
+- Reported on 2026-10-28 (not re-run here): runtime 11 (QAIRT Genie bundles: `genie_config.json` plus `ctx-bins`) and runtime 12 (llama.cpp GGUF) load in GenieX. Runtime 6 (Genie bundle) failed to load because it had no `metadata.json`; runtimes 2 (QNN DLC) and 3 (QNN context binary) failed on import or load. Runtimes 2, 3 and 6 are not listed in the tab now (see `codebase-map.md`). The `metadata.json` requirement matches GenieX's `localfs` zip reader (`sdk/model-manager/crates/core/src/source/localfs.rs`, read-only checkout `C:\Work\GenieX`).
 - The catalog, detail, model card, download and import were not run in the app or against the live bucket. The version probe (`resolve_version`) relies on the bucket answering 403 for a missing object, which is stated in a code comment and not checked.
-- The detail page lists the assets of every chipset and does not filter by the device. A download for another chipset is refused by the backend ("This AI Hub asset is for X, and this device is Y"), and an unset GenieX `chipset` allows only universal assets.
+- The detail page lists the assets of every chipset and does not filter by the device; the asset picker shows a `This device` / `Other chipset` badge and disables Download for another chipset. The backend refuses it too ("This AI Hub asset is for X, and this device is Y"). An unset GenieX `chipset` allows only universal assets.
+- Chipset matching normalises names (AI Hub `qualcomm-snapdragon-x-elite` against GenieX's `Snapdragon X Elite CRD`). Not run against a live device report.
 - The download gate is in memory: a zip can be downloaded only after its model page was opened in the same session (`AihubCache.asset_urls`). After a restart, open the page first.
-- `geniex pull qualcomm/<Name>:<precision> --model-hub localfs --local-path <zip>` is the import path; the precision label is taken from the app (`validate_precision`), and whether GenieX accepts the label for a zip was not verified.
+- `geniex pull qualcomm/<Name>:<precision> --model-hub localfs --local-path <zip>` is the import path for runtime 11; the precision label is taken from the app (`validate_precision`), and whether GenieX accepts the label for a zip was not verified.
+- The AI Hub tab's card description is hard-coded `QAIRT · N chipsets`, so a GGUF-only model is labelled QAIRT (code-read, `AihubBrowser.tsx`).
 
 ## Chat attachments (code-verified, runtime-unverified)
 - mp3 input is not verified with the server. The chat path sends `input_audio` with `format` `mp3` when the file is an mp3; GenieX accepts the format name and writes a temp file (code-read). The audio scan probe uses wav, so wav is the only format the scan has exercised.

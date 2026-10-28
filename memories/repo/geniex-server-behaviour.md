@@ -27,6 +27,11 @@ Source: the official GenieX repo (github.com/qualcomm/GenieX, read-only), checke
 - llama.cpp keeps special tokens in the output: Gemma 4 thinking markers (`<|channel>thought` ... `<channel|>`) reach the reply content (reported live). The thinking parser in `shared/thinking-patterns.json` relies on this.
 - `enable_think` and `tools` behaviour was tested live; the settings scan's `thinking` and `toolCalls` probes (`capability_scan/`) are the test code. Specific findings are not recorded here.
 
+## Runtimes in the AI Hub catalog (what the tab lists)
+- `src-tauri/proto/shared/runtime.proto` values: 2 `QNN_DLC`, 3 `QNN_CONTEXT_BINARY`, 6 `GENIE`, 11 `GENIEX_QAIRT`, 12 `GENIEX_LLAMACPP`.
+- The tab lists a model only with runtime 11 or 12 and a runnable asset (`commands/aihub.rs`). Runtime 11 is a QAIRT zip imported with `geniex pull ... --local-path <zip>`. Runtime 12 is a Hugging Face GGUF imported like any other GGUF.
+- Reported on 2026-10-28 (maintainer, live; not re-run here): GenieX runs llama.cpp GGUF and QAIRT Genie bundles (`genie_config.json` plus `ctx-bins`; the QAIRT plugin reads these, `sdk/plugins/qairt/src/llm.cpp` in the checkout). Runtime 6 Genie bundles had no `metadata.json` and failed to load. Runtimes 2 (QNN DLC) and 3 (QNN context binary) failed on import or load. These are not listed in the tab.
+
 ## Local GGUF import rejects `mtp` in weight filenames
 - `geniex pull <repo>:<precision> --model-hub localfs` skips any `.gguf` whose lowercased name contains `mtp` (`is_weight_gguf` in `sdk/model-manager/crates/core/src/manifest_builder.rs`, GenieX checkout, read-only). A repo whose only weight files have `mtp` in the name fails with "has no model files GenieX can load". Meant for separate MTP draft files, but it also hits a model name such as `Tiel-Coder-35B-A3B-MTP-UD-IQ4_XS.gguf`.
 - Verified on the maintainer's machine (reported): renaming the folder and file to drop the `mtp` token made the same import succeed and the model load. Workaround and status: `known-issues.md`.
