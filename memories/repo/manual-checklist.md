@@ -58,3 +58,11 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] Overview "Recent Generation Speeds" shows chat-based figures only; Compare charts use the selected runs; CSV and PNG exports open the save dialog and "open" works on the saved file.
 - [ ] Responsive: sidebar collapses to icon rail ≤860px; model grid 3→2→1 columns; settings rows stack; chat session list hides on narrow widths.
 - [ ] Keyboard: Escape closes model-remove dialog; nav items are real buttons (focusable); sliders are labelled via `aria-labelledby`.
+
+## Qualcomm AI Hub tab (not yet run; uncommitted code)
+
+- [ ] Models > Qualcomm AI Hub lists QAIRT models only; the name filter and the domain chips narrow the list; the list loads with no network error.
+- [ ] Open a model: domain, licence, model card and QAIRT assets load. With the assets unreadable, the page shows "Assets unavailable" and the model info still shows.
+- [ ] With GenieX's `chipset` set to this device's chipset: a universal asset and this chipset's asset download. Another chipset's asset is refused with a "Download failed" toast.
+- [ ] A download runs in the drawer, then "Model ready"; the zip and its `aihub--<id>` folder are gone from Downloads. A failed import keeps the zip, and Resume reuses it.
+- [ ] After a restart, the imported model is listed under Local, and `list_models` reports its `source` as `aihub` (check the value in the dev console).

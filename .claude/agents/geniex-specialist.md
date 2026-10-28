@@ -13,6 +13,8 @@ You are the GenieX CLI specialist for LocalGenie. You cover what `geniex` does, 
 
 ## How the app uses GenieX
 - Model files are not pulled by GenieX from a hub. The app downloads GGUF files from Hugging Face itself (resumable, `.part` files) and imports them with `geniex pull <repo>:<precision> --model-hub localfs --local-path <dir>`. Hub pulls are legacy in this app.
+- Qualcomm AI Hub models: the app downloads a `.zip` for the device's chipset (or a universal one) from the public AI Hub bucket and imports it with `geniex pull qualcomm/<Name>:<precision> --model-hub localfs --local-path <zip>`. GenieX reads the zip in place (`localfs` detects `.zip` as AI Hub) and takes the precision from the zip's metadata, not from the argument. Reference source is read-only at `C:\Work\GenieX`: `sdk/model-manager/crates/core/src/source/localfs.rs`.
+- `geniex model list` shows both Hugging Face and AI Hub models in one table. `--format json` works only for cached models.
 - Listing, removal, cleaning and set-type go through `models::run_geniex`, which has a timeout.
 - The server is started with `geniex serve --host 127.0.0.1:<port>` and optional `--compute`, `--nctx`, `--ngl`, `--origins`, `--keepalive`. It is stopped by killing the tracked PID.
 - Config uses `geniex config get|set|list`.

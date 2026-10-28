@@ -1,6 +1,6 @@
 # LocalGenie
 
-Tauri 2 desktop UI (React 19 + TS frontend in `src/`, Rust backend in `src-tauri/`) for Qualcomm's GenieX CLI, which runs local LLMs on CPU/GPU/NPU. Models are downloaded directly from Hugging Face (GGUF) by the app, then imported through GenieX's local import (`--model-hub localfs`), not hub-pulled; leftover Qualcomm AI Hub code is legacy and will be reworked later. Project is a work in progress.
+Tauri 2 desktop UI (React 19 + TS frontend in `src/`, Rust backend in `src-tauri/`) for Qualcomm's GenieX CLI, which runs local LLMs on CPU/GPU/NPU. Models are downloaded directly by the app (Hugging Face GGUF, and Qualcomm AI Hub QAIRT zips from the public bucket), then imported through GenieX's local import (`--model-hub localfs`), not hub-pulled. The AI Hub tab is a read-only catalog plus zip import; the legacy `list_aihub_models` command is unused. Project is a work in progress.
 
 ## Read first
 - `memories/repo/codebase-map.md` - architecture, commands, events, DB, flows (start here)

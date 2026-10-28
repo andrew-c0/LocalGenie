@@ -14,9 +14,15 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Qwen3.5 thinking probe needs the 1024-token budget: at 200 tokens the closing tag is not reached (reported; the 200 cap is `THINK_MAX_TOKENS`, the stream cap `THINK_STREAM_MAX_TOKENS` = 1024, `capability_scan.rs`).
 - Active badge clipped: in the model selector, a row that is active, not loaded and has four capability icons overflows the 120px capabilities cell (reported; `ModelOptionButton.tsx` and its CSS). Not fixed.
 - Think token for templates that read it (Gemma 4 style, `<|think|>`): sent in the system turn only when the stored GGUF summary has `think_token`, and stripped from every message when thinking is off (code-read; `chat_helpers.rs` tests cover the string handling; uncommitted; runtime-unverified in this sync).
-- Hub facets and the filter panel (uncommitted; code-read, runtime-unverified): the filters are sent as Hub tags and `num_parameters`, and the tag catalogue comes from `/api/models-tags-by-type`. The Hub's tag and filter semantics are not checked against a live response in this sync.
+- Hub facets and the filter panel (committed 2122ed2; code-read, runtime-unverified): the filters are sent as Hub tags and `num_parameters`, and the tag catalogue comes from `/api/models-tags-by-type`. The Hub's tag and filter semantics are not checked against a live response in this sync.
 - Fixed: the local model lookups in `pages/models/useHubModelDetail.ts` matched rows with a substring test (`repoId.includes(name)`). They now match the exact id or the id with a precision suffix (`isSameRepo`).
 - Vision and audio probes match whole words only (`has_word`), so a reply that names the colour or number only inside another word does not count (`capability_scan.rs` tests `names_match_whole_words_only`).
+
+## Qualcomm AI Hub tab (uncommitted; code-read 2026-10-28, runtime-unverified)
+- The catalog, detail, model card, download and import were not run in the app or against the live bucket. The version probe (`resolve_version`) relies on the bucket answering 403 for a missing object, which is stated in a code comment and not checked.
+- The detail page lists the assets of every chipset and does not filter by the device. A download for another chipset is refused by the backend ("This AI Hub asset is for X, and this device is Y"), and an unset GenieX `chipset` allows only universal assets.
+- The download gate is in memory: a zip can be downloaded only after its model page was opened in the same session (`AihubCache.asset_urls`). After a restart, open the page first.
+- `geniex pull qualcomm/<Name>:<precision> --model-hub localfs --local-path <zip>` is the import path; the precision label is taken from the app (`validate_precision`), and whether GenieX accepts the label for a zip was not verified.
 
 ## Chat attachments (code-verified, runtime-unverified)
 - mp3 input is not verified with the server. The chat path sends `input_audio` with `format` `mp3` when the file is an mp3; GenieX accepts the format name and writes a temp file (code-read). The audio scan probe uses wav, so wav is the only format the scan has exercised.

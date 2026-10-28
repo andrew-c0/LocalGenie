@@ -25,7 +25,7 @@ Source: the official GenieX repo (github.com/qualcomm/GenieX, read-only), checke
 - A text-only model rejects `image_url` and audio parts with HTTP 400 `not support content part type` (`cli/server/handler/chat_messages.go`; reported live). The scan's vision and audio probes rely on this.
 - A streamed client disconnect stops generation (reported live).
 - llama.cpp keeps special tokens in the output: Gemma 4 thinking markers (`<|channel>thought` ... `<channel|>`) reach the reply content (reported live). The thinking parser in `shared/thinking-patterns.json` relies on this.
-- `enable_think` and `tools` behaviour was tested live; the settings scan's `thinking` and `toolCalls` probes (`capability_scan.rs`) are the test code. Specific findings are not recorded here.
+- `enable_think` and `tools` behaviour was tested live; the settings scan's `thinking` and `toolCalls` probes (`capability_scan/`) are the test code. Specific findings are not recorded here.
 
 ## Local GGUF import rejects `mtp` in weight filenames
 - `geniex pull <repo>:<precision> --model-hub localfs` skips any `.gguf` whose lowercased name contains `mtp` (`is_weight_gguf` in `sdk/model-manager/crates/core/src/manifest_builder.rs`, GenieX checkout, read-only). A repo whose only weight files have `mtp` in the name fails with "has no model files GenieX can load". Meant for separate MTP draft files, but it also hits a model name such as `Tiel-Coder-35B-A3B-MTP-UD-IQ4_XS.gguf`.
