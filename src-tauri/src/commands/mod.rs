@@ -19,6 +19,7 @@ pub mod hub;
 pub mod import;
 pub mod logs;
 pub mod power;
+pub mod runtimes;
 pub mod models;
 pub mod server;
 pub mod system;

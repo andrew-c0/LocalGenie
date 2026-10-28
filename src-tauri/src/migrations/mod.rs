@@ -18,6 +18,7 @@ mod m20261030_000001_chat_session_overrides;
 mod m20261031_000001_message_kind;
 mod m20261032_000001_message_compute;
 mod m20261033_000001_downloaded_model_facets;
+mod m20261034_000001_create_installed_runtimes;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -42,6 +43,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261031_000001_message_kind::Migration),
             Box::new(m20261032_000001_message_compute::Migration),
             Box::new(m20261033_000001_downloaded_model_facets::Migration),
+            Box::new(m20261034_000001_create_installed_runtimes::Migration),
         ]
     }
 }
@@ -218,8 +220,8 @@ mod tests {
         assert_eq!(msg.token_count, Some(42));
         assert_eq!(msg.prompt_chars, Some(7));
 
-        // Fourteen steps: the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute and downloaded model facets migrations come after this one.
-        Migrator::down(&db, Some(14))
+        // Fifteen steps: the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets and installed runtimes migrations come after this one.
+        Migrator::down(&db, Some(15))
             .await
             .expect("revert stats migration");
         let after_down = columns(db.clone()).await;
@@ -249,8 +251,8 @@ mod tests {
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
         // Put back the old JSON row, then apply the migrations again so it copies it.
-        // Thirteen steps: the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute and downloaded model facets migrations come after the settings one.
-        Migrator::down(&db, Some(13))
+        // Fourteen steps: the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets and installed runtimes migrations come after the settings one.
+        Migrator::down(&db, Some(14))
             .await
             .expect("revert settings migration");
         db.execute(Statement::from_string(
@@ -572,7 +574,8 @@ mod tests {
         assert_eq!(row.facets.as_deref(), Some(facets));
 
         // Reverting drops the column; reapplying brings it back as null for old rows.
-        Migrator::down(&db, Some(1)).await.expect("revert facets");
+        // Two steps: the installed runtimes migration comes after this one.
+        Migrator::down(&db, Some(2)).await.expect("revert facets");
         assert!(!columns(db.clone()).await.iter().any(|c| c == "facets"));
         Migrator::up(&db, None).await.expect("reapply facets");
         let row = downloaded_model::Entity::find_by_id("org/model")
@@ -581,6 +584,36 @@ mod tests {
             .expect("query")
             .expect("row exists");
         assert_eq!(row.facets, None);
+    }
+
+    #[tokio::test]
+    async fn installed_runtimes_keeps_one_row_per_runtime() {
+        use crate::entities::installed_runtime;
+
+        let tmp = TempDb::new("migrate-runtimes");
+        let db = init_database(&tmp.url()).await.expect("migrations apply");
+
+        let row = |version: &str| installed_runtime::ActiveModel {
+            runtime_id: Set("sd-cpp".into()),
+            version: Set(version.into()),
+            install_path: Set(format!("runtimes/sd-cpp/{version}")),
+            source_url: Set("https://github.com/o/r/releases/download/t/a.zip".into()),
+            sha256: Set("ab".into()),
+            backend: Set(None),
+            installed_at: Set(1),
+        };
+        row("1.0").insert(&db).await.expect("first install");
+        assert!(row("1.1").insert(&db).await.is_err(), "runtime_id is the primary key");
+
+        installed_runtime::Entity::delete_by_id("sd-cpp")
+            .exec(&db)
+            .await
+            .expect("forget");
+        assert!(installed_runtime::Entity::find()
+            .all(&db)
+            .await
+            .expect("query")
+            .is_empty());
     }
 
     #[tokio::test]

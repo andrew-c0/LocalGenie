@@ -34,6 +34,10 @@ pub const CLI_CONFIG_SET_TIMEOUT_SECS: u64 = 10;
 /// Timeout for GitHub API calls, in seconds.
 pub const GITHUB_TIMEOUT_SECS: u64 = 10;
 
+/// How long a fetched runtime release stays cached, in seconds. Keeps GitHub's unauthenticated
+/// rate limit (60 requests an hour) out of reach of the Settings page.
+pub const RUNTIME_RELEASE_CACHE_SECS: u64 = 3600;
+
 /// Timeout for downloading the CLI installer, in seconds.
 pub const INSTALLER_DOWNLOAD_TIMEOUT_SECS: u64 = 300;
 

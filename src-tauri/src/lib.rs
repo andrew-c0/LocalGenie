@@ -26,6 +26,7 @@ use commands::hub;
 use commands::import;
 use commands::logs;
 use commands::models;
+use commands::runtimes;
 use commands::server;
 use commands::system;
 use commands::system_usage;
@@ -60,6 +61,7 @@ pub fn run() {
         .manage(commands::AppState::default())
         .manage(aihub::AihubCache::default())
         .manage(commands::download::DownloadRegistry::default())
+        .manage(commands::runtimes::release::ReleaseCache::default())
         .manage(commands::benchmark_runner::BenchmarkRunState::default())
         .invoke_handler(tauri::generate_handler![
             // Model management
@@ -105,6 +107,11 @@ pub fn run() {
             attachments::pick_attachment,
             attachments::read_attachment,
             attachments::reveal_attachment,
+            // Optional runtimes (GitHub releases, side-by-side installs)
+            runtimes::runtime_list,
+            runtimes::runtime_check_update,
+            runtimes::runtime_install,
+            runtimes::runtime_uninstall,
             // Qualcomm AI Hub catalog (read-only)
             aihub::aihub_latest_version,
             aihub::aihub_list_models,

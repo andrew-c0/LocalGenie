@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Instant;
 
 use tauri::{AppHandle, Emitter, State};
 use tokio::io::AsyncWriteExt;
@@ -39,7 +40,7 @@ impl DownloadRegistry {
     }
 
     /// Register a download. Fails if the same id is already downloading.
-    fn register(&self, download_id: &str) -> Result<Arc<AtomicBool>, String> {
+    pub(super) fn register(&self, download_id: &str) -> Result<Arc<AtomicBool>, String> {
         let mut map = self.lock_cancels()?;
         if map.contains_key(download_id) {
             return Err(format!("{download_id} is already downloading"));
@@ -49,10 +50,15 @@ impl DownloadRegistry {
         Ok(flag)
     }
 
-    fn release(&self, download_id: &str) {
+    pub(super) fn release(&self, download_id: &str) {
         if let Ok(mut map) = self.lock_cancels() {
             map.remove(download_id);
         }
+    }
+
+    /// The shared download client (no total timeout).
+    pub(super) fn client(&self) -> &reqwest::Client {
+        &self.client
     }
 }
 
@@ -125,7 +131,7 @@ pub async fn download_file(
     let cancel = registry.register(&download_id)?;
     let result = run_download(
         &app,
-        &registry.client,
+        registry.client(),
         &url,
         &target,
         &download_id,
@@ -137,21 +143,35 @@ pub async fn download_file(
     result
 }
 
-async fn run_download(
-    app: &AppHandle,
+/// Byte counts of one transfer. `total` is `None` when the server does not state a length.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct TransferProgress {
+    pub received: u64,
+    pub total: Option<u64>,
+    pub speed_bps: u64,
+}
+
+/// How a transfer ended. A cancelled transfer keeps its partial file for a later resume.
+#[derive(Debug, PartialEq)]
+pub(super) enum Transfer {
+    Finished(TransferProgress),
+    Cancelled,
+}
+
+/// Streams `url` into `partial`, resuming from the file's length with an HTTP Range request when
+/// the file already exists. `on_progress` is called at most every 1 MiB or 500 ms. `cancel`, when
+/// given, is checked between chunks. The caller renames `partial` once the transfer has finished.
+pub(super) async fn stream_to_partial(
     client: &reqwest::Client,
     url: &str,
-    target: &Path,
-    download_id: &str,
-    file_name: &str,
-    cancel: &AtomicBool,
-) -> Result<String, String> {
-    let partial = target.with_file_name(format!("{file_name}.part"));
-
-    let mut resume_from: u64 = match tokio::fs::metadata(&partial).await {
-        Ok(m) => m.len(),
-        Err(_) => 0,
-    };
+    partial: &Path,
+    cancel: Option<&AtomicBool>,
+    mut on_progress: impl FnMut(TransferProgress),
+) -> Result<Transfer, String> {
+    let mut resume_from: u64 = tokio::fs::metadata(partial)
+        .await
+        .map(|m| m.len())
+        .unwrap_or(0);
 
     let mut req = client.get(url);
     if resume_from > 0 {
@@ -177,42 +197,38 @@ async fn run_download(
     let mut file = if resume_from > 0 {
         tokio::fs::OpenOptions::new()
             .append(true)
-            .open(&partial)
+            .open(partial)
             .await
             .map_err(|e| format!("Failed to open partial file {}: {e}", partial.display()))?
     } else {
-        tokio::fs::File::create(&partial)
+        tokio::fs::File::create(partial)
             .await
             .map_err(|e| format!("Failed to create file {}: {e}", partial.display()))?
     };
 
     let mut received: u64 = resume_from;
     let mut last_emit: u64 = 0;
-    let mut last_emit_at = std::time::Instant::now();
+    let mut last_emit_at = Instant::now();
     let mut speed_bps: f64 = 0.0;
 
     loop {
-        if cancel.load(Ordering::Relaxed) {
-            let _ = app.emit(
-                "download-progress",
-                serde_json::json!({ "id": download_id, "file": file_name, "cancelled": true }),
-            );
-            return Err(format!("Download of {file_name} was cancelled"));
+        if cancel.is_some_and(|flag| flag.load(Ordering::Relaxed)) {
+            return Ok(Transfer::Cancelled);
         }
 
-        let chunk = match resp.chunk().await {
-            Ok(Some(c)) => c,
-            Ok(None) => break,
-            Err(e) => return Err(format!("Download stream error: {e}")),
-        };
+        let chunk = resp
+            .chunk()
+            .await
+            .map_err(|e| format!("Download stream error: {e}"))?;
+        let Some(chunk) = chunk else { break };
 
         file.write_all(&chunk)
             .await
             .map_err(|e| format!("Failed to write file: {e}"))?;
         received += chunk.len() as u64;
 
-        // Emit progress at most every 1 MiB or 500 ms.
-        let now = std::time::Instant::now();
+        // Report progress at most every 1 MiB or 500 ms.
+        let now = Instant::now();
         let elapsed = now.duration_since(last_emit_at).as_secs_f64();
         if received - last_emit >= 1_048_576 || elapsed >= 0.5 {
             if elapsed > 0.05 {
@@ -226,16 +242,11 @@ async fn run_download(
             }
             last_emit = received;
             last_emit_at = now;
-            let _ = app.emit(
-                "download-progress",
-                serde_json::json!({
-                    "id": download_id,
-                    "file": file_name,
-                    "received": received,
-                    "total": total,
-                    "speed": speed_bps as u64,
-                }),
-            );
+            on_progress(TransferProgress {
+                received,
+                total,
+                speed_bps: speed_bps as u64,
+            });
         }
     }
 
@@ -244,23 +255,63 @@ async fn run_download(
         .map_err(|e| format!("Failed to flush file: {e}"))?;
     drop(file);
 
-    tokio::fs::rename(&partial, target)
-        .await
-        .map_err(|e| format!("Failed to finalise download: {e}"))?;
+    Ok(Transfer::Finished(TransferProgress {
+        received,
+        total,
+        speed_bps: speed_bps as u64,
+    }))
+}
 
-    let _ = app.emit(
-        "download-progress",
-        serde_json::json!({
-            "id": download_id,
-            "file": file_name,
-            "received": received,
-            "total": total,
-            "speed": speed_bps as u64,
-            "complete": true,
-        }),
-    );
+async fn run_download(
+    app: &AppHandle,
+    client: &reqwest::Client,
+    url: &str,
+    target: &Path,
+    download_id: &str,
+    file_name: &str,
+    cancel: &AtomicBool,
+) -> Result<String, String> {
+    let partial = target.with_file_name(format!("{file_name}.part"));
+    let emit_progress = |progress: TransferProgress| {
+        let _ = app.emit(
+            "download-progress",
+            serde_json::json!({
+                "id": download_id,
+                "file": file_name,
+                "received": progress.received,
+                "total": progress.total,
+                "speed": progress.speed_bps,
+            }),
+        );
+    };
 
-    Ok(target.to_string_lossy().into_owned())
+    match stream_to_partial(client, url, &partial, Some(cancel), emit_progress).await? {
+        Transfer::Cancelled => {
+            let _ = app.emit(
+                "download-progress",
+                serde_json::json!({ "id": download_id, "file": file_name, "cancelled": true }),
+            );
+            Err(format!("Download of {file_name} was cancelled"))
+        }
+        Transfer::Finished(last) => {
+            tokio::fs::rename(&partial, target)
+                .await
+                .map_err(|e| format!("Failed to finalise download: {e}"))?;
+
+            let _ = app.emit(
+                "download-progress",
+                serde_json::json!({
+                    "id": download_id,
+                    "file": file_name,
+                    "received": last.received,
+                    "total": last.total,
+                    "speed": last.speed_bps,
+                    "complete": true,
+                }),
+            );
+            Ok(target.to_string_lossy().into_owned())
+        }
+    }
 }
 
 /// Known-folder lookup for the user's Downloads directory (Windows).

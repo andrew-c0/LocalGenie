@@ -35,6 +35,8 @@ sysinfo = "0.33"
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 prost = "0.14"
+# Runtime archives (zip only, deflate only: no encryption, bzip2 or zstd codecs).
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [

@@ -5,13 +5,17 @@ use tokio::process::Command;
 
 use super::cli::get_installed_version_timeout;
 use super::constants::{
-    CLI_PROBE_TIMEOUT_SECS, GITHUB_TIMEOUT_SECS, INSTALLER_DOWNLOAD_TIMEOUT_SECS,
-    UPDATE_POLL_ATTEMPTS, UPDATE_POLL_INTERVAL_SECS,
+    CLI_PROBE_TIMEOUT_SECS, INSTALLER_DOWNLOAD_TIMEOUT_SECS, UPDATE_POLL_ATTEMPTS,
+    UPDATE_POLL_INTERVAL_SECS,
+};
+use super::runtimes::release::{
+    fetch_release_json, github_client, parse_release, release_api_url, version_less_than, Release,
+    ReleaseAsset,
 };
 use std::path::PathBuf;
 
-/// GitHub API endpoint for the latest GenieX release.
-const GITHUB_RELEASES_URL: &str = "https://api.github.com/repos/qualcomm/GenieX/releases/latest";
+/// GitHub repository of the GenieX CLI.
+const GENIEX_REPO: &str = "qualcomm/GenieX";
 /// Fallback release page when the API response is missing a URL.
 const RELEASE_BASE_URL: &str = "https://github.com/qualcomm/GenieX/releases";
 /// Version comparison result for the GenieX CLI.
@@ -22,67 +26,20 @@ pub struct UpdateInfo {
     pub update_available: bool,
     pub release_url: String,
 }
-/// Build a reqwest client with the LocalGenie user agent.
-fn github_client(timeout_secs: u64) -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
-        .user_agent("LocalGenie/0.1")
-        .timeout(Duration::from_secs(timeout_secs))
-        .build()
-        .map_err(|e| format!("Failed to build HTTP client: {e}"))
+
+/// The latest GenieX release, read from GitHub (not cached: the CLI check must be live).
+async fn fetch_geniex_release() -> Result<Release, String> {
+    let json = fetch_release_json(&release_api_url(GENIEX_REPO, None)).await?;
+    parse_release(&json, GENIEX_REPO)
 }
 
-/// Fetch the latest GenieX release JSON from the GitHub API.
-async fn fetch_latest_release_json() -> Result<serde_json::Value, String> {
-    let client = github_client(GITHUB_TIMEOUT_SECS)?;
-    let resp = client
-        .get(GITHUB_RELEASES_URL)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to reach GitHub releases: {e}"))?;
-    if !resp.status().is_success() {
-        return Err(format!("GitHub API returned HTTP {}", resp.status()));
-    }
-    resp.json()
-        .await
-        .map_err(|e| format!("Failed to parse GitHub release: {e}"))
-}
-
-/// Latest release tag (without a leading `v`) and its page URL.
-fn release_tag_and_url(json: &serde_json::Value) -> Result<(String, String), String> {
-    let tag = json
-        .get("tag_name")
-        .and_then(|t| t.as_str())
-        .unwrap_or_default()
-        .trim_start_matches('v')
-        .to_string();
-    if tag.is_empty() {
-        return Err("GitHub release response missing tag_name".to_string());
-    }
-    let url = json
-        .get("html_url")
-        .and_then(|u| u.as_str())
-        .unwrap_or(RELEASE_BASE_URL)
-        .to_string();
-    Ok((tag, url))
-}
-
-/// Find the Windows ARM64 CLI installer asset URL in a release's assets list.
-/// Returns the download URL and the suggested local file name.
-fn find_arm64_installer(json: &serde_json::Value) -> Option<(String, String)> {
-    let assets = json.get("assets").and_then(|a| a.as_array())?;
-    assets.iter().find_map(|asset| {
-        let name = asset
-            .get("name")
-            .and_then(|n| n.as_str())
-            .unwrap_or_default();
-        let url = asset
-            .get("browser_download_url")
-            .and_then(|u| u.as_str())
-            .unwrap_or_default();
-        // e.g. "geniex-cli-setup-windows-arm64-v0.5.0.exe"
-        let matches =
-            name.contains("cli-setup") && name.contains("windows-arm64") && name.ends_with(".exe");
-        matches.then(|| (url.to_string(), name.to_string()))
+/// The Windows arm64 CLI installer asset of a release.
+fn find_arm64_installer(assets: &[ReleaseAsset]) -> Option<&ReleaseAsset> {
+    // e.g. "geniex-cli-setup-windows-arm64-v0.5.0.exe"
+    assets.iter().find(|asset| {
+        asset.name.contains("cli-setup")
+            && asset.name.contains("windows-arm64")
+            && asset.name.ends_with(".exe")
     })
 }
 
@@ -136,14 +93,14 @@ pub async fn update_geniex(app: tauri::AppHandle) -> Result<String, String> {
 
     // 1. Resolve the latest release and its Windows arm64 installer.
     emit("Checking for the latest release...".to_string());
-    let json = fetch_latest_release_json().await?;
-    let (latest, _) = release_tag_and_url(&json)?;
-    let (installer_url, installer_name) = find_arm64_installer(&json)
+    let release = fetch_geniex_release().await?;
+    let latest = release.tag.clone();
+    let installer = find_arm64_installer(&release.assets)
         .ok_or_else(|| "No Windows ARM64 CLI installer found in the latest release.".to_string())?;
 
     // 2. Download the installer.
     emit(format!("Downloading GenieX CLI v{latest}..."));
-    let installer_path = download_installer(&app, &installer_url, &installer_name).await?;
+    let installer_path = download_installer(&app, &installer.download_url, &installer.name).await?;
     emit("Download complete. Launching the installer...".to_string());
 
     // 3. Launch the installer for the user to complete.
@@ -172,36 +129,19 @@ pub async fn update_geniex(app: tauri::AppHandle) -> Result<String, String> {
     ))
 }
 
-/// Compare two dotted version strings. Returns `true` if `a < b`.
-fn version_less_than(a: &str, b: &str) -> bool {
-    let parse =
-        |s: &str| -> Vec<u64> { s.split('.').filter_map(|p| p.parse::<u64>().ok()).collect() };
-    let (pa, pb) = (parse(a), parse(b));
-    let len = pa.len().max(pb.len());
-    for i in 0..len {
-        let x = pa.get(i).copied().unwrap_or(0);
-        let y = pb.get(i).copied().unwrap_or(0);
-        if x != y {
-            return x < y;
-        }
-    }
-    false
-}
-
 #[tauri::command]
 pub async fn check_for_cli_update() -> Result<UpdateInfo, String> {
     let current = get_installed_version_timeout(CLI_PROBE_TIMEOUT_SECS)
         .await
         .ok_or_else(|| "GenieX CLI not found or did not respond in time.".to_string())?;
 
-    let json = fetch_latest_release_json().await?;
-    let (latest, release_url) = release_tag_and_url(&json)?;
+    let release = fetch_geniex_release().await?;
 
     Ok(UpdateInfo {
-        update_available: version_less_than(&current, &latest),
+        update_available: version_less_than(&current, &release.tag),
         current_version: current,
-        latest_version: latest,
-        release_url,
+        latest_version: release.tag,
+        release_url: release.page_url,
     })
 }
 
@@ -210,27 +150,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compares_dotted_versions() {
-        assert!(version_less_than("0.3.17", "0.5.0"));
-        assert!(!version_less_than("0.5.0", "0.5.0"));
-        assert!(!version_less_than("1.0", "0.9.9"));
-        assert!(version_less_than("0.5", "0.5.1"));
-    }
-
-    #[test]
     fn finds_arm64_installer_asset() {
-        let json = serde_json::json!({
-            "assets": [
-                { "name": "geniex-cli-setup-windows-x64-v0.5.0.exe", "browser_download_url": "x64" },
-                { "name": "geniex-cli-setup-windows-arm64-v0.5.0.exe", "browser_download_url": "arm" }
-            ]
-        });
-        assert_eq!(
-            find_arm64_installer(&json),
-            Some((
-                "arm".into(),
-                "geniex-cli-setup-windows-arm64-v0.5.0.exe".into()
-            ))
-        );
+        let asset = |name: &str, url: &str| ReleaseAsset {
+            name: name.into(),
+            download_url: url.into(),
+            sha256: None,
+        };
+        let assets = [
+            asset("geniex-cli-setup-windows-x64-v0.5.0.exe", "x64"),
+            asset("geniex-cli-setup-windows-arm64-v0.5.0.exe", "arm"),
+        ];
+        let found = find_arm64_installer(&assets).expect("installer found");
+        assert_eq!(found.download_url, "arm");
+        assert_eq!(found.name, "geniex-cli-setup-windows-arm64-v0.5.0.exe");
     }
 }
