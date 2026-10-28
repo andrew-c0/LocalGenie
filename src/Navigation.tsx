@@ -11,6 +11,7 @@ import LocalModelsBrowserPage from "./pages/LocalModelsBrowserPage/LocalModelsBr
 import AihubModelDetail from "./pages/models/AihubModelDetail/AihubModelDetail";
 import HubModelDetailRoute from "./pages/models/HubModelDetailRoute";
 import OverviewPage from "./pages/OverviewPage/OverviewPage";
+import PlaygroundPage from "./pages/PlaygroundPage/PlaygroundPage";
 import SettingsPage from "./pages/SettingsPage/SettingsPage";
 
 /**
@@ -21,6 +22,7 @@ import SettingsPage from "./pages/SettingsPage/SettingsPage";
  * - `/models` local library, `/models/browse` Hugging Face browser, `/models/aihub` Qualcomm AI Hub
  *   catalog, `/models/aihub/:id` its detail, `/models/:repoId` Hugging Face detail
  * - `/chat` default content, `/chat/:sessionId` one conversation
+ * - `/playground` special models that need their own tools (scaffold)
  * - `/settings/:section`
  * - `/benchmarks/prompts|suites|run|runs|compare` (benchmark area)
  */
@@ -36,6 +38,7 @@ export default function Navigation() {
         <Route path="/models/:repoId" element={<HubModelDetailRoute />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:sessionId" element={<ChatPage />} />
+        <Route path="/playground" element={<PlaygroundPage />} />
         <Route path="/benchmarks" element={<BenchmarkPage />}>
           <Route index element={<Navigate to="prompts" replace />} />
           <Route path="prompts" element={<BenchmarkPrompts />} />

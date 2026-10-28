@@ -1,0 +1,14 @@
+.playground-page__page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--spacingHorizontalL);
+}
+
+.playground-page__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalL);
+  max-width: 1200px;
+  margin: 0 auto;
+}

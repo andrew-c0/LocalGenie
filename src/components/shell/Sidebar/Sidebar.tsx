@@ -1,6 +1,7 @@
 import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
 import { Button, CounterBadge, Tab, TabList } from "@fluentui/react-components";
 import {
+  BeakerRegular,
   ChatRegular,
   CubeRegular,
   GridRegular,
@@ -17,7 +18,8 @@ import "./Sidebar.css";
 const NAV_ITEMS: { to: string; label: string; icon: ReactElement }[] = [
   { to: "/", label: "Overview", icon: <GridRegular /> },
   { to: "/models", label: "Models", icon: <CubeRegular /> },
-  { to: "/chat", label: "Chat & Playground", icon: <ChatRegular /> },
+  { to: "/chat", label: "Chat", icon: <ChatRegular /> },
+  { to: "/playground", label: "Playground", icon: <BeakerRegular /> },
   { to: "/benchmarks", label: "Benchmarks", icon: <PlayCircleRegular /> },
   { to: "/settings", label: "Settings", icon: <SettingsRegular /> },
 ];
