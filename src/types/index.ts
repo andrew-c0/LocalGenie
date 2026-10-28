@@ -287,6 +287,44 @@ export interface UpdateInfo {
   release_url: string;
 }
 
+// Playground runtimes (optional local engines installed from Settings > Runtimes). Camel case, as
+// the Rust side serialises them. `services/runtimes.ts` wraps the commands.
+
+/** One runtime the app knows about. `installedVersion` and `installPath` are null when not installed. */
+export interface RuntimeInfo {
+  id: string;
+  displayName: string;
+  repo: string;
+  installedVersion: string | null;
+  installPath: string | null;
+}
+
+/** Installed and latest release of one runtime, from its GitHub `releases/latest`. */
+export interface RuntimeUpdateInfo {
+  id: string;
+  installedVersion: string | null;
+  latestVersion: string;
+  updateAvailable: boolean;
+  releaseUrl: string;
+}
+
+export type RuntimeInstallStage =
+  | "checking"
+  | "downloading"
+  | "verifying"
+  | "extracting"
+  | "done"
+  | "error";
+
+/** One `runtime-install-progress` event. `total` is 0 when the size is not known. */
+export interface RuntimeInstallProgress {
+  id: string;
+  stage: RuntimeInstallStage;
+  received: number;
+  total: number;
+  message: string;
+}
+
 /** Top-level pages of the Stitch-designed workspace shell. */
 
 export type ComputeTarget = "npu" | "gpu" | "cpu";

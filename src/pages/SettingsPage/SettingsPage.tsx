@@ -2,6 +2,7 @@ import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
 import { Tab, TabList } from "@fluentui/react-components";
 import {
   BrainCircuitRegular,
+  CubeRegular,
   DesktopRegular,
   DocumentBulletListRegular,
 } from "@fluentui/react-icons";
@@ -9,6 +10,7 @@ import type { ReactElement } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AppSettings from "../../components/AppSettings/AppSettings";
 import ModelSettings from "../../components/ModelSettings/ModelSettings";
+import RuntimesCard from "../../components/settings/RuntimesCard/RuntimesCard";
 import ServerLogsCard from "../../components/settings/ServerLogsCard/ServerLogsCard";
 import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
 import { StatusBadge } from "../../components/ui/StatusBadge/StatusBadge";
@@ -16,7 +18,7 @@ import { useModelStore } from "../../stores/modelStore";
 import "./SettingsPage.css";
 import { BodyStrong, Meta, SectionTitle } from "../../components/ui/Typography/Typography";
 
-type SectionId = "app" | "inference" | "logs";
+type SectionId = "app" | "runtimes" | "inference" | "logs";
 
 const SECTIONS: {
   id: SectionId;
@@ -31,6 +33,13 @@ const SECTIONS: {
     desc: "Server port, CLI updates",
     subtitle: "Configure the local GenieX server port and keep the GenieX CLI up to date.",
     icon: <DesktopRegular />,
+  },
+  {
+    id: "runtimes",
+    label: "Runtimes",
+    desc: "Optional local engines",
+    subtitle: "Install, update and remove the optional runtimes used by the Playground.",
+    icon: <CubeRegular />,
   },
   {
     id: "inference",
@@ -104,6 +113,7 @@ export default function SettingsPage() {
         />
 
         {section === "app" && <AppSettings updateInfo={updateInfo} />}
+        {section === "runtimes" && <RuntimesCard />}
         {section === "inference" && <ModelSettings />}
         {section === "logs" && <ServerLogsCard />}
 

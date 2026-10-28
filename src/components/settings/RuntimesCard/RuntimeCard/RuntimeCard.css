@@ -1,0 +1,4 @@
+/* The install path can be long and has no spaces to wrap on. */
+.runtime-card__path {
+  overflow-wrap: anywhere;
+}
