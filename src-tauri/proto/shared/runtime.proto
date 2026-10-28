@@ -1,0 +1,23 @@
+// ---------------------------------------------------------------------
+// Copyright (c) 2025 Qualcomm Technologies, Inc. and/or its subsidiaries.
+// SPDX-License-Identifier: BSD-3-Clause
+// ---------------------------------------------------------------------
+syntax = "proto3";
+
+package qaihm;
+
+enum Runtime {
+  RUNTIME_UNSPECIFIED = 0;
+  RUNTIME_TFLITE = 1;
+  RUNTIME_QNN_DLC = 2;
+  RUNTIME_QNN_CONTEXT_BINARY = 3;
+  RUNTIME_ONNX = 4;
+  RUNTIME_PRECOMPILED_QNN_ONNX = 5;
+  RUNTIME_GENIE = 6;
+  RUNTIME_VOICE_AI = 7;
+  RUNTIME_GENIEX_QAIRT = 11;
+  RUNTIME_GENIEX_LLAMACPP = 12;
+
+  reserved 8, 9, 10;
+  reserved "RUNTIME_LLAMA_CPP_CPU", "RUNTIME_LLAMA_CPP_GPU", "RUNTIME_LLAMA_CPP_NPU";
+}

@@ -32,10 +32,12 @@ export interface ModelCardData {
   paramCount?: number;
   /** GGUF variants available on Hugging Face (only set for search results). */
   ggufFiles?: GGUFFileOption[];
-  /** Optional status badge shown next to the name (e.g. Qualcomm asset compatibility). */
+  /** Optional status badge shown next to the name (e.g. a compatibility label). */
   badge?: { tone: "green" | "default"; label: string };
   /** Repo is gated on Hugging Face (shows a lock). */
   gated?: boolean;
+  /** Short supporting line for a remote card without Hub stats (e.g. a catalog entry). */
+  description?: string;
 }
 
 interface ModelCardProps {
@@ -46,7 +48,7 @@ interface ModelCardProps {
   /** Whether this card represents a locally installed model (vs. a remote HF result). */
   isLocal: boolean;
   /** Open the header model selector (which loads + binds to the active chat). */
-  onOpenSelector: () => void;
+  onOpenSelector?: () => void;
   onRemove?: (name: string) => void;
   /** Navigate to model detail page. Passes `isLocal` so the route can pick the right view. */
   onDetails?: (name: string, isLocal: boolean) => void;
@@ -112,11 +114,12 @@ export function ModelCard({
           </>
         ) : (
           <>
-            {!model.downloaded && (
+            {!model.downloaded && (model.downloads != null || model.likes != null) && (
               <Meta>
                 ⬇ {fmt(model.downloads)} · ❤ {fmt(model.likes)}
               </Meta>
             )}
+            {model.description && <Meta>{model.description}</Meta>}
             {model.facets && (
               <div className="model-card__facets">
                 {model.facets.task && (

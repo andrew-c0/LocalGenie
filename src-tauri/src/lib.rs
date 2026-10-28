@@ -1,3 +1,4 @@
+mod aihub_proto;
 mod commands;
 mod gguf;
 pub mod model_settings;
@@ -7,6 +8,7 @@ mod tray;
 pub mod entities;
 pub mod migrations;
 
+use commands::aihub;
 use commands::attachments;
 use commands::benchmark_files;
 use commands::benchmark_prompts;
@@ -56,6 +58,7 @@ pub fn run() {
             Ok(())
         })
         .manage(commands::AppState::default())
+        .manage(aihub::AihubCache::default())
         .manage(commands::download::DownloadRegistry::default())
         .manage(commands::benchmark_runner::BenchmarkRunState::default())
         .invoke_handler(tauri::generate_handler![
@@ -86,6 +89,7 @@ pub fn run() {
             commands::download::download_file,
             commands::download::cancel_download,
             import::import_gguf,
+            import::import_aihub_zip,
             cli::config_get,
             cli::config_set,
             cli::config_list,
@@ -101,6 +105,11 @@ pub fn run() {
             attachments::pick_attachment,
             attachments::read_attachment,
             attachments::reveal_attachment,
+            // Qualcomm AI Hub catalog (read-only)
+            aihub::aihub_latest_version,
+            aihub::aihub_list_models,
+            aihub::aihub_model_detail,
+            aihub::aihub_model_readme,
             // Benchmark library (prompts and their files)
             benchmark_files::import_benchmark_file,
             benchmark_files::discard_benchmark_file,

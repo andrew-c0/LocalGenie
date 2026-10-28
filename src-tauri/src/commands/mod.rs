@@ -1,3 +1,4 @@
+pub mod aihub;
 pub mod attachments;
 pub mod benchmark_files;
 pub mod benchmark_runner;

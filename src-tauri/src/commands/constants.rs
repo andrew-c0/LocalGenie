@@ -45,3 +45,6 @@ pub const UPDATE_POLL_ATTEMPTS: u32 = 100;
 
 /// Upper bound for a `geniex` CLI call (list, remove, clean, model set-type), in seconds.
 pub const GENIEX_COMMAND_TIMEOUT_SECS: u64 = 180;
+
+/// Timeout for each Qualcomm AI Hub request (manifest, model info, release assets, README), in seconds.
+pub const AIHUB_TIMEOUT_SECS: u64 = 60;

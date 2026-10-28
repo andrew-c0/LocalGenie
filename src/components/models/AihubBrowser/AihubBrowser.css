@@ -1,0 +1,13 @@
+.aihub-browser__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--spacingHorizontalM);
+}
+
+/* The search box fills the toolbar; scoped so it wins over Fluent's fixed SearchBox width. */
+.aihub-browser__toolbar .aihub-browser__search {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}

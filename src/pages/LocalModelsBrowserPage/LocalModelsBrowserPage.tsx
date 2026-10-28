@@ -11,6 +11,7 @@ import {
 } from "@fluentui/react-components";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { AihubBrowser } from "../../components/models/AihubBrowser/AihubBrowser";
 import HubModelBrowser from "../../components/models/HubModelBrowser/HubModelBrowser";
 import { ChipRow } from "../../components/ui/ChipRow/ChipRow";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog/ConfirmDialog";
@@ -38,8 +39,20 @@ import { Body, Meta } from "../../components/ui/Typography/Typography";
 const GGUF_LOOKUP_CONCURRENCY = 4;
 
 /** Browser page for locally installed models, plus Hugging Face search. */
-/** Library tabs; each is its own route (`/models`, `/models/browse`). */
-type LibraryTab = "local" | "all";
+/** Library tabs; each is its own route (`/models`, `/models/browse`, `/models/aihub`). */
+type LibraryTab = "local" | "all" | "aihub";
+
+const TAB_PATHS: Record<LibraryTab, string> = {
+  local: "/models",
+  all: "/models/browse",
+  aihub: "/models/aihub",
+};
+
+const SUBTITLES: Record<LibraryTab, string> = {
+  local: "Models installed on this device, ready to load into the GenieX server.",
+  all: "Search Hugging Face for GGUF models and download them to this device.",
+  aihub: "Qualcomm AI Hub models with QAIRT assets, read from the public catalog.",
+};
 
 export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
   const models = useModelStore((s) => s.models);
@@ -216,7 +229,8 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
   }, [cards, query, activeFamily]);
 
   const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
-    navigate(data.value === "all" ? "/models/browse" : "/models");
+    const next = data.value as LibraryTab;
+    if (TAB_PATHS[next]) navigate(TAB_PATHS[next]);
   };
 
   return (
@@ -225,18 +239,16 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
         <PageHeader
           eyebrow="● MODEL LIBRARY"
           title="Models"
-          subtitle={
-            tab === "local"
-              ? "Models installed on this device, ready to load into the GenieX server."
-              : "Search Hugging Face for GGUF models and download them to this device."
-          }
+          subtitle={SUBTITLES[tab]}
           actions={
-            <Button
-              appearance="secondary"
-              onClick={() => geniex.cleanModels().catch((err: Error) => setError(String(err)))}
-            >
-              Clean Cache
-            </Button>
+            tab === "aihub" ? undefined : (
+              <Button
+                appearance="secondary"
+                onClick={() => geniex.cleanModels().catch((err: Error) => setError(String(err)))}
+              >
+                Clean Cache
+              </Button>
+            )
           }
         />
 
@@ -245,9 +257,12 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
         <TabList selectedValue={tab} onTabSelect={handleTabSelect}>
           <Tab value="local">Local</Tab>
           <Tab value="all">Hugging Face</Tab>
+          <Tab value="aihub">Qualcomm AI Hub</Tab>
         </TabList>
 
-        {tab === "local" ? (
+        {tab === "aihub" ? (
+          <AihubBrowser />
+        ) : tab === "local" ? (
           <>
             <div className="local-models-browser-page__toolbar">
               <SearchBox
@@ -333,7 +348,7 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
             )}
           </>
         ) : (
-          <HubModelBrowser area="all" downloading={activeIds} />
+          <HubModelBrowser downloading={activeIds} />
         )}
 
         {confirmRemove && (

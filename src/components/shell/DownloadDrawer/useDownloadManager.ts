@@ -3,7 +3,12 @@ import { useTauriEvent } from "../../../hooks";
 import { cancelDownload } from "../../../services/download";
 import { useDownloadStore } from "../../../stores/downloadStore";
 import { toast } from "../../../utils/toast";
-import { refreshAfterImport, runGGUFDownload } from "./downloadPipeline";
+import {
+  refreshAfterImport,
+  refreshModelList,
+  runAihubDownload,
+  runGGUFDownload,
+} from "./downloadPipeline";
 
 /**
  * Owns the download pipeline while the drawer is mounted (the header keeps it mounted for the
@@ -16,7 +21,7 @@ export function useDownloadManager() {
   const patchProgress = useDownloadStore((s) => s.patchProgress);
   const setStatus = useDownloadStore((s) => s.setStatus);
   const setImportingProgress = useDownloadStore((s) => s.setImportingProgress);
-  const enqueue = useDownloadStore((s) => s.enqueue);
+  const requeue = useDownloadStore((s) => s.requeue);
   const remove = useDownloadStore((s) => s.remove);
   const clearFinished = useDownloadStore((s) => s.clearFinished);
   /** Entries with a cancel request in flight. */
@@ -26,7 +31,9 @@ export function useDownloadManager() {
   // check makes a repeat call for the same entry a no-op.
   useEffect(() => {
     for (const d of downloads) {
-      if (d.status === "queued" && d.variant) void runGGUFDownload(d.variant);
+      if (d.status !== "queued") continue;
+      if (d.aihub) void runAihubDownload(d.aihub);
+      else if (d.variant) void runGGUFDownload(d.variant);
     }
   }, [downloads]);
 
@@ -41,9 +48,14 @@ export function useDownloadManager() {
   });
 
   useTauriEvent<{ model: string }>("model-pull-complete", (payload) => {
+    const isAihub = useDownloadStore
+      .getState()
+      .downloads.some((d) => d.id === payload.model && d.aihub);
     setStatus(payload.model, "finished");
     toast.success("Model ready", `${payload.model} is imported and available to load.`);
-    void refreshAfterImport(payload.model);
+    // The Rust import writes the AI Hub model's row itself, so only the library list refreshes.
+    if (isAihub) void refreshModelList();
+    else void refreshAfterImport(payload.model);
   });
 
   // File download progress, keyed by download id (= repo id).
@@ -88,5 +100,5 @@ export function useDownloadManager() {
     }
   }, []);
 
-  return { downloads, cancelling, cancel, enqueue, remove, clearFinished };
+  return { downloads, cancelling, cancel, requeue, remove, clearFinished };
 }

@@ -33,7 +33,11 @@ pub async fn import_gguf(
     for name in &sidecar_names {
         validate_file_name(name)?;
     }
-    database::validate_facets(facets.as_deref())?;
+    // This command is the Hugging Face import, so the source is set here, not derived from the name.
+    let facets = Some(database::facets_with_source(
+        facets.as_deref(),
+        database::SOURCE_HF,
+    )?);
     // Not canonicalised: on Windows that adds a `\\?\` prefix the GenieX CLI may not accept.
     let dir = download_dir()
         .ok_or("Could not resolve downloads directory")?
@@ -68,27 +72,7 @@ pub async fn import_gguf(
         serde_json::json!({ "model": repo_id, "message": "Importing into GenieX cache…" }),
     );
 
-    let exe = super::cli::resolve_geniex_executable();
-    let output = tokio::process::Command::new(&exe)
-        .args([
-            "pull",
-            &format!("{repo_id}:{precision}"),
-            "--model-hub",
-            "localfs",
-            "--local-path",
-            &dir.to_string_lossy(),
-        ])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .output()
-        .await
-        .map_err(|e| format!("Failed to spawn `geniex pull`: {e}"))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        eprintln!("geniex pull failed: {stderr}");
-        return Err(format!("`geniex pull` failed: {stderr}"));
-    }
+    pull_local(&dir, &repo_id, &precision).await?;
 
     let repo_url = format!("https://huggingface.co/{repo_id}");
     let readme_url = format!("https://huggingface.co/{repo_id}/raw/main/README.md");
@@ -131,6 +115,134 @@ pub async fn import_gguf(
     Ok(())
 }
 
+/// Import a QAIRT zip that the download step put in `folder` (inside Downloads) into the GenieX
+/// cache as `model_name`, e.g. `qualcomm/Qwen3-0.6B`. GenieX reads the AI Hub `.zip` directly, so
+/// it is not extracted. The zip is removed only after GenieX has copied it. A failed import keeps
+/// it, so a retry reuses the download.
+#[tauri::command]
+pub async fn import_aihub_zip(
+    app: AppHandle,
+    db: State<'_, DatabaseConnection>,
+    folder: String,
+    zip_name: String,
+    model_name: String,
+    precision: String,
+    facets: Option<String>,
+) -> Result<(), String> {
+    validate_file_name(&folder)?;
+    validate_file_name(&zip_name)?;
+    validate_aihub_model_name(&model_name)?;
+    validate_precision(&precision)?;
+    // This command is the AI Hub import, so the source is set here, not derived from the name.
+    let facets = Some(database::facets_with_source(
+        facets.as_deref(),
+        database::SOURCE_AIHUB,
+    )?);
+    let dir = download_dir()
+        .ok_or("Could not resolve downloads directory")?
+        .join(&folder);
+    let zip = dir.join(&zip_name);
+    if !zip.is_file() {
+        return Err(format!("Downloaded file {} is missing", zip.display()));
+    }
+
+    let _ = app.emit(
+        "model-pull-start",
+        serde_json::json!({ "model": model_name }),
+    );
+    let _ = app.emit(
+        "model-pull-progress",
+        serde_json::json!({ "model": model_name, "message": "Importing into GenieX cache…" }),
+    );
+
+    pull_local(&zip, &model_name, &precision).await?;
+
+    // AI Hub zips carry no GGUF header and no repo, so the row has only the name, precision and facets.
+    if let Err(e) = database::upsert_downloaded_model(
+        db,
+        model_name.clone(),
+        Some(precision),
+        None,
+        None,
+        None,
+        None,
+        facets,
+    )
+    .await
+    {
+        eprintln!("Failed to upsert downloaded model metadata: {e}");
+    }
+
+    // GenieX has its copy now. Remove the zip, and the folder when it is empty.
+    remove_variant_files(&dir, &zip_name, &[]).await;
+
+    // Emitted last: listeners read the metadata row as soon as this fires.
+    let _ = app.emit(
+        "model-pull-complete",
+        serde_json::json!({ "model": model_name }),
+    );
+
+    Ok(())
+}
+
+/// `geniex pull <model>:<precision> --model-hub localfs --local-path <path>`. `local_path` is a
+/// folder (HF GGUF or extracted AI Hub) or an AI Hub `.zip`. A failure returns GenieX's stderr.
+async fn pull_local(local_path: &Path, model_name: &str, precision: &str) -> Result<(), String> {
+    let exe = super::cli::resolve_geniex_executable();
+    let output = tokio::process::Command::new(&exe)
+        .args([
+            "pull",
+            &format!("{model_name}:{precision}"),
+            "--model-hub",
+            "localfs",
+            "--local-path",
+            &local_path.to_string_lossy(),
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| format!("Failed to spawn `geniex pull`: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("geniex pull failed: {stderr}");
+        return Err(format!("`geniex pull` failed: {stderr}"));
+    }
+    Ok(())
+}
+
+/// A GenieX AI Hub name: `qualcomm/<display name>`. The display name keeps letters, digits, `.`,
+/// `-` and `_` (for example `Qwen3-0.6B`), with no leading dot.
+fn validate_aihub_model_name(name: &str) -> Result<(), String> {
+    let display = name
+        .strip_prefix("qualcomm/")
+        .ok_or_else(|| format!("Invalid AI Hub model name: {name}"))?;
+    let ok = !display.is_empty()
+        && !display.starts_with('.')
+        && display
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'));
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("Invalid AI Hub model name: {name}"))
+    }
+}
+
+/// A QAIRT precision label such as `W4A16`. It becomes part of the `geniex pull` argument.
+fn validate_precision(precision: &str) -> Result<(), String> {
+    let ok = !precision.is_empty()
+        && precision
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("Invalid precision: {precision}"))
+    }
+}
+
 /// Remove projector files in `dir` that are not in `keep`. GenieX picks one projector from the
 /// folder, so a projector from another variant must not sit next to this variant's.
 fn remove_other_projectors(dir: &Path, keep: &[String]) -> Result<(), String> {
@@ -154,4 +266,27 @@ async fn remove_variant_files(dir: &Path, filename: &str, sidecar_names: &[Strin
         let _ = tokio::fs::remove_file(dir.join(name)).await;
     }
     let _ = tokio::fs::remove_dir(dir).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_aihub_model_name, validate_precision};
+
+    #[test]
+    fn aihub_model_names_are_qualcomm_display_names() {
+        assert!(validate_aihub_model_name("qualcomm/Qwen3-0.6B").is_ok());
+        assert!(validate_aihub_model_name("qualcomm/Qwen3-4B").is_ok());
+        assert!(validate_aihub_model_name("Qwen3-4B").is_err());
+        assert!(validate_aihub_model_name("qualcomm/").is_err());
+        assert!(validate_aihub_model_name("qualcomm/../x").is_err());
+        assert!(validate_aihub_model_name("qualcomm/a:w4a16").is_err());
+        assert!(validate_aihub_model_name("qualcomm/a b").is_err());
+    }
+
+    #[test]
+    fn precision_is_a_plain_label() {
+        assert!(validate_precision("W4A16").is_ok());
+        assert!(validate_precision("").is_err());
+        assert!(validate_precision("W4A16:x").is_err());
+    }
 }

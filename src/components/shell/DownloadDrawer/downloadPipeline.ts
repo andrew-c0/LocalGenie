@@ -1,8 +1,13 @@
+import { importAihubZip } from "../../../services/aihub";
 import * as db from "../../../services/database";
 import { downloadFile, importGGUF } from "../../../services/download";
 import * as geniex from "../../../services/geniex";
 import { fetchContextLength } from "../../../services/hubApi";
-import { type GGUFVariant, useDownloadStore } from "../../../stores/downloadStore";
+import {
+  type AihubDownload,
+  type GGUFVariant,
+  useDownloadStore,
+} from "../../../stores/downloadStore";
 import { useModelStore } from "../../../stores/modelStore";
 import type { DownloadedModelMeta } from "../../../types";
 import { serializeFacets } from "../../../utils/hubModelInfo";
@@ -58,14 +63,50 @@ export async function runGGUFDownload(variant: GGUFVariant): Promise<void> {
     const facets = variant.facets ? serializeFacets(variant.facets) : null;
     await importGGUF(folder, repoId, fileName, main.precision, sidecarNames, facets);
   } catch (err) {
-    const message = String(err);
-    if (message.includes("cancelled")) {
-      store.setStatus(repoId, "cancelled");
-      toast.info("Download cancelled", repoId);
-    } else {
-      store.setStatus(repoId, "error", message);
-      toast.error("Download failed", `${repoId}: ${message}`);
-    }
+    recordFailure(repoId, err);
+  }
+}
+
+/**
+ * Run the AI Hub pipeline for a queued zip: download it into its folder under Downloads, then
+ * import it into the GenieX cache. The backend deletes the zip after a successful import and keeps
+ * it after a failed one, so a retry reuses it.
+ */
+export async function runAihubDownload(download: AihubDownload): Promise<void> {
+  const { modelName, downloadUrl, folder, zipName, precision, facets } = download;
+  const store = useDownloadStore.getState();
+  if (store.downloads.find((d) => d.id === modelName)?.status !== "queued") return;
+  store.setStatus(modelName, "downloading");
+  toast.info("Download started", modelName);
+
+  try {
+    await downloadFile(modelName, downloadUrl, folder, zipName);
+    // The backend emits model-pull-start/complete around the import and sets the status.
+    await importAihubZip(folder, zipName, modelName, precision, serializeFacets(facets));
+  } catch (err) {
+    recordFailure(modelName, err);
+  }
+}
+
+/** Mark a pipeline entry cancelled or failed, and tell the user. */
+function recordFailure(id: string, err: unknown): void {
+  const store = useDownloadStore.getState();
+  const message = String(err);
+  if (message.includes("cancelled")) {
+    store.setStatus(id, "cancelled");
+    toast.info("Download cancelled", id);
+  } else {
+    store.setStatus(id, "error", message);
+    toast.error("Download failed", `${id}: ${message}`);
+  }
+}
+
+/** Refresh the local library from the CLI model list. Best-effort. */
+export async function refreshModelList(): Promise<void> {
+  try {
+    useModelStore.getState().setModels(await geniex.listModels());
+  } catch {
+    // CLI list refresh is best-effort
   }
 }
 
@@ -89,11 +130,7 @@ export async function refreshAfterImport(repoId: string): Promise<void> {
   } catch {
     // metadata is a nice-to-have
   }
-  try {
-    useModelStore.getState().setModels(await geniex.listModels());
-  } catch {
-    // CLI list refresh is best-effort
-  }
+  await refreshModelList();
 }
 
 /**

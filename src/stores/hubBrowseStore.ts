@@ -1,26 +1,12 @@
 import { create } from "zustand";
-import * as geniex from "../services/geniex";
-import {
-  type AssetCompat,
-  type HubModel,
-  type HubQuery,
-  type HubSort,
-  listHubModels,
-  listQualcommModels,
-} from "../services/hubApi";
+import { type HubModel, type HubQuery, type HubSort, listHubModels } from "../services/hubApi";
 import type { BaseRelation } from "../utils/hubModelInfo";
 
-const ALL_PAGE_SIZE = 30;
-/** Qualcomm AI Hub has few chipset-compatible models, so fetch large pages to intersect against. */
-const QUALCOMM_PAGE_SIZE = 100;
+const PAGE_SIZE = 30;
 /** Debounce window for rapid filter/search changes before refetching. */
 const REFRESH_DEBOUNCE_MS = 300;
 /** How long a cached result stays fresh before a background revalidation. */
 const CACHE_TTL_MS = 60_000;
-
-export type HubArea = "all" | "qualcomm";
-/** Which top tab is active on the Models page (survives navigation). */
-export type ModelTab = "local" | HubArea;
 
 /** The facet filters of the browse panel. Every field except `baseOnly` is sent to the Hub. */
 export interface HubFacetFilters {
@@ -55,12 +41,11 @@ export const DEFAULT_FACETS: HubFacetFilters = {
 };
 
 interface HubBrowseState {
-  area: HubArea;
   search: string;
   sort: HubSort;
   ascending: boolean;
   facets: HubFacetFilters;
-  /** Show only GGUF models (library:gguf) — on by default for the All HF area. */
+  /** Show only GGUF models (library:gguf). */
   ggufOnly: boolean;
   setGgufOnly: (v: boolean) => void;
   models: HubModel[];
@@ -70,16 +55,7 @@ interface HubBrowseState {
   /** A filter changed while a page was loading; the next refresh runs once that load ends. */
   refreshQueued: boolean;
   error: string | null;
-  /** AI Hub model names GenieX can pull directly on this chipset (from `geniex model list`). */
-  compatibleNames: Set<string> | null;
-  /**
-   * Asset compatibility per repo. Not populated yet: nothing calls setAssetCompat.
-   */
-  assetCompat: Record<string, AssetCompat>;
-  /** Record a learned compatibility for a repo (called by the detail page). */
-  setAssetCompat: (repoId: string, compat: AssetCompat) => void;
 
-  setArea: (area: HubArea) => void;
   setSearch: (search: string) => void;
   setSort: (sort: HubSort) => void;
   toggleAscending: () => void;
@@ -104,13 +80,13 @@ function queryFor(s: QueryFields, cursor?: string): HubQuery {
       paramMin != null || paramMax != null
         ? { min: paramMin ?? undefined, max: paramMax ?? undefined }
         : undefined,
-    limit: s.area === "qualcomm" ? QUALCOMM_PAGE_SIZE : ALL_PAGE_SIZE,
+    limit: PAGE_SIZE,
     cursor,
   };
 }
 
 /** Fields a query is built from. */
-type QueryFields = Pick<HubBrowseState, "area" | "search" | "sort" | "ascending" | "ggufOnly"> & {
+type QueryFields = Pick<HubBrowseState, "search" | "sort" | "ascending" | "ggufOnly"> & {
   facets: HubFacetFilters;
 };
 
@@ -135,7 +111,7 @@ function hubTags(s: QueryFields): string[] {
   const repo = f.baseRepo.trim();
   // The Hub only filters the tree with a relation and a repo together.
   if (repo) tags.push(`base_model:${f.baseRelation}:${repo}`);
-  if (s.area === "all" && s.ggufOnly) tags.push("gguf");
+  if (s.ggufOnly) tags.push("gguf");
   return tags;
 }
 
@@ -143,14 +119,13 @@ async function fetchPage(
   state: QueryFields & { cursor?: string },
 ): Promise<{ models: HubModel[]; nextCursor: string | null }> {
   const query = queryFor(state, state.cursor);
-  return state.area === "qualcomm" ? listQualcommModels(query) : listHubModels(query);
+  return listHubModels(query);
 }
 
 /** Stable cache key for a first-page query. */
 function cacheKey(s: QueryFields): string {
   const q = queryFor(s);
   return JSON.stringify([
-    s.area,
     q.search ?? "",
     q.sort,
     q.ascending,
@@ -188,7 +163,6 @@ export const useHubBrowseStore = create<HubBrowseState>((set, get) => {
   };
 
   return {
-    area: "qualcomm",
     search: "",
     sort: "downloads",
     ascending: false,
@@ -200,12 +174,7 @@ export const useHubBrowseStore = create<HubBrowseState>((set, get) => {
     isFetchingMore: false,
     refreshQueued: false,
     error: null,
-    compatibleNames: null,
-    assetCompat: {},
-    setAssetCompat: (repoId, compat) =>
-      set((state) => ({ assetCompat: { ...state.assetCompat, [repoId]: compat } })),
 
-    setArea: (area) => changed({ area }),
     setSearch: (search) => set({ search }),
     setSort: (sort) => changed({ sort }),
     toggleAscending: () => changed({ ascending: !get().ascending }),
@@ -247,18 +216,6 @@ export const useHubBrowseStore = create<HubBrowseState>((set, get) => {
             const seq = ++refreshSeq;
             set({ isLoading: true, error: null });
             try {
-              // For the Qualcomm area, load the chipset-compatible names from
-              // `geniex model list` once — used to badge cards and pick the
-              // download flow. All models
-              // are shown regardless.
-              if (s.area === "qualcomm" && !s.compatibleNames) {
-                try {
-                  const aihub = await geniex.listAihubModels();
-                  set({ compatibleNames: new Set(aihub.map((m) => m.name)) });
-                } catch {
-                  set({ compatibleNames: null }); // CLI missing/failed — no badges
-                }
-              }
               const page = await fetchPage(s);
               if (seq !== refreshSeq) {
                 resolve(); // a newer refresh superseded this one
