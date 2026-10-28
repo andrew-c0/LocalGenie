@@ -1,21 +1,9 @@
-import type { AihubAsset } from "../services/aihub";
 import type { HubFacetSummary } from "./hubModelInfo";
 
 /** Readable text for a proto enum label: `GENERATIVE_AI` -> `Generative ai`. */
 export function humanLabel(raw: string): string {
   const text = raw.replace(/_/g, " ").toLowerCase();
   return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-/** Sorted distinct chipsets across the assets (null entries are left out). */
-export function chipsetsOf(assets: AihubAsset[]): string[] {
-  return [...new Set(assets.map((a) => a.chipset).filter((c): c is string => !!c))].sort();
-}
-
-/** Assets for the chosen chipset; `null` means every chipset. */
-export function filterAssetsByChipset(assets: AihubAsset[], chipset: string | null): AihubAsset[] {
-  if (chipset === null) return assets;
-  return assets.filter((a) => a.chipset === chipset);
 }
 
 /** The GenieX name of an AI Hub model: `qualcomm/<display name>`, the name `geniex pull` uses. */
@@ -49,13 +37,36 @@ export function aihubFacets(precision: string): HubFacetSummary {
   };
 }
 
-/** Assets grouped by precision, in the order they arrive (the Rust side sorts them). */
-export function groupByPrecision(assets: AihubAsset[]): [string, AihubAsset[]][] {
-  const groups = new Map<string, AihubAsset[]>();
-  for (const a of assets) {
-    const list = groups.get(a.precision);
-    if (list) list.push(a);
-    else groups.set(a.precision, [a]);
-  }
-  return [...groups.entries()];
+/**
+ * The repo and file of a Hugging Face file URL (`https://huggingface.co/<owner>/<repo>/resolve/main/<file>`),
+ * which is how a llama.cpp GGUF asset is linked. Null for any other URL, such as an AI Hub zip.
+ */
+export function hfFileOf(url: string): { repoId: string; filename: string } | null {
+  const match = /^https:\/\/huggingface\.co\/([^/]+\/[^/]+)\/resolve\/main\/(.+)$/.exec(url);
+  return match ? { repoId: match[1], filename: match[2] } : null;
+}
+
+/** Lower-case words of a chipset name, without the `qualcomm` vendor word. Mirrors the backend. */
+function chipsetWords(name: string): string[] {
+  return name
+    .split(/[^a-z0-9]+/i)
+    .filter((w) => w !== "" && w.toLowerCase() !== "qualcomm")
+    .map((w) => w.toLowerCase());
+}
+
+/**
+ * Whether an asset can be downloaded to a device with this chipset. Mirrors `asset_allowed` in the
+ * backend, which makes the final call. A universal asset (null) is for any device. A chipset asset is
+ * for the device's chipset, whose name may add one word, such as a SKU suffix (`Snapdragon X Elite CRD`).
+ */
+export function isAssetForDevice(
+  assetChipset: string | null,
+  deviceChipset: string | null,
+): boolean {
+  if (assetChipset === null) return true;
+  const asset = chipsetWords(assetChipset);
+  const device = deviceChipset ? chipsetWords(deviceChipset) : [];
+  if (asset.length === 0 || device.length === 0) return false;
+  const samePrefix = asset.every((word, i) => device[i] === word);
+  return samePrefix && (device.length === asset.length || device.length === asset.length + 1);
 }

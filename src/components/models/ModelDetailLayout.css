@@ -1,0 +1,21 @@
+.model-detail__page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--spacingHorizontalL);
+}
+
+.model-detail__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalL);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.model-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+}

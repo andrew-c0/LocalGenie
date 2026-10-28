@@ -18,8 +18,7 @@ function cardOf(entry: AihubCatalogEntry): ModelCardData {
   return {
     name: entry.displayName,
     installed: false,
-    description: entry.useCase ? humanLabel(entry.useCase) : undefined,
-    badge: entry.domain ? { tone: "default", label: humanLabel(entry.domain) } : undefined,
+    description: `QAIRT · ${entry.chipsets.length} chipsets`,
   };
 }
 

@@ -43,9 +43,10 @@ const README_BASE: &str = "https://raw.githubusercontent.com/qualcomm/ai-hub-mod
 pub struct AihubCache {
     version: tokio::sync::OnceCell<String>,
     bodies: Mutex<HashMap<String, Arc<Vec<u8>>>>,
-    /// QAIRT asset URLs of the models opened this session, with the asset's chipset (`None` for an
-    /// asset not tied to one). The only AI Hub URLs `download_file` accepts (`check_asset_download`).
-    asset_urls: Mutex<HashMap<String, Option<String>>>,
+    /// QAIRT asset URLs of the models opened this session, with the chipsets listed for each (`None`
+    /// for an asset not tied to one). A URL can be listed for more than one chipset. The only AI Hub
+    /// URLs `download_file` accepts (`check_asset_download`).
+    asset_urls: Mutex<HashMap<String, Vec<Option<String>>>>,
 }
 
 /// One row of the catalog list. Only QAIRT models appear (see `catalog_entries`).
@@ -100,14 +101,51 @@ pub async fn aihub_latest_version(
     Ok(resolve_version(&state.http_client, &cache).await)
 }
 
-/// QAIRT models in the catalog.
+/// Models in the catalog that have at least one runnable asset. A model whose release assets are
+/// missing or unreadable has nothing to download, so it is left out.
 #[tauri::command]
 pub async fn aihub_list_models(
     state: State<'_, AppState>,
     cache: State<'_, AihubCache>,
 ) -> Result<Vec<AihubCatalogEntry>, String> {
     let manifest = load_manifest(&state.http_client, &cache).await?;
-    Ok(catalog_entries(&manifest))
+    let entries = catalog_entries(&manifest);
+    let candidates: Vec<(String, String)> = entries
+        .iter()
+        .filter_map(|e| {
+            let urls = find_entry(&manifest, &e.id).ok()?.manifest_urls.as_ref()?;
+            Some((e.id.clone(), urls.release_assets.clone()))
+        })
+        .collect();
+    let client = &state.http_client;
+    let cache: &AihubCache = &cache;
+    let runnable: Vec<String> = stream::iter(candidates)
+        .map(|(id, url)| async move {
+            has_runnable_assets(client, cache, &url, &id)
+                .await
+                .then_some(id)
+        })
+        .buffer_unordered(PROBE_CONCURRENCY)
+        .filter_map(|id| async move { id })
+        .collect()
+        .await;
+    Ok(entries
+        .into_iter()
+        .filter(|e| runnable.contains(&e.id))
+        .collect())
+}
+
+/// Whether a model's release assets list at least one runnable file. False when they cannot be read.
+async fn has_runnable_assets(
+    client: &reqwest::Client,
+    cache: &AihubCache,
+    url: &str,
+    id: &str,
+) -> bool {
+    fetch_release_assets(client, cache, url, id)
+        .await
+        .map(|assets| !model_assets(&assets.assets).is_empty())
+        .unwrap_or(false)
 }
 
 /// Model info and QAIRT assets for one model id.
@@ -146,7 +184,10 @@ pub async fn aihub_model_detail(
 fn remember_asset_urls(cache: &AihubCache, assets: &[AihubAsset]) {
     if let Ok(mut map) = cache.asset_urls.lock() {
         for a in assets {
-            map.insert(a.download_url.clone(), a.chipset.clone());
+            let chipsets = map.entry(a.download_url.clone()).or_default();
+            if !chipsets.contains(&a.chipset) {
+                chipsets.push(a.chipset.clone());
+            }
         }
     }
 }
@@ -164,31 +205,54 @@ fn check_remembered(cache: &AihubCache, url: &str, device: Option<&str>) -> Resu
     if !url.ends_with(".zip") {
         return Err(format!("Not an AI Hub asset zip: {url}"));
     }
-    let asset_chipset = cache
+    let chipsets = cache
         .asset_urls
         .lock()
         .map_err(|_| "AI Hub asset list is unavailable".to_string())?
         .get(url)
         .cloned()
         .ok_or_else(|| format!("Not an AI Hub asset of a model opened in LocalGenie: {url}"))?;
-    if asset_allowed(asset_chipset.as_deref(), device) {
-        Ok(())
-    } else {
-        Err(format!(
-            "This AI Hub asset is for {}, and this device is {}",
-            asset_chipset.unwrap_or_default(),
-            device.unwrap_or("not set to a chipset")
-        ))
+    if chipsets.iter().any(|c| asset_allowed(c.as_deref(), device)) {
+        return Ok(());
     }
+    let listed: Vec<&str> = chipsets
+        .iter()
+        .map(|c| c.as_deref().unwrap_or("any chipset"))
+        .collect();
+    Err(format!(
+        "This AI Hub asset is for {}, and this device is {}",
+        listed.join(" or "),
+        device.unwrap_or("not set to a chipset")
+    ))
 }
 
-/// A chipset-specific asset is allowed only for the device's chipset (names compared without case).
-/// An asset with no chipset is allowed for any device. A device with no chipset set matches none.
+/// A chipset-specific asset is allowed only for the device's chipset. An asset with no chipset is
+/// allowed for any device. A device with no chipset set matches none.
 pub fn asset_allowed(asset_chipset: Option<&str>, device: Option<&str>) -> bool {
     match asset_chipset {
         None => true,
-        Some(asset) => device.is_some_and(|d| d.eq_ignore_ascii_case(asset)),
+        Some(asset) => device.is_some_and(|d| same_chipset(asset, d)),
     }
+}
+
+/// Whether the device's chipset name is the asset's chipset. AI Hub names a chipset like
+/// `qualcomm-snapdragon-x-elite`, while GenieX reports its display name (`Snapdragon X Elite CRD`),
+/// so both are compared as lower-case words without the `qualcomm` vendor word. The device name may
+/// add one word after the asset's, such as a SKU suffix.
+fn same_chipset(asset: &str, device: &str) -> bool {
+    let asset_words = chipset_words(asset);
+    let device_words = chipset_words(device);
+    !asset_words.is_empty()
+        && (device_words == asset_words
+            || (device_words.len() == asset_words.len() + 1
+                && device_words.starts_with(&asset_words)))
+}
+
+fn chipset_words(name: &str) -> Vec<String> {
+    name.split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty() && !w.eq_ignore_ascii_case("qualcomm"))
+        .map(str::to_ascii_lowercase)
+        .collect()
 }
 
 /// The chipset this device has: the one in GenieX's config (`chipset`), which GenieX sets from
@@ -412,16 +476,22 @@ fn label(full: &str, prefix: &str) -> String {
     full.strip_prefix(prefix).unwrap_or(full).to_string()
 }
 
-fn has_qairt(runtimes: &[i32]) -> bool {
-    runtimes.contains(&(Runtime::GeniexQairt as i32))
+/// Runtimes GenieX can run from this tab: QAIRT zips (`geniex_qairt`) and llama.cpp GGUF files.
+fn is_supported_runtime(runtime: i32) -> bool {
+    runtime == Runtime::GeniexQairt as i32 || runtime == Runtime::GeniexLlamacpp as i32
 }
 
-/// Only models with QAIRT assets belong in this tab. Unknown enum values become empty strings.
+/// Only models with a runnable asset belong in this tab. Unknown enum values become empty strings.
 pub fn catalog_entries(manifest: &ReleaseManifest) -> Vec<AihubCatalogEntry> {
     manifest
         .models
         .iter()
-        .filter(|m| has_qairt(&m.supported_runtimes))
+        .filter(|m| {
+            m.supported_runtimes
+                .iter()
+                .copied()
+                .any(is_supported_runtime)
+        })
         .map(|m| AihubCatalogEntry {
             id: m.id.clone(),
             display_name: m.display_name.clone(),
@@ -449,11 +519,12 @@ pub fn catalog_entries(manifest: &ReleaseManifest) -> Vec<AihubCatalogEntry> {
         .collect()
 }
 
-/// QAIRT assets only (runtime 12 is llama.cpp GGUF, not a zip), sorted by precision then chipset.
-pub fn qairt_assets(assets: &[AssetDetails]) -> Vec<AihubAsset> {
+/// Runnable assets: QAIRT zips (runtime 11) and llama.cpp GGUF files (runtime 12, a Hugging Face
+/// URL), sorted by precision then chipset.
+pub fn model_assets(assets: &[AssetDetails]) -> Vec<AihubAsset> {
     let mut out: Vec<AihubAsset> = assets
         .iter()
-        .filter(|a| a.runtime == Runtime::GeniexQairt as i32 && !a.download_url.is_empty())
+        .filter(|a| is_supported_runtime(a.runtime) && !a.download_url.is_empty())
         .map(|a| AihubAsset {
             precision: Precision::try_from(a.precision)
                 .map(|p| label(p.as_str_name(), "PRECISION_"))
@@ -494,7 +565,7 @@ fn detail_from(info: &ModelInfo, assets: Option<&ModelReleaseAssets>) -> AihubMo
                 .ok()
                 .map(|c| label(c.as_str_name(), "CALL_TO_ACTION_"))
         }),
-        assets: assets.map(|a| qairt_assets(&a.assets)),
+        assets: assets.map(|a| model_assets(&a.assets)),
     }
 }
 
@@ -545,7 +616,7 @@ mod tests {
     }
 
     #[test]
-    fn qairt_assets_skip_llamacpp_and_empty_urls_and_sort() {
+    fn model_assets_keep_qairt_and_gguf_and_skip_empty_urls() {
         let assets = vec![
             asset(
                 Precision::W4a16,
@@ -567,15 +638,22 @@ mod tests {
             ),
             asset(Precision::W8a16, Runtime::GeniexQairt, Some("chip_a"), ""),
         ];
-        let out = qairt_assets(&assets);
-        assert_eq!(out.len(), 2);
-        assert_eq!(out[0].precision, "W4A16");
-        assert_eq!(out[0].chipset, None);
-        assert_eq!(out[1].chipset.as_deref(), Some("chip_b"));
+        let out = model_assets(&assets);
+        // The empty URL is dropped; the GGUF is kept beside the two zips.
+        assert_eq!(out.len(), 3);
+        assert!(out.iter().any(|a| a.download_url == "https://h/g.zip"));
+        assert!(!out.iter().any(|a| a.download_url.is_empty()));
+        let w4 = out
+            .iter()
+            .filter(|a| a.precision == "W4A16")
+            .collect::<Vec<_>>();
+        assert_eq!(w4.len(), 2);
+        assert_eq!(w4[0].chipset, None);
+        assert_eq!(w4[1].chipset.as_deref(), Some("chip_b"));
     }
 
     #[test]
-    fn catalog_lists_only_qairt_models() {
+    fn catalog_lists_qairt_and_gguf_models_only() {
         let manifest = ReleaseManifest {
             version: "0.65.0".into(),
             platform_url: String::new(),
@@ -598,10 +676,11 @@ mod tests {
             ],
         };
         let entries = catalog_entries(&manifest);
-        assert_eq!(entries.len(), 1);
+        assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].id, "qwen");
         assert_eq!(entries[0].runtimes, vec!["GENIEX_QAIRT", "GENIEX_LLAMACPP"]);
         assert_eq!(entries[0].tags, vec!["LLM"]);
+        assert_eq!(entries[1].id, "gguf_only");
     }
 
     #[test]
@@ -664,6 +743,53 @@ mod tests {
             Some("snapdragon_x2_elite")
         ));
         assert!(!asset_allowed(Some("snapdragon_x2_elite"), None));
+    }
+
+    #[test]
+    fn asset_chipset_matches_genie_display_name_with_sku_suffix() {
+        // AI Hub's name against GenieX's display name, which can carry a SKU word after it.
+        assert!(asset_allowed(
+            Some("qualcomm-snapdragon-x-elite"),
+            Some("Snapdragon X Elite CRD")
+        ));
+        assert!(asset_allowed(
+            Some("qualcomm-snapdragon-8-elite-for-galaxy"),
+            Some("Snapdragon 8 Elite for Galaxy")
+        ));
+        // Different chipsets, including one whose name only starts the same way.
+        assert!(!asset_allowed(
+            Some("qualcomm-snapdragon-x-elite"),
+            Some("Snapdragon X2 Elite")
+        ));
+        assert!(!asset_allowed(
+            Some("qualcomm-snapdragon-8-elite"),
+            Some("Snapdragon 8 Elite for Galaxy")
+        ));
+        assert!(!asset_allowed(
+            Some("qualcomm-snapdragon-x-elite"),
+            Some("Snapdragon X Plus 8 Core")
+        ));
+    }
+
+    #[test]
+    fn shared_asset_url_is_allowed_for_any_chipset_it_is_listed_for() {
+        // AI Hub lists one zip under two chipsets. The zip is for this device, so it is allowed.
+        let cache = AihubCache::default();
+        let shared = "https://qaihub-public-assets.s3.us-west-2.amazonaws.com/a/shared.zip";
+        let chip = |c: &str| AihubAsset {
+            precision: "W4A16".into(),
+            chipset: Some(c.into()),
+            download_url: shared.into(),
+        };
+        remember_asset_urls(
+            &cache,
+            &[
+                chip("qualcomm-snapdragon-x-elite"),
+                chip("qualcomm-snapdragon-x-plus-8-core"),
+            ],
+        );
+        assert!(check_remembered(&cache, shared, Some("Snapdragon X Elite CRD")).is_ok());
+        assert!(check_remembered(&cache, shared, Some("Snapdragon X2 Elite")).is_err());
     }
 
     #[test]
