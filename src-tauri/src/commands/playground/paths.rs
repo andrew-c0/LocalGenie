@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 const MODELS_DIR: &str = "playground-models";
 const PLAYGROUND_DIR: &str = "playground";
 const IMAGES_DIR: &str = "images";
-/// The folder under Pictures that generated images are saved in.
+/// Folder under the app cache dir that holds microphone recordings.
+const RECORDINGS_DIR: &str = "playground-audio";
+/// The folder under Pictures and Music that generated images and speech are saved in.
 const OUTPUT_FOLDER: &str = "LocalGenie";
 const MAX_JOB_ID_CHARS: usize = 64;
 /// How many characters of the prompt go into a file name.
@@ -31,6 +33,16 @@ pub(super) fn legacy_images_root(data_dir: &Path) -> PathBuf {
 /// Where generated images are saved: `<Pictures>/LocalGenie`.
 pub(super) fn output_folder(pictures_dir: &Path) -> PathBuf {
     pictures_dir.join(OUTPUT_FOLDER)
+}
+
+/// Where generated speech is saved: `<Music>/LocalGenie`.
+pub(super) fn speech_output_folder(music_dir: &Path) -> PathBuf {
+    music_dir.join(OUTPUT_FOLDER)
+}
+
+/// Where microphone recordings are kept until they are cleaned up: `<app cache>/playground-audio`.
+pub(super) fn recordings_folder(cache_dir: &Path) -> PathBuf {
+    cache_dir.join(RECORDINGS_DIR)
 }
 
 /// The file name of a generated image without its extension:
@@ -59,15 +71,20 @@ pub(super) fn slug_from_prompt(prompt: &str) -> String {
     }
 }
 
-/// The path for a new PNG called `stem` in `folder`. A name that is taken gets `-2`, `-3` and so
-/// on before the extension, so an existing image is never overwritten.
+/// The path for a new PNG called `stem` in `folder`. See `free_path`.
 pub(super) fn free_output_path(folder: &Path, stem: &str) -> Result<PathBuf, String> {
-    let first = folder.join(format!("{stem}.png"));
+    free_path(folder, stem, "png")
+}
+
+/// The path for a new file called `stem.extension` in `folder`. A name that is taken gets `-2`,
+/// `-3` and so on before the extension, so an existing file is never overwritten.
+pub(super) fn free_path(folder: &Path, stem: &str, extension: &str) -> Result<PathBuf, String> {
+    let first = folder.join(format!("{stem}.{extension}"));
     if !first.exists() {
         return Ok(first);
     }
     (2..=MAX_NAME_SUFFIX)
-        .map(|suffix| folder.join(format!("{stem}-{suffix}.png")))
+        .map(|suffix| folder.join(format!("{stem}-{suffix}.{extension}")))
         .find(|path| !path.exists())
         .ok_or_else(|| format!("No free file name for {stem} in {}", folder.display()))
 }
@@ -86,24 +103,36 @@ pub(super) fn validate_job_id(job_id: &str) -> Result<(), String> {
     }
 }
 
-/// Resolve a path from the webview to a PNG inside one of `allowed_roots`. Symbolic links and `..`
-/// are resolved first, so a path that leaves the folders is refused. A root that does not exist
-/// allows nothing.
+/// Resolve a path from the webview to a PNG inside one of `allowed_roots`. See `resolve_file_path`.
 pub(super) fn resolve_image_path(raw: &str, allowed_roots: &[PathBuf]) -> Result<PathBuf, String> {
-    let candidate = fs::canonicalize(raw).map_err(|_| format!("Image not found: {raw}"))?;
+    resolve_file_path(raw, allowed_roots, "png")
+}
+
+/// Resolve a path from the webview to a file named `.extension` inside one of `allowed_roots`.
+/// Symbolic links and `..` are resolved first, so a path that leaves the folders is refused. A root
+/// that does not exist allows nothing.
+pub(super) fn resolve_file_path(
+    raw: &str,
+    allowed_roots: &[PathBuf],
+    extension: &str,
+) -> Result<PathBuf, String> {
+    let candidate = fs::canonicalize(raw).map_err(|_| format!("File not found: {raw}"))?;
     let inside_a_root = allowed_roots
         .iter()
         .filter_map(|root| fs::canonicalize(root).ok())
         .any(|root| candidate.starts_with(root));
     if !inside_a_root {
-        return Err("Only images made by the Playground can be opened here.".to_string());
+        return Err("Only files made by the Playground can be opened here.".to_string());
     }
-    let is_png = candidate
+    let has_extension = candidate
         .extension()
         .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("png"));
-    if !is_png || !candidate.is_file() {
-        return Err(format!("Not a PNG image: {raw}"));
+        .is_some_and(|ext| ext.eq_ignore_ascii_case(extension));
+    if !has_extension || !candidate.is_file() {
+        return Err(format!(
+            "Not a {} file: {raw}",
+            extension.to_ascii_uppercase()
+        ));
     }
     Ok(candidate)
 }
@@ -269,6 +298,42 @@ mod tests {
         let elsewhere = scratch.path().join("img.png");
         fs::write(&elsewhere, b"png").expect("elsewhere");
         assert!(resolve_image_path(&elsewhere.to_string_lossy(), &roots).is_err());
+    }
+
+    #[test]
+    fn only_wavs_inside_an_allowed_folder_resolve_for_audio() {
+        let scratch = Scratch::new("paths-audio");
+        let speech = scratch.path().join("Music").join("LocalGenie");
+        fs::create_dir_all(&speech).expect("speech folder");
+        fs::write(speech.join("speech-hi-1.wav"), b"RIFF").expect("wav");
+        fs::write(speech.join("notes.png"), b"png").expect("png");
+        fs::write(scratch.path().join("outside.wav"), b"RIFF").expect("outside");
+        let roots = [speech.clone()];
+
+        let inside = speech.join("speech-hi-1.wav");
+        assert!(resolve_file_path(&inside.to_string_lossy(), &roots, "wav").is_ok());
+        assert!(
+            resolve_file_path(&speech.join("notes.png").to_string_lossy(), &roots, "wav").is_err()
+        );
+        let escape = speech.join("..").join("..").join("outside.wav");
+        assert!(resolve_file_path(&escape.to_string_lossy(), &roots, "wav").is_err());
+        assert!(
+            resolve_file_path(&inside.to_string_lossy(), &[], "wav").is_err(),
+            "no roots"
+        );
+    }
+
+    #[test]
+    fn a_folder_with_no_files_of_the_extension_refuses_it() {
+        let scratch = Scratch::new("paths-file-kind");
+        let folder = scratch.path().join("recordings");
+        fs::create_dir_all(&folder).expect("folder");
+        assert!(resolve_file_path(
+            &folder.to_string_lossy(),
+            std::slice::from_ref(&folder),
+            "wav"
+        )
+        .is_err());
     }
 
     #[test]

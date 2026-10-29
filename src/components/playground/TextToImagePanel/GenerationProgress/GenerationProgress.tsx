@@ -10,7 +10,7 @@ import { Flex } from "../../../ui/Flex/Flex";
 import { ProgressBar } from "../../../ui/ProgressBar/ProgressBar";
 import { SurfaceCard } from "../../../ui/SurfaceCard/SurfaceCard";
 import { Meta } from "../../../ui/Typography/Typography";
-import { useNow } from "../useNow";
+import { useNow } from "../../useNow";
 import { GenerationPhaseList } from "./GenerationPhaseList/GenerationPhaseList";
 
 const CLOCK_TICK_MS = 1000;

@@ -91,7 +91,7 @@ fn file_to_delete_at(path: &Path, models_root: &Path) -> Result<Option<FileToDel
 }
 
 /// The partial download of `file`: the same path with `.part` added, as the downloader writes it.
-fn partial_path(file: &Path) -> PathBuf {
+pub(super) fn partial_path(file: &Path) -> PathBuf {
     let mut name = file.as_os_str().to_os_string();
     name.push(".part");
     PathBuf::from(name)

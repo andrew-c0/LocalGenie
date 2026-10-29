@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-const APACHE_LICENSE_URL: &str = "https://www.apache.org/licenses/LICENSE-2.0";
+/// The Apache 2.0 licence text, shown on a model card. Image and speech models both use it.
+pub(super) const APACHE_LICENSE_URL: &str = "https://www.apache.org/licenses/LICENSE-2.0";
 const SD15_LICENSE_URL: &str = "https://huggingface.co/spaces/CompVis/stable-diffusion-license";
 
 /// What a model file is for. A recipe's `flags` map each role to the sd-cli flag that loads it.

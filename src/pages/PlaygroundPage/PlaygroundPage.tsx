@@ -1,18 +1,22 @@
 import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
 import { Tab, TabList } from "@fluentui/react-components";
 import { useState } from "react";
+import SpeechToTextPanel from "../../components/playground/SpeechToTextPanel/SpeechToTextPanel";
 import TextToImagePanel from "../../components/playground/TextToImagePanel/TextToImagePanel";
+import TextToSpeechPanel from "../../components/playground/TextToSpeechPanel/TextToSpeechPanel";
 import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
 import "./PlaygroundPage.css";
 
 const TEXT_TO_IMAGE = "text-to-image";
+const SPEECH_TO_TEXT = "speech-to-text";
+const TEXT_TO_SPEECH = "text-to-speech";
 
-/** Functions of the Playground. Only text to image is built; the rest are listed and disabled. */
+/** Functions of the Playground. Image to image and video are listed and disabled until they are built. */
 const FUNCTIONS: { value: string; label: string; enabled: boolean }[] = [
   { value: TEXT_TO_IMAGE, label: "Text to image", enabled: true },
   { value: "image-to-image", label: "Image to image", enabled: false },
-  { value: "speech-to-text", label: "Speech to text", enabled: false },
-  { value: "text-to-speech", label: "Text to speech", enabled: false },
+  { value: SPEECH_TO_TEXT, label: "Speech to text", enabled: true },
+  { value: TEXT_TO_SPEECH, label: "Text to speech", enabled: true },
   { value: "video", label: "Video", enabled: false },
 ];
 
@@ -48,6 +52,8 @@ export default function PlaygroundPage() {
           ))}
         </TabList>
         {functionId === TEXT_TO_IMAGE && <TextToImagePanel />}
+        {functionId === SPEECH_TO_TEXT && <SpeechToTextPanel />}
+        {functionId === TEXT_TO_SPEECH && <TextToSpeechPanel />}
       </div>
     </div>
   );

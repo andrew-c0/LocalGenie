@@ -53,7 +53,9 @@ Build once, so each runtime is a small descriptor plus an adapter.
 
 **Exit test for phase 0:** install and uninstall a dummy runtime end to end, update with rollback, kill the app and confirm no orphan process.
 
-## 4. Runtime 1: sherpa-onnx (audio) — first
+## 4. Runtime 1: sherpa-onnx (audio) — done on CPU (2026-10-29)
+
+Status: built (working tree, not committed). Spike findings and results are in section 12. The steps below are the original plan.
 
 Why first: official Windows ARM64 binaries exist, small, no build step, covers speech-to-text, text-to-speech, speech enhancement, source separation, voice activity detection.
 
@@ -128,3 +130,13 @@ Each phase ends with entries in `known-issues.md`, `manual-checklist.md`, the co
 - **NPU through GenieX's ggml-hexagon.dll: closed for now.** With a shim exporting `ggml_backend_init`/`ggml_backend_score`, HTP0 registers and the session opens (needs `ADSP_LIBRARY_PATH` pointing at the folder with the skel and catalog), then it access-violates inside GenieX's DLL, even with ggml built from the exact llama.cpp commit (19cce69) and a 64-byte tensor name field. Building the Hexagon host ourselves needs the Hexagon SDK (PKLA). Not pursued.
 - **NPU later (nice to have):** wait for GenieX/Genie text-to-image (QAIRT 2.49 notes an SD 3.0 path), or Qualcomm's QAI AppBuilder (`qualcomm/qai-appbuilder`, v2.51.40, `win_arm64` wheels, SD 1.5 / 2.1 / 3.5 Medium samples), or ONNX Runtime + QNN. `Kreuzhofen/hk-npu-studio` shows the QAI AppBuilder route works but its licence is evaluation-only, so no code reuse.
 - **Known issue (GPU, OpenCL):** a CFG scale above 1 gives a blank white image because sd.cpp's batched CFG forward breaks on the Adreno backend (CFG 1.0 works). Workaround: `--batched-cfg off`, which the app passes for every non-CPU device (`playground/args.rs`). Cause inside ggml-opencl not confirmed. Re-test after each ggml update (fork sync) and drop the flag if fixed. Also: GPU is slower than the CPU in every measurement so far (SD-Turbo 512x512 x4: CPU 25 s, GPU 43 s; SD 1.5 Q4: CPU 57 s at 6 steps, GPU 102 s at 4 steps).
+
+## 12. sherpa-onnx spike and result (2026-10-29)
+
+- **CLI programs are shipped:** the `win-arm64-shared-MT-MinSizeRel` archive (v2.0.1) has command-line programs in `bin/` (`sherpa-onnx-offline`, `sherpa-onnx-offline-tts`), so no helper binary is needed. The app runs one program per job and reads its output.
+- **Speed on CPU (real-time factor, lower is faster):** Whisper tiny.en 0.044, Moonshine base 0.02, Kokoro 0.84.
+- **Models built in:** `whisper-tiny-en`, `moonshine-base-en` (speech to text), `kokoro-int8-multi-v1` (text to speech). Piper and `kokoro-en-v0_19` were dropped: sherpa-onnx 2.0 removed espeak-ng, and those models then need a lexicon.
+- **Compute:** CPU only. The prebuilt ARM64 build has no DirectML, so no GPU. The CLI has QNN options for QNN-format models; untested. NPU stays with the ORT-QNN phase.
+- **Limitation:** the command line cannot carry non-ASCII text, so text to speech converts it to ASCII first.
+- Code facts: `memories/repo/codebase-map.md`; open items: `memories/repo/known-issues.md`.
+

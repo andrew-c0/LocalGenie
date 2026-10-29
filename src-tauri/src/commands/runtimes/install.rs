@@ -1,12 +1,13 @@
 //! Download, verify and extract a runtime release into `<runtimes>/<id>/<version>/`.
 
 use std::fs;
-use std::io::{Read, Write};
-use std::path::{Component, Path, PathBuf};
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use serde::Serialize;
 
+use super::archive;
 use super::release::{Release, ReleaseAsset};
 use super::spec::RuntimeSpec;
 use crate::commands::download::{
@@ -114,7 +115,7 @@ pub(super) async fn install_release(
     })
 }
 
-/// Stream the asset into `<runtime_dir>/downloads/<tag>.zip`, resuming a partial file if one exists.
+/// Stream the asset into `<runtime_dir>/downloads/<asset name>`, resuming a partial file if one exists.
 async fn download_archive(
     client: &reqwest::Client,
     cancel: &AtomicBool,
@@ -159,15 +160,16 @@ async fn download_archive(
 
 /// Unpack `archive` into `staging`, check the program is there, then move it to `install_dir`.
 async fn unpack_into_place(
-    archive: &Path,
+    download: &Path,
     staging: &Path,
     install_dir: &Path,
     spec: &RuntimeSpec,
 ) -> Result<(), String> {
-    let (archive, staging_owned) = (archive.to_path_buf(), staging.to_path_buf());
+    let (download_owned, staging_owned) = (download.to_path_buf(), staging.to_path_buf());
+    let (format, strip) = (spec.archive, spec.strip_top_level);
     tokio::task::spawn_blocking(move || {
         let _ = fs::remove_dir_all(&staging_owned);
-        extract_archive(&archive, &staging_owned)
+        archive::extract(format, &download_owned, &staging_owned, strip)
     })
     .await
     .map_err(|e| format!("Unpacking stopped unexpectedly: {e}"))??;
@@ -226,27 +228,6 @@ pub(super) fn is_runtime_download_url(url: &str, repo: &str) -> bool {
     url.starts_with(&format!("https://github.com/{repo}/releases/download/"))
 }
 
-/// The path an archive entry unpacks to, relative to the destination. Rejects absolute paths,
-/// drive prefixes, `..` and backslashes (zip-slip).
-pub(super) fn archive_entry_path(name: &str) -> Result<PathBuf, String> {
-    let unsafe_entry = || format!("Unsafe path in the archive: {name}");
-    if name.contains('\\') {
-        return Err(unsafe_entry());
-    }
-    let mut relative = PathBuf::new();
-    for component in Path::new(name).components() {
-        match component {
-            Component::Normal(part) => relative.push(part),
-            Component::CurDir => {}
-            _ => return Err(unsafe_entry()),
-        }
-    }
-    if relative.as_os_str().is_empty() {
-        return Err(unsafe_entry());
-    }
-    Ok(relative)
-}
-
 /// Compare the hash of the downloaded file with GitHub's digest. No digest from GitHub means
 /// nothing to compare, so the check passes.
 pub(super) fn verify_sha256(actual: &str, expected: Option<&str>) -> Result<(), String> {
@@ -283,84 +264,10 @@ fn sha256_of_file(path: &Path) -> Result<String, String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-/// Unpack a zip into `dest`. Every entry path is checked before anything is written, and symbolic
-/// links are refused.
-fn extract_archive(archive: &Path, dest: &Path) -> Result<(), String> {
-    let file = fs::File::open(archive).map_err(|e| format!("Cannot open the download: {e}"))?;
-    let mut zip = zip::ZipArchive::new(file)
-        .map_err(|e| format!("The download is not a valid zip archive: {e}"))?;
-    fs::create_dir_all(dest).map_err(|e| format!("Failed to create {}: {e}", dest.display()))?;
-
-    for index in 0..zip.len() {
-        let mut entry = zip
-            .by_index(index)
-            .map_err(|e| format!("Failed to read an archive entry: {e}"))?;
-        let relative = archive_entry_path(entry.name())?;
-        if entry.is_symlink() {
-            return Err(format!(
-                "Archive entry is a symbolic link: {}",
-                entry.name()
-            ));
-        }
-        let out_path = dest.join(&relative);
-        if entry.is_dir() {
-            fs::create_dir_all(&out_path)
-                .map_err(|e| format!("Failed to create {}: {e}", out_path.display()))?;
-            continue;
-        }
-        if let Some(parent) = out_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
-        }
-        let mut out = fs::File::create(&out_path)
-            .map_err(|e| format!("Failed to create {}: {e}", out_path.display()))?;
-        std::io::copy(&mut entry, &mut out)
-            .and_then(|_| out.flush())
-            .map_err(|e| format!("Failed to write {}: {e}", out_path.display()))?;
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::Scratch;
     use super::*;
-
-    /// A fresh directory under the system temp dir, removed when dropped.
-    struct Scratch(PathBuf);
-
-    impl Scratch {
-        fn new(name: &str) -> Self {
-            let nanos = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0);
-            let dir = std::env::temp_dir().join(format!(
-                "localgenie-runtime-{name}-{}-{nanos}",
-                std::process::id()
-            ));
-            fs::create_dir_all(&dir).expect("scratch dir");
-            Self(dir)
-        }
-    }
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
-
-    /// Write a zip with the given entries (name, bytes, unix mode) to `path`.
-    fn write_zip(path: &Path, entries: &[(&str, &[u8])]) {
-        use zip::write::SimpleFileOptions;
-        let file = fs::File::create(path).expect("zip file");
-        let mut writer = zip::ZipWriter::new(file);
-        for (name, bytes) in entries {
-            let options = SimpleFileOptions::default();
-            writer.start_file(*name, options).expect("start entry");
-            writer.write_all(bytes).expect("write entry");
-        }
-        writer.finish().expect("finish zip");
-    }
 
     #[test]
     fn version_must_be_a_safe_folder_name() {
@@ -389,56 +296,6 @@ mod tests {
     }
 
     #[test]
-    fn archive_entries_must_stay_inside_the_destination() {
-        assert_eq!(
-            archive_entry_path("bin/sd-cli.exe").expect("safe"),
-            Path::new("bin").join("sd-cli.exe")
-        );
-        assert!(archive_entry_path("./a.txt").is_ok());
-        for bad in ["../x", "a/../../x", "/abs/x", "..\\x", "a\\..\\x", "", "./"] {
-            assert!(
-                archive_entry_path(bad).is_err(),
-                "{bad:?} should be rejected"
-            );
-        }
-    }
-
-    #[test]
-    fn zip_slip_entry_is_rejected_and_nothing_escapes() {
-        let scratch = Scratch::new("zipslip");
-        let archive = scratch.0.join("evil.zip");
-        let dest = scratch.0.join("out");
-        write_zip(
-            &archive,
-            &[("ok/sd-cli.exe", b"exe"), ("../escape.txt", b"x")],
-        );
-
-        assert!(extract_archive(&archive, &dest).is_err());
-        assert!(
-            !scratch.0.join("escape.txt").exists(),
-            "entry wrote outside the destination"
-        );
-    }
-
-    #[test]
-    fn valid_archive_unpacks_with_its_folders() {
-        let scratch = Scratch::new("unpack");
-        let archive = scratch.0.join("ok.zip");
-        let dest = scratch.0.join("out");
-        write_zip(
-            &archive,
-            &[("sd-cli.exe", b"exe"), ("lib/ggml.dll", b"dll")],
-        );
-
-        extract_archive(&archive, &dest).expect("extracts");
-        assert_eq!(fs::read(dest.join("sd-cli.exe")).expect("exe"), b"exe");
-        assert_eq!(
-            fs::read(dest.join("lib").join("ggml.dll")).expect("dll"),
-            b"dll"
-        );
-    }
-
-    #[test]
     fn digest_must_match_when_github_gives_one() {
         let hash = "ab12";
         assert!(
@@ -455,7 +312,7 @@ mod tests {
     #[test]
     fn sha256_of_a_file_matches_the_known_digest() {
         let scratch = Scratch::new("sha");
-        let file = scratch.0.join("abc.bin");
+        let file = scratch.path().join("abc.bin");
         fs::write(&file, b"abc").expect("write");
         assert_eq!(
             sha256_of_file(&file).expect("hash"),

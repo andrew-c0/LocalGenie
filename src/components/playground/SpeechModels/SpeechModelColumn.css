@@ -1,0 +1,4 @@
+/* The model column keeps a fixed width so the panel beside it takes the rest of the page. */
+.speech-model-column {
+  flex: 0 0 320px;
+}

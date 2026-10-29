@@ -9,8 +9,8 @@ use serde::Serialize;
 use tokio::time::timeout;
 
 use super::args::AUTO_DEVICE;
+use super::program;
 use super::progress::plain_text;
-use super::sd_cli;
 
 const LIST_DEVICES_TIMEOUT: Duration = Duration::from_secs(15);
 /// Lower-case name prefixes of the CPU backend.
@@ -82,7 +82,7 @@ fn parse_device_line(line: &str) -> Option<SdDevice> {
 /// Run `sd-cli --list-devices` and parse what it prints. Stops after 15 seconds; the process is
 /// killed then.
 pub(super) async fn list_devices(program: &Path) -> Result<Vec<SdDevice>, String> {
-    let mut command = sd_cli::command(program)?;
+    let mut command = program::command(program, program::folder_of(program)?);
     command.arg("--list-devices");
     let output = timeout(LIST_DEVICES_TIMEOUT, command.output())
         .await

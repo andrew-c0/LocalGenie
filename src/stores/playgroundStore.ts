@@ -1,12 +1,12 @@
 import { create } from "zustand";
 import type {
-  ImageDownloadState,
   ImageForm,
   ImageJob,
   ImageModel,
   ImageResult,
   PlaygroundDevice,
   PlaygroundDownloadProgress,
+  PlaygroundDownloadState,
   PlaygroundImageProgress,
 } from "../types";
 import {
@@ -29,7 +29,7 @@ interface PlaygroundState {
   devices: PlaygroundDevice[] | null;
   form: ImageForm;
   /** Downloads started in this session, keyed by model id. A finished download is removed. */
-  downloads: Record<string, ImageDownloadState>;
+  downloads: Record<string, PlaygroundDownloadState>;
   job: ImageJob | null;
   result: ImageResult | null;
 

@@ -1,5 +1,5 @@
 import { Button, Spinner } from "@fluentui/react-components";
-import { revealImage } from "../../../../services/playground";
+import { readImage, revealImage } from "../../../../services/playground";
 import type { ImageResult, PlaygroundDevice } from "../../../../types";
 import { errorMessage } from "../../../../utils/errorMessage";
 import { formatDuration } from "../../../../utils/format";
@@ -9,7 +9,7 @@ import { ErrorBanner } from "../../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../../ui/Flex/Flex";
 import { SurfaceCard } from "../../../ui/SurfaceCard/SurfaceCard";
 import { Body, Meta } from "../../../ui/Typography/Typography";
-import { useResultImage } from "../useResultImage";
+import { useSavedDataUrl } from "../../useSavedDataUrl";
 import "./GeneratedImage.css";
 
 interface GeneratedImageProps {
@@ -24,7 +24,7 @@ interface GeneratedImageProps {
 export default function GeneratedImage({ result, devices, onUseSeed }: GeneratedImageProps) {
   const path = result.status === "done" ? result.path : null;
   const seed = result.seed;
-  const image = useResultImage(path);
+  const image = useSavedDataUrl(path, readImage, "Could not open the image.");
 
   const reveal = () => {
     if (!path) return;

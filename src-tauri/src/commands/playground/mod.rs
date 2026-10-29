@@ -1,6 +1,7 @@
-//! Playground text-to-image: the curated model catalogue, model downloads, and stable-diffusion.cpp
-//! image jobs. Models live in `<app data>/playground-models/`. Images are saved in
-//! `<Pictures>/LocalGenie/`; images from before that were saved in `<app data>/playground/images/`
+//! The Playground: text-to-image (stable-diffusion.cpp image jobs) and speech (sherpa-onnx speech to
+//! text and text to speech jobs). Image models live in `<app data>/playground-models/`; speech models
+//! in `<app data>/playground-models/k2-fsa--sherpa-onnx/`. Images are saved in `<Pictures>/LocalGenie/`,
+//! speech in `<Music>/LocalGenie/`. Images from before that were saved in `<app data>/playground/images/`
 //! and still open. Only catalogue URLs are fetched; the webview picks a model by id and never
 //! supplies a URL.
 
@@ -11,8 +12,17 @@ mod image_job;
 mod model_delete;
 mod model_download;
 mod paths;
+mod program;
 mod progress;
-mod sd_cli;
+mod recordings;
+mod speech_args;
+mod speech_catalog;
+pub(crate) mod speech_commands;
+mod speech_delete;
+mod speech_download;
+mod speech_job;
+mod speech_output;
+mod wav;
 
 use std::path::PathBuf;
 
@@ -30,6 +40,7 @@ use devices::SdDevice;
 use image_job::ImageJob;
 pub use image_job::PlaygroundJobs;
 use model_delete::ModelDeletion;
+pub use speech_job::SpeechJobs;
 
 /// Largest image `playground_read_image` returns, in bytes.
 const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
@@ -65,7 +76,7 @@ pub async fn playground_download_model(
 ) -> Result<(), String> {
     let recipe = catalog::find_recipe(&model_id)?;
     let models_root = paths::models_root(&app_data_dir(&app)?);
-    let download_id = model_download::download_id(recipe);
+    let download_id = model_download::download_id(recipe.id);
     let cancel = registry.register(&download_id)?;
     let outcome = model_download::RecipeDownload {
         app: &app,
@@ -106,7 +117,7 @@ pub async fn playground_delete_model(
         );
     }
     // Registering the download id refuses a download of this model until the delete ends.
-    let download_id = model_download::download_id(recipe);
+    let download_id = model_download::download_id(recipe.id);
     registry.register(&download_id).map_err(|_| {
         format!(
             "{} is downloading. Cancel the download before deleting it.",

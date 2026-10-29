@@ -1,28 +1,30 @@
+import { downloadImageModel } from "../../../services/playground";
 import { usePlaygroundStore } from "../../../stores/playgroundStore";
-import { generateBlockedReason } from "../../../utils/playground";
+import { generateBlockedReason, SD_CPP_NAME, SD_CPP_RUNTIME_ID } from "../../../utils/playground";
+import { runtimeMissingMessage } from "../../../utils/playgroundText";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../ui/Flex/Flex";
 import { StateBlock } from "../../ui/StateBlock/StateBlock";
 import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
+import { PlaygroundModelCard } from "../PlaygroundModelCard/PlaygroundModelCard";
+import { RuntimeNotice } from "../RuntimeNotice/RuntimeNotice";
+import { usePlaygroundModelActions } from "../usePlaygroundModelActions";
+import { useRuntimeCheck } from "../useRuntimeCheck";
 import GeneratedImage from "./GeneratedImage/GeneratedImage";
 import GenerateForm from "./GenerateForm/GenerateForm";
 import GenerationProgress from "./GenerationProgress/GenerationProgress";
-import ImageModelCard from "./ImageModelCard/ImageModelCard";
 import { ImageModelDeleteDialog } from "./ImageModelDeleteDialog/ImageModelDeleteDialog";
-import { RuntimeNotice } from "./RuntimeNotice/RuntimeNotice";
 import { useComputeDevices } from "./useComputeDevices";
 import { useImageGeneration } from "./useImageGeneration";
-import { useImageModelActions } from "./useImageModelActions";
 import { useImageModelDelete } from "./useImageModelDelete";
 import { useImageModels } from "./useImageModels";
-import { useSdCppRuntime } from "./useSdCppRuntime";
 import "./TextToImagePanel.css";
 
 /** Text to image: the model list on the left; the form, the running image and the last result on the right. */
 export default function TextToImagePanel() {
   const { models, loadError } = useImageModels();
-  const runtime = useSdCppRuntime();
-  const { download, cancel: cancelDownload } = useImageModelActions();
+  const runtime = useRuntimeCheck(SD_CPP_RUNTIME_ID);
+  const { download, cancel: cancelDownload } = usePlaygroundModelActions(downloadImageModel);
   const { generate, cancel: cancelJob } = useImageGeneration();
   const compute = useComputeDevices(runtime.status);
   const { pendingModel, deletingModelId, requestDelete, cancelDelete, confirmDelete } =
@@ -48,7 +50,9 @@ export default function TextToImagePanel() {
 
   return (
     <Flex direction="column" gap="l">
-      {runtime.status === "missing" && <RuntimeNotice />}
+      {runtime.status === "missing" && (
+        <RuntimeNotice message={runtimeMissingMessage("Image generation", SD_CPP_NAME)} />
+      )}
       {runtime.error && <ErrorBanner message={runtime.error} />}
       {loadError && <ErrorBanner message={loadError} />}
       {!models && !loadError && <StateBlock message="Reading image models…" />}
@@ -57,14 +61,15 @@ export default function TextToImagePanel() {
         <Flex gap="l" align="start">
           <Flex direction="column" gap="m" className="text-to-image__models">
             {models.map((model) => (
-              <ImageModelCard
+              <PlaygroundModelCard
                 key={model.id}
                 model={model}
+                sizeBytes={model.totalBytes}
                 isSelected={model.id === selectedModelId}
                 download={downloads[model.id]}
                 isOtherDownloading={isAnyDownloading}
                 onSelect={() => selectModel(model)}
-                onDownload={() => download(model)}
+                onDownload={() => download(model.id)}
                 isDeleteBusy={deletingModelId === model.id || job?.modelId === model.id}
                 onCancelDownload={() => cancelDownload(model.id)}
                 onDelete={() => requestDelete(model)}

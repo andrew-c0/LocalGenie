@@ -47,9 +47,10 @@ pub(super) enum DownloadEnd {
     Cancelled,
 }
 
-/// The id a model's download is registered under. `cancel_download` takes this id.
-pub(super) fn download_id(recipe: &ImageRecipe) -> String {
-    format!("playground:{}", recipe.id)
+/// The id a model's download is registered under. `cancel_download` takes this id. Image and speech
+/// models share the prefix, so their ids never clash.
+pub(super) fn download_id(model_id: &str) -> String {
+    format!("playground:{model_id}")
 }
 
 /// One run of a recipe's downloads: where the files go, and the flag that cancels them.
@@ -164,7 +165,7 @@ pub(super) fn report_outcome(
     outcome.map(|_| ())
 }
 
-fn emit_progress(app: &AppHandle, event: &DownloadProgressEvent) {
+pub(super) fn emit_progress(app: &AppHandle, event: &DownloadProgressEvent) {
     let _ = app.emit(MODEL_PROGRESS_EVENT, event);
 }
 
@@ -176,7 +177,7 @@ mod tests {
     #[test]
     fn download_id_is_the_model_id_under_the_playground_prefix() {
         let recipe = find_recipe("sd15-q4").expect("sd15");
-        assert_eq!(download_id(recipe), "playground:sd15-q4");
+        assert_eq!(download_id(recipe.id), "playground:sd15-q4");
     }
 
     #[test]

@@ -63,6 +63,7 @@ pub fn run() {
         .manage(commands::download::DownloadRegistry::default())
         .manage(commands::runtimes::release::ReleaseCache::default())
         .manage(playground::PlaygroundJobs::default())
+        .manage(playground::SpeechJobs::default())
         .manage(commands::benchmark_runner::BenchmarkRunState::default())
         .invoke_handler(tauri::generate_handler![
             // Model management
@@ -122,6 +123,16 @@ pub fn run() {
             playground::playground_reveal_image,
             playground::playground_list_devices,
             playground::playground_delete_model,
+            // Playground speech (sherpa-onnx speech to text and text to speech)
+            playground::speech_commands::playground_speech_models,
+            playground::speech_commands::playground_download_speech_model,
+            playground::speech_commands::playground_delete_speech_model,
+            playground::speech_commands::playground_transcribe,
+            playground::speech_commands::playground_synthesize,
+            playground::speech_commands::playground_cancel_speech,
+            playground::speech_commands::playground_store_audio,
+            playground::speech_commands::playground_read_audio,
+            playground::speech_commands::playground_reveal_audio,
             // Qualcomm AI Hub catalog (read-only)
             aihub::aihub_latest_version,
             aihub::aihub_list_models,
@@ -177,6 +188,7 @@ pub fn run() {
                 window
                     .state::<playground::PlaygroundJobs>()
                     .kill_active_sync();
+                window.state::<playground::SpeechJobs>().kill_active_sync();
             }
         })
         .run(tauri::generate_context!())

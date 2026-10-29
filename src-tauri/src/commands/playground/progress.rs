@@ -7,6 +7,8 @@
 use std::collections::VecDeque;
 
 use serde::Serialize;
+use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::sync::mpsc;
 
 /// Lines kept for an error report.
 const TAIL_LINES: usize = 10;
@@ -14,6 +16,8 @@ const TAIL_LINES: usize = 10;
 /// bound.
 const MAX_PENDING_BYTES: usize = 64 * 1024;
 const ESCAPE: char = '\u{1b}';
+/// Read size for each pipe.
+const READ_CHUNK_BYTES: usize = 4096;
 /// Log lines that open a stage, matched against the message text of the line.
 const STAGE_MARKERS: &[(&str, ImagePhase)] = &[
     ("generating image:", ImagePhase::Sampling),
@@ -316,6 +320,40 @@ impl OutputTail {
 
     pub(super) fn to_vec(&self) -> Vec<String> {
         self.lines.iter().cloned().collect()
+    }
+}
+
+/// Send each line of one pipe into `lines`, splitting on `\r` and `\n`.
+pub(super) fn forward_lines<R>(mut reader: R, lines: mpsc::UnboundedSender<String>)
+where
+    R: AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut splitter = LineSplitter::default();
+        let mut buffer = [0u8; READ_CHUNK_BYTES];
+        loop {
+            let read = match reader.read(&mut buffer).await {
+                Ok(read) if read > 0 => read,
+                _ => break,
+            };
+            for line in splitter.push(&buffer[..read]) {
+                if lines.send(line).is_err() {
+                    return;
+                }
+            }
+        }
+        if let Some(rest) = splitter.finish() {
+            let _ = lines.send(rest);
+        }
+    });
+}
+
+/// The headline, then the output lines that came before the failure.
+pub(super) fn with_tail(headline: String, tail: &[String]) -> String {
+    if tail.is_empty() {
+        headline
+    } else {
+        format!("{headline}\n{}", tail.join("\n"))
     }
 }
 

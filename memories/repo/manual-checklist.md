@@ -70,7 +70,7 @@ Run through these checks manually after building or deploying the app. Automated
 
 ## Optional runtimes: Settings > Runtimes (not yet run)
 
-- [ ] The section lists stable-diffusion.cpp as not installed. Opening it reads GitHub once; offline, the card shows an error and the page still works.
+- [ ] The section lists stable-diffusion.cpp and sherpa-onnx as not installed. Opening it reads GitHub once; offline, the card shows an error and the page still works.
 - [ ] Install: the stages show in order (checking, downloading with byte counts, verifying, extracting, done). The card shows the version. `%APPDATA%\com.localgenie.app\runtimes\sd-cpp\<tag>\sd-cli.exe` exists.
 - [ ] The archive installed is the ARM64 one (`windows-arm64` in the zip name), even when GitHub's latest release is an x64-only build.
 - [ ] After a restart the card still shows the installed version.
@@ -93,4 +93,14 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] Leave Playground during a generation and come back: the progress and the result are still there (`PlaygroundRuntime` keeps listening).
 - [ ] Close the window during a generation: the sd-cli process ends.
 - [ ] GPU (only if the build lists one): with CFG 1.0 the image is not blank; with CFG above 1 check for the white-image bug (known-issues). Expect it to be slower than the CPU.
+
+## Playground: speech (not yet run)
+
+- [ ] Install sherpa-onnx in Settings > Runtimes: the `win-arm64 ... MinSizeRel.tar.bz2` archive installs, and `runtimes\sherpa-onnx\<tag>\bin\sherpa-onnx-offline.exe` and `sherpa-onnx-offline-tts.exe` exist. Before that, both speech tabs show the not-installed notice.
+- [ ] Speech to text lists Whisper tiny (English) and Moonshine base (English); Text to speech lists Kokoro v1.0 (int8). Download each (about 110-130 MB): progress, Ready, cancel and resume; delete frees the folder.
+- [ ] Speech to text with a .wav file: the phases show (loading, transcribing), the transcript appears and can be copied. A non-WAV file is refused. Silence gives "No speech was recognised."
+- [ ] Speech to text from the microphone: access is granted, a recording transcribes, a copy exists in the app cache `playground-audio` folder, and recordings older than a day are removed on the next save.
+- [ ] Text to speech: pick a voice and speed, generate; a `.wav` appears in `Music\LocalGenie`, plays in the app, and Reveal in Explorer selects it. Text with accents or curly quotes still speaks (non-ASCII is converted).
+- [ ] Cancel a speech job: the status is cancelled and no process remains. Close the window during a job: the process ends. Leave the tab and return: the progress or result is still there.
+- [ ] Both speech tabs say CPU only; there is no GPU or NPU choice.
 - [ ] A device that sd-cli no longer lists is refused with the "Pick a device from the list" message.

@@ -2,13 +2,18 @@
 //! Archives come from each runtime's GitHub release. Versions live side by side under
 //! `<app data>/runtimes/<id>/<version>/`; the `installed_runtimes` row names the current one.
 
+pub(crate) mod archive;
 pub mod release;
+pub(crate) mod sherpa_cli;
 
 mod install;
 mod spec;
 mod store;
 
-use std::path::{Path, PathBuf};
+#[cfg(test)]
+pub(crate) mod test_support;
+
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -56,15 +61,26 @@ pub struct RuntimeUpdateInfo {
     pub release_url: String,
 }
 
+/// The version folder of the current install of `spec`, or None when it is not installed. The
+/// folder is not checked to exist; the caller does that.
+pub(crate) async fn current_install_dir(
+    db: &DatabaseConnection,
+    spec: &RuntimeSpec,
+) -> Result<Option<PathBuf>, String> {
+    Ok(store::current_install(db, spec.id)
+        .await?
+        .map(|row| PathBuf::from(row.install_path)))
+}
+
 /// Path of the program in the current install of `spec`, or None when it is not installed. The
 /// program is not checked to exist; the caller does that.
 pub(crate) async fn current_program(
     db: &DatabaseConnection,
     spec: &RuntimeSpec,
 ) -> Result<Option<PathBuf>, String> {
-    Ok(store::current_install(db, spec.id)
+    Ok(current_install_dir(db, spec)
         .await?
-        .map(|row| spec.exe_path(Path::new(&row.install_path))))
+        .map(|dir| spec.exe_path(&dir)))
 }
 
 /// Every known runtime with its installed version, if any.
@@ -187,10 +203,9 @@ async fn install_flow(
     ));
 
     let release = match version {
-        Some(tag) => {
-            cache
-                .get_or_fetch(&release_api_url(spec.repo, Some(tag)), spec.repo)
-                .await?
+        Some(version) => {
+            let api_url = release_api_url(spec.repo, Some(&spec.git_tag(version)));
+            cache.get_or_fetch(&api_url, spec.repo).await?
         }
         None => latest_matching_release(cache, spec).await?,
     };

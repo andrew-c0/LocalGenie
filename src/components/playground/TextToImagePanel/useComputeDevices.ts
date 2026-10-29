@@ -3,7 +3,7 @@ import * as playground from "../../../services/playground";
 import { usePlaygroundStore } from "../../../stores/playgroundStore";
 import type { PlaygroundDevice } from "../../../types";
 import { errorMessage } from "../../../utils/errorMessage";
-import type { SdCppStatus } from "../../../utils/playground";
+import type { RuntimeStatus } from "../../../utils/playground";
 
 /** What the Compute field shows and does. */
 export interface ComputeControls {
@@ -21,7 +21,7 @@ export interface ComputeControls {
  * The compute devices, read once the runtime is installed and kept in the Playground store. The
  * refresh button re-reads them, for example after the user changes the runtime build.
  */
-export function useComputeDevices(runtimeStatus: SdCppStatus): ComputeControls {
+export function useComputeDevices(runtimeStatus: RuntimeStatus): ComputeControls {
   const devices = usePlaygroundStore((s) => s.devices);
   const setDevices = usePlaygroundStore((s) => s.setDevices);
   const [error, setError] = useState<string | null>(null);

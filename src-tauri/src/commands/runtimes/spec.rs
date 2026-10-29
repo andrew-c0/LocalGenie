@@ -2,12 +2,16 @@
 
 use std::path::{Path, PathBuf};
 
+use super::archive::ArchiveFormat;
 use super::release::{parse_release_list, Release, ReleaseAsset};
 
 /// Our fork of stable-diffusion.cpp. Upstream ships no Windows ARM64 build, so the fork's release
 /// workflow publishes one. A runtime with an official ARM64 release points at the official repo
 /// instead; a runtime without one gets its own fork or repo.
 pub const SD_CPP_REPO: &str = "andrew-c0/stable-diffusion.cpp";
+
+/// Upstream sherpa-onnx, which publishes Windows ARM64 builds in its own releases.
+pub const SHERPA_ONNX_REPO: &str = "k2-fsa/sherpa-onnx";
 
 /// One optional runtime the app can install.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -19,8 +23,16 @@ pub struct RuntimeSpec {
     pub repo: &'static str,
     /// Every part must appear in the asset name.
     pub asset_contains: &'static [&'static str],
+    /// No part may appear in the asset name (for example a debug or library-only build).
+    pub asset_excludes: &'static [&'static str],
     /// The asset name must end with this.
     pub asset_suffix: &'static str,
+    /// How the downloaded archive is packed.
+    pub archive: ArchiveFormat,
+    /// Drop the archive's single top-level folder when unpacking.
+    pub strip_top_level: bool,
+    /// Text in front of a version to make its git tag (`2.0.1` is tagged `v2.0.1`), or empty.
+    pub tag_prefix: &'static str,
     /// Path of the program inside an installed version folder.
     pub exe_relative_path: &'static str,
 }
@@ -31,12 +43,40 @@ pub const SD_CPP: RuntimeSpec = RuntimeSpec {
     display_name: "stable-diffusion.cpp",
     repo: SD_CPP_REPO,
     asset_contains: &["sd", "windows-arm64"],
+    asset_excludes: &[],
     asset_suffix: ".zip",
+    archive: ArchiveFormat::Zip,
+    strip_top_level: false,
+    tag_prefix: "",
     exe_relative_path: "sd-cli.exe",
 };
 
+/// sherpa-onnx (speech recognition and synthesis), the shared Windows ARM64 build with the
+/// MinSizeRel configuration and the static C runtime. The archive has one top-level folder, which
+/// is dropped on unpack, so the programs sit in `bin/`.
+pub const SHERPA_ONNX: RuntimeSpec = RuntimeSpec {
+    id: "sherpa-onnx",
+    display_name: "sherpa-onnx",
+    repo: SHERPA_ONNX_REPO,
+    asset_contains: &["sherpa-onnx-v", "win-arm64"],
+    asset_excludes: &[
+        "-lib",
+        "-no-tts",
+        "-jni",
+        "static-",
+        "Debug",
+        "Release",
+        "RelWithDebInfo",
+    ],
+    asset_suffix: "-shared-MT-MinSizeRel.tar.bz2",
+    archive: ArchiveFormat::TarBz2,
+    strip_top_level: true,
+    tag_prefix: "v",
+    exe_relative_path: "bin/sherpa-onnx-offline.exe",
+};
+
 /// Every runtime the app knows about, in display order.
-pub const RUNTIME_SPECS: &[RuntimeSpec] = &[SD_CPP];
+pub const RUNTIME_SPECS: &[RuntimeSpec] = &[SD_CPP, SHERPA_ONNX];
 
 /// The spec with this id, or an error naming the unknown id.
 pub fn find_spec(id: &str) -> Result<&'static RuntimeSpec, String> {
@@ -50,7 +90,13 @@ impl RuntimeSpec {
     /// True when an asset name is this runtime's archive.
     pub fn matches_asset(&self, name: &str) -> bool {
         self.asset_contains.iter().all(|part| name.contains(part))
+            && !self.asset_excludes.iter().any(|part| name.contains(part))
             && name.ends_with(self.asset_suffix)
+    }
+
+    /// The git tag of a version, for example `v2.0.1` for version `2.0.1` of sherpa-onnx.
+    pub fn git_tag(&self, version: &str) -> String {
+        format!("{}{version}", self.tag_prefix)
     }
 
     /// The archive asset of a release, if it has one.
@@ -274,5 +320,111 @@ mod tests {
     fn exe_is_resolved_inside_the_version_folder() {
         let dir = Path::new("base").join("sd-cpp").join("1.0");
         assert_eq!(SD_CPP.exe_path(&dir), dir.join("sd-cli.exe"));
+    }
+
+    const SHERPA_ARM64: &str = "sherpa-onnx-v2.0.1-win-arm64-shared-MT-MinSizeRel.tar.bz2";
+
+    #[test]
+    fn sherpa_picks_the_arm64_minsizerel_archive_exactly() {
+        let release = release_with(&[
+            "sherpa-onnx-v2.0.1-win-x64-shared-MT-MinSizeRel.tar.bz2",
+            "sherpa-onnx-v2.0.1-win-arm64-shared-MT-MinSizeRel-lib.tar.bz2",
+            "sherpa-onnx-v2.0.1-win-arm64-shared-MT-MinSizeRel-no-tts.tar.bz2",
+            SHERPA_ARM64,
+        ]);
+        let picked = SHERPA_ONNX.pick_asset(&release).expect("asset found");
+        assert_eq!(picked.name, SHERPA_ARM64);
+    }
+
+    #[test]
+    fn sherpa_rejects_the_other_builds() {
+        for name in [
+            "sherpa-onnx-v2.0.1-win-arm64-shared-MT-MinSizeRel-lib.tar.bz2",
+            "sherpa-onnx-v2.0.1-win-arm64-shared-MT-MinSizeRel-no-tts.tar.bz2",
+            "sherpa-onnx-v2.0.1-win-arm64-shared-MT-MinSizeRel-jni.tar.bz2",
+            "sherpa-onnx-v2.0.1-win-arm64-static-MT-MinSizeRel.tar.bz2",
+            "sherpa-onnx-v2.0.1-win-arm64-shared-MT-Debug.tar.bz2",
+            "sherpa-onnx-v2.0.1-win-arm64-shared-MT-Release.tar.bz2",
+            "sherpa-onnx-v2.0.1-win-arm64-shared-MT-RelWithDebInfo.tar.bz2",
+            "sherpa-onnx-v2.0.1-win-arm64-shared-MD-MinSizeRel.tar.bz2",
+            "sherpa-onnx-v2.0.1-win-arm64-shared-MT-MinSizeRel.zip",
+            "sherpa-onnx-v2.0.1-win-x64-shared-MT-MinSizeRel.tar.bz2",
+            "sherpa-onnx-v2.0.1-linux-aarch64-shared-MT-MinSizeRel.tar.bz2",
+            "sherpa-onnx-v2.0.1-win-arm64-shared-MT-MinSizeRel.tar.bz2.sha256",
+        ] {
+            assert!(
+                !SHERPA_ONNX.matches_asset(name),
+                "{name} should be rejected"
+            );
+        }
+        assert!(SHERPA_ONNX.matches_asset(SHERPA_ARM64));
+    }
+
+    #[test]
+    fn sherpa_has_no_archive_when_only_other_platforms_are_listed() {
+        let release = release_with(&[
+            "sherpa-onnx-v2.0.1-win-x64-shared-MT-MinSizeRel.tar.bz2",
+            "sherpa-onnx-v2.0.1-linux-x64-shared.tar.bz2",
+        ]);
+        assert!(SHERPA_ONNX.pick_asset(&release).is_none());
+    }
+
+    #[test]
+    fn sherpa_newest_release_skips_releases_for_other_platforms() {
+        let release = |tag: &str, published_at: &str, names: &[&str]| {
+            serde_json::json!({
+                "tag_name": tag,
+                "draft": false,
+                "prerelease": false,
+                "published_at": published_at,
+                "html_url": format!("https://github.com/k2-fsa/sherpa-onnx/releases/tag/{tag}"),
+                "assets": names
+                    .iter()
+                    .map(|name| serde_json::json!({
+                        "name": name,
+                        "browser_download_url": format!("https://github.com/k2-fsa/sherpa-onnx/releases/download/{tag}/{name}"),
+                    }))
+                    .collect::<Vec<_>>(),
+            })
+        };
+        let list = serde_json::json!([
+            release(
+                "v2.0.2",
+                "2026-10-28T09:00:00Z",
+                &["sherpa-onnx-v2.0.2-linux-x64-shared.tar.bz2"]
+            ),
+            release(
+                "v2.0.1",
+                "2026-10-20T09:00:00Z",
+                &[
+                    SHERPA_ARM64,
+                    "sherpa-onnx-v2.0.1-win-x64-shared-MT-MinSizeRel.tar.bz2"
+                ]
+            ),
+        ]);
+        let newest = SHERPA_ONNX.newest_release(&list).expect("an ARM64 release");
+        assert_eq!(
+            newest.tag, "2.0.1",
+            "the `v` prefix is dropped from the tag"
+        );
+        assert_eq!(SHERPA_ONNX.git_tag(&newest.tag), "v2.0.1");
+    }
+
+    #[test]
+    fn sherpa_program_is_in_bin_and_sd_cpp_tags_have_no_prefix() {
+        let dir = Path::new("base").join("sherpa-onnx").join("2.0.1");
+        assert_eq!(
+            SHERPA_ONNX.exe_path(&dir),
+            dir.join("bin").join("sherpa-onnx-offline.exe")
+        );
+        assert_eq!(SD_CPP.git_tag("master-1024-77b72a2"), "master-1024-77b72a2");
+    }
+
+    #[test]
+    fn finds_sherpa_by_id() {
+        assert_eq!(
+            find_spec("sherpa-onnx").map(|s| s.repo),
+            Ok(SHERPA_ONNX_REPO)
+        );
     }
 }

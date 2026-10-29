@@ -1,12 +1,12 @@
 import { Button, Card } from "@fluentui/react-components";
-import type { ImageDownloadState, ImageModel } from "../../../../types";
-import { formatBytes } from "../../../../utils/format";
-import { ErrorBanner } from "../../../ui/ErrorBanner/ErrorBanner";
-import { ExternalLink } from "../../../ui/ExternalLink/ExternalLink";
-import { Flex } from "../../../ui/Flex/Flex";
-import type { BadgeTone } from "../../../ui/StatusBadge/StatusBadge";
-import { StatusBadge } from "../../../ui/StatusBadge/StatusBadge";
-import { Body, CardTitle, Meta } from "../../../ui/Typography/Typography";
+import type { PlaygroundDownloadState } from "../../../types";
+import { formatBytes } from "../../../utils/format";
+import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
+import { ExternalLink } from "../../ui/ExternalLink/ExternalLink";
+import { Flex } from "../../ui/Flex/Flex";
+import type { BadgeTone } from "../../ui/StatusBadge/StatusBadge";
+import { StatusBadge } from "../../ui/StatusBadge/StatusBadge";
+import { Body, CardTitle, Meta } from "../../ui/Typography/Typography";
 import { ModelDownloadProgress } from "./ModelDownloadProgress";
 
 type ModelStatus = "ready" | "downloading" | "notDownloaded";
@@ -17,19 +17,38 @@ const STATUS_BADGE: Record<ModelStatus, { tone: BadgeTone; label: string }> = {
   notDownloaded: { tone: "default", label: "Not downloaded" },
 };
 
-function modelStatusOf(model: ImageModel, isDownloading: boolean): ModelStatus {
+function modelStatusOf(downloaded: boolean, isDownloading: boolean): ModelStatus {
   if (isDownloading) return "downloading";
-  return model.downloaded ? "ready" : "notDownloaded";
+  return downloaded ? "ready" : "notDownloaded";
 }
 
-interface ImageModelCardProps {
-  model: ImageModel;
+/** What every Playground model card shows. Image and speech models both have these fields. */
+export interface PlaygroundModelInfo {
+  name: string;
+  description: string;
+  license: string;
+  licenseUrl: string;
+  downloaded: boolean;
+}
+
+/** One extra line on a card, such as the languages a speech model reads. */
+export interface ModelDetail {
+  label: string;
+  value: string;
+}
+
+interface PlaygroundModelCardProps {
+  model: PlaygroundModelInfo;
+  /** Size of all the model's files, in bytes. */
+  sizeBytes: number;
+  /** Extra lines between the description and the size. */
+  details?: ModelDetail[];
   isSelected: boolean;
   /** This model's download, if one was started in this session. */
-  download: ImageDownloadState | undefined;
+  download: PlaygroundDownloadState | undefined;
   /** Another model is downloading. Downloads run one at a time. */
   isOtherDownloading: boolean;
-  /** A generation uses this model, or it is being deleted. Delete is off then. */
+  /** A job uses this model, or it is being deleted. Delete is off then. */
   isDeleteBusy: boolean;
   onSelect: () => void;
   onDownload: () => void;
@@ -37,9 +56,11 @@ interface ImageModelCardProps {
   onDelete: () => void;
 }
 
-/** One image model: what it is, its licence and size, its download state and the actions for it. */
-export default function ImageModelCard({
+/** One Playground model: what it is, its licence and size, its download state and the actions for it. */
+export function PlaygroundModelCard({
   model,
+  sizeBytes,
+  details = [],
   isSelected,
   download,
   isOtherDownloading,
@@ -48,9 +69,9 @@ export default function ImageModelCard({
   onDownload,
   onCancelDownload,
   onDelete,
-}: ImageModelCardProps) {
+}: PlaygroundModelCardProps) {
   const isDownloading = download?.status === "downloading";
-  const badge = STATUS_BADGE[modelStatusOf(model, isDownloading)];
+  const badge = STATUS_BADGE[modelStatusOf(model.downloaded, isDownloading)];
 
   return (
     <Card selected={isSelected}>
@@ -61,9 +82,15 @@ export default function ImageModelCard({
         </Flex>
         <Body>{model.description}</Body>
 
+        {details.map((detail) => (
+          <Flex key={detail.label} justify="between" align="center" gap="m">
+            <Meta>{detail.label}</Meta>
+            <Body>{detail.value}</Body>
+          </Flex>
+        ))}
         <Flex justify="between" align="center" gap="m">
           <Meta>Total size</Meta>
-          <Body>{formatBytes(model.totalBytes)}</Body>
+          <Body>{formatBytes(sizeBytes)}</Body>
         </Flex>
         <Flex justify="between" align="center" gap="m">
           <Meta>Licence</Meta>

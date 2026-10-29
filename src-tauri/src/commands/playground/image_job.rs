@@ -10,19 +10,18 @@ use std::time::Instant;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Child;
 use tokio::sync::mpsc;
 
-use super::progress::{plain_text, ImageProgressEvent, LineSplitter, OutputTail, ProgressTracker};
-use super::sd_cli;
+use super::program;
+use super::progress::{
+    forward_lines, plain_text, with_tail, ImageProgressEvent, OutputTail, ProgressTracker,
+};
 use super::JobStatus;
 use crate::commands::server::{kill_process, kill_process_sync};
 
 const IMAGE_PROGRESS_EVENT: &str = "playground-image-progress";
 const IMAGE_DONE_EVENT: &str = "playground-image-done";
-/// Read size for each pipe.
-const READ_CHUNK_BYTES: usize = 4096;
 
 /// Everything `start` needs to run one image.
 #[derive(Debug)]
@@ -145,7 +144,7 @@ pub(super) async fn cancel_job(jobs: &PlaygroundJobs, job_id: &str) -> Result<()
 
 /// Start sd-cli with piped output, from its own folder.
 fn spawn_sd_cli(program: &Path, args: &[String]) -> Result<Child, String> {
-    let mut command = sd_cli::command(program)?;
+    let mut command = program::command(program, program::folder_of(program)?);
     command
         .args(args)
         .stdout(Stdio::piped())
@@ -191,31 +190,6 @@ async fn run_job(app: AppHandle, mut child: Child, job: ImageJob, cancel: Arc<At
     let _ = app.emit(IMAGE_DONE_EVENT, &event);
 }
 
-/// Send each line of one pipe into `lines`, splitting on `\r` and `\n`.
-fn forward_lines<R>(mut reader: R, lines: mpsc::UnboundedSender<String>)
-where
-    R: AsyncRead + Unpin + Send + 'static,
-{
-    tokio::spawn(async move {
-        let mut splitter = LineSplitter::default();
-        let mut buffer = [0u8; READ_CHUNK_BYTES];
-        loop {
-            let read = match reader.read(&mut buffer).await {
-                Ok(read) if read > 0 => read,
-                _ => break,
-            };
-            for line in splitter.push(&buffer[..read]) {
-                if lines.send(line).is_err() {
-                    return;
-                }
-            }
-        }
-        if let Some(rest) = splitter.finish() {
-            let _ = lines.send(rest);
-        }
-    });
-}
-
 /// How a job ended.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum ImageOutcome {
@@ -249,15 +223,6 @@ pub(super) fn image_outcome(
         }
     };
     ImageOutcome::Failed(with_tail(headline, tail))
-}
-
-/// The headline, then the output lines that came before the failure.
-fn with_tail(headline: String, tail: &[String]) -> String {
-    if tail.is_empty() {
-        headline
-    } else {
-        format!("{headline}\n{}", tail.join("\n"))
-    }
 }
 
 fn done_event(job: &ImageJob, outcome: ImageOutcome, seconds: f64) -> ImageDoneEvent {

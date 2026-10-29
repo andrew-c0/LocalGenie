@@ -79,3 +79,8 @@ export function fixedCfgReason(cfgScale: number): string {
 export function nativeSizeHint(nativeSizeLabel: string): string {
   return `Models work best near their native size (${nativeSizeLabel}). Other sizes are allowed but may look worse and are slower.`;
 }
+
+/** Why a tab cannot run until its runtime is installed. `purpose` names the tab's job, e.g. "Image generation". */
+export function runtimeMissingMessage(purpose: string, runtimeName: string): string {
+  return `${purpose} needs ${runtimeName}. Install it in Settings > Runtimes.`;
+}

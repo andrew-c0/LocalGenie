@@ -26,6 +26,8 @@ import {
 
 /** Runtime id of stable-diffusion.cpp in the runtime registry. */
 export const SD_CPP_RUNTIME_ID = "sd-cpp";
+/** The name stable-diffusion.cpp goes by in messages. */
+export const SD_CPP_NAME = "stable-diffusion.cpp";
 
 /** Width and height must be multiples of this, within the min and max. */
 export const IMAGE_SIZE_STEP = 8;
@@ -359,21 +361,27 @@ export function formatElapsed(ms: number): string {
   return `${minutes}:${seconds}`;
 }
 
-/** Whether stable-diffusion.cpp is installed, as the Playground sees it. */
-export type SdCppStatus = "checking" | "installed" | "missing" | "failed";
+/** Whether a tab's runtime is installed, as the Playground sees it. */
+export type RuntimeStatus = "checking" | "installed" | "missing" | "failed";
+
+/** Why a runtime that is not installed blocks a job, or null when it is installed. Names the runtime and where to install it. */
+export function runtimeBlockedReason(runtime: RuntimeStatus, runtimeName: string): string | null {
+  if (runtime === "checking") return "Checking the runtime…";
+  if (runtime === "failed") return "Could not check the runtime.";
+  if (runtime === "missing") return `Install ${runtimeName} in Settings > Runtimes first.`;
+  return null;
+}
 
 /** What stops Generate from running, in the order the user can fix it. Null when it can run. */
 export function generateBlockedReason(gate: {
-  runtime: SdCppStatus;
+  runtime: RuntimeStatus;
   model: ImageModel | null;
   prompt: string;
   jobRunning: boolean;
 }): string | null {
   if (gate.jobRunning) return "An image is already being generated.";
-  if (gate.runtime === "checking") return "Checking the runtime…";
-  if (gate.runtime === "failed") return "Could not check the runtime.";
-  if (gate.runtime === "missing")
-    return "Install stable-diffusion.cpp in Settings > Runtimes first.";
+  const runtimeReason = runtimeBlockedReason(gate.runtime, SD_CPP_NAME);
+  if (runtimeReason) return runtimeReason;
   if (!gate.model) return "Choose a model first.";
   if (!gate.model.downloaded) return "Download the model first.";
   if (!gate.prompt.trim()) return "Write a prompt first.";

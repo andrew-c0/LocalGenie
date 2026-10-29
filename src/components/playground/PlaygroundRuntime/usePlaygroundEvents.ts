@@ -1,16 +1,41 @@
 import { useTauriEvent } from "../../../hooks";
 import * as playground from "../../../services/playground";
 import { usePlaygroundStore } from "../../../stores/playgroundStore";
+import { useSpeechStore } from "../../../stores/speechStore";
 import type {
   ImageResult,
   PlaygroundDownloadDone,
   PlaygroundDownloadProgress,
   PlaygroundImageDone,
   PlaygroundImageProgress,
+  PlaygroundSpeechDone,
+  PlaygroundSpeechProgress,
+  SpeechResult,
 } from "../../../types";
 import { errorMessage } from "../../../utils/errorMessage";
 import { formatDuration } from "../../../utils/format";
+import { speechDoneTitle, speechFailedTitle } from "../../../utils/speechText";
 import { toast } from "../../../utils/toast";
+
+/** The name of a downloaded model, from whichever catalog lists it. */
+function modelName(modelId: string): string {
+  const imageName = usePlaygroundStore.getState().models?.find((m) => m.id === modelId)?.name;
+  const speechName = useSpeechStore.getState().models?.find((m) => m.id === modelId)?.name;
+  return imageName ?? speechName ?? modelId;
+}
+
+/** Re-read the catalog that lists the model, so its card shows Ready. Image and speech models have separate catalogs. */
+function refreshCatalogFor(modelId: string): Promise<void> {
+  if (usePlaygroundStore.getState().models?.some((m) => m.id === modelId)) {
+    return playground
+      .listImageModels()
+      .then((list) => usePlaygroundStore.getState().setModels(list));
+  }
+  if (useSpeechStore.getState().models?.some((m) => m.id === modelId)) {
+    return playground.listSpeechModels().then((list) => useSpeechStore.getState().setModels(list));
+  }
+  return Promise.resolve();
+}
 
 /** A finished model download: refresh the catalog so the card shows Ready, then drop the download entry. */
 function handleDownloadDone(payload: PlaygroundDownloadDone) {
@@ -28,17 +53,14 @@ function handleDownloadDone(payload: PlaygroundDownloadDone) {
     return;
   }
 
-  const name = store.models?.find((m) => m.id === modelId)?.name ?? modelId;
-  playground
-    .listImageModels()
-    .then((list) => usePlaygroundStore.getState().setModels(list))
+  refreshCatalogFor(modelId)
     .catch((err: unknown) => {
-      toast.error("Could not refresh the image models", errorMessage(err));
+      toast.error("Could not refresh the models", errorMessage(err));
     })
     .finally(() => {
       usePlaygroundStore.getState().clearDownload(modelId);
     });
-  toast.success("Model downloaded", name);
+  toast.success("Model downloaded", modelName(modelId));
 }
 
 /** A finished generation: store the result. Toasts only for the job the store is waiting on. */
@@ -64,7 +86,31 @@ function handleImageDone(payload: PlaygroundImageDone) {
   }
 }
 
-/** Subscribes to the four Playground events for the app's lifetime, so downloads and images keep updating on other pages. */
+/** A finished speech job: store its result. Toasts only for the job the store is waiting on. */
+function handleSpeechDone(payload: PlaygroundSpeechDone) {
+  const store = useSpeechStore.getState();
+  const isCurrentJob = store.job?.jobId === payload.jobId;
+  const result: SpeechResult = {
+    jobId: payload.jobId,
+    kind: payload.kind,
+    status: payload.status,
+    text: payload.text ?? null,
+    outputPath: payload.outputPath ?? null,
+    audioSeconds: payload.audioSeconds ?? null,
+    elapsedSeconds: payload.elapsedSeconds ?? null,
+    error: payload.error ?? null,
+  };
+  store.finishJob(result);
+
+  if (!isCurrentJob) return;
+  if (payload.status === "ok") {
+    toast.success(speechDoneTitle(payload.kind));
+  } else if (payload.status === "error") {
+    toast.error(speechFailedTitle(payload.kind), errorMessage(payload.error, "Unknown error."));
+  }
+}
+
+/** Subscribes to the Playground events for the app's lifetime, so downloads and jobs keep updating on other pages. */
 export function usePlaygroundEvents() {
   useTauriEvent<PlaygroundDownloadProgress>(
     playground.PLAYGROUND_DOWNLOAD_PROGRESS_EVENT,
@@ -78,4 +124,8 @@ export function usePlaygroundEvents() {
     usePlaygroundStore.getState().setJobProgress(payload),
   );
   useTauriEvent<PlaygroundImageDone>(playground.PLAYGROUND_IMAGE_DONE_EVENT, handleImageDone);
+  useTauriEvent<PlaygroundSpeechProgress>(playground.PLAYGROUND_SPEECH_PROGRESS_EVENT, (payload) =>
+    useSpeechStore.getState().setJobProgress(payload),
+  );
+  useTauriEvent<PlaygroundSpeechDone>(playground.PLAYGROUND_SPEECH_DONE_EVENT, handleSpeechDone);
 }

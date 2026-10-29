@@ -35,8 +35,10 @@ sysinfo = "0.33"
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 prost = "0.14"
-# Runtime archives (zip only, deflate only: no encryption, bzip2 or zstd codecs).
+# Runtime archives: zip (deflate only: no encryption or zstd codecs).
 zip = { version = "2", default-features = false, features = ["deflate"] }
+# Runtime archives: tar.bz2 (sherpa-onnx). Default backend is the pure-Rust libbz2-rs-sys: no C toolchain.
+bzip2 = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [
