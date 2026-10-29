@@ -8,7 +8,7 @@ mod install;
 mod spec;
 mod store;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -21,8 +21,12 @@ use install::{
     install_release, remove_runtime_files, validate_version, InstallProgress, InstallStage,
     InstalledVersion,
 };
-use release::{is_update, release_api_url, ReleaseCache};
+use release::{
+    fetch_release_json, is_update, release_api_url, release_list_api_url, Release, ReleaseCache,
+};
 use spec::{find_spec, RuntimeSpec, RUNTIME_SPECS};
+
+pub(crate) use spec::SD_CPP;
 
 /// Event carrying `InstallProgress` while a runtime installs.
 const INSTALL_PROGRESS_EVENT: &str = "runtime-install-progress";
@@ -52,6 +56,17 @@ pub struct RuntimeUpdateInfo {
     pub release_url: String,
 }
 
+/// Path of the program in the current install of `spec`, or None when it is not installed. The
+/// program is not checked to exist; the caller does that.
+pub(crate) async fn current_program(
+    db: &DatabaseConnection,
+    spec: &RuntimeSpec,
+) -> Result<Option<PathBuf>, String> {
+    Ok(store::current_install(db, spec.id)
+        .await?
+        .map(|row| spec.exe_path(Path::new(&row.install_path))))
+}
+
 /// Every known runtime with its installed version, if any.
 #[tauri::command]
 pub async fn runtime_list(db: State<'_, DatabaseConnection>) -> Result<Vec<RuntimeInfo>, String> {
@@ -69,7 +84,8 @@ pub async fn runtime_list(db: State<'_, DatabaseConnection>) -> Result<Vec<Runti
     Ok(infos)
 }
 
-/// Compare the installed version with the latest release (cached for an hour).
+/// Compare the installed version with the newest release that has a build for this platform
+/// (cached for an hour).
 #[tauri::command]
 pub async fn runtime_check_update(
     id: String,
@@ -80,9 +96,7 @@ pub async fn runtime_check_update(
     let installed = store::current_install(&db, spec.id)
         .await?
         .map(|row| row.version);
-    let latest = cache
-        .get_or_fetch(&release_api_url(spec.repo, None), spec.repo)
-        .await?;
+    let latest = latest_matching_release(&cache, spec).await?;
     Ok(RuntimeUpdateInfo {
         id: spec.id.to_string(),
         update_available: installed
@@ -172,14 +186,35 @@ async fn install_flow(
         "Looking up the release",
     ));
 
-    let release = cache
-        .get_or_fetch(&release_api_url(spec.repo, version), spec.repo)
-        .await?;
+    let release = match version {
+        Some(tag) => {
+            cache
+                .get_or_fetch(&release_api_url(spec.repo, Some(tag)), spec.repo)
+                .await?
+        }
+        None => latest_matching_release(cache, spec).await?,
+    };
     let root = runtimes_root(app)?;
     let installed =
         install_release(registry.client(), cancel, &root, spec, &release, &report).await?;
     store::set_current(db, spec.id, &installed).await?;
     Ok(installed)
+}
+
+/// The newest release of the runtime's repo with an archive for this platform. The release list
+/// is read once and the choice is cached per repo and runtime. Failures are not cached.
+async fn latest_matching_release(
+    cache: &ReleaseCache,
+    spec: &RuntimeSpec,
+) -> Result<Release, String> {
+    let key = format!("latest:{}:{}", spec.repo, spec.id);
+    let list_url = release_list_api_url(spec.repo);
+    cache
+        .get_or_load(&key, || async move {
+            let json = fetch_release_json(&list_url).await?;
+            spec.newest_release(&json)
+        })
+        .await
 }
 
 async fn uninstall_flow(

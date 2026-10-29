@@ -1,10 +1,15 @@
 //! GitHub release lookup shared by the GenieX CLI update and the runtime installer.
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::commands::constants::{GITHUB_TIMEOUT_SECS, RUNTIME_RELEASE_CACHE_SECS};
+
+/// How many of a repo's newest releases to read when looking for a build. Upstream publishes
+/// releases faster than the app's update check runs, so one page is enough.
+const RELEASE_LIST_PAGE_SIZE: u32 = 30;
 
 /// Build a reqwest client with the LocalGenie user agent and a total timeout.
 pub(crate) fn github_client(timeout_secs: u64) -> Result<reqwest::Client, String> {
@@ -23,7 +28,12 @@ pub fn release_api_url(repo: &str, tag: Option<&str>) -> String {
     }
 }
 
-/// GET a release's JSON from the GitHub API.
+/// API URL of a repo's most recent releases, newest first, as a JSON list.
+pub fn release_list_api_url(repo: &str) -> String {
+    format!("https://api.github.com/repos/{repo}/releases?per_page={RELEASE_LIST_PAGE_SIZE}")
+}
+
+/// GET a release's JSON (or a list of releases) from the GitHub API.
 pub(crate) async fn fetch_release_json(api_url: &str) -> Result<serde_json::Value, String> {
     let client = github_client(GITHUB_TIMEOUT_SECS)?;
     let resp = client
@@ -100,35 +110,82 @@ fn parse_asset(asset: &serde_json::Value) -> Option<ReleaseAsset> {
     })
 }
 
-/// Recently fetched releases, keyed by API URL. Only successful fetches are kept.
+/// Read a release list from GitHub's JSON, newest first. Drafts and prereleases are dropped, and
+/// the order comes from `published_at` (or `created_at` when a release has no publish time). An
+/// entry that is not a valid release is skipped rather than failing the whole list.
+pub fn parse_release_list(json: &serde_json::Value, repo: &str) -> Result<Vec<Release>, String> {
+    let entries = json
+        .as_array()
+        .ok_or_else(|| "GitHub release list is not a JSON array".to_string())?;
+    let mut published: Vec<&serde_json::Value> = entries
+        .iter()
+        .filter(|entry| !is_draft_or_prerelease(entry))
+        .collect();
+    // GitHub writes timestamps as fixed-width UTC strings, so string order is time order. The
+    // sort is stable, so releases with equal timestamps keep the API's order.
+    published.sort_by(|a, b| release_time(b).cmp(release_time(a)));
+    Ok(published
+        .into_iter()
+        .filter_map(|entry| parse_release(entry, repo).ok())
+        .collect())
+}
+
+fn is_draft_or_prerelease(entry: &serde_json::Value) -> bool {
+    let flag = |key: &str| entry.get(key).and_then(|v| v.as_bool()).unwrap_or(false);
+    flag("draft") || flag("prerelease")
+}
+
+/// The publish time of a release, or its creation time when it has none. Empty when neither is set.
+fn release_time(entry: &serde_json::Value) -> &str {
+    ["published_at", "created_at"]
+        .iter()
+        .find_map(|key| entry.get(*key).and_then(|v| v.as_str()))
+        .unwrap_or_default()
+}
+
+/// Recently fetched releases, keyed by a cache key (an API URL, or a repo and runtime pair). Only
+/// successful loads are kept.
 #[derive(Default)]
 pub struct ReleaseCache {
     entries: Mutex<HashMap<String, (Instant, Release)>>,
 }
 
 impl ReleaseCache {
-    /// The release at `api_url`, from the cache while it is under an hour old.
-    pub async fn get_or_fetch(&self, api_url: &str, repo: &str) -> Result<Release, String> {
-        if let Some(hit) = self.fresh(api_url) {
+    /// The release stored under `key`, or the result of `load` when nothing fresh is cached. A
+    /// failed load is not cached, so the next call tries again.
+    pub async fn get_or_load<F, Fut>(&self, key: &str, load: F) -> Result<Release, String>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = Result<Release, String>>,
+    {
+        if let Some(hit) = self.fresh(key) {
             return Ok(hit);
         }
-        let json = fetch_release_json(api_url).await?;
-        let release = parse_release(&json, repo)?;
-        self.store(api_url, &release);
+        let release = load().await?;
+        self.store(key, &release);
         Ok(release)
     }
 
-    fn fresh(&self, api_url: &str) -> Option<Release> {
-        // A poisoned lock only means nothing is cached; the caller then fetches again.
+    /// The release at one tag's `api_url`, from the cache while it is under an hour old.
+    pub async fn get_or_fetch(&self, api_url: &str, repo: &str) -> Result<Release, String> {
+        self.get_or_load(api_url, || async {
+            let json = fetch_release_json(api_url).await?;
+            parse_release(&json, repo)
+        })
+        .await
+    }
+
+    fn fresh(&self, key: &str) -> Option<Release> {
+        // A poisoned lock only means nothing is cached; the caller then loads again.
         let map = self.entries.lock().ok()?;
-        let (fetched_at, release) = map.get(api_url)?;
+        let (fetched_at, release) = map.get(key)?;
         (fetched_at.elapsed() < Duration::from_secs(RUNTIME_RELEASE_CACHE_SECS))
             .then(|| release.clone())
     }
 
-    fn store(&self, api_url: &str, release: &Release) {
+    fn store(&self, key: &str, release: &Release) {
         if let Ok(mut map) = self.entries.lock() {
-            map.insert(api_url.to_string(), (Instant::now(), release.clone()));
+            map.insert(key.to_string(), (Instant::now(), release.clone()));
         }
     }
 }
@@ -228,6 +285,87 @@ mod tests {
         assert_eq!(release.assets[0].sha256, None);
     }
 
+    fn list_entry(tag: &str, published_at: Option<&str>, flags: (bool, bool)) -> serde_json::Value {
+        let mut entry = serde_json::json!({
+            "tag_name": tag,
+            "draft": flags.0,
+            "prerelease": flags.1,
+            "created_at": "2026-01-01T00:00:00Z",
+            "assets": []
+        });
+        if let Some(published_at) = published_at {
+            entry["published_at"] = serde_json::json!(published_at);
+        }
+        entry
+    }
+
+    #[test]
+    fn release_list_skips_drafts_and_prereleases_and_sorts_newest_first() {
+        let json = serde_json::json!([
+            list_entry("old", Some("2026-01-05T10:00:00Z"), (false, false)),
+            list_entry("draft", Some("2026-03-01T10:00:00Z"), (true, false)),
+            list_entry("beta", Some("2026-02-20T10:00:00Z"), (false, true)),
+            list_entry("new", Some("2026-02-01T10:00:00Z"), (false, false)),
+        ]);
+        let tags: Vec<String> = parse_release_list(&json, "o/r")
+            .expect("parses")
+            .into_iter()
+            .map(|release| release.tag)
+            .collect();
+        assert_eq!(tags, ["new", "old"]);
+    }
+
+    #[test]
+    fn release_list_falls_back_to_created_at_and_skips_bad_entries() {
+        let json = serde_json::json!([
+            list_entry("published", Some("2026-01-10T00:00:00Z"), (false, false)),
+            { "created_at": "2026-01-20T00:00:00Z", "tag_name": "unpublished-new" },
+            { "created_at": "2026-01-01T00:00:00Z" },
+        ]);
+        let tags: Vec<String> = parse_release_list(&json, "o/r")
+            .expect("parses")
+            .into_iter()
+            .map(|release| release.tag)
+            .collect();
+        assert_eq!(tags, ["unpublished-new", "published"]);
+    }
+
+    #[test]
+    fn release_list_must_be_an_array() {
+        assert!(parse_release_list(&serde_json::json!({ "message": "Not Found" }), "o/r").is_err());
+    }
+
+    #[tokio::test]
+    async fn cache_keeps_a_successful_load_and_not_a_failure() {
+        use std::cell::Cell;
+        let cache = ReleaseCache::default();
+        let calls = Cell::new(0);
+        let release = parse_release(&serde_json::json!({ "tag_name": "1.0" }), "o/r").expect("ok");
+
+        let failed = cache
+            .get_or_load("k", || async {
+                calls.set(calls.get() + 1);
+                Err::<Release, String>("offline".to_string())
+            })
+            .await;
+        assert!(failed.is_err());
+
+        for _ in 0..2 {
+            let loaded = cache
+                .get_or_load("k", || async {
+                    calls.set(calls.get() + 1);
+                    Ok(release.clone())
+                })
+                .await;
+            assert_eq!(loaded.expect("loads").tag, "1.0");
+        }
+        assert_eq!(
+            calls.get(),
+            2,
+            "the failure was retried, the success was cached"
+        );
+    }
+
     #[test]
     fn api_url_for_latest_and_for_a_tag() {
         assert_eq!(
@@ -237,6 +375,10 @@ mod tests {
         assert_eq!(
             release_api_url("o/r", Some("1.0")),
             "https://api.github.com/repos/o/r/releases/tags/1.0"
+        );
+        assert_eq!(
+            release_list_api_url("o/r"),
+            "https://api.github.com/repos/o/r/releases?per_page=30"
         );
     }
 }
