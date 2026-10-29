@@ -9,10 +9,8 @@ const PROGRESS_COLOR: Record<ProgressTone, NonNullable<ProgressBarProps["color"]
   green: "success",
 };
 
-/** Progress bar; `value` is 0–100 and is clamped. */
-export function ProgressBar({ value, color }: { value: number; color?: ProgressTone }) {
-  const clamped = Math.max(0, Math.min(100, value));
-  return (
-    <FluentProgressBar value={clamped / 100} color={color ? PROGRESS_COLOR[color] : undefined} />
-  );
+/** Progress bar; `value` is 0–100 and is clamped. Null draws an indeterminate bar, for work with no known length. */
+export function ProgressBar({ value, color }: { value: number | null; color?: ProgressTone }) {
+  const fraction = value === null ? undefined : Math.max(0, Math.min(100, value)) / 100;
+  return <FluentProgressBar value={fraction} color={color ? PROGRESS_COLOR[color] : undefined} />;
 }

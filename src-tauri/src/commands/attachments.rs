@@ -129,7 +129,7 @@ pub async fn reveal_attachment(path: String) -> Result<(), String> {
 /// normal quoting would wrap the whole `/select,...` text and Explorer would not select the file.
 /// Explorer may exit with a non-zero code even when it opened, so only the start is checked.
 #[cfg(target_os = "windows")]
-fn reveal_in_explorer(file: &Path) -> Result<(), String> {
+pub(super) fn reveal_in_explorer(file: &Path) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     std::process::Command::new("explorer")
         .raw_arg(format!("/select,\"{}\"", file.display()))
@@ -139,7 +139,7 @@ fn reveal_in_explorer(file: &Path) -> Result<(), String> {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn reveal_in_explorer(_file: &Path) -> Result<(), String> {
+pub(super) fn reveal_in_explorer(_file: &Path) -> Result<(), String> {
     Err("Opening the file location is only supported on Windows.".to_string())
 }
 

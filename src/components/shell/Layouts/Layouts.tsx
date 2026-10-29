@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom";
 import { useModelStore } from "../../../stores/modelStore";
 import { ChatRuntime } from "../../chat/ChatRuntime/ChatRuntime";
+import { PlaygroundRuntime } from "../../playground/PlaygroundRuntime/PlaygroundRuntime";
 import CliMissingBanner from "../CliMissingBanner/CliMissingBanner";
 import CloseGuard from "../CloseGuard";
 import Header from "../Header/Header";
@@ -13,6 +14,7 @@ import "./Layouts.css";
  * and the routed page content. Rendered inside the router so pages appear via <Outlet />.
  * `CloseGuard` sits here too, so the close confirmation works on every page. `ChatRuntime`
  * sits here too, so a reply keeps streaming and saving while the user is on another page.
+ * `PlaygroundRuntime` sits here for the same reason: a download or image keeps updating.
  */
 export function MainLayout() {
   const selectorOpen = useModelStore((s) => s.selectorOpen);
@@ -32,6 +34,7 @@ export function MainLayout() {
       </div>
       <CloseGuard />
       <ChatRuntime />
+      <PlaygroundRuntime />
     </div>
   );
 }

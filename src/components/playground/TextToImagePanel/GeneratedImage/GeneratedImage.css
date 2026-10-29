@@ -1,0 +1,11 @@
+/* Images scale down to the card; the saved path can be long with no spaces to wrap on. */
+.generated-image__image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--borderRadiusMedium);
+}
+
+.generated-image__path {
+  overflow-wrap: anywhere;
+}

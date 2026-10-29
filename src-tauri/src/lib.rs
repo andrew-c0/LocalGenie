@@ -1,8 +1,8 @@
 mod aihub_proto;
 mod commands;
 mod gguf;
-pub mod model_settings;
 pub mod model_capabilities;
+pub mod model_settings;
 mod tray;
 
 pub mod entities;
@@ -26,6 +26,7 @@ use commands::hub;
 use commands::import;
 use commands::logs;
 use commands::models;
+use commands::playground;
 use commands::runtimes;
 use commands::server;
 use commands::system;
@@ -47,10 +48,9 @@ pub fn run() {
             // Remove benchmark files that no prompt uses (left behind by a crash or an
             // unsaved editor). A failure here is logged; the app still starts.
             let benchmark_root = db_dir.join(benchmark_files::STORE_DIR);
-            if let Err(e) = tauri::async_runtime::block_on(benchmark_files::sweep_orphans(
-                &db,
-                &benchmark_root,
-            )) {
+            if let Err(e) =
+                tauri::async_runtime::block_on(benchmark_files::sweep_orphans(&db, &benchmark_root))
+            {
                 eprintln!("[benchmark] startup sweep failed: {e}");
             }
 
@@ -62,6 +62,7 @@ pub fn run() {
         .manage(aihub::AihubCache::default())
         .manage(commands::download::DownloadRegistry::default())
         .manage(commands::runtimes::release::ReleaseCache::default())
+        .manage(playground::PlaygroundJobs::default())
         .manage(commands::benchmark_runner::BenchmarkRunState::default())
         .invoke_handler(tauri::generate_handler![
             // Model management
@@ -112,6 +113,15 @@ pub fn run() {
             runtimes::runtime_check_update,
             runtimes::runtime_install,
             runtimes::runtime_uninstall,
+            // Playground text-to-image (curated models, sd-cli jobs, generated images)
+            playground::playground_image_models,
+            playground::playground_download_model,
+            playground::playground_generate_image,
+            playground::playground_cancel_image,
+            playground::playground_read_image,
+            playground::playground_reveal_image,
+            playground::playground_list_devices,
+            playground::playground_delete_model,
             // Qualcomm AI Hub catalog (read-only)
             aihub::aihub_latest_version,
             aihub::aihub_list_models,
@@ -164,6 +174,9 @@ pub fn run() {
                 if let Some(pid) = pid {
                     server::kill_process_sync(pid);
                 }
+                window
+                    .state::<playground::PlaygroundJobs>()
+                    .kill_active_sync();
             }
         })
         .run(tauri::generate_context!())

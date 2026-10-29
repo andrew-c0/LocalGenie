@@ -1,0 +1,4 @@
+/* The model column keeps a fixed width so the form beside it takes the rest of the page. */
+.text-to-image__models {
+  flex: 0 0 320px;
+}

@@ -325,6 +325,161 @@ export interface RuntimeInstallProgress {
   message: string;
 }
 
+/** One file of an image model, as listed by `playground_image_models`. */
+export interface ImageModelFile {
+  fileName: string;
+  sizeBytes: number;
+  present: boolean;
+}
+
+/** A width and height in pixels. */
+export interface ImageSize {
+  width: number;
+  height: number;
+}
+
+/** Starting values of the text-to-image form for one model. */
+export interface ImageModelDefaults extends ImageSize {
+  steps: number;
+  cfgScale: number;
+}
+
+/** An image model the Playground can download and run. */
+export interface ImageModel {
+  id: string;
+  name: string;
+  description: string;
+  license: string;
+  licenseUrl: string;
+  /** Size of all the model's files, in bytes. */
+  totalBytes: number;
+  downloaded: boolean;
+  files: ImageModelFile[];
+  defaults: ImageModelDefaults;
+  /** False when the model ignores a negative prompt. The field is then disabled. */
+  supportsNegativePrompt: boolean;
+  /** False when the model fixes its CFG scale at `defaults.cfgScale`. The field is then disabled. */
+  cfgAdjustable: boolean;
+}
+
+/** Request for `playground_generate_image`. A `seed` of -1 asks for a random seed. `device` is left out for auto. */
+export interface ImageGenerateRequest {
+  jobId: string;
+  modelId: string;
+  prompt: string;
+  negativePrompt?: string;
+  width: number;
+  height: number;
+  steps: number;
+  cfgScale: number;
+  seed: number;
+  device?: string;
+}
+
+export type PlaygroundDeviceKind = "cpu" | "gpu" | "npu" | "other";
+
+/** One compute device the installed stable-diffusion.cpp build reports, from `playground_list_devices`. */
+export interface PlaygroundDevice {
+  /** The id sent as `device` in a generate request. */
+  name: string;
+  description: string;
+  kind: PlaygroundDeviceKind;
+}
+
+/** Result of `playground_delete_model`: the bytes removed from disk. */
+export interface PlaygroundDeleteResult {
+  freedBytes: number;
+}
+
+/** `playground-download-progress`. `total` is 0 when the size of the current file is not known. */
+export interface PlaygroundDownloadProgress {
+  modelId: string;
+  fileName: string;
+  /** Position of the file being fetched, counted from 0. */
+  fileIndex: number;
+  fileCount: number;
+  received: number;
+  total: number;
+}
+
+/** `playground-download-done`. `error` is set when `status` is `error`. */
+export interface PlaygroundDownloadDone {
+  modelId: string;
+  status: "done" | "error" | "cancelled";
+  error?: string | null;
+}
+
+/** Stages of one generation, in the order they run. `sampling` is the only stage with a known length. */
+export type ImagePhase = "loading" | "encoding" | "sampling" | "decoding" | "saving";
+
+/** `playground-image-progress`. `step` counts finished steps out of `steps`, during `sampling`. */
+export interface PlaygroundImageProgress {
+  jobId: string;
+  phase: ImagePhase;
+  step: number;
+  steps: number;
+  /** Measured time per sampling step, or null until one step has finished. */
+  secondsPerStep: number | null;
+  message: string;
+}
+
+/** `playground-image-done`. `path` is set when the image was saved; `error` when it failed. `seed` is the seed used, also for a random one. */
+export interface PlaygroundImageDone {
+  jobId: string;
+  status: "done" | "error" | "cancelled";
+  path?: string | null;
+  error?: string | null;
+  seed: number;
+  seconds: number | null;
+}
+
+/** The text-to-image form. Kept in the Playground store between visits. Width and height are always valid sizes. */
+export interface ImageForm {
+  prompt: string;
+  negativePrompt: string;
+  width: number;
+  height: number;
+  steps: number;
+  cfgScale: number;
+  /** When true the seed is sent as -1 and the field is ignored. */
+  randomSeed: boolean;
+  seed: number;
+  /** "auto" for the runtime default, else a `PlaygroundDevice` name. */
+  device: string;
+}
+
+/** A model download the app started, from the first request until it is done. */
+export interface ImageDownloadState {
+  status: "downloading" | "cancelled" | "error";
+  /** Latest progress event. Null until the first one arrives. */
+  progress: PlaygroundDownloadProgress | null;
+  error: string | null;
+}
+
+/** A generation running now. Starts in the `loading` phase; `step` is 0 until the first sampling step. */
+export interface ImageJob {
+  jobId: string;
+  modelId: string;
+  /** The form's compute choice when the job started: "auto" or a device name. */
+  device: string;
+  startedAt: number;
+  phase: ImagePhase;
+  step: number;
+  steps: number;
+  secondsPerStep: number | null;
+}
+
+/** The last generation that ended, kept until the next one starts. `seed` is null when the job never started. `device` is the job's compute choice. */
+export interface ImageResult {
+  jobId: string;
+  status: "done" | "error" | "cancelled";
+  path: string | null;
+  error: string | null;
+  seed: number | null;
+  seconds: number | null;
+  device: string;
+}
+
 /** Top-level pages of the Stitch-designed workspace shell. */
 
 export type ComputeTarget = "npu" | "gpu" | "cpu";

@@ -1,0 +1,27 @@
+/* A plain list: the reset removes the browser's list bullets and indent. */
+.generation-phases {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.generation-phases__mark {
+  flex-shrink: 0;
+  font-size: var(--fontSizeBase400);
+}
+
+.generation-phases__row--done .generation-phases__mark {
+  color: var(--colorPaletteGreenForeground1);
+}
+
+.generation-phases__row--pending .generation-phases__mark {
+  color: var(--colorNeutralForeground3);
+}
+
+.generation-phases__row--pending .generation-phases__label {
+  color: var(--colorNeutralForeground3);
+}
+
+.generation-phases__row--active .generation-phases__label {
+  font-weight: var(--fontWeightSemibold);
+}
