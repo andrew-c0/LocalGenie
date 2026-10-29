@@ -1,3 +1,3 @@
-last_synced_commit=55219bc0b910c97aef0068d6864171948c44f5e4
-last_synced_date=2026-10-28
-note=Synced to HEAD 55219bc (5 commits since 2122ed2: AI Hub tab, capability_scan/ folder, ModelSettings sections, agent/skill docs). Uncommitted working tree reflected: /playground scaffold (Navigation.tsx, Sidebar.tsx, pages/PlaygroundPage/). Untracked tasks-ordered.md and memories/external/huggingFace/hub-api.md not read or touched. Runtime 2/3/6 results are maintainer-reported, not re-run. cargo/tsc/vitest/biome not run; the app not run.
+last_synced_commit=0e0dcb5ffa82207513f45e1d8f2755ae43b3cc2d
+last_synced_date=2026-10-29
+note=Synced to HEAD 0e0dcb5 (6 commits since 55219bc: /playground route, runtimes framework and Settings > Runtimes, sd-cpp spec pointing at the fork, Playground research/plan, tasks-ordered.md and hub-api.md). Uncommitted working tree reflected (not committed): Playground text-to-image (commands/playground/, components/playground/, stores/playgroundStore.ts, services/playground.ts, utils/playground*.ts, ui/HelpLabel/) and the runtimes working-tree change (newest release with an ARM64 archive, spec.rs/release.rs/mod.rs), plus small lib.rs, attachments.rs, mod.rs, Layouts, ProgressBar, types and research-plan edits. Maintainer-reported test results (cargo test 363, vitest 304, tsc, clippy) not re-run. Nothing run in the app; biome not run.

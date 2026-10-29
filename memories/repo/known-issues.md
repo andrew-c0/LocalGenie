@@ -1,6 +1,6 @@
 # Known issues
 
-Status labels: **code-verified** = read in the source (committed up to 694a036, or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-26, 2026-10-27 or 2026-10-28 syncs (the benchmark suite and the chat settings were read, not run). Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
+Status labels: **code-verified** = read in the source (committed up to 694a036, or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-26, 2026-10-27, 2026-10-28 or 2026-10-29 syncs (the benchmark suite and the chat settings were read, not run). Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
 
 ## Active
 - Model load/chat hangs: the GenieX warmup request in `load_model` may never get a response. The warmup carries the model's load params (committed in 6068a81), so it matches chat. Not re-validated (runtime-unverified).
@@ -17,6 +17,15 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Hub facets and the filter panel (committed 2122ed2; code-read, runtime-unverified): the filters are sent as Hub tags and `num_parameters`, and the tag catalogue comes from `/api/models-tags-by-type`. The Hub's tag and filter semantics are not checked against a live response in this sync.
 - Fixed: the local model lookups in `pages/models/useHubModelDetail.ts` matched rows with a substring test (`repoId.includes(name)`). They now match the exact id or the id with a precision suffix (`isSameRepo`).
 - Vision and audio probes match whole words only (`has_word`), so a reply that names the colour or number only inside another word does not count (`capability_scan.rs` tests `names_match_whole_words_only`).
+
+## Playground and optional runtimes (committed 42dea0c..0e0dcb5 and the working tree; runtime-unverified)
+- **GPU (Adreno, OpenCL): blank white image with CFG above 1.** sd.cpp's batched CFG forward breaks on the OpenCL backend (CFG 1.0 works). The app passes `--batched-cfg off` for every non-CPU device (`playground/args.rs`). The cause inside ggml-opencl is not confirmed. Re-test after each fork sync; drop the flag when it is fixed. Reported by the maintainer (research notes, section 11, 2026-10-29), not re-run here.
+- **GPU is slower than the CPU** in every measurement so far (maintainer, same notes; figures there). The app defaults to Auto = CPU. The Compute help text says so (`utils/playgroundText.ts`). The help text also warns that about 128 px images may come out blank; that was not checked here.
+- **NPU is not supported** in the Playground (Compute help text). The device list shows whatever sd-cli reports; an HTP or Hexagon device is classed as NPU (`devices.rs`). Not run.
+- **Latest release for installs (fixed in the working tree, not committed).** At 0e0dcb5, `runtime_install` (no version) and `runtime_check_update` use GitHub's `releases/latest`. Upstream stable-diffusion.cpp publishes x64-only builds as latest, so that could fail or pick a build with no ARM64 archive. The working tree picks the newest non-draft, non-prerelease release that has the ARM64 archive (`runtimes/spec.rs` `newest_release`, `runtimes/mod.rs` `latest_matching_release`). Code-read; a unit test covers it; not run against GitHub.
+- **Release cache can hide a newer release.** `ReleaseCache` keeps the lookup for one hour (`RUNTIME_RELEASE_CACHE_SECS`), so an install or update check soon after a new release can see the older one (code-read).
+- **Playground model downloads** check the exact byte count from the catalog, not a hash (`model_download.rs`). A file of the right size but different content would pass (code-read).
+- **Nothing in the Playground or Runtimes areas has been run in the app**: install, update, uninstall, model download and delete, generation, cancel and the device list are runtime-unverified. The maintainer's test runs cover the Rust and TypeScript code only.
 
 ## Qualcomm AI Hub tab (committed 7664d01..55219bc; code-read 2026-10-28, runtime-unverified)
 - Reported on 2026-10-28 (not re-run here): runtime 11 (QAIRT Genie bundles: `genie_config.json` plus `ctx-bins`) and runtime 12 (llama.cpp GGUF) load in GenieX. Runtime 6 (Genie bundle) failed to load because it had no `metadata.json`; runtimes 2 (QNN DLC) and 3 (QNN context binary) failed on import or load. Runtimes 2, 3 and 6 are not listed in the tab now (see `codebase-map.md`). The `metadata.json` requirement matches GenieX's `localfs` zip reader (`sdk/model-manager/crates/core/src/source/localfs.rs`, read-only checkout `C:\Work\GenieX`).

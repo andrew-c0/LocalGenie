@@ -67,3 +67,30 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] With GenieX's `chipset` set to this device's chipset: a universal asset and this chipset's asset download. Another chipset's asset is refused with a "Download failed" toast.
 - [ ] A download runs in the drawer, then "Model ready"; the zip and its `aihub--<id>` folder are gone from Downloads. A failed import keeps the zip, and Resume reuses it.
 - [ ] After a restart, the imported model is listed under Local, and `list_models` reports its `source` as `aihub` (check the value in the dev console).
+
+## Optional runtimes: Settings > Runtimes (not yet run)
+
+- [ ] The section lists stable-diffusion.cpp as not installed. Opening it reads GitHub once; offline, the card shows an error and the page still works.
+- [ ] Install: the stages show in order (checking, downloading with byte counts, verifying, extracting, done). The card shows the version. `%APPDATA%\com.localgenie.app\runtimes\sd-cpp\<tag>\sd-cli.exe` exists.
+- [ ] The archive installed is the ARM64 one (`windows-arm64` in the zip name), even when GitHub's latest release is an x64-only build.
+- [ ] After a restart the card still shows the installed version.
+- [ ] Update: when a newer ARM64 release exists the card offers Update; the older folder stays on disk.
+- [ ] Interrupt a download (disconnect), then retry: the `.part` file is reused and the install completes. A bad archive or a missing `sd-cli.exe` shows an error and leaves nothing in `runtimes\sd-cpp\`.
+- [ ] Uninstall (after the confirm): the runtime folder and the card's version are gone. The Playground then shows the "not installed" notice.
+
+## Playground: text to image (not yet run)
+
+- [ ] Playground lists three models (SD 1.5 Q4, FLUX.2 klein 4B Q4, Z-Image Turbo Q4) with sizes, licence links and Download. The other four function tabs are disabled.
+- [ ] Download SD 1.5 Q4 (about 1.7 GB): per-file progress, "Model downloaded" toast, the card shows Ready. Cancel part-way: the status says cancelled; Download again resumes.
+- [ ] FLUX.2 klein and Z-Image Turbo share the Qwen3-4B text encoder. Downloading the second one fetches only its own files. Deleting one keeps the encoder while the other is downloaded; deleting both removes it. Deleting shows the bytes freed.
+- [ ] Delete and Download are refused while the model is generating or downloading.
+- [ ] Generate SD 1.5 Q4 at 512 x 512, 20 steps, Compute Auto: the phases show in order (loading, encoding, sampling with a step count, decoding, saving). The image shows, and a `.png` named from the prompt, time and seed is in `Pictures\LocalGenie`. Reveal in Explorer selects it.
+- [ ] Same prompt and a fixed seed twice on CPU: the two images match.
+- [ ] Random seed: the seed used is shown with the result, and the same seed reproduces it.
+- [ ] Generate before the model is downloaded, or with the runtime removed: refused with a message.
+- [ ] Negative prompt is disabled for FLUX.2 klein and Z-Image Turbo; CFG is disabled for them too.
+- [ ] Cancel during sampling: the status is cancelled, the process is gone (Task Manager), and no PNG is written.
+- [ ] Leave Playground during a generation and come back: the progress and the result are still there (`PlaygroundRuntime` keeps listening).
+- [ ] Close the window during a generation: the sd-cli process ends.
+- [ ] GPU (only if the build lists one): with CFG 1.0 the image is not blank; with CFG above 1 check for the white-image bug (known-issues). Expect it to be slower than the CPU.
+- [ ] A device that sd-cli no longer lists is refused with the "Pick a device from the list" message.
