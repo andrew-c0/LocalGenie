@@ -1,6 +1,7 @@
 import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
 import { Tab, TabList } from "@fluentui/react-components";
 import { useState } from "react";
+import ImageToImagePanel from "../../components/playground/ImageToImagePanel/ImageToImagePanel";
 import SpeechToTextPanel from "../../components/playground/SpeechToTextPanel/SpeechToTextPanel";
 import TextToImagePanel from "../../components/playground/TextToImagePanel/TextToImagePanel";
 import TextToSpeechPanel from "../../components/playground/TextToSpeechPanel/TextToSpeechPanel";
@@ -8,13 +9,14 @@ import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
 import "./PlaygroundPage.css";
 
 const TEXT_TO_IMAGE = "text-to-image";
+const IMAGE_TO_IMAGE = "image-to-image";
 const SPEECH_TO_TEXT = "speech-to-text";
 const TEXT_TO_SPEECH = "text-to-speech";
 
-/** Functions of the Playground. Image to image and video are listed and disabled until they are built. */
+/** Functions of the Playground. Video is listed and disabled until it is built. */
 const FUNCTIONS: { value: string; label: string; enabled: boolean }[] = [
   { value: TEXT_TO_IMAGE, label: "Text to image", enabled: true },
-  { value: "image-to-image", label: "Image to image", enabled: false },
+  { value: IMAGE_TO_IMAGE, label: "Image to image", enabled: true },
   { value: SPEECH_TO_TEXT, label: "Speech to text", enabled: true },
   { value: TEXT_TO_SPEECH, label: "Text to speech", enabled: true },
   { value: "video", label: "Video", enabled: false },
@@ -51,7 +53,10 @@ export default function PlaygroundPage() {
             </Tab>
           ))}
         </TabList>
-        {functionId === TEXT_TO_IMAGE && <TextToImagePanel />}
+        {functionId === TEXT_TO_IMAGE && (
+          <TextToImagePanel onOpenImageToImage={() => setFunctionId(IMAGE_TO_IMAGE)} />
+        )}
+        {functionId === IMAGE_TO_IMAGE && <ImageToImagePanel />}
         {functionId === SPEECH_TO_TEXT && <SpeechToTextPanel />}
         {functionId === TEXT_TO_SPEECH && <TextToSpeechPanel />}
       </div>

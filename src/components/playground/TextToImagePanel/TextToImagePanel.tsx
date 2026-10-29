@@ -1,52 +1,61 @@
-import { downloadImageModel } from "../../../services/playground";
 import { usePlaygroundStore } from "../../../stores/playgroundStore";
-import { generateBlockedReason, SD_CPP_NAME, SD_CPP_RUNTIME_ID } from "../../../utils/playground";
+import { inputFileName } from "../../../utils/imageToImage";
+import {
+  buildImageRequest,
+  generateBlockedReason,
+  SD_CPP_NAME,
+  SD_CPP_RUNTIME_ID,
+} from "../../../utils/playground";
 import { runtimeMissingMessage } from "../../../utils/playgroundText";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../ui/Flex/Flex";
 import { StateBlock } from "../../ui/StateBlock/StateBlock";
 import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
-import { PlaygroundModelCard } from "../PlaygroundModelCard/PlaygroundModelCard";
+import GeneratedImage from "../ImageGeneration/GeneratedImage/GeneratedImage";
+import GenerationProgress from "../ImageGeneration/GenerationProgress/GenerationProgress";
+import { useComputeDevices } from "../ImageGeneration/useComputeDevices";
+import { newImageJobId, useImageGeneration } from "../ImageGeneration/useImageGeneration";
+import { ImageModelColumn } from "../ImageModels/ImageModelColumn/ImageModelColumn";
+import { useImageModels } from "../ImageModels/useImageModels";
 import { RuntimeNotice } from "../RuntimeNotice/RuntimeNotice";
-import { usePlaygroundModelActions } from "../usePlaygroundModelActions";
 import { useRuntimeCheck } from "../useRuntimeCheck";
-import GeneratedImage from "./GeneratedImage/GeneratedImage";
 import GenerateForm from "./GenerateForm/GenerateForm";
-import GenerationProgress from "./GenerationProgress/GenerationProgress";
-import { ImageModelDeleteDialog } from "./ImageModelDeleteDialog/ImageModelDeleteDialog";
-import { useComputeDevices } from "./useComputeDevices";
-import { useImageGeneration } from "./useImageGeneration";
-import { useImageModelDelete } from "./useImageModelDelete";
-import { useImageModels } from "./useImageModels";
-import "./TextToImagePanel.css";
+
+interface TextToImagePanelProps {
+  /** Opens the image to image tab, once a result has been sent there as its input. */
+  onOpenImageToImage: () => void;
+}
 
 /** Text to image: the model list on the left; the form, the running image and the last result on the right. */
-export default function TextToImagePanel() {
+export default function TextToImagePanel({ onOpenImageToImage }: TextToImagePanelProps) {
   const { models, loadError } = useImageModels();
   const runtime = useRuntimeCheck(SD_CPP_RUNTIME_ID);
-  const { download, cancel: cancelDownload } = usePlaygroundModelActions(downloadImageModel);
   const { generate, cancel: cancelJob } = useImageGeneration();
   const compute = useComputeDevices(runtime.status);
-  const { pendingModel, deletingModelId, requestDelete, cancelDelete, confirmDelete } =
-    useImageModelDelete();
 
   const selectedModelId = usePlaygroundStore((s) => s.selectedModelId);
   const selectModel = usePlaygroundStore((s) => s.selectModel);
   const form = usePlaygroundStore((s) => s.form);
   const setForm = usePlaygroundStore((s) => s.setForm);
   const applySeed = usePlaygroundStore((s) => s.applySeed);
-  const downloads = usePlaygroundStore((s) => s.downloads);
+  const setInputImage = usePlaygroundStore((s) => s.setInputImage);
   const job = usePlaygroundStore((s) => s.job);
   const result = usePlaygroundStore((s) => s.result);
 
   const selected = models?.find((m) => m.id === selectedModelId) ?? null;
-  const isAnyDownloading = Object.values(downloads).some((d) => d.status === "downloading");
   const blockedReason = generateBlockedReason({
     runtime: runtime.status,
     model: selected,
     prompt: form.prompt,
     jobRunning: job !== null,
   });
+  // The image to image tab shows its own results, so this tab shows only the text to image ones.
+  const textResult = result?.inputPath ? null : result;
+
+  const useResultAsInput = (path: string) => {
+    setInputImage({ path, name: inputFileName(path), sourceSize: null });
+    onOpenImageToImage();
+  };
 
   return (
     <Flex direction="column" gap="l">
@@ -59,31 +68,12 @@ export default function TextToImagePanel() {
 
       {models && (
         <Flex gap="l" align="start">
-          <Flex direction="column" gap="m" className="text-to-image__models">
-            {models.map((model) => (
-              <PlaygroundModelCard
-                key={model.id}
-                model={model}
-                sizeBytes={model.totalBytes}
-                isSelected={model.id === selectedModelId}
-                download={downloads[model.id]}
-                isOtherDownloading={isAnyDownloading}
-                onSelect={() => selectModel(model)}
-                onDownload={() => download(model.id)}
-                isDeleteBusy={deletingModelId === model.id || job?.modelId === model.id}
-                onCancelDownload={() => cancelDownload(model.id)}
-                onDelete={() => requestDelete(model)}
-              />
-            ))}
-            {pendingModel && (
-              <ImageModelDeleteDialog
-                model={pendingModel}
-                models={models}
-                onConfirm={confirmDelete}
-                onCancel={cancelDelete}
-              />
-            )}
-          </Flex>
+          <ImageModelColumn
+            models={models}
+            catalog={models}
+            selectedModelId={selectedModelId}
+            onSelect={selectModel}
+          />
 
           <Flex direction="column" gap="l" className="flex-grow">
             <SurfaceCard title="Generate">
@@ -94,13 +84,19 @@ export default function TextToImagePanel() {
                 blockedReason={blockedReason}
                 compute={compute}
                 onGenerate={() => {
-                  if (selected) generate(selected, form);
+                  if (selected)
+                    generate(buildImageRequest(newImageJobId(), selected, form), form, null);
                 }}
               />
             </SurfaceCard>
             {job && <GenerationProgress job={job} onCancel={cancelJob} />}
-            {result && (
-              <GeneratedImage result={result} devices={compute.devices} onUseSeed={applySeed} />
+            {textResult && (
+              <GeneratedImage
+                result={textResult}
+                devices={compute.devices}
+                onUseSeed={applySeed}
+                onUseAsInput={useResultAsInput}
+              />
             )}
           </Flex>
         </Flex>

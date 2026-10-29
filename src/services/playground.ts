@@ -68,6 +68,11 @@ export async function readImage(path: string): Promise<string> {
   return invoke("playground_read_image", { path });
 }
 
+/** Read the picture an image to image job edits, as a data URL, so the webview can show it. */
+export async function readInputImage(path: string): Promise<string> {
+  return invoke("playground_read_input_image", { path });
+}
+
 /** Open the folder of a saved image with the file selected. */
 export async function revealImage(path: string): Promise<void> {
   return invoke("playground_reveal_image", { path });

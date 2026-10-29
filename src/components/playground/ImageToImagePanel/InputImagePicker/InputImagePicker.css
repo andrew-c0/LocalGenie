@@ -1,0 +1,10 @@
+/* The preview keeps the picture's shape and scales down to the card, so a tall picture does not push the form away. */
+.input-image-picker__preview {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--borderRadiusMedium);
+}

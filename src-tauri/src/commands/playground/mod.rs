@@ -9,6 +9,7 @@ mod args;
 mod catalog;
 mod devices;
 mod image_job;
+mod input_image;
 mod model_delete;
 mod model_download;
 mod paths;
@@ -133,7 +134,7 @@ pub async fn playground_delete_model(
 /// and the end as `playground-image-done`. Fails at once when the model is not downloaded, the
 /// runtime is not installed, or another image is being made. First the devices sd-cli lists are
 /// read, which takes a moment: a chosen device must be one of them, and a missing or `auto` device
-/// runs on the CPU.
+/// runs on the CPU. A request with `inputPath` is image-to-image; its picture is checked first.
 #[tauri::command]
 pub async fn playground_generate_image(
     app: AppHandle,
@@ -144,6 +145,12 @@ pub async fn playground_generate_image(
     paths::validate_job_id(&request.job_id)?;
     args::validate_request(&request)?;
     let recipe = catalog::find_recipe(&request.model_id)?;
+    args::validate_input_for_model(recipe, &request)?;
+    let input = request
+        .input_path
+        .as_deref()
+        .map(input_image::validate_input_image)
+        .transpose()?;
     let data_dir = app_data_dir(&app)?;
     let models_root = paths::models_root(&data_dir);
     if !catalog::is_downloaded(recipe, &models_root) {
@@ -168,6 +175,7 @@ pub async fn playground_generate_image(
         &request,
         &output,
         backend.as_deref(),
+        input.as_ref().map(|image| image.path.as_path()),
     );
     jobs.start(
         &app,
@@ -210,6 +218,17 @@ pub async fn playground_read_image(app: AppHandle, path: String) -> Result<Strin
         .await
         .map_err(|e| format!("Cannot read {path}: {e}"))?;
     Ok(format!("data:image/png;base64,{}", STANDARD.encode(bytes)))
+}
+
+/// A picked input picture as a `data:` URL, for the preview. It must be a PNG or JPG within the
+/// input size cap (see `input_image`).
+#[tauri::command]
+pub async fn playground_read_input_image(path: String) -> Result<String, String> {
+    let input = input_image::validate_input_image(&path)?;
+    let bytes = tokio::fs::read(&input.path)
+        .await
+        .map_err(|e| format!("Cannot read {path}: {e}"))?;
+    Ok(input_image::data_url(input.mime, &bytes))
 }
 
 /// Select a generated image in its folder in Explorer. The path must be inside an images folder.

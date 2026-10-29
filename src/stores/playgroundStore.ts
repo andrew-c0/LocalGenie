@@ -3,12 +3,21 @@ import type {
   ImageForm,
   ImageJob,
   ImageModel,
+  ImageOutcome,
   ImageResult,
+  ImageSize,
+  InputImage,
   PlaygroundDevice,
   PlaygroundDownloadProgress,
   PlaygroundDownloadState,
   PlaygroundImageProgress,
 } from "../types";
+import {
+  clampStrength,
+  DEFAULT_STRENGTH,
+  formWithInputSize,
+  isImageToImageModel,
+} from "../utils/imageToImage";
 import {
   applyModelDefaults,
   DEFAULT_IMAGE_FORM,
@@ -18,8 +27,8 @@ import {
 
 /**
  * Playground state, kept across page visits. It holds the model catalog, the selection, the form,
- * model downloads, the running generation and the last result. The event listeners and the service
- * calls live outside the store (`PlaygroundRuntime` and the panel hooks).
+ * the image to image input, model downloads, the running generation and the last result. The event
+ * listeners and the service calls live outside the store (`PlaygroundRuntime` and the panel hooks).
  */
 interface PlaygroundState {
   /** Null until the catalog has been read. */
@@ -28,6 +37,10 @@ interface PlaygroundState {
   /** Compute devices the runtime reported. Null until they are read. */
   devices: PlaygroundDevice[] | null;
   form: ImageForm;
+  /** The picture image to image edits. Null until one is picked. */
+  inputImage: InputImage | null;
+  /** How far a re-draw model moves away from the input picture. */
+  strength: number;
   /** Downloads started in this session, keyed by model id. A finished download is removed. */
   downloads: Record<string, PlaygroundDownloadState>;
   job: ImageJob | null;
@@ -45,6 +58,14 @@ interface PlaygroundState {
   /** Fill the form seed with a seed from a result and turn random seeds off. */
   applySeed: (seed: number) => void;
 
+  /** Pick the input picture. Its size is not known until its preview has loaded. */
+  setInputImage: (input: InputImage) => void;
+  /** Store the input picture's pixel size and set the form's size from it, for the selected model. */
+  setInputSourceSize: (size: ImageSize) => void;
+  setStrength: (strength: number) => void;
+  /** Select a model for image to image: its defaults, with the size taken from the input picture. */
+  selectEditModel: (model: ImageModel) => void;
+
   startDownload: (modelId: string) => void;
   setDownloadProgress: (progress: PlaygroundDownloadProgress) => void;
   markDownloadCancelled: (modelId: string) => void;
@@ -54,8 +75,15 @@ interface PlaygroundState {
   /** Start a job and clear the previous result. */
   startJob: (job: ImageJob) => void;
   setJobProgress: (progress: PlaygroundImageProgress) => void;
-  /** Store the result of the running job, with the job's device. A result for any other job is ignored. */
-  finishJob: (result: Omit<ImageResult, "device">) => void;
+  /** Store the result of the running job, with the job's device and input. A result for any other job is ignored. */
+  finishJob: (result: ImageOutcome) => void;
+}
+
+/** The model the selection points at, when it is in the catalog. */
+function selectedModelOf(
+  state: Pick<PlaygroundState, "models" | "selectedModelId">,
+): ImageModel | null {
+  return state.models?.find((m) => m.id === state.selectedModelId) ?? null;
 }
 
 export const usePlaygroundStore = create<PlaygroundState>((set) => ({
@@ -63,6 +91,8 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
   selectedModelId: null,
   devices: null,
   form: DEFAULT_IMAGE_FORM,
+  inputImage: null,
+  strength: DEFAULT_STRENGTH,
   downloads: {},
   job: null,
   result: null,
@@ -101,6 +131,31 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
   setForm: (patch) => set((state) => ({ form: { ...state.form, ...patch } })),
 
   applySeed: (seed) => set((state) => ({ form: { ...state.form, seed, randomSeed: false } })),
+
+  setInputImage: (input) => set({ inputImage: input }),
+
+  setInputSourceSize: (size) =>
+    set((state) => {
+      if (!state.inputImage) return {};
+      const selected = selectedModelOf(state);
+      const native = selected && isImageToImageModel(selected) ? selected.defaults : null;
+      return {
+        inputImage: { ...state.inputImage, sourceSize: size },
+        form: native ? formWithInputSize(state.form, size, native) : state.form,
+      };
+    }),
+
+  setStrength: (strength) => set({ strength: clampStrength(strength) }),
+
+  selectEditModel: (model) =>
+    set((state) => ({
+      selectedModelId: model.id,
+      form: formWithInputSize(
+        applyModelDefaults(state.form, model.defaults),
+        state.inputImage?.sourceSize ?? null,
+        model.defaults,
+      ),
+    })),
 
   startDownload: (modelId) =>
     set((state) => ({
@@ -175,6 +230,9 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
     set((state) => {
       const job = state.job;
       if (!job || job.jobId !== result.jobId) return {};
-      return { job: null, result: { ...result, device: job.device } };
+      return {
+        job: null,
+        result: { ...result, device: job.device, inputPath: job.inputPath },
+      };
     }),
 }));

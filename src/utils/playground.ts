@@ -102,28 +102,33 @@ function clampImageDimension(value: number): number {
 }
 
 /**
- * The valid width or height nearest to the typed text: a multiple of 8 within 64 to 2048. Text that
- * is blank or not a number gives `fallback`, so the field goes back to the value it had.
+ * The valid width or height nearest to the typed text: a multiple of `step` (8 for text to image)
+ * within 64 to 2048. Text that is blank or not a number gives `fallback`, so the field goes back to
+ * the value it had.
  */
-export function snapImageSize(text: string, fallback: number): number {
+export function snapImageSize(text: string, fallback: number, step = IMAGE_SIZE_STEP): number {
   const parsed = parseWholeNumber(text);
   if (parsed === null) return fallback;
-  return clampImageDimension(Math.round(parsed / IMAGE_SIZE_STEP) * IMAGE_SIZE_STEP);
+  return clampImageDimension(Math.round(parsed / step) * step);
 }
 
 /**
  * Why a typed width or height cannot be used as it is, or null when it is valid. The message names
  * the field, and for a size that is off the step, the nearest valid value.
  */
-export function imageSizeError(fieldName: string, text: string): string | null {
+export function imageSizeError(
+  fieldName: string,
+  text: string,
+  step = IMAGE_SIZE_STEP,
+): string | null {
   const parsed = parseWholeNumber(text);
   if (parsed === null) return `${fieldName} must be a whole number.`;
   if (parsed < IMAGE_SIZE_MIN || parsed > IMAGE_SIZE_MAX) {
     return `${fieldName} must be between ${IMAGE_SIZE_MIN} and ${IMAGE_SIZE_MAX}.`;
   }
-  if (parsed % IMAGE_SIZE_STEP !== 0) {
-    const nearest = snapImageSize(text, IMAGE_SIZE_MIN);
-    return `${fieldName} must be a multiple of ${IMAGE_SIZE_STEP}. Nearest is ${nearest}.`;
+  if (parsed % step !== 0) {
+    const nearest = snapImageSize(text, IMAGE_SIZE_MIN, step);
+    return `${fieldName} must be a multiple of ${step}. Nearest is ${nearest}.`;
   }
   return null;
 }
@@ -372,11 +377,10 @@ export function runtimeBlockedReason(runtime: RuntimeStatus, runtimeName: string
   return null;
 }
 
-/** What stops Generate from running, in the order the user can fix it. Null when it can run. */
-export function generateBlockedReason(gate: {
+/** The reasons every image job shares, in the order the user can fix them. Null when a job may start. */
+export function imageJobBlockedReason(gate: {
   runtime: RuntimeStatus;
   model: ImageModel | null;
-  prompt: string;
   jobRunning: boolean;
 }): string | null {
   if (gate.jobRunning) return "An image is already being generated.";
@@ -384,6 +388,18 @@ export function generateBlockedReason(gate: {
   if (runtimeReason) return runtimeReason;
   if (!gate.model) return "Choose a model first.";
   if (!gate.model.downloaded) return "Download the model first.";
+  return null;
+}
+
+/** What stops Generate from running, in the order the user can fix it. Null when it can run. */
+export function generateBlockedReason(gate: {
+  runtime: RuntimeStatus;
+  model: ImageModel | null;
+  prompt: string;
+  jobRunning: boolean;
+}): string | null {
+  const jobReason = imageJobBlockedReason(gate);
+  if (jobReason) return jobReason;
   if (!gate.prompt.trim()) return "Write a prompt first.";
   return null;
 }

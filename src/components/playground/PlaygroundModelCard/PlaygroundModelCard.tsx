@@ -1,4 +1,5 @@
 import { Button, Card } from "@fluentui/react-components";
+import type { ReactNode } from "react";
 import type { PlaygroundDownloadState } from "../../../types";
 import { formatBytes } from "../../../utils/format";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
@@ -43,6 +44,8 @@ interface PlaygroundModelCardProps {
   sizeBytes: number;
   /** Extra lines between the description and the size. */
   details?: ModelDetail[];
+  /** A small badge beside the status, e.g. how the model uses an input picture. */
+  tag?: ReactNode;
   isSelected: boolean;
   /** This model's download, if one was started in this session. */
   download: PlaygroundDownloadState | undefined;
@@ -61,6 +64,7 @@ export function PlaygroundModelCard({
   model,
   sizeBytes,
   details = [],
+  tag,
   isSelected,
   download,
   isOtherDownloading,
@@ -78,7 +82,10 @@ export function PlaygroundModelCard({
       <Flex direction="column" gap="s">
         <Flex justify="between" align="center" gap="m">
           <CardTitle>{model.name}</CardTitle>
-          <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+          <Flex gap="s" align="center">
+            {tag}
+            <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+          </Flex>
         </Flex>
         <Body>{model.description}</Body>
 

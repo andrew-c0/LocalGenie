@@ -344,6 +344,12 @@ export interface ImageModelDefaults extends ImageSize {
   cfgScale: number;
 }
 
+/**
+ * How an image model uses an input picture. `init` re-draws it (strength applies), `reference` edits
+ * it from an instruction, `none` takes no picture (text to image only).
+ */
+export type ImageInputKind = "none" | "init" | "reference";
+
 /** An image model the Playground can download and run. */
 export interface ImageModel {
   id: string;
@@ -360,9 +366,11 @@ export interface ImageModel {
   supportsNegativePrompt: boolean;
   /** False when the model fixes its CFG scale at `defaults.cfgScale`. The field is then disabled. */
   cfgAdjustable: boolean;
+  /** Whether the model takes an input picture. Only `init` and `reference` models are listed for image to image. */
+  imageInput: ImageInputKind;
 }
 
-/** Request for `playground_generate_image`. A `seed` of -1 asks for a random seed. `device` is left out for auto. */
+/** Request for `playground_generate_image`. A `seed` of -1 asks for a random seed. `device` is left out for auto. `inputPath` is set for image to image; `strength` only for `init` models. */
 export interface ImageGenerateRequest {
   jobId: string;
   modelId: string;
@@ -374,6 +382,8 @@ export interface ImageGenerateRequest {
   cfgScale: number;
   seed: number;
   device?: string;
+  inputPath?: string;
+  strength?: number;
 }
 
 export type PlaygroundDeviceKind = "cpu" | "gpu" | "npu" | "other";
@@ -462,6 +472,8 @@ export interface ImageJob {
   modelId: string;
   /** The form's compute choice when the job started: "auto" or a device name. */
   device: string;
+  /** The picture the job edits, or null for text to image. */
+  inputPath: string | null;
   startedAt: number;
   phase: ImagePhase;
   step: number;
@@ -469,7 +481,7 @@ export interface ImageJob {
   secondsPerStep: number | null;
 }
 
-/** The last generation that ended, kept until the next one starts. `seed` is null when the job never started. `device` is the job's compute choice. */
+/** The last generation that ended, kept until the next one starts. `seed` is null when the job never started. `device` is the job's compute choice; `inputPath` is the picture it edited, or null for text to image. */
 export interface ImageResult {
   jobId: string;
   status: "done" | "error" | "cancelled";
@@ -478,6 +490,17 @@ export interface ImageResult {
   seed: number | null;
   seconds: number | null;
   device: string;
+  inputPath: string | null;
+}
+
+/** What the backend reports for a generation, before the store adds the job's device and input. */
+export type ImageOutcome = Omit<ImageResult, "device" | "inputPath">;
+
+/** The picture an image to image job edits. `sourceSize` is its pixel size, known once its preview has loaded. */
+export interface InputImage {
+  path: string;
+  name: string;
+  sourceSize: ImageSize | null;
 }
 
 /** Speech models: `stt` turns a recording into text, `tts` reads text aloud. */

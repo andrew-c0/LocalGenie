@@ -80,17 +80,19 @@ pub struct AttachmentFile {
     pub text: Option<String>,
 }
 
-/// Open a native file dialog limited to the extensions of one attachment kind. Resolves to the
-/// chosen path, or null when the user cancels.
+/// Open a native file dialog limited to the extensions of one attachment kind, or to the subset
+/// `extensions` names. Resolves to the chosen path, or null when the user cancels.
 #[tauri::command]
 pub async fn pick_attachment(
     app: AppHandle,
     kind: AttachmentKind,
+    extensions: Option<Vec<String>>,
 ) -> Result<Option<String>, String> {
+    let offered = dialog_extensions(kind, extensions.as_deref().unwrap_or(&[]))?;
     let (tx, rx) = oneshot::channel();
     app.dialog()
         .file()
-        .add_filter(kind.filter_label(), kind.extensions())
+        .add_filter(kind.filter_label(), &offered)
         .pick_file(move |picked| {
             let _ = tx.send(picked);
         });
@@ -141,6 +143,34 @@ pub(super) fn reveal_in_explorer(file: &Path) -> Result<(), String> {
 #[cfg(not(target_os = "windows"))]
 pub(super) fn reveal_in_explorer(_file: &Path) -> Result<(), String> {
     Err("Opening the file location is only supported on Windows.".to_string())
+}
+
+/// The extensions the dialog offers. An empty `requested` list gives the kind's full list. Otherwise
+/// each requested extension (ignoring case) must be on the kind's list, or the whole request is
+/// refused: a dialog filter never offers a type the command would not accept.
+pub(super) fn dialog_extensions(
+    kind: AttachmentKind,
+    requested: &[String],
+) -> Result<Vec<&'static str>, String> {
+    if requested.is_empty() {
+        return Ok(kind.extensions().to_vec());
+    }
+    requested
+        .iter()
+        .map(|wanted| {
+            let lower = wanted.to_ascii_lowercase();
+            kind.extensions()
+                .iter()
+                .copied()
+                .find(|allowed| *allowed == lower)
+                .ok_or_else(|| {
+                    format!(
+                        "{wanted} is not an allowed extension for {}",
+                        kind.filter_label().to_lowercase()
+                    )
+                })
+        })
+        .collect()
 }
 
 /// The kind an extension belongs to, or None when no attachment kind takes it.
@@ -439,6 +469,44 @@ mod tests {
             pixel.iter().all(|&c| c > 240),
             "expected white, got {pixel:?}"
         );
+    }
+
+    #[test]
+    fn dialog_offers_the_full_kind_list_when_no_extensions_are_asked() {
+        assert_eq!(
+            dialog_extensions(AttachmentKind::Image, &[]).expect("image"),
+            IMAGE_EXTENSIONS
+        );
+        assert_eq!(
+            dialog_extensions(AttachmentKind::Audio, &[]).expect("audio"),
+            AUDIO_EXTENSIONS
+        );
+    }
+
+    #[test]
+    fn dialog_narrows_to_the_asked_extensions_in_any_case() {
+        let asked = ["png", "JPG", "jpeg"].map(String::from);
+        assert_eq!(
+            dialog_extensions(AttachmentKind::Image, &asked).expect("image subset"),
+            vec!["png", "jpg", "jpeg"]
+        );
+        let wav = ["WAV".to_string()];
+        assert_eq!(
+            dialog_extensions(AttachmentKind::Audio, &wav).expect("audio subset"),
+            vec!["wav"]
+        );
+    }
+
+    #[test]
+    fn dialog_refuses_an_extension_outside_the_kind() {
+        let mixed = ["png".to_string(), "mp3".to_string()];
+        assert!(dialog_extensions(AttachmentKind::Image, &mixed).is_err());
+        let bmp = ["bmp".to_string()];
+        let error = dialog_extensions(AttachmentKind::Image, &bmp).expect_err("bmp");
+        assert!(error.contains("bmp"), "{error}");
+        let wav = ["wav".to_string()];
+        assert!(dialog_extensions(AttachmentKind::Image, &wav).is_err());
+        assert!(dialog_extensions(AttachmentKind::Text, &wav).is_err());
     }
 
     #[test]

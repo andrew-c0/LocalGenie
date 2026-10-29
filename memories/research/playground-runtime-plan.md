@@ -140,3 +140,12 @@ Each phase ends with entries in `known-issues.md`, `manual-checklist.md`, the co
 - **Limitation:** the command line cannot carry non-ASCII text, so text to speech converts it to ASCII first.
 - Code facts: `memories/repo/codebase-map.md`; open items: `memories/repo/known-issues.md`.
 
+## 13. Image to image spike (2026-10-30)
+
+- **SD 1.5 Q4 re-draw (`-i`, `--strength`):** 256 px, 10 steps, strength 0.6 took about 28 s; quality is rough. Needs `--batched-cfg off` even on CPU (blank image otherwise, verified).
+- **FLUX.2 klein 4B edit (`-r`, `--sampling-method euler`):** 256 px, 4 steps took about 49 s; the edit was correct.
+- **Z-Image Turbo** has no edit path.
+- **Process model:** each job starts a fresh `sd-cli` that loads the model and releases it afterwards; a persistent `sd-server` is a possible later option.
+- **Video:** the only disabled Playground tab (large Wan/Hunyuan models, frame-count rules).
+- **Later idea:** a middle layer that converts other image types to jpeg for input.
+- Code facts: `memories/repo/codebase-map.md`; open items: `memories/repo/known-issues.md`.

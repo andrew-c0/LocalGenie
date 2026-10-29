@@ -22,6 +22,17 @@ pub(super) enum ModelRole {
     Llm,
 }
 
+/// What a model does with an input image. `Init` is image-to-image from a starting picture (sd-cli
+/// `-i` with `--strength`). `Reference` is an instruction edit that takes the picture as context
+/// (sd-cli `-r`, no strength). `None` is text-to-image only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ImageInput {
+    None,
+    Init,
+    Reference,
+}
+
 /// One file of a recipe, fetched from `https://huggingface.co/<repo>/resolve/main/<path_in_repo>`.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct ModelFile {
@@ -68,6 +79,7 @@ pub(super) struct ImageRecipe {
     pub supports_negative_prompt: bool,
     /// False for a distilled model whose CFG scale is fixed at its default.
     pub cfg_adjustable: bool,
+    pub image_input: ImageInput,
 }
 
 /// The Qwen3 text encoder used by both FLUX.2 klein and Z-Image Turbo. One copy on disk.
@@ -99,6 +111,7 @@ const SD15_Q4: ImageRecipe = ImageRecipe {
     },
     supports_negative_prompt: true,
     cfg_adjustable: true,
+    image_input: ImageInput::Init,
 };
 
 const FLUX2_KLEIN_4B_Q4: ImageRecipe = ImageRecipe {
@@ -136,6 +149,7 @@ const FLUX2_KLEIN_4B_Q4: ImageRecipe = ImageRecipe {
     },
     supports_negative_prompt: false,
     cfg_adjustable: false,
+    image_input: ImageInput::Reference,
 };
 
 const Z_IMAGE_TURBO_Q4: ImageRecipe = ImageRecipe {
@@ -172,6 +186,7 @@ const Z_IMAGE_TURBO_Q4: ImageRecipe = ImageRecipe {
     },
     supports_negative_prompt: false,
     cfg_adjustable: false,
+    image_input: ImageInput::None,
 };
 
 /// Every curated model, in the order the Playground lists them.
@@ -200,6 +215,7 @@ pub struct ImageModel {
     pub defaults: ImageDefaults,
     pub supports_negative_prompt: bool,
     pub cfg_adjustable: bool,
+    pub image_input: ImageInput,
 }
 
 /// One file of a listed model.
@@ -234,6 +250,7 @@ pub(super) fn describe(recipe: &'static ImageRecipe, models_root: &Path) -> Imag
         defaults: recipe.defaults,
         supports_negative_prompt: recipe.supports_negative_prompt,
         cfg_adjustable: recipe.cfg_adjustable,
+        image_input: recipe.image_input,
     }
 }
 
@@ -430,6 +447,26 @@ mod tests {
         assert_eq!(json["defaults"]["steps"], 20);
         assert_eq!(json["supportsNegativePrompt"], true);
         assert_eq!(json["cfgAdjustable"], true);
+        assert_eq!(json["imageInput"], "init");
+    }
+
+    #[test]
+    fn each_model_says_what_it_does_with_an_input_image() {
+        let expected = [
+            ("sd15-q4", ImageInput::Init),
+            ("flux2-klein-4b-q4", ImageInput::Reference),
+            ("z-image-turbo-q4", ImageInput::None),
+        ];
+        for (id, input) in expected {
+            assert_eq!(find_recipe(id).expect("recipe").image_input, input, "{id}");
+        }
+    }
+
+    #[test]
+    fn image_input_serialises_as_the_frontend_words() {
+        assert_eq!(serde_json::json!(ImageInput::None), "none");
+        assert_eq!(serde_json::json!(ImageInput::Init), "init");
+        assert_eq!(serde_json::json!(ImageInput::Reference), "reference");
     }
 
     #[test]

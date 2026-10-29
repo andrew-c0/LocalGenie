@@ -3,7 +3,7 @@ import * as playground from "../../../services/playground";
 import { usePlaygroundStore } from "../../../stores/playgroundStore";
 import { useSpeechStore } from "../../../stores/speechStore";
 import type {
-  ImageResult,
+  ImageOutcome,
   PlaygroundDownloadDone,
   PlaygroundDownloadProgress,
   PlaygroundImageDone,
@@ -67,7 +67,7 @@ function handleDownloadDone(payload: PlaygroundDownloadDone) {
 function handleImageDone(payload: PlaygroundImageDone) {
   const store = usePlaygroundStore.getState();
   const isCurrentJob = store.job?.jobId === payload.jobId;
-  const result: Omit<ImageResult, "device"> = {
+  const result: ImageOutcome = {
     jobId: payload.jobId,
     status: payload.status,
     path: payload.path ?? null,

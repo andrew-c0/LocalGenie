@@ -18,7 +18,7 @@ export function useAudioFilePicker(): AudioFilePicker {
 
   const chooseFile = () => {
     setError(null);
-    pickAttachment("audio")
+    pickAttachment("audio", ["wav"])
       .then((path) => {
         if (!path) return;
         if (!isWavPath(path)) {

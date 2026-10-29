@@ -1,33 +1,41 @@
 import * as playground from "../../../services/playground";
 import { usePlaygroundStore } from "../../../stores/playgroundStore";
-import type { ImageForm, ImageModel } from "../../../types";
+import type { ImageForm, ImageGenerateRequest } from "../../../types";
 import { errorMessage } from "../../../utils/errorMessage";
-import { buildImageRequest } from "../../../utils/playground";
 import { toast } from "../../../utils/toast";
 
+/** A new id for an image job. The request and the job share it. */
+export function newImageJobId(): string {
+  return `img-${Date.now()}`;
+}
+
 /**
- * Start and cancel an image generation. Progress and the result come from the `PlaygroundRuntime`
- * listeners. A failed start is recorded here as the job's result.
+ * Start and cancel an image generation, for text to image and image to image alike. Progress and the
+ * result come from the `PlaygroundRuntime` listeners. A failed start is recorded here as the job's result.
  */
 export function useImageGeneration() {
   const startJob = usePlaygroundStore((s) => s.startJob);
   const finishJob = usePlaygroundStore((s) => s.finishJob);
 
-  const generate = (model: ImageModel, form: ImageForm) => {
-    const jobId = `img-${Date.now()}`;
+  /**
+   * Start the job a request describes. `form` gives the compute choice; `inputPath` is the picture an
+   * edit works on, or null for text to image.
+   */
+  const generate = (request: ImageGenerateRequest, form: ImageForm, inputPath: string | null) => {
     startJob({
-      jobId,
-      modelId: model.id,
+      jobId: request.jobId,
+      modelId: request.modelId,
       device: form.device,
+      inputPath,
       startedAt: Date.now(),
       phase: "loading",
       step: 0,
-      steps: form.steps,
+      steps: request.steps,
       secondsPerStep: null,
     });
-    playground.generateImage(buildImageRequest(jobId, model, form)).catch((err: unknown) => {
+    playground.generateImage(request).catch((err: unknown) => {
       finishJob({
-        jobId,
+        jobId: request.jobId,
         status: "error",
         path: null,
         error: errorMessage(err, "The image could not be generated."),

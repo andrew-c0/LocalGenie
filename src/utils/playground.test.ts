@@ -56,6 +56,7 @@ const model = (overrides: Partial<ImageModel> = {}): ImageModel => ({
   defaults: { width: 512, height: 512, steps: 4, cfgScale: 1 },
   supportsNegativePrompt: true,
   cfgAdjustable: true,
+  imageInput: "none",
   ...overrides,
 });
 
@@ -250,6 +251,14 @@ describe("size validation", () => {
     expect(imageSizeError("Width", "")).toBe("Width must be a whole number.");
     expect(imageSizeError("Width", "abc")).toBe("Width must be a whole number.");
     expect(imageSizeError("Width", "512.5")).toBe("Width must be a whole number.");
+  });
+
+  it("checks the step the caller gives, such as 16 for edit models", () => {
+    expect(imageSizeError("Width", "504", 16)).toBe(
+      "Width must be a multiple of 16. Nearest is 512.",
+    );
+    expect(imageSizeError("Width", "528", 16)).toBeNull();
+    expect(imageSizeError("Width", "504")).toBeNull();
   });
 });
 

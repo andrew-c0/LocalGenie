@@ -120,6 +120,7 @@ pub fn run() {
             playground::playground_generate_image,
             playground::playground_cancel_image,
             playground::playground_read_image,
+            playground::playground_read_input_image,
             playground::playground_reveal_image,
             playground::playground_list_devices,
             playground::playground_delete_model,

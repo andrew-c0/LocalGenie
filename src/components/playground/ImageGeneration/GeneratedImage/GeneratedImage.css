@@ -1,0 +1,4 @@
+/* The saved path can be long with no spaces to wrap on. */
+.generated-image__path {
+  overflow-wrap: anywhere;
+}

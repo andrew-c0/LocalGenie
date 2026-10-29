@@ -1,4 +1,4 @@
 /* Fluent's Textarea does not fill its Field by itself, so the prompt boxes are set to full width. */
-.generate-form__textarea {
+.prompt-field__textarea {
   width: 100%;
 }

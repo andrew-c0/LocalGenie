@@ -1,0 +1,13 @@
+/* Two pictures sit side by side and wrap under each other on a narrow card; each takes an equal share. */
+.image-pane {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+/* Images scale down to the pane; the picture keeps its shape. */
+.image-pane__image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--borderRadiusMedium);
+}

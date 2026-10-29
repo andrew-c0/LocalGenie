@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use super::catalog::{ImageRecipe, ModelRole};
+use super::catalog::{ImageInput, ImageRecipe, ModelRole};
 use super::devices::{device_kind, DeviceKind};
 
 const MIN_EDGE: u32 = 64;
@@ -19,8 +19,15 @@ const MAX_PROMPT_CHARS: usize = 2000;
 const MAX_DEVICE_CHARS: usize = 40;
 /// The device value that asks for the default, the same as sending no device: the CPU.
 pub(super) const AUTO_DEVICE: &str = "auto";
+/// The share of the steps an init image runs: 0.05 keeps most of the picture, 1.0 starts from noise.
+const MIN_STRENGTH: f32 = 0.05;
+const MAX_STRENGTH: f32 = 1.0;
+/// The strength an init image uses when the request gives none.
+pub(super) const DEFAULT_STRENGTH: f32 = 0.6;
+/// The sampler a reference edit runs with, the one the verified FLUX.2 klein edit used.
+const REFERENCE_SAMPLER: &str = "euler";
 
-/// What the webview asks for: one image from one curated model.
+/// What the webview asks for: one image from one curated model, optionally from an input picture.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageRequest {
@@ -36,6 +43,10 @@ pub struct ImageRequest {
     pub seed: i64,
     /// A device name from `playground_list_devices`. Missing or `auto` runs on the CPU device.
     pub device: Option<String>,
+    /// The picture to start from or to edit. Its path is checked by `input_image` before use.
+    pub input_path: Option<String>,
+    /// How far an init image is changed. Used only with an init image; see `DEFAULT_STRENGTH`.
+    pub strength: Option<f32>,
 }
 
 impl ImageRequest {
@@ -96,6 +107,40 @@ pub(super) fn validate_request(request: &ImageRequest) -> Result<(), String> {
     validate_device_name(request.device.as_deref())
 }
 
+/// Checks the input picture against the model. A request with no input picture is text-to-image and
+/// is never refused here. A model with no input support refuses one. A reference edit ignores the
+/// strength. An init image needs a strength between `MIN_STRENGTH` and `MAX_STRENGTH`, or the default.
+pub(super) fn validate_input_for_model(
+    recipe: &ImageRecipe,
+    request: &ImageRequest,
+) -> Result<(), String> {
+    if request.input_path.is_none() {
+        return Ok(());
+    }
+    match recipe.image_input {
+        ImageInput::None => Err(format!(
+            "{} cannot take an input image. Pick a model that can.",
+            recipe.name
+        )),
+        ImageInput::Reference => Ok(()),
+        ImageInput::Init => {
+            let strength = init_strength(request);
+            if (MIN_STRENGTH..=MAX_STRENGTH).contains(&strength) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "Strength must be between {MIN_STRENGTH} and {MAX_STRENGTH}."
+                ))
+            }
+        }
+    }
+}
+
+/// The strength an init image runs with: the request's, or `DEFAULT_STRENGTH` when it gives none.
+fn init_strength(request: &ImageRequest) -> f32 {
+    request.strength.unwrap_or(DEFAULT_STRENGTH)
+}
+
 /// Accept a missing device, or a name of letters, digits, `_`, `.` and `-` up to 40 characters.
 /// The name is only a shape check; the caller checks it against the devices sd-cli lists.
 pub(super) fn validate_device_name(device: Option<&str>) -> Result<(), String> {
@@ -119,21 +164,26 @@ pub(super) fn validate_device_name(device: Option<&str>) -> Result<(), String> {
 /// caller checks the files are on disk first. A model that does not take a negative prompt or a
 /// CFG scale gets neither from the request. `backend` is the device for `--backend`, or None to
 /// leave the choice to sd-cli (only when the device list has no CPU, see `devices::pick_backend`).
-/// A GPU or NPU device also gets `--batched-cfg off`: the batched CFG forward renders a blank white
-/// image on the Adreno OpenCL backend whenever the CFG scale is above 1. The CPU and the no-device
-/// case keep sd-cli's default.
+/// `input` is the checked input picture, if the request has one (see `push_input_args`).
+/// `--batched-cfg off` is passed for an init image on any device, and for a GPU or NPU device: the
+/// batched CFG forward renders a blank white image on the Adreno OpenCL backend whenever the CFG
+/// scale is above 1. The CPU and the no-device case keep sd-cli's default.
 pub(super) fn build_args(
     recipe: &ImageRecipe,
     model_paths: &[(ModelRole, PathBuf)],
     request: &ImageRequest,
     output_path: &Path,
     backend: Option<&str>,
+    input: Option<&Path>,
 ) -> Vec<String> {
     let mut args = Vec::new();
     for &(flag, role) in recipe.flags {
         if let Some((_, path)) = model_paths.iter().find(|(path_role, _)| *path_role == role) {
             push_pair(&mut args, flag, path.to_string_lossy());
         }
+    }
+    if let Some(path) = input {
+        push_input_args(&mut args, recipe.image_input, path, request);
     }
     push_pair(&mut args, "-p", &request.prompt);
     if recipe.supports_negative_prompt {
@@ -157,13 +207,42 @@ pub(super) fn build_args(
     // text encoder runs on the same device. No module is pinned to the CPU.
     if let Some(device) = backend {
         push_pair(&mut args, "--backend", device);
-        if !is_cpu_backend(device) {
-            push_pair(&mut args, "--batched-cfg", "off");
-        }
+    }
+    if needs_batched_cfg_off(recipe.image_input, input.is_some(), backend) {
+        push_pair(&mut args, "--batched-cfg", "off");
     }
     push_pair(&mut args, "-t", thread_count());
     push_pair(&mut args, "-o", output_path.to_string_lossy());
     args
+}
+
+/// The flags for the input picture. An init image gets `-i` and `--strength`. A reference image gets
+/// `-r`, and a reference edit samples with Euler. A model with no input support gets nothing here;
+/// `validate_input_for_model` refuses that request before it gets this far.
+fn push_input_args(
+    args: &mut Vec<String>,
+    image_input: ImageInput,
+    input: &Path,
+    request: &ImageRequest,
+) {
+    match image_input {
+        ImageInput::Init => {
+            push_pair(args, "-i", input.to_string_lossy());
+            push_pair(args, "--strength", init_strength(request));
+        }
+        ImageInput::Reference => {
+            push_pair(args, "-r", input.to_string_lossy());
+            push_pair(args, "--sampling-method", REFERENCE_SAMPLER);
+        }
+        ImageInput::None => {}
+    }
+}
+
+/// True when the run needs `--batched-cfg off`: an init image on any device (the blank white image
+/// is also seen on the CPU), or a device that is not the CPU.
+fn needs_batched_cfg_off(image_input: ImageInput, has_input: bool, backend: Option<&str>) -> bool {
+    let init_image = has_input && image_input == ImageInput::Init;
+    init_image || backend.is_some_and(|device| !is_cpu_backend(device))
 }
 
 /// The negative prompt with its surrounding spaces removed, or None when it has no text.
@@ -210,6 +289,8 @@ mod tests {
             cfg_scale: recipe.defaults.cfg_scale,
             seed: 42,
             device: None,
+            input_path: None,
+            strength: None,
         }
     }
 
@@ -232,7 +313,20 @@ mod tests {
             &request_for(model_id),
             &output(),
             None,
+            None,
         )
+    }
+
+    /// The arguments without the `-t` thread count, which depends on the machine.
+    fn without_threads(mut args: Vec<String>) -> Vec<String> {
+        if let Some(index) = args.iter().position(|arg| arg == "-t") {
+            args.drain(index..index + 2);
+        }
+        args
+    }
+
+    fn strings(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(|part| part.to_string()).collect()
     }
 
     fn value_after<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
@@ -341,12 +435,26 @@ mod tests {
         let recipe = find_recipe("sd15-q4").expect("sd15");
         let mut request = request_for("sd15-q4");
         request.negative_prompt = Some("  blurry  ".to_string());
-        let args = build_args(recipe, &paths_for("sd15-q4"), &request, &output(), None);
+        let args = build_args(
+            recipe,
+            &paths_for("sd15-q4"),
+            &request,
+            &output(),
+            None,
+            None,
+        );
         assert_eq!(value_after(&args, "-n"), Some("blurry"));
 
         for blank in [None, Some(String::new()), Some("   ".to_string())] {
             request.negative_prompt = blank;
-            let args = build_args(recipe, &paths_for("sd15-q4"), &request, &output(), None);
+            let args = build_args(
+                recipe,
+                &paths_for("sd15-q4"),
+                &request,
+                &output(),
+                None,
+                None,
+            );
             assert!(value_after(&args, "-n").is_none());
         }
     }
@@ -358,7 +466,14 @@ mod tests {
             let mut request = request_for(model_id);
             request.negative_prompt = Some("blurry".to_string());
             request.cfg_scale = 5.5;
-            let args = build_args(recipe, &paths_for(model_id), &request, &output(), None);
+            let args = build_args(
+                recipe,
+                &paths_for(model_id),
+                &request,
+                &output(),
+                None,
+                None,
+            );
             assert!(value_after(&args, "-n").is_none(), "{model_id} got -n");
             assert_eq!(
                 value_after(&args, "--cfg-scale"),
@@ -374,7 +489,14 @@ mod tests {
         let mut request = request_for("sd15-q4");
         request.negative_prompt = Some("blurry".to_string());
         request.cfg_scale = 3.5;
-        let args = build_args(recipe, &paths_for("sd15-q4"), &request, &output(), None);
+        let args = build_args(
+            recipe,
+            &paths_for("sd15-q4"),
+            &request,
+            &output(),
+            None,
+            None,
+        );
         assert_eq!(value_after(&args, "-n"), Some("blurry"));
         assert_eq!(value_after(&args, "--cfg-scale"), Some("3.5"));
     }
@@ -396,6 +518,7 @@ mod tests {
             &request_for(recipe.id),
             &output(),
             Some("GPUOpenCL0"),
+            None,
         );
         assert_eq!(value_after(&args, "--backend"), Some("GPUOpenCL0"));
         assert_eq!(args.iter().filter(|arg| *arg == "--backend").count(), 1);
@@ -416,6 +539,7 @@ mod tests {
             &request_for("sd15-q4"),
             &output(),
             Some("HTP0"),
+            None,
         );
         assert_eq!(value_after(&args, "--backend"), Some("HTP0"));
         assert_eq!(
@@ -431,6 +555,7 @@ mod tests {
             &request_for(model_id),
             &output(),
             device,
+            None,
         )
     }
 
@@ -575,5 +700,338 @@ mod tests {
         });
         let request: ImageRequest = serde_json::from_value(with_device).expect("parses");
         assert_eq!(request.device.as_deref(), Some("HTP0"));
+    }
+
+    #[test]
+    fn input_fields_read_the_camel_case_contract() {
+        let with_input: ImageRequest = serde_json::from_value(serde_json::json!({
+            "jobId": "job-3",
+            "modelId": "sd15-q4",
+            "prompt": "a lighthouse",
+            "width": 256,
+            "height": 256,
+            "steps": 8,
+            "cfgScale": 7.0,
+            "seed": 1,
+            "inputPath": "C:\\pictures\\cow.png",
+            "strength": 0.6
+        }))
+        .expect("parses");
+        assert_eq!(
+            with_input.input_path.as_deref(),
+            Some("C:\\pictures\\cow.png")
+        );
+        assert_eq!(with_input.strength, Some(0.6));
+
+        let text_only: ImageRequest = serde_json::from_value(serde_json::json!({
+            "jobId": "job-4",
+            "modelId": "sd15-q4",
+            "prompt": "a lighthouse",
+            "width": 256,
+            "height": 256,
+            "steps": 8,
+            "cfgScale": 7.0,
+            "seed": 1
+        }))
+        .expect("parses");
+        assert_eq!(text_only.input_path, None);
+        assert_eq!(text_only.strength, None);
+    }
+
+    /// The exact arguments of a text-to-image request, for each model, with no input picture. These
+    /// must not change when image-to-image is added.
+    #[test]
+    fn text_to_image_vectors_are_unchanged() {
+        let out = output().to_string_lossy().into_owned();
+
+        let sd15 = local("sd15-q4", ModelRole::Model);
+        assert_eq!(
+            without_threads(args_for("sd15-q4")),
+            strings(&[
+                "-m",
+                sd15.as_str(),
+                "-p",
+                "a red fox in the snow",
+                "-W",
+                "512",
+                "-H",
+                "512",
+                "--steps",
+                "20",
+                "--cfg-scale",
+                "7",
+                "--seed",
+                "42",
+                "-o",
+                out.as_str(),
+            ])
+        );
+
+        for model_id in ["flux2-klein-4b-q4", "z-image-turbo-q4"] {
+            let steps = find_recipe(model_id)
+                .expect("recipe")
+                .defaults
+                .steps
+                .to_string();
+            let diffusion = local(model_id, ModelRole::Model);
+            let vae = local(model_id, ModelRole::Vae);
+            let llm = local(model_id, ModelRole::Llm);
+            assert_eq!(
+                without_threads(args_for(model_id)),
+                strings(&[
+                    "--diffusion-model",
+                    diffusion.as_str(),
+                    "--vae",
+                    vae.as_str(),
+                    "--llm",
+                    llm.as_str(),
+                    "-p",
+                    "a red fox in the snow",
+                    "-W",
+                    "512",
+                    "-H",
+                    "512",
+                    "--steps",
+                    steps.as_str(),
+                    "--cfg-scale",
+                    "1",
+                    "--seed",
+                    "42",
+                    "-o",
+                    out.as_str(),
+                ]),
+                "{model_id}"
+            );
+        }
+    }
+
+    /// An init image request: 256 px, 8 steps, seed 42, on `sd15-q4` with the picture `cow.png`.
+    fn init_request() -> ImageRequest {
+        let mut request = request_for("sd15-q4");
+        request.width = 256;
+        request.height = 256;
+        request.steps = 8;
+        request.input_path = Some("cow.png".to_string());
+        request
+    }
+
+    #[test]
+    fn init_image_vector_passes_the_strength_and_turns_batched_cfg_off() {
+        let recipe = find_recipe("sd15-q4").expect("sd15");
+        let mut request = init_request();
+        request.strength = Some(0.6);
+        let input = PathBuf::from("cow.png");
+        let args = build_args(
+            recipe,
+            &paths_for("sd15-q4"),
+            &request,
+            &output(),
+            None,
+            Some(&input),
+        );
+
+        let model = local("sd15-q4", ModelRole::Model);
+        let out = output().to_string_lossy().into_owned();
+        assert_eq!(
+            without_threads(args),
+            strings(&[
+                "-m",
+                model.as_str(),
+                "-i",
+                "cow.png",
+                "--strength",
+                "0.6",
+                "-p",
+                "a red fox in the snow",
+                "-W",
+                "256",
+                "-H",
+                "256",
+                "--steps",
+                "8",
+                "--cfg-scale",
+                "7",
+                "--seed",
+                "42",
+                "--batched-cfg",
+                "off",
+                "-o",
+                out.as_str(),
+            ])
+        );
+    }
+
+    #[test]
+    fn init_image_on_the_cpu_defaults_the_strength_and_keeps_batched_cfg_off() {
+        let recipe = find_recipe("sd15-q4").expect("sd15");
+        let request = init_request();
+        let input = PathBuf::from("cow.png");
+        let args = build_args(
+            recipe,
+            &paths_for("sd15-q4"),
+            &request,
+            &output(),
+            Some("CPU"),
+            Some(&input),
+        );
+
+        let model = local("sd15-q4", ModelRole::Model);
+        let out = output().to_string_lossy().into_owned();
+        assert_eq!(
+            without_threads(args),
+            strings(&[
+                "-m",
+                model.as_str(),
+                "-i",
+                "cow.png",
+                "--strength",
+                "0.6",
+                "-p",
+                "a red fox in the snow",
+                "-W",
+                "256",
+                "-H",
+                "256",
+                "--steps",
+                "8",
+                "--cfg-scale",
+                "7",
+                "--seed",
+                "42",
+                "--backend",
+                "CPU",
+                "--batched-cfg",
+                "off",
+                "-o",
+                out.as_str(),
+            ])
+        );
+    }
+
+    #[test]
+    fn init_image_on_a_gpu_sends_batched_cfg_off_once() {
+        let recipe = find_recipe("sd15-q4").expect("sd15");
+        let input = PathBuf::from("cow.png");
+        let args = build_args(
+            recipe,
+            &paths_for("sd15-q4"),
+            &init_request(),
+            &output(),
+            Some("GPUOpenCL0"),
+            Some(&input),
+        );
+        assert_eq!(args.iter().filter(|arg| *arg == "--batched-cfg").count(), 1);
+        assert_eq!(value_after(&args, "--batched-cfg"), Some("off"));
+    }
+
+    #[test]
+    fn reference_vector_passes_the_picture_with_no_strength() {
+        let recipe = find_recipe("flux2-klein-4b-q4").expect("flux");
+        let mut request = request_for(recipe.id);
+        request.width = 256;
+        request.height = 256;
+        request.seed = 7;
+        request.input_path = Some("cow.png".to_string());
+        request.strength = Some(0.2);
+        let input = PathBuf::from("cow.png");
+        let args = build_args(
+            recipe,
+            &paths_for(recipe.id),
+            &request,
+            &output(),
+            None,
+            Some(&input),
+        );
+
+        let diffusion = local(recipe.id, ModelRole::Model);
+        let vae = local(recipe.id, ModelRole::Vae);
+        let llm = local(recipe.id, ModelRole::Llm);
+        let out = output().to_string_lossy().into_owned();
+        assert_eq!(
+            without_threads(args),
+            strings(&[
+                "--diffusion-model",
+                diffusion.as_str(),
+                "--vae",
+                vae.as_str(),
+                "--llm",
+                llm.as_str(),
+                "-r",
+                "cow.png",
+                "--sampling-method",
+                "euler",
+                "-p",
+                "a red fox in the snow",
+                "-W",
+                "256",
+                "-H",
+                "256",
+                "--steps",
+                "4",
+                "--cfg-scale",
+                "1",
+                "--seed",
+                "7",
+                "-o",
+                out.as_str(),
+            ])
+        );
+    }
+
+    #[test]
+    fn an_input_picture_needs_a_model_that_takes_one() {
+        let recipe = find_recipe("z-image-turbo-q4").expect("z-image");
+        let mut request = request_for(recipe.id);
+        request.input_path = Some("cow.png".to_string());
+        let error = validate_input_for_model(recipe, &request).expect_err("refused");
+        assert!(error.contains("Z-Image Turbo"), "{error}");
+    }
+
+    #[test]
+    fn a_request_without_an_input_picture_is_never_refused_here() {
+        for recipe in super::super::catalog::RECIPES {
+            let mut request = request_for(recipe.id);
+            request.strength = Some(9.0);
+            assert!(
+                validate_input_for_model(recipe, &request).is_ok(),
+                "{}",
+                recipe.id
+            );
+        }
+    }
+
+    #[test]
+    fn an_init_strength_must_be_between_five_hundredths_and_one() {
+        let recipe = find_recipe("sd15-q4").expect("sd15");
+        let mut request = init_request();
+        for good in [None, Some(0.05), Some(0.6), Some(1.0)] {
+            request.strength = good;
+            assert!(
+                validate_input_for_model(recipe, &request).is_ok(),
+                "{good:?}"
+            );
+        }
+        for bad in [
+            Some(0.0),
+            Some(0.04),
+            Some(1.01),
+            Some(-0.5),
+            Some(f32::NAN),
+        ] {
+            request.strength = bad;
+            assert!(
+                validate_input_for_model(recipe, &request).is_err(),
+                "{bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_reference_edit_ignores_the_strength() {
+        let recipe = find_recipe("flux2-klein-4b-q4").expect("flux");
+        let mut request = request_for(recipe.id);
+        request.input_path = Some("cow.png".to_string());
+        request.strength = Some(9.0);
+        assert!(validate_input_for_model(recipe, &request).is_ok());
     }
 }
