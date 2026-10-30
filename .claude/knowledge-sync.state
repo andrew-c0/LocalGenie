@@ -1,3 +1,3 @@
-last_synced_commit=46a4b77abc959cef19a4b008b57491a0e720b516
+last_synced_commit=b9617e618813bd560369088cf4a04c4bcdde9060
 last_synced_date=2026-10-30
-note=Synced to HEAD 46a4b77 (2 commits: image to image, audio to audio). Clean tree. Tests, biome and the app not run.
+note=Synced to HEAD b9617e6 (4 commits: docs sync, voice cloning, upscaling, OCR). Clean tree. Tests, biome and the app not run.
