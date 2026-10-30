@@ -117,3 +117,15 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] Audio to audio (not yet checked in the app by the user beyond the first pass): clean up and split both play, Show in folder works, Cancel stops the process.
 - [ ] Image upscaling (not manually tested yet): install the newest sd.cpp runtime, download a model, upscale a small png/jpg (about 10 to 20 s for 256 px), check before/after, Show in folder, the over-1024 px warning, Cancel, and that Text to image and Image to image still work.
 - [ ] OCR (not manually tested yet): download PaddleOCR-VL or MiniCPM-OCR from the OCR tab (it also appears in the Models tab), start the GenieX server from the tab notice, read a png/jpg (about 17 s for a small page with the defaults: language model CPU, vision encoder NPU), try the table mode with PaddleOCR-VL, Copy, Save as .txt, Cancel, and Delete.
+
+## Multi-model step 1 and 2: ports and RAM estimate (not yet run)
+- [ ] Settings > server port card: CPU, GPU and NPU port fields exist; a blank field saves and reloads as blank.
+- [ ] A port another program holds (for example start `geniex serve --host 127.0.0.1:18199`) shows "already in use" under that field and Save stays disabled.
+- [ ] The same port in two compute fields, or equal to the main port, is flagged.
+- [ ] A save that fails part-way restores the earlier values and shows an error toast, not the success one.
+- [ ] The main chat flow still starts, loads and stops a server as before (one server, main port).
+- [ ] Closing the app leaves no `geniex` process running.
+- [ ] Settings > RAM headroom card loads 10, saves a valid value and rejects blank or above 50.
+- [ ] The model selector shows "RAM ~X GB" under each model; compare with Task Manager after loading one (the constants are a guess).
+- [ ] With headroom 50, models that do not fit show the orange warning and tooltip; with 0 they do not. Loading is not blocked.
+- [ ] A model already loaded shows its estimate but no warning. The names still truncate at the popover width.
