@@ -214,7 +214,7 @@ async fn list_runs(db: &DatabaseConnection) -> Result<Vec<BenchmarkRunSummaryDto
 }
 
 /// Ask where to save, then write `bytes` there. Resolves to the saved path, or null when the user cancels.
-async fn save_with_dialog(
+pub(super) async fn save_with_dialog(
     app: &AppHandle,
     bytes: Vec<u8>,
     default_name: &str,

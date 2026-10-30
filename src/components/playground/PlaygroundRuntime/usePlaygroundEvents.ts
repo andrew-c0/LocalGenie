@@ -1,5 +1,6 @@
 import { useTauriEvent } from "../../../hooks";
 import * as playground from "../../../services/playground";
+import { useOcrStore } from "../../../stores/ocrStore";
 import { usePlaygroundStore } from "../../../stores/playgroundStore";
 import { useSpeechStore } from "../../../stores/speechStore";
 import type {
@@ -8,11 +9,14 @@ import type {
   PlaygroundDownloadProgress,
   PlaygroundImageDone,
   PlaygroundImageProgress,
+  PlaygroundOcrDone,
   PlaygroundSpeechDone,
   PlaygroundSpeechProgress,
 } from "../../../types";
 import { errorMessage } from "../../../utils/errorMessage";
 import { formatDuration } from "../../../utils/format";
+import { ocrResultOf } from "../../../utils/ocr";
+import { OCR_DONE_TITLE, OCR_FAILED_TITLE } from "../../../utils/ocrText";
 import { speechResultOf } from "../../../utils/speech";
 import { speechDoneTitle, speechFailedTitle } from "../../../utils/speechText";
 import { toast } from "../../../utils/toast";
@@ -24,8 +28,9 @@ function modelName(modelId: string): string {
   const imageName = [...(models ?? []), ...(upscaleModels ?? [])].find(
     (m) => m.id === modelId,
   )?.name;
+  const ocrName = useOcrStore.getState().models?.find((m) => m.id === modelId)?.name;
   const speechName = useSpeechStore.getState().models?.find((m) => m.id === modelId)?.name;
-  return imageName ?? speechName ?? modelId;
+  return imageName ?? ocrName ?? speechName ?? modelId;
 }
 
 /** Re-read the catalog that lists the model, so its card shows Ready. Image and speech models have separate catalogs. */
@@ -39,6 +44,9 @@ function refreshCatalogFor(modelId: string): Promise<void> {
     return playground
       .listUpscaleModels()
       .then((list) => usePlaygroundStore.getState().setUpscaleModels(list));
+  }
+  if (useOcrStore.getState().models?.some((m) => m.id === modelId)) {
+    return playground.listOcrModels().then((list) => useOcrStore.getState().setModels(list));
   }
   if (useSpeechStore.getState().models?.some((m) => m.id === modelId)) {
     return playground.listSpeechModels().then((list) => useSpeechStore.getState().setModels(list));
@@ -102,6 +110,21 @@ function handleImageDone(payload: PlaygroundImageDone) {
   }
 }
 
+/** A finished OCR job: store its result. Toasts only for the job the store is waiting on. */
+function handleOcrDone(payload: PlaygroundOcrDone) {
+  const store = useOcrStore.getState();
+  const isCurrentJob = store.job?.jobId === payload.jobId;
+  store.finishJob(ocrResultOf(payload, store.input?.name ?? null));
+
+  if (!isCurrentJob) return;
+  if (payload.status === "done") {
+    const took = payload.seconds === null ? null : formatDuration(payload.seconds * 1000);
+    toast.success(OCR_DONE_TITLE, took ? `Read in ${took}` : undefined);
+  } else if (payload.status === "error") {
+    toast.error(OCR_FAILED_TITLE, errorMessage(payload.error, "Unknown error."));
+  }
+}
+
 /** A finished speech job: store its result. Toasts only for the job the store is waiting on. */
 function handleSpeechDone(payload: PlaygroundSpeechDone) {
   const store = useSpeechStore.getState();
@@ -130,6 +153,7 @@ export function usePlaygroundEvents() {
     usePlaygroundStore.getState().setJobProgress(payload),
   );
   useTauriEvent<PlaygroundImageDone>(playground.PLAYGROUND_IMAGE_DONE_EVENT, handleImageDone);
+  useTauriEvent<PlaygroundOcrDone>(playground.PLAYGROUND_OCR_DONE_EVENT, handleOcrDone);
   useTauriEvent<PlaygroundSpeechProgress>(playground.PLAYGROUND_SPEECH_PROGRESS_EVENT, (payload) =>
     useSpeechStore.getState().setJobProgress(payload),
   );

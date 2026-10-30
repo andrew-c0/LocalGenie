@@ -492,6 +492,78 @@ export interface UpscaleRequest {
   inputPath: string;
 }
 
+/** What an OCR model reads a picture as: plain text, or a table. */
+export type OcrMode = "text" | "table";
+
+/** One mode an OCR model offers, with the label to show. */
+export interface OcrModeOption {
+  id: OcrMode;
+  label: string;
+}
+
+/** An OCR model the Playground can download and run on the GenieX server, from `playground_ocr_models`. */
+export interface OcrModel {
+  id: string;
+  name: string;
+  description: string;
+  /** What the model suits, e.g. "Documents and tables". */
+  bestFor: string;
+  license: string;
+  licenseUrl: string;
+  sizeBytes: number;
+  downloaded: boolean;
+  modes: OcrModeOption[];
+}
+
+/** Where the OCR language model runs. Auto lets the runtime choose. */
+export type OcrCompute = "auto" | "cpu" | "gpu" | "npu";
+
+/** Where the OCR vision encoder (the part that reads the picture) runs. */
+export type OcrVisionCompute = "cpu" | "npu";
+
+/** The compute choices of the OCR tab. */
+export interface OcrComputeSettings {
+  compute: OcrCompute;
+  visionCompute: OcrVisionCompute;
+}
+
+/** Request for `playground_ocr_run`. The result arrives as `playground-ocr-done`. */
+export interface OcrRequest extends OcrComputeSettings {
+  jobId: string;
+  modelId: string;
+  imagePath: string;
+  mode: OcrMode;
+  /** Port of the running GenieX server. */
+  port?: number;
+}
+
+/** Payload of `playground-ocr-done`. */
+export interface PlaygroundOcrDone {
+  jobId: string;
+  status: "done" | "error" | "cancelled";
+  text?: string | null;
+  error?: string | null;
+  seconds: number | null;
+}
+
+/** An OCR job running now. There is no progress, only the start time for the elapsed clock. */
+export interface OcrJob {
+  jobId: string;
+  modelId: string;
+  startedAt: number;
+}
+
+/** How the last OCR job ended. */
+export interface OcrResult {
+  jobId: string;
+  status: "done" | "error" | "cancelled";
+  text: string | null;
+  error: string | null;
+  seconds: number | null;
+  /** The picture file name, used as the suggested name when saving. */
+  inputName: string | null;
+}
+
 /** A generation running now. Starts in the `loading` phase; `step` is 0 until the first sampling step. */
 export interface ImageJob {
   jobId: string;

@@ -44,5 +44,12 @@ Added after audio to audio, at the user's request. Same runtime and program (`sh
 - Models: `realesrgan-x4plus-anime-6b` (BSD-3-Clause), `nomos2-hq-mosr-x4` (CC-BY; the author writes "CC-BY-0.4"). Input png/jpg/jpeg, 30 MB and 1024 px longest side caps; output `upscaled-…png` in Pictures\LocalGenie.
 - Status: built and checked by tests; NOT manually tested in the app yet (see manual checklist).
 
+## 3b. OCR: spike and build result (route C, dedicated OCR VLMs through GenieX)
+
+- Chosen with the user: dedicated OCR models run through the existing GenieX server (llama.cpp VLM), not a new runtime. Curated: PaddleOCR-VL 1.6 (`PaddlePaddle/PaddleOCR-VL-1.6-GGUF`, import precision label `BF16`, prompts `OCR:` / `Table Recognition:`, table tags converted to markdown) and MiniCPM-OCR 1.0 (`openbmb/MiniCPM-OCR-1.0-gguf`, Q4_K_M). Both Apache-2.0, each a GGUF plus a projector.
+- Spike (900x520 invoice page, correct text from both): language model CPU + vision encoder CPU about 48 s; vision encoder on the NPU (`--vit-compute HTP0`) about 17 s; language model on NPU about the same total (decode slower, start sooner); GPU slowest. The only vision-encoder devices that work here are `CPU` and `HTP0`; `GPU`, `npu`, `HTP2`, `hybrid` fail with "Invalid input parameters". Defaults: language model CPU, vision encoder NPU.
+- Build: backend downloads both files, imports with `geniex pull` (same path as `import_gguf`, source `hf`, so the model also shows in the Models tab), and runs a non-streamed chat completion on the running GenieX server with `compute` / `vit_compute`; pictures png/jpg/jpeg, 30 MB, 2500 px longest side.
+- Status: built, unit tests pass; NOT manually tested in the app yet (see manual checklist). Not tested: photos, handwriting, other languages, dots.ocr (MIT, 1.9 GB + 1.3 GB projector).
+
 ## Status
-Audio to audio: done, user-tested, committed. Voice cloning and image upscaling: built and committed, user test pending. Next: 3 OCR spike.
+Audio to audio: done, user-tested. Voice cloning, image upscaling and OCR: built and committed, user test pending. All three planned tabs are built.

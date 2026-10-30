@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   ImageGenerateRequest,
   ImageModel,
+  OcrModel,
+  OcrRequest,
   PlaygroundDeleteResult,
   PlaygroundDevice,
   SpeechEnhanceRequest,
@@ -25,6 +27,8 @@ export const PLAYGROUND_IMAGE_DONE_EVENT = "playground-image-done";
 export const PLAYGROUND_SPEECH_PROGRESS_EVENT = "playground-speech-progress";
 /** Event carrying `PlaygroundSpeechDone` once a speech job ends. */
 export const PLAYGROUND_SPEECH_DONE_EVENT = "playground-speech-done";
+/** Event carrying `PlaygroundOcrDone` once an OCR job ends. */
+export const PLAYGROUND_OCR_DONE_EVENT = "playground-ocr-done";
 
 /** The download id the backend uses for a model, image or speech. `cancel_download` takes this id. */
 export function playgroundDownloadId(modelId: string): string {
@@ -149,4 +153,34 @@ export async function readAudio(path: string): Promise<string> {
 /** Open the folder of a saved audio file with the file selected. */
 export async function revealAudio(path: string): Promise<void> {
   return invoke("playground_reveal_audio", { path });
+}
+
+/** Every OCR model the Playground knows, with its download state. */
+export async function listOcrModels(): Promise<OcrModel[]> {
+  return invoke("playground_ocr_models");
+}
+
+/** Download an OCR model. Progress and the end arrive as the `playground-download-*` events. Resolves when the download has finished. */
+export async function downloadOcrModel(modelId: string): Promise<void> {
+  return invoke("playground_download_ocr_model", { modelId });
+}
+
+/** Delete an OCR model's files. Rejects while it downloads or a job runs. */
+export async function deleteOcrModel(modelId: string): Promise<PlaygroundDeleteResult> {
+  return invoke("playground_delete_ocr_model", { modelId });
+}
+
+/** Start an OCR job on the running GenieX server. Resolves right after the job starts; the result comes as `playground-ocr-done`. */
+export async function runOcr(request: OcrRequest): Promise<void> {
+  return invoke("playground_ocr_run", { request });
+}
+
+/** Stop a running OCR job. The backend reports the stop through `playground-ocr-done`. */
+export async function cancelOcr(jobId: string): Promise<void> {
+  return invoke("playground_cancel_ocr", { jobId });
+}
+
+/** Ask where to save the recognised text and write it there. Resolves to the saved path, or null when cancelled. */
+export async function saveOcrText(text: string, defaultName: string): Promise<string | null> {
+  return invoke("playground_save_ocr_text", { text, defaultName });
 }

@@ -85,61 +85,87 @@ impl RecipeDownload<'_> {
         position: FilePosition<'_>,
         file: &ModelFile,
     ) -> Result<DownloadEnd, String> {
-        let name = file.file_name();
-        validate_file_name(name)?;
         let dir = catalog::local_dir(self.models_root, file);
-        tokio::fs::create_dir_all(&dir)
-            .await
-            .map_err(|e| format!("Failed to create {}: {e}", dir.display()))?;
-        let target = dir.join(name);
-        let partial = dir.join(format!("{name}.part"));
-
-        let on_progress = |progress: TransferProgress| {
-            emit_progress(
-                self.app,
-                &DownloadProgressEvent {
-                    model_id: position.model_id.to_string(),
-                    file_name: name.to_string(),
-                    file_index: position.index,
-                    file_count: position.count,
-                    received: progress.received,
-                    total: progress.total.unwrap_or(0),
-                },
-            );
-        };
-        let finished = match stream_to_partial(
+        fetch_to_folder(
+            self.app,
             self.client,
-            &catalog::download_url(file),
-            &partial,
-            Some(self.cancel),
-            on_progress,
+            self.cancel,
+            position,
+            &FileSource {
+                url: catalog::download_url(file),
+                name: file.file_name(),
+                size_bytes: file.size_bytes,
+                folder: &dir,
+            },
         )
-        .await?
-        {
+        .await
+    }
+}
+
+/// A file to download: where it comes from, its name and size, and the folder it goes to.
+pub(super) struct FileSource<'a> {
+    pub url: String,
+    pub name: &'a str,
+    /// The size the catalogue expects. A different download is refused.
+    pub size_bytes: u64,
+    pub folder: &'a Path,
+}
+
+/// Download one file into its folder through `<name>.part`, reporting progress, then check its size
+/// and rename it. A cancelled download keeps the `.part` file for a resume.
+pub(super) async fn fetch_to_folder(
+    app: &AppHandle,
+    client: &reqwest::Client,
+    cancel: &AtomicBool,
+    position: FilePosition<'_>,
+    file: &FileSource<'_>,
+) -> Result<DownloadEnd, String> {
+    let name = file.name;
+    validate_file_name(name)?;
+    tokio::fs::create_dir_all(file.folder)
+        .await
+        .map_err(|e| format!("Failed to create {}: {e}", file.folder.display()))?;
+    let target = file.folder.join(name);
+    let partial = file.folder.join(format!("{name}.part"));
+
+    let on_progress = |progress: TransferProgress| {
+        emit_progress(
+            app,
+            &DownloadProgressEvent {
+                model_id: position.model_id.to_string(),
+                file_name: name.to_string(),
+                file_index: position.index,
+                file_count: position.count,
+                received: progress.received,
+                total: progress.total.unwrap_or(0),
+            },
+        );
+    };
+    let finished =
+        match stream_to_partial(client, &file.url, &partial, Some(cancel), on_progress).await? {
             Transfer::Cancelled => return Ok(DownloadEnd::Cancelled),
             Transfer::Finished(progress) => progress,
         };
 
-        if finished.received != file.size_bytes {
-            let _ = tokio::fs::remove_file(&partial).await;
-            return Err(format!(
-                "{name} is {} bytes, but the catalogue expects {}. The catalogue may be out of date.",
-                finished.received, file.size_bytes
-            ));
-        }
-        tokio::fs::rename(&partial, &target)
-            .await
-            .map_err(|e| format!("Failed to finish {name}: {e}"))?;
-        Ok(DownloadEnd::Finished)
+    if finished.received != file.size_bytes {
+        let _ = tokio::fs::remove_file(&partial).await;
+        return Err(format!(
+            "{name} is {} bytes, but the catalogue expects {}. The catalogue may be out of date.",
+            finished.received, file.size_bytes
+        ));
     }
+    tokio::fs::rename(&partial, &target)
+        .await
+        .map_err(|e| format!("Failed to finish {name}: {e}"))?;
+    Ok(DownloadEnd::Finished)
 }
 
 /// Where a file sits in its recipe, for the progress events.
 #[derive(Clone, Copy)]
-struct FilePosition<'a> {
-    model_id: &'a str,
-    index: usize,
-    count: usize,
+pub(super) struct FilePosition<'a> {
+    pub model_id: &'a str,
+    pub index: usize,
+    pub count: usize,
 }
 
 /// Emit the done event for a finished run and return the outcome to the caller. An error is also

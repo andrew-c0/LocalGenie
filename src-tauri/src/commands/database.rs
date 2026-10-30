@@ -415,16 +415,48 @@ pub async fn upsert_downloaded_model(
     model_card: Option<String>,
     facets: Option<String>,
 ) -> Result<(), String> {
-    validate_facets(facets.as_deref())?;
+    store_downloaded_model(
+        &db,
+        DownloadedModelRow {
+            name,
+            precision,
+            context_size,
+            param_count,
+            repo_url,
+            model_card,
+            facets,
+        },
+    )
+    .await
+}
+
+/// The metadata `upsert_downloaded_model` stores for one model.
+#[derive(Debug, Clone)]
+pub(super) struct DownloadedModelRow {
+    pub name: String,
+    pub precision: Option<String>,
+    pub context_size: Option<i64>,
+    pub param_count: Option<i64>,
+    pub repo_url: Option<String>,
+    pub model_card: Option<String>,
+    pub facets: Option<String>,
+}
+
+/// Insert or update the metadata row of a model. Used by the command and by backend imports.
+pub(super) async fn store_downloaded_model(
+    db: &DatabaseConnection,
+    row: DownloadedModelRow,
+) -> Result<(), String> {
+    validate_facets(row.facets.as_deref())?;
     let now = now_millis();
     downloaded_model::Entity::insert(downloaded_model::ActiveModel {
-        name: Set(name),
-        precision: Set(precision),
-        context_size: Set(context_size),
-        param_count: Set(param_count),
-        repo_url: Set(repo_url),
-        model_card: Set(model_card),
-        facets: Set(facets),
+        name: Set(row.name),
+        precision: Set(row.precision),
+        context_size: Set(row.context_size),
+        param_count: Set(row.param_count),
+        repo_url: Set(row.repo_url),
+        model_card: Set(row.model_card),
+        facets: Set(row.facets),
         created_at: Set(now),
         updated_at: Set(now),
     })
@@ -441,10 +473,34 @@ pub async fn upsert_downloaded_model(
             ])
             .to_owned(),
     )
-    .exec(&*db)
+    .exec(db)
     .await
     .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// True when a metadata row exists for `name`, the repo a model was imported as.
+pub(super) async fn has_downloaded_model(
+    db: &DatabaseConnection,
+    name: &str,
+) -> Result<bool, String> {
+    downloaded_model::Entity::find_by_id(name)
+        .one(db)
+        .await
+        .map(|row| row.is_some())
+        .map_err(|e| e.to_string())
+}
+
+/// Forget the metadata row of `name`. Nothing happens when there is none.
+pub(super) async fn forget_downloaded_model(
+    db: &DatabaseConnection,
+    name: &str,
+) -> Result<(), String> {
+    downloaded_model::Entity::delete_by_id(name)
+        .exec(db)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// All downloaded-model metadata rows.

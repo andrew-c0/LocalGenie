@@ -6,6 +6,19 @@ use std::path::Path;
 use super::download::{download_dir, validate_file_name};
 use super::{database, AppState};
 
+/// What `import_gguf_files` imports: a repo's GGUF and projector files in one Downloads folder.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct GgufImport<'a> {
+    /// The repo's download folder: one name under Downloads.
+    pub folder: &'a str,
+    pub repo_id: &'a str,
+    pub filename: &'a str,
+    pub precision: &'a str,
+    /// The projector files the download step put in `folder`.
+    pub sidecar_names: &'a [String],
+    pub facets: Option<&'a str>,
+}
+
 /// Import a repo's downloaded GGUF into the GenieX model cache.
 ///
 /// `folder` is the repo's download folder under Downloads. It holds `filename` and the projector
@@ -27,29 +40,59 @@ pub async fn import_gguf(
     sidecar_names: Vec<String>,
     facets: Option<String>,
 ) -> Result<(), String> {
+    import_gguf_files(
+        &app,
+        &state.http_client,
+        &db,
+        GgufImport {
+            folder: &folder,
+            repo_id: &repo_id,
+            filename: &filename,
+            precision: &precision,
+            sidecar_names: &sidecar_names,
+            facets: facets.as_deref(),
+        },
+    )
+    .await
+}
+
+/// The import behind `import_gguf`, also used by the Playground's OCR model download. Emits
+/// `model-pull-start`, `model-pull-progress` and, once the metadata row is stored,
+/// `model-pull-complete`, which the Models tab listens to.
+pub(super) async fn import_gguf_files(
+    app: &AppHandle,
+    client: &reqwest::Client,
+    db: &DatabaseConnection,
+    import: GgufImport<'_>,
+) -> Result<(), String> {
+    let GgufImport {
+        folder,
+        repo_id,
+        filename,
+        precision,
+        sidecar_names,
+        facets,
+    } = import;
     // The folder is one name under Downloads, so nothing outside it can be reached.
-    validate_file_name(&folder)?;
-    validate_file_name(&filename)?;
-    for name in &sidecar_names {
+    validate_file_name(folder)?;
+    validate_file_name(filename)?;
+    for name in sidecar_names {
         validate_file_name(name)?;
     }
-    // This command is the Hugging Face import, so the source is set here, not derived from the name.
-    let facets = Some(database::facets_with_source(
-        facets.as_deref(),
-        database::SOURCE_HF,
-    )?);
-    // Not canonicalised: on Windows that adds a `\\?\` prefix the GenieX CLI may not accept.
+    // This is the Hugging Face import, so the source is set here, not derived from the name.
+    let facets = Some(database::facets_with_source(facets, database::SOURCE_HF)?);
+    // Not canonicalised: on Windows that adds a `\?\` prefix the GenieX CLI may not accept.
     let dir = download_dir()
         .ok_or("Could not resolve downloads directory")?
-        .join(&folder);
+        .join(folder);
     if !dir.is_dir() {
         return Err(format!("Download folder {} is missing", dir.display()));
     }
 
-    remove_other_projectors(&dir, &sidecar_names)?;
+    remove_other_projectors(&dir, sidecar_names)?;
 
     // Read the native context length now, before GenieX runs.
-    let header_path = dir.join(&filename);
+    let header_path = dir.join(filename);
     let context_size = match tokio::task::spawn_blocking(move || {
         crate::gguf::read_context_length(&header_path)
     })
@@ -72,12 +115,11 @@ pub async fn import_gguf(
         serde_json::json!({ "model": repo_id, "message": "Importing into GenieX cache…" }),
     );
 
-    pull_local(&dir, &repo_id, &precision).await?;
+    pull_local(&dir, repo_id, precision).await?;
 
     let repo_url = format!("https://huggingface.co/{repo_id}");
     let readme_url = format!("https://huggingface.co/{repo_id}/raw/main/README.md");
-    let model_card = match state
-        .http_client
+    let model_card = match client
         .get(&readme_url)
         .timeout(std::time::Duration::from_secs(super::constants::HTTP_TIMEOUT_SECS))
         .send()
@@ -88,15 +130,17 @@ pub async fn import_gguf(
     }
     .filter(|s| !s.trim().is_empty());
 
-    if let Err(e) = database::upsert_downloaded_model(
+    if let Err(e) = database::store_downloaded_model(
         db,
-        repo_id.clone(),
-        Some(precision.clone()),
-        context_size,
-        None,
-        Some(repo_url),
-        model_card,
-        facets,
+        database::DownloadedModelRow {
+            name: repo_id.to_string(),
+            precision: Some(precision.to_string()),
+            context_size,
+            param_count: None,
+            repo_url: Some(repo_url),
+            model_card,
+            facets,
+        },
     )
     .await
     {
@@ -104,7 +148,7 @@ pub async fn import_gguf(
     }
 
     // GenieX has its copies now. Remove this variant's files from the download folder.
-    remove_variant_files(&dir, &filename, &sidecar_names).await;
+    remove_variant_files(&dir, filename, sidecar_names).await;
 
     // Emitted last: listeners read the metadata row as soon as this fires.
     let _ = app.emit(

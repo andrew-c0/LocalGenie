@@ -64,6 +64,7 @@ pub fn run() {
         .manage(commands::runtimes::release::ReleaseCache::default())
         .manage(playground::PlaygroundJobs::default())
         .manage(playground::SpeechJobs::default())
+        .manage(playground::OcrJobs::default())
         .manage(commands::benchmark_runner::BenchmarkRunState::default())
         .invoke_handler(tauri::generate_handler![
             // Model management
@@ -140,6 +141,13 @@ pub fn run() {
             playground::upscale_commands::playground_download_upscale_model,
             playground::upscale_commands::playground_delete_upscale_model,
             playground::upscale_commands::playground_upscale_image,
+            // Playground OCR (vision-language models through the GenieX server)
+            playground::ocr_commands::playground_ocr_models,
+            playground::ocr_commands::playground_download_ocr_model,
+            playground::ocr_commands::playground_delete_ocr_model,
+            playground::ocr_commands::playground_ocr_run,
+            playground::ocr_commands::playground_cancel_ocr,
+            playground::ocr_commands::playground_save_ocr_text,
             // Qualcomm AI Hub catalog (read-only)
             aihub::aihub_latest_version,
             aihub::aihub_list_models,

@@ -105,6 +105,18 @@ pub async fn list_models(db: State<'_, DatabaseConnection>) -> Result<Vec<ModelI
         .collect())
 }
 
+/// The size in bytes of every model `geniex list` reports, by name (the repo, without precision).
+/// A model with no stated size counts as 0.
+pub(super) async fn installed_model_sizes() -> Result<std::collections::HashMap<String, u64>, String> {
+    let stdout = run_geniex(&["list", "--format", "json"], "list models").await?;
+    let raw: Vec<GeniexListModel> = serde_json::from_str(&stdout)
+        .map_err(|e| format!("Failed to parse `geniex list` JSON: {e}"))?;
+    Ok(raw
+        .into_iter()
+        .map(|m| (m.name, m.size.unwrap_or(0)))
+        .collect())
+}
+
 /// One Qualcomm AI Hub model that GenieX can run on this chipset.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AihubModel {

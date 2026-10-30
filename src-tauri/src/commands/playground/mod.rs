@@ -17,6 +17,12 @@ mod image_job;
 mod input_image;
 mod model_delete;
 mod model_download;
+mod ocr_catalog;
+pub(crate) mod ocr_commands;
+mod ocr_download;
+mod ocr_job;
+mod ocr_request;
+mod ocr_table;
 mod paths;
 mod program;
 mod progress;
@@ -50,6 +56,7 @@ use devices::SdDevice;
 use image_job::ImageJob;
 pub use image_job::PlaygroundJobs;
 use model_delete::ModelDeletion;
+pub use ocr_job::OcrJobs;
 pub use speech_job::SpeechJobs;
 
 /// Largest image `playground_read_image` returns, in bytes.
