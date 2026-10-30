@@ -1,14 +1,25 @@
+use super::constants::{DEFAULT_PORT, SERVER_STATUS_TIMEOUT_SECS};
 use super::AppState;
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use std::sync::MutexGuard;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::process::Command;
 
-/// Status of the GenieX serve process.
+/// Status of one GenieX serve process.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerStatus {
     pub running: bool,
     pub port: u16,
     pub models: Vec<String>,
+}
+
+/// Payload of the `server-stopped` event: the port whose server exited without a stop request.
+#[derive(Debug, Clone, Serialize)]
+pub struct ServerStoppedEvent {
+    pub port: u16,
 }
 
 /// Force-kill a process tree by PID (Windows: `taskkill /T`, else `kill -9`).
@@ -98,7 +109,34 @@ pub struct ServerStartOptions {
     pub keepalive: Option<i32>,
 }
 
-/// Start the `geniex serve` process in the background.
+/// Arguments for `geniex serve` on `serve_port`. An option the app did not set is left out,
+/// so the CLI uses its own default for it.
+fn serve_args(serve_port: u16, opts: &ServerStartOptions) -> Vec<String> {
+    let mut args = vec![
+        "serve".to_string(),
+        "--host".to_string(),
+        format!("127.0.0.1:{serve_port}"),
+    ];
+    if let Some(compute) = &opts.compute {
+        args.extend(["--compute".to_string(), compute.clone()]);
+    }
+    if let Some(nctx) = opts.nctx {
+        args.extend(["--nctx".to_string(), nctx.to_string()]);
+    }
+    if let Some(ngl) = opts.ngl {
+        args.extend(["--ngl".to_string(), ngl.to_string()]);
+    }
+    if let Some(origins) = &opts.origins {
+        args.extend(["--origins".to_string(), origins.clone()]);
+    }
+    if let Some(keepalive) = opts.keepalive {
+        args.extend(["--keepalive".to_string(), keepalive.to_string()]);
+    }
+    args
+}
+
+/// Start a `geniex serve` process on the port in `options` (default port when unset).
+/// A server already answering there, or a tracked process for that port, is reused.
 #[tauri::command]
 pub async fn start_server(
     app: AppHandle,
@@ -106,48 +144,23 @@ pub async fn start_server(
     options: Option<ServerStartOptions>,
 ) -> Result<ServerStatus, String> {
     let opts = options.unwrap_or_default();
-    let port = opts.port;
-    let serve_port = port.unwrap_or(super::constants::DEFAULT_PORT);
+    let serve_port = opts.port.unwrap_or(DEFAULT_PORT);
 
     // A server already answering on the port (ours or external) is reused.
     if fetch_loaded_models(&state.http_client, &local_base_url(serve_port))
         .await
         .is_ok()
     {
-        return get_server_status(state, port).await;
+        return Ok(probe_status(&state.http_client, serve_port).await);
     }
 
     // Our tracked process is cleared by its exit watcher, so a tracked PID means it is alive.
-    if tracked_pid(&state)?.is_some() {
-        return get_server_status(state, port).await;
-    }
-
-    let host = format!("127.0.0.1:{serve_port}");
-    let mut args = vec!["serve".to_string(), "--host".into(), host];
-
-    if let Some(ref c) = opts.compute {
-        args.push("--compute".into());
-        args.push(c.clone());
-    }
-    if let Some(n) = opts.nctx {
-        args.push("--nctx".into());
-        args.push(n.to_string());
-    }
-    if let Some(n) = opts.ngl {
-        args.push("--ngl".into());
-        args.push(n.to_string());
-    }
-    if let Some(ref o) = opts.origins {
-        args.push("--origins".into());
-        args.push(o.clone());
-    }
-    if let Some(k) = opts.keepalive {
-        args.push("--keepalive".into());
-        args.push(k.to_string());
+    if tracked_pid(&state, serve_port)?.is_some() {
+        return Ok(probe_status(&state.http_client, serve_port).await);
     }
 
     let mut child = Command::new(super::cli::resolve_geniex_executable())
-        .args(&args)
+        .args(serve_args(serve_port, &opts))
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -160,12 +173,18 @@ pub async fn start_server(
         })?;
 
     let pid = child.id().unwrap_or(0);
-    {
-        let mut proc = state
-            .server_process
-            .lock()
-            .map_err(|_| "server state is unavailable".to_string())?;
-        *proc = Some(pid);
+    match track_spawned(&state, serve_port, pid) {
+        Ok(true) => {}
+        // Another start won the race for this port, or the state is unavailable. This child is
+        // not tracked, so stop it rather than leave it running.
+        Ok(false) => {
+            kill_process(pid).await;
+            return Ok(probe_status(&state.http_client, serve_port).await);
+        }
+        Err(e) => {
+            kill_process(pid).await;
+            return Err(e);
+        }
     }
 
     if let Some(stdout) = child.stdout.take() {
@@ -175,32 +194,25 @@ pub async fn start_server(
         forward_lines(app.clone(), stderr, "stderr");
     }
 
-    // When the process exits, forget its PID so the next start actually spawns.
+    // When the process exits, forget its entry so the next start actually spawns.
     tokio::spawn(async move {
         let _ = child.wait().await;
-        // A user stop (unload) takes the PID out of the state before killing the process, so
-        // only an exit we did not ask for still finds it here and is reported.
+        // A stop request removes the entry before it kills the process, so only an exit we did not
+        // ask for still finds it here and is reported.
         let unexpected = app
             .state::<AppState>()
-            .server_process
+            .server_processes
             .lock()
-            .map(|mut proc| {
-                if *proc == Some(pid) {
-                    *proc = None;
-                    true
-                } else {
-                    false
-                }
-            })
+            .map(|mut servers| untrack_server(&mut servers, serve_port, pid))
             .unwrap_or(false);
         if unexpected {
-            let _ = app.emit("server-stopped", ());
+            let _ = app.emit("server-stopped", ServerStoppedEvent { port: serve_port });
         }
     });
 
     // Poll for readiness instead of a fixed sleep.
     for _ in 0..super::constants::SERVER_STARTUP_PROBES {
-        tokio::time::sleep(std::time::Duration::from_millis(
+        tokio::time::sleep(Duration::from_millis(
             super::constants::SERVER_STARTUP_PROBE_DELAY_MS,
         ))
         .await;
@@ -213,7 +225,7 @@ pub async fn start_server(
     }
 
     // Report the current status even if the server is still starting.
-    get_server_status(state, port).await
+    Ok(probe_status(&state.http_client, serve_port).await)
 }
 
 /// Stream a child's output lines to the frontend as `server-log` events.
@@ -230,38 +242,112 @@ where
     });
 }
 
-fn tracked_pid(state: &AppState) -> Result<Option<u32>, String> {
+/// Lock the map of tracked servers. The guard must not be held across an `.await`.
+fn lock_servers(state: &AppState) -> Result<MutexGuard<'_, HashMap<u16, u32>>, String> {
     state
-        .server_process
+        .server_processes
         .lock()
-        .map(|proc| *proc)
         .map_err(|_| "server state is unavailable".to_string())
 }
 
-/// Stop the running `geniex serve` process.
+/// The pid of the server the app started on `port`, if it is still tracked.
+pub(crate) fn tracked_pid(state: &AppState, port: u16) -> Result<Option<u32>, String> {
+    Ok(lock_servers(state)?.get(&port).copied())
+}
+
+/// Record a freshly spawned server. Returns false when the port already has a tracked server.
+fn track_spawned(state: &AppState, port: u16, pid: u32) -> Result<bool, String> {
+    let mut servers = lock_servers(state)?;
+    Ok(track_server(&mut servers, port, pid))
+}
+
+/// Records `pid` as the server on `port`. Returns false, and keeps the existing entry, when the
+/// port already has one.
+fn track_server(servers: &mut HashMap<u16, u32>, port: u16, pid: u32) -> bool {
+    match servers.entry(port) {
+        Entry::Occupied(_) => false,
+        Entry::Vacant(slot) => {
+            slot.insert(pid);
+            true
+        }
+    }
+}
+
+/// Forgets the server on `port`, but only while it is still `pid`. A late exit watcher then cannot
+/// remove a newer server on the same port. Returns true when an entry was removed.
+fn untrack_server(servers: &mut HashMap<u16, u32>, port: u16, pid: u32) -> bool {
+    if servers.get(&port) == Some(&pid) {
+        servers.remove(&port);
+        true
+    } else {
+        false
+    }
+}
+
+/// Empties the map and returns its servers as `(port, pid)`, ordered by port.
+fn take_all_servers(servers: &mut HashMap<u16, u32>) -> Vec<(u16, u32)> {
+    let mut all: Vec<(u16, u32)> = servers.drain().collect();
+    all.sort_unstable();
+    all
+}
+
+/// Ports that have a tracked server, ordered.
+fn tracked_ports(servers: &HashMap<u16, u32>) -> Vec<u16> {
+    let mut ports: Vec<u16> = servers.keys().copied().collect();
+    ports.sort_unstable();
+    ports
+}
+
+/// Asks the OS for a free localhost port: binds port 0, reads the port, then releases the listener.
+/// Another program can take the port before a server uses it, so callers should use it promptly.
+fn reserve_free_port() -> std::io::Result<u16> {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    Ok(listener.local_addr()?.port())
+}
+
+/// A free localhost port, for a server that has no port set.
+#[tauri::command]
+pub fn free_port() -> Result<u16, String> {
+    reserve_free_port().map_err(|e| format!("No free port is available: {e}"))
+}
+
+/// Stop the server on `port` (default port when unset). Other servers are left running.
 #[tauri::command]
 pub async fn stop_server(
     state: State<'_, AppState>,
     port: Option<u16>,
 ) -> Result<ServerStatus, String> {
-    let serve_port = port.unwrap_or(super::constants::DEFAULT_PORT);
-    let pid = {
-        let mut proc = state
-            .server_process
-            .lock()
-            .map_err(|_| "server state is unavailable".to_string())?;
-        proc.take()
-    };
-
+    let serve_port = port.unwrap_or(DEFAULT_PORT);
+    let pid = lock_servers(&state)?.remove(&serve_port);
     if let Some(pid) = pid {
         kill_process(pid).await;
     }
+    Ok(stopped_status(serve_port))
+}
 
-    Ok(ServerStatus {
-        running: false,
-        port: serve_port,
-        models: vec![],
-    })
+/// Stop every server the app started. Used when the app shuts down, so none is left orphaned.
+#[tauri::command]
+pub async fn stop_all_servers(state: State<'_, AppState>) -> Result<(), String> {
+    let servers = {
+        let mut map = lock_servers(&state)?;
+        take_all_servers(&mut map)
+    };
+    for (_, pid) in servers {
+        kill_process(pid).await;
+    }
+    Ok(())
+}
+
+/// Kill every tracked server from a sync context (the window-destroy handler, which cannot await).
+/// Same drain as `stop_all_servers`. A poisoned lock is still read, so no server is left running.
+pub fn kill_all_servers_sync(state: &AppState) {
+    let servers = match state.server_processes.lock() {
+        Ok(mut servers) => take_all_servers(&mut servers),
+        Err(poisoned) => take_all_servers(&mut poisoned.into_inner()),
+    };
+    for (_, pid) in servers {
+        kill_process_sync(pid);
+    }
 }
 
 /// Report whether a server answers on the port and which models it has loaded.
@@ -271,26 +357,59 @@ pub async fn get_server_status(
     state: State<'_, AppState>,
     port: Option<u16>,
 ) -> Result<ServerStatus, String> {
-    let serve_port = port.unwrap_or(super::constants::DEFAULT_PORT);
+    Ok(probe_status(&state.http_client, port.unwrap_or(DEFAULT_PORT)).await)
+}
 
-    match fetch_loaded_models(&state.http_client, &local_base_url(serve_port)).await {
-        Ok(models) => Ok(ServerStatus {
+/// Status of every port the app is tracking, ordered by port. A tracked port that does not answer
+/// in time is listed as not running.
+#[tauri::command]
+pub async fn list_servers(state: State<'_, AppState>) -> Result<Vec<ServerStatus>, String> {
+    let ports = {
+        let servers = lock_servers(&state)?;
+        tracked_ports(&servers)
+    };
+    let client = &state.http_client;
+    let probes = ports.into_iter().map(|port| probe_listed(client, port));
+    Ok(futures_util::future::join_all(probes).await)
+}
+
+/// One `list_servers` entry: the status probe, bounded so one hung server cannot stall the list.
+async fn probe_listed(client: &reqwest::Client, port: u16) -> ServerStatus {
+    let limit = Duration::from_secs(SERVER_STATUS_TIMEOUT_SECS);
+    tokio::time::timeout(limit, probe_status(client, port))
+        .await
+        .unwrap_or_else(|_| stopped_status(port))
+}
+
+/// Status of the server on `port`: running with its loaded models when it answers `/status`,
+/// otherwise not running.
+async fn probe_status(client: &reqwest::Client, port: u16) -> ServerStatus {
+    match fetch_loaded_models(client, &local_base_url(port)).await {
+        Ok(models) => ServerStatus {
             running: true,
-            port: serve_port,
+            port,
             models,
-        }),
-        Err(_) => Ok(ServerStatus {
-            running: false,
-            port: serve_port,
-            models: vec![],
-        }),
+        },
+        Err(_) => stopped_status(port),
+    }
+}
+
+fn stopped_status(port: u16) -> ServerStatus {
+    ServerStatus {
+        running: false,
+        port,
+        models: vec![],
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::loaded_ids;
+    use super::{
+        loaded_ids, reserve_free_port, serve_args, take_all_servers, track_server, tracked_ports,
+        untrack_server, ServerStartOptions,
+    };
     use serde_json::json;
+    use std::collections::HashMap;
 
     #[test]
     fn reads_loaded_ids_from_status_models() {
@@ -325,5 +444,93 @@ mod tests {
     fn skips_entries_without_a_string_id() {
         let body = json!({"models": [{"state": "idle"}, {"id": 7}, {"id": "org/repo:Q4"}]});
         assert_eq!(loaded_ids(&body), vec!["org/repo:Q4"]);
+    }
+
+    #[test]
+    fn serve_args_with_no_options_use_only_the_port() {
+        let args = serve_args(18181, &ServerStartOptions::default());
+        assert_eq!(args, vec!["serve", "--host", "127.0.0.1:18181"]);
+    }
+
+    #[test]
+    fn serve_args_pass_each_option_that_is_set() {
+        let opts = ServerStartOptions {
+            port: Some(18190),
+            compute: Some("npu".into()),
+            nctx: Some(4096),
+            ngl: Some(99),
+            origins: Some("http://localhost:1420".into()),
+            keepalive: Some(600),
+        };
+        assert_eq!(
+            serve_args(18190, &opts),
+            vec![
+                "serve",
+                "--host",
+                "127.0.0.1:18190",
+                "--compute",
+                "npu",
+                "--nctx",
+                "4096",
+                "--ngl",
+                "99",
+                "--origins",
+                "http://localhost:1420",
+                "--keepalive",
+                "600",
+            ]
+        );
+    }
+
+    #[test]
+    fn track_server_keeps_the_first_server_on_a_port() {
+        let mut servers = HashMap::new();
+        assert!(track_server(&mut servers, 18181, 100));
+        assert!(!track_server(&mut servers, 18181, 200));
+        assert_eq!(servers.get(&18181), Some(&100));
+    }
+
+    #[test]
+    fn track_server_keeps_separate_ports_apart() {
+        let mut servers = HashMap::new();
+        assert!(track_server(&mut servers, 18181, 100));
+        assert!(track_server(&mut servers, 18182, 200));
+        assert_eq!(servers.len(), 2);
+    }
+
+    #[test]
+    fn untrack_server_removes_only_the_matching_pid() {
+        let mut servers = HashMap::from([(18181, 100)]);
+        assert!(!untrack_server(&mut servers, 18181, 200));
+        assert_eq!(servers.get(&18181), Some(&100));
+        assert!(untrack_server(&mut servers, 18181, 100));
+        assert!(servers.is_empty());
+    }
+
+    #[test]
+    fn untrack_server_ignores_a_port_with_no_server() {
+        let mut servers = HashMap::from([(18181, 100)]);
+        assert!(!untrack_server(&mut servers, 18182, 100));
+        assert_eq!(servers.len(), 1);
+    }
+
+    #[test]
+    fn take_all_servers_empties_the_map_ordered_by_port() {
+        let mut servers = HashMap::from([(18190, 3), (18181, 1)]);
+        assert_eq!(take_all_servers(&mut servers), vec![(18181, 1), (18190, 3)]);
+        assert!(servers.is_empty());
+    }
+
+    #[test]
+    fn tracked_ports_are_ordered() {
+        let servers = HashMap::from([(18190, 3), (18181, 1), (18185, 2)]);
+        assert_eq!(tracked_ports(&servers), vec![18181, 18185, 18190]);
+    }
+
+    #[test]
+    fn reserve_free_port_returns_a_port_that_can_be_bound_again() {
+        let port = reserve_free_port().expect("a free port");
+        assert_ne!(port, 0);
+        assert!(std::net::TcpListener::bind(("127.0.0.1", port)).is_ok());
     }
 }

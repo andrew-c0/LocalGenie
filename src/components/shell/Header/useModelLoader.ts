@@ -4,7 +4,7 @@ import * as db from "../../../services/database";
 import * as geniex from "../../../services/geniex";
 import { useChatStore } from "../../../stores/chatStore";
 import { COMPUTE_TARGETS, type ComputeChoice, useModelStore } from "../../../stores/modelStore";
-import type { ModelLoadSettings } from "../../../types";
+import type { ModelLoadSettings, ServerStoppedEvent } from "../../../types";
 import { shortModelKey } from "../../../utils/modelKey";
 import {
   DEFAULT_CONTEXT_WINDOW,
@@ -48,8 +48,9 @@ export function useModelLoader() {
     if (selectorOpen) setError(null);
   }, [selectorOpen]);
 
-  // The server process exited on its own.
-  useTauriEvent("server-stopped", () => {
+  // The server process exited on its own. The payload may be missing (the backend sends none today)
+  // or carry the port; the handler does not use it yet.
+  useTauriEvent<ServerStoppedEvent | null | undefined>("server-stopped", () => {
     console.warn("[app] Server process exited unexpectedly");
     setServerStatus({ running: false, port: useModelStore.getState().serverPort, models: [] });
     setServerOptions(null);

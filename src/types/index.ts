@@ -125,6 +125,14 @@ export interface ServerStatus {
   models: string[];
 }
 
+/**
+ * Payload of `server-stopped`. The backend may send no payload (null or missing) or the port of the
+ * server that exited.
+ */
+export interface ServerStoppedEvent {
+  port: number;
+}
+
 /** Per-request sampling settings, sent with each chat completion. */
 export interface GenerationSettings {
   temperature?: number;

@@ -14,8 +14,19 @@ pub struct SystemMemoryInfo {
 /// Report total and available System RAM for the precision fit calculator.
 #[tauri::command]
 pub async fn get_system_memory() -> Result<SystemMemoryInfo, String> {
-    // sysinfo reads /proc or calls GlobalMemoryStatusEx — quick, but keep it
-    // off the async runtime thread anyway.
+    read_system_memory().await
+}
+
+/// Report total and available System RAM for the model RAM estimate and the load check. Same
+/// reading as `get_system_memory`.
+#[tauri::command]
+pub async fn system_memory() -> Result<SystemMemoryInfo, String> {
+    read_system_memory().await
+}
+
+/// Read total and available memory. sysinfo reads /proc or calls GlobalMemoryStatusEx, which is
+/// quick, but it still runs off the async runtime thread.
+async fn read_system_memory() -> Result<SystemMemoryInfo, String> {
     tokio::task::spawn_blocking(|| {
         let mut sys = sysinfo::System::new();
         sys.refresh_memory();
@@ -62,6 +73,13 @@ pub async fn get_platform_info() -> Result<PlatformInfo, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn system_memory_reports_available_within_total() {
+        let info = system_memory().await.expect("system memory");
+        assert!(info.total_bytes > 0);
+        assert!(info.available_bytes <= info.total_bytes);
+    }
 
     #[tokio::test]
     async fn platform_info_reports_os_and_arch() {

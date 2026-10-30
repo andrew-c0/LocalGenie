@@ -44,11 +44,18 @@ pub struct ModelInfo {
 
 /// Raw JSON object returned by `geniex list --format json`.
 #[derive(Debug, Deserialize)]
-struct GeniexListModel {
-    name: String,
-    size: Option<u64>,
-    precisions: Option<Vec<String>>,
+pub(super) struct GeniexListModel {
+    pub(super) name: String,
+    pub(super) size: Option<u64>,
+    pub(super) precisions: Option<Vec<String>>,
 }
+
+/// Every cached model `geniex list --format json` reports, with its size and precisions.
+pub(super) async fn geniex_list() -> Result<Vec<GeniexListModel>, String> {
+    let stdout = run_geniex(&["list", "--format", "json"], "list models").await?;
+    serde_json::from_str(&stdout).map_err(|e| format!("Failed to parse `geniex list` JSON: {e}"))
+}
+
 /// Format bytes into a human-readable size string.
 fn format_size(bytes: u64) -> String {
     const GB: u64 = 1_073_741_824;
@@ -79,10 +86,7 @@ pub(super) fn derive_source(name: &str) -> &str {
 /// guess (`derive_source`) is only for models with no stored source, such as rows from before it was kept.
 #[tauri::command]
 pub async fn list_models(db: State<'_, DatabaseConnection>) -> Result<Vec<ModelInfo>, String> {
-    let stdout = run_geniex(&["list", "--format", "json"], "list models").await?;
-
-    let raw: Vec<GeniexListModel> = serde_json::from_str(&stdout)
-        .map_err(|e| format!("Failed to parse `geniex list` JSON: {e}"))?;
+    let raw = geniex_list().await?;
     let stored = match super::database::stored_sources(&db).await {
         Ok(map) => map,
         Err(e) => {
@@ -107,11 +111,10 @@ pub async fn list_models(db: State<'_, DatabaseConnection>) -> Result<Vec<ModelI
 
 /// The size in bytes of every model `geniex list` reports, by name (the repo, without precision).
 /// A model with no stated size counts as 0.
-pub(super) async fn installed_model_sizes() -> Result<std::collections::HashMap<String, u64>, String> {
-    let stdout = run_geniex(&["list", "--format", "json"], "list models").await?;
-    let raw: Vec<GeniexListModel> = serde_json::from_str(&stdout)
-        .map_err(|e| format!("Failed to parse `geniex list` JSON: {e}"))?;
-    Ok(raw
+pub(super) async fn installed_model_sizes() -> Result<std::collections::HashMap<String, u64>, String>
+{
+    Ok(geniex_list()
+        .await?
         .into_iter()
         .map(|m| (m.name, m.size.unwrap_or(0)))
         .collect())

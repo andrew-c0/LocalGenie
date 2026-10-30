@@ -74,7 +74,10 @@ const ARCH_INTEGER_SUFFIXES: [&str; 10] = [
 ];
 
 /// Architecture-prefixed array keys the app reads (per-layer values).
-const ARCH_ARRAY_SUFFIXES: [&str; 2] = [".attention.head_count_kv", ".attention.sliding_window_pattern"];
+const ARCH_ARRAY_SUFFIXES: [&str; 2] = [
+    ".attention.head_count_kv",
+    ".attention.sliding_window_pattern",
+];
 
 /// Bytes per cached element for the KV cache, assuming an f16 cache (keys and values).
 const KV_BYTES_PER_ELEMENT: u64 = 2;
@@ -99,7 +102,11 @@ impl GgufHeader {
             .checked_mul(KV_BYTES_PER_ELEMENT)?;
 
         let mut total = 0_u64;
-        for (layer, kv_heads) in self.kv_heads_per_layer(block_count)?.into_iter().enumerate() {
+        for (layer, kv_heads) in self
+            .kv_heads_per_layer(block_count)?
+            .into_iter()
+            .enumerate()
+        {
             if kv_heads == 0 {
                 continue;
             }
@@ -126,7 +133,8 @@ impl GgufHeader {
                 .map(|heads| u64::try_from(*heads).ok())
                 .collect();
         }
-        let kv_heads = u64::try_from(self.head_count_kv?).ok()?;
+        // A missing KV head count means one KV head per query head, as llama.cpp assumes.
+        let kv_heads = u64::try_from(self.head_count_kv.or(self.head_count)?).ok()?;
         // Hybrid models (attention mixed with recurrent layers) keep a cache only in every Nth layer.
         let interval = self
             .full_attention_interval
@@ -214,10 +222,18 @@ pub fn read_header(path: &Path) -> Result<GgufHeader, String> {
             header.chat_template = read_capped_string(&mut reader, MAX_CHAT_TEMPLATE_BYTES)?;
         } else if key == "clip.has_audio_encoder" && ty == TYPE_BOOL {
             header.has_audio_encoder = Some(read_bool(&mut reader)?);
-        } else if is_integer(ty) && ARCH_INTEGER_SUFFIXES.iter().any(|suffix| key.ends_with(suffix)) {
+        } else if is_integer(ty)
+            && ARCH_INTEGER_SUFFIXES
+                .iter()
+                .any(|suffix| key.ends_with(suffix))
+        {
             let value = read_integer(&mut reader, ty)?;
             arch_integers.push((key, value));
-        } else if ty == TYPE_ARRAY && ARCH_ARRAY_SUFFIXES.iter().any(|suffix| key.ends_with(suffix)) {
+        } else if ty == TYPE_ARRAY
+            && ARCH_ARRAY_SUFFIXES
+                .iter()
+                .any(|suffix| key.ends_with(suffix))
+        {
             if let Some(values) = read_array(&mut reader)? {
                 arch_arrays.push((key, values));
             }
@@ -569,7 +585,10 @@ mod tests {
         let path = write_temp("localgenie-test-kv-hybrid.gguf", &header);
         let got = read_header(&path);
         let _ = std::fs::remove_file(&path);
-        assert_eq!(got.expect("header parses").kv_cache_bytes(1000), Some(256_000));
+        assert_eq!(
+            got.expect("header parses").kv_cache_bytes(1000),
+            Some(256_000)
+        );
     }
 
     /// Read a header built from `entries` and return its KV-cache size for `n_ctx`.
@@ -590,7 +609,10 @@ mod tests {
             kv_u32("custom.attention.head_count", 4),
             kv_array("custom.attention.head_count_kv", TYPE_INT32, &[2, 0, 2, 0]),
         ];
-        assert_eq!(kv_bytes_of(&entries, "localgenie-test-kv-per-layer.gguf", 1000), Some(256_000));
+        assert_eq!(
+            kv_bytes_of(&entries, "localgenie-test-kv-per-layer.gguf", 1000),
+            Some(256_000)
+        );
     }
 
     #[test]
@@ -603,7 +625,11 @@ mod tests {
             kv_u32("custom.attention.head_count", 4),
             kv_u32("custom.attention.head_count_kv", 2),
             kv_u32("custom.attention.sliding_window", 512),
-            kv_array("custom.attention.sliding_window_pattern", TYPE_BOOL, &[1, 0]),
+            kv_array(
+                "custom.attention.sliding_window_pattern",
+                TYPE_BOOL,
+                &[1, 0],
+            ),
         ];
         assert_eq!(
             kv_bytes_of(&entries, "localgenie-test-kv-window.gguf", 1000),
@@ -621,7 +647,10 @@ mod tests {
             kv_u32("custom.attention.head_count_kv", 2),
             kv_u32("custom.attention.sliding_window", 512),
         ];
-        assert_eq!(kv_bytes_of(&entries, "localgenie-test-kv-window-unknown.gguf", 1000), None);
+        assert_eq!(
+            kv_bytes_of(&entries, "localgenie-test-kv-window-unknown.gguf", 1000),
+            None
+        );
     }
 
     #[test]
@@ -634,11 +663,15 @@ mod tests {
             kv_u32("custom.attention.head_count_kv", 2),
             kv_u32("custom.attention.kv_lora_rank", 128),
         ];
-        assert_eq!(kv_bytes_of(&entries, "localgenie-test-kv-mla.gguf", 1000), None);
+        assert_eq!(
+            kv_bytes_of(&entries, "localgenie-test-kv-mla.gguf", 1000),
+            None
+        );
     }
 
     #[test]
-    fn kv_cache_bytes_is_none_without_the_kv_head_count() {
+    fn kv_cache_bytes_uses_query_heads_when_the_kv_head_count_is_absent() {
+        // No head_count_kv: 4 KV heads (one per query head). 2 layers x 4 x 64 bytes = 512 per token.
         let header = build_header(&[
             kv_string("general.architecture", "llama"),
             kv_u32("llama.block_count", 2),
@@ -648,7 +681,31 @@ mod tests {
         let path = write_temp("localgenie-test-kv-missing.gguf", &header);
         let got = read_header(&path);
         let _ = std::fs::remove_file(&path);
-        assert_eq!(got.expect("header parses").kv_cache_bytes(1000), None);
+        assert_eq!(
+            got.expect("header parses").kv_cache_bytes(1000),
+            Some(512_000)
+        );
+    }
+
+    #[test]
+    fn kv_cache_bytes_uses_the_explicit_key_and_value_widths() {
+        // Key width 40 and value width 24 (not embedding / heads). (40 + 24) x 2 bytes x 2 KV heads = 256 per token.
+        let header = build_header(&[
+            kv_string("general.architecture", "llama"),
+            kv_u32("llama.block_count", 1),
+            kv_u32("llama.embedding_length", 64),
+            kv_u32("llama.attention.head_count", 4),
+            kv_u32("llama.attention.head_count_kv", 2),
+            kv_u32("llama.attention.key_length", 40),
+            kv_u32("llama.attention.value_length", 24),
+        ]);
+        let path = write_temp("localgenie-test-kv-widths.gguf", &header);
+        let got = read_header(&path);
+        let _ = std::fs::remove_file(&path);
+        let got = got.expect("header parses");
+        assert_eq!(got.key_length, Some(40));
+        assert_eq!(got.value_length, Some(24));
+        assert_eq!(got.kv_cache_bytes(1000), Some(256_000));
     }
 
     #[test]

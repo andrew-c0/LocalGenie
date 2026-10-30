@@ -18,6 +18,7 @@ pub mod files;
 pub mod hub;
 pub mod import;
 pub mod logs;
+pub mod model_ram;
 pub mod models;
 pub mod playground;
 pub mod power;
@@ -26,12 +27,14 @@ pub mod server;
 pub mod system;
 pub mod system_usage;
 
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 /// Shared application state managed by Tauri.
 pub struct AppState {
-    /// Handle to the running `geniex serve` child process.
-    pub server_process: Mutex<Option<u32>>,
+    /// PIDs of the `geniex serve` child processes the app started, keyed by port.
+    /// An entry is removed by the server's exit watcher or by a stop request.
+    pub server_processes: Mutex<HashMap<u16, u32>>,
     /// Shared HTTP client for talking to the GenieX server.
     /// `reqwest::Client` manages a connection pool internally — reusing it
     /// avoids allocating a new pool and TCP connections per request.
@@ -43,7 +46,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         Self {
-            server_process: Mutex::new(None),
+            server_processes: Mutex::new(HashMap::new()),
             server_logs: Mutex::new(logs::LogBuffer::default()),
             // No total timeout here: chat streams run until the model finishes.
             // Non-streaming calls set `HTTP_TIMEOUT_SECS` per request.

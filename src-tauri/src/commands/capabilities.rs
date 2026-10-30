@@ -107,8 +107,8 @@ pub(super) fn model_folder(model_name: &str) -> Result<PathBuf, String> {
 /// One GGUF file in a model folder.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct CachedFile {
-    path: PathBuf,
-    name: String,
+    pub(super) path: PathBuf,
+    pub(super) name: String,
     pub(super) size: u64,
     pub(super) modified: Option<SystemTime>,
 }
@@ -117,8 +117,11 @@ pub(super) struct CachedFile {
 /// Compared by path, size and modification time, so it doubles as the cache key.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub(super) struct FolderFiles {
+    /// The largest weights file, the one the summary reads.
     pub(super) main: Option<CachedFile>,
-    projector: Option<CachedFile>,
+    /// Every weights file, largest first. A folder can hold more than one precision.
+    pub(super) weights: Vec<CachedFile>,
+    pub(super) projector: Option<CachedFile>,
 }
 
 pub(super) fn scan_folder(folder: &Path) -> FolderFiles {
@@ -155,8 +158,9 @@ pub(super) fn scan_folder(folder: &Path) -> FolderFiles {
     weights.sort_by(|a, b| b.size.cmp(&a.size).then_with(|| a.name.cmp(&b.name)));
     projectors.sort_by(|a, b| a.name.cmp(&b.name));
     FolderFiles {
-        main: weights.into_iter().next(),
+        main: weights.first().cloned(),
         projector: projectors.into_iter().next(),
+        weights,
     }
 }
 
