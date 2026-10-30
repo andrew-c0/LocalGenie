@@ -1,3 +1,3 @@
-last_synced_commit=11d5c2867583a64e700eea9ebc282d9f77c855f8
+last_synced_commit=46a4b77abc959cef19a4b008b57491a0e720b516
 last_synced_date=2026-10-30
-note=Synced to HEAD 11d5c28. Uncommitted working tree reflected (not committed): Playground Image to image (ImageInput enum, input_image.rs, playground_read_input_image, pick_attachment extensions, ImageGeneration/ImageModels/ImageToImagePanel components). Tests, biome and the app not run.
+note=Synced to HEAD 46a4b77 (2 commits: image to image, audio to audio). Clean tree. Tests, biome and the app not run.
