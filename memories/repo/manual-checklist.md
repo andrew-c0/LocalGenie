@@ -115,3 +115,4 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] A device that sd-cli no longer lists is refused with the "Pick a device from the list" message.
 - [ ] Voice cloning: in Text to speech pick Pocket TTS (voice cloning) and download it (98 MB). The voice and speed controls are hidden and a Voice to copy input appears. Generate stays disabled until a clip is chosen; the output plays and sounds like the clip. Kokoro still shows its voices and speed.
 - [ ] Audio to audio (not yet checked in the app by the user beyond the first pass): clean up and split both play, Show in folder works, Cancel stops the process.
+- [ ] Image upscaling (not manually tested yet): install the newest sd.cpp runtime, download a model, upscale a small png/jpg (about 10 to 20 s for 256 px), check before/after, Show in folder, the over-1024 px warning, Cancel, and that Text to image and Image to image still work.

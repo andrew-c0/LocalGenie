@@ -16,10 +16,14 @@ import { formatDuration } from "../../../utils/format";
 import { speechResultOf } from "../../../utils/speech";
 import { speechDoneTitle, speechFailedTitle } from "../../../utils/speechText";
 import { toast } from "../../../utils/toast";
+import { UPSCALE_DONE_TITLE, UPSCALE_FAILED_TITLE } from "../../../utils/upscaleText";
 
 /** The name of a downloaded model, from whichever catalog lists it. */
 function modelName(modelId: string): string {
-  const imageName = usePlaygroundStore.getState().models?.find((m) => m.id === modelId)?.name;
+  const { models, upscaleModels } = usePlaygroundStore.getState();
+  const imageName = [...(models ?? []), ...(upscaleModels ?? [])].find(
+    (m) => m.id === modelId,
+  )?.name;
   const speechName = useSpeechStore.getState().models?.find((m) => m.id === modelId)?.name;
   return imageName ?? speechName ?? modelId;
 }
@@ -30,6 +34,11 @@ function refreshCatalogFor(modelId: string): Promise<void> {
     return playground
       .listImageModels()
       .then((list) => usePlaygroundStore.getState().setModels(list));
+  }
+  if (usePlaygroundStore.getState().upscaleModels?.some((m) => m.id === modelId)) {
+    return playground
+      .listUpscaleModels()
+      .then((list) => usePlaygroundStore.getState().setUpscaleModels(list));
   }
   if (useSpeechStore.getState().models?.some((m) => m.id === modelId)) {
     return playground.listSpeechModels().then((list) => useSpeechStore.getState().setModels(list));
@@ -67,6 +76,7 @@ function handleDownloadDone(payload: PlaygroundDownloadDone) {
 function handleImageDone(payload: PlaygroundImageDone) {
   const store = usePlaygroundStore.getState();
   const isCurrentJob = store.job?.jobId === payload.jobId;
+  const isUpscale = store.job?.kind === "upscale";
   const result: ImageOutcome = {
     jobId: payload.jobId,
     status: payload.status,
@@ -80,9 +90,15 @@ function handleImageDone(payload: PlaygroundImageDone) {
   if (!isCurrentJob) return;
   if (payload.status === "done") {
     const took = payload.seconds === null ? null : formatDuration(payload.seconds * 1000);
-    toast.success("Image ready", took ? `Generated in ${took}` : undefined);
+    toast.success(
+      isUpscale ? UPSCALE_DONE_TITLE : "Image ready",
+      took ? `${isUpscale ? "Upscaled" : "Generated"} in ${took}` : undefined,
+    );
   } else if (payload.status === "error") {
-    toast.error("Image generation failed", errorMessage(payload.error, "Unknown error."));
+    toast.error(
+      isUpscale ? UPSCALE_FAILED_TITLE : "Image generation failed",
+      errorMessage(payload.error, "Unknown error."),
+    );
   }
 }
 

@@ -59,6 +59,16 @@ pub(super) fn slug_from_prompt(prompt: &str) -> String {
     slug_of(prompt, FALLBACK_SLUG)
 }
 
+/// The file name of an upscaled image without its extension: `upscaled-<timestamp>-<input slug>`,
+/// for example `upscaled-20261030-101112-cow`.
+pub(super) fn upscaled_stem(input: &Path, timestamp: &str) -> String {
+    let stem = input
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("");
+    format!("upscaled-{timestamp}-{}", slug_of(stem, FALLBACK_SLUG))
+}
+
 /// The slug of a file's name without its extension, as `slug_from_prompt` makes it. `audio` when
 /// nothing is left.
 pub(super) fn slug_from_file_stem(file: &Path) -> String {
@@ -245,6 +255,18 @@ mod tests {
         assert_eq!(slug_from_file_stem(Path::new("clip_01.wav")), "clip-01");
         assert_eq!(slug_from_file_stem(Path::new("☕☕.wav")), "audio");
         assert_eq!(slug_from_file_stem(Path::new("")), "audio");
+    }
+
+    #[test]
+    fn an_upscaled_stem_has_the_prefix_timestamp_and_input_name() {
+        assert_eq!(
+            upscaled_stem(Path::new(r"C:\pics\My Cow.PNG"), "20261030-101112"),
+            "upscaled-20261030-101112-my-cow"
+        );
+        assert_eq!(
+            upscaled_stem(Path::new("☕.png"), "20261030-101112"),
+            "upscaled-20261030-101112-image"
+        );
     }
 
     #[test]

@@ -28,6 +28,10 @@ mod speech_delete;
 mod speech_download;
 mod speech_job;
 mod speech_output;
+mod upscale_args;
+mod upscale_catalog;
+pub(crate) mod upscale_commands;
+mod upscale_files;
 mod wav;
 
 use std::path::PathBuf;
@@ -191,6 +195,7 @@ pub async fn playground_generate_image(
             output,
             steps: request.steps,
             seed: request.seed,
+            result_size: None,
         },
     )
 }

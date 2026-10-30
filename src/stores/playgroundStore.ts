@@ -11,6 +11,7 @@ import type {
   PlaygroundDownloadProgress,
   PlaygroundDownloadState,
   PlaygroundImageProgress,
+  UpscaleModel,
 } from "../types";
 import {
   clampStrength,
@@ -24,10 +25,11 @@ import {
   defaultImageModel,
   keepDeviceSelection,
 } from "../utils/playground";
+import { defaultUpscaleModel } from "../utils/upscale";
 
 /**
  * Playground state, kept across page visits. It holds the model catalog, the selection, the form,
- * the image to image input, model downloads, the running generation and the last result. The event
+ * the image to image input, model downloads, the running generation and the last result (text to image, image to image and upscaling share one job slot). The event
  * listeners and the service calls live outside the store (`PlaygroundRuntime` and the panel hooks).
  */
 interface PlaygroundState {
@@ -43,6 +45,12 @@ interface PlaygroundState {
   strength: number;
   /** Downloads started in this session, keyed by model id. A finished download is removed. */
   downloads: Record<string, PlaygroundDownloadState>;
+  /** Upscaling models. Null until the catalog has been read. */
+  upscaleModels: UpscaleModel[] | null;
+  upscaleModelId: string | null;
+  /** The picture Image upscaling works on. Null until one is picked. */
+  upscaleInput: InputImage | null;
+  /** The running image job of any tab; `job.kind` says which tab shows it. */
   job: ImageJob | null;
   result: ImageResult | null;
 
@@ -65,6 +73,15 @@ interface PlaygroundState {
   setStrength: (strength: number) => void;
   /** Select a model for image to image: its defaults, with the size taken from the input picture. */
   selectEditModel: (model: ImageModel) => void;
+
+  /** Replace the upscaling catalog. The selection stays when its model is still listed, else a default is chosen. */
+  setUpscaleModels: (models: UpscaleModel[]) => void;
+  /** Replace the upscaling catalog after a delete. The deleted model is not selected again. */
+  replaceUpscaleModelsAfterDelete: (models: UpscaleModel[], deletedModelId: string) => void;
+  selectUpscaleModel: (modelId: string) => void;
+  /** Pick the upscale input picture. Its size is not known until its preview has loaded. */
+  setUpscaleInput: (input: InputImage) => void;
+  setUpscaleInputSize: (size: ImageSize) => void;
 
   startDownload: (modelId: string) => void;
   setDownloadProgress: (progress: PlaygroundDownloadProgress) => void;
@@ -94,6 +111,9 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
   inputImage: null,
   strength: DEFAULT_STRENGTH,
   downloads: {},
+  upscaleModels: null,
+  upscaleModelId: null,
+  upscaleInput: null,
   job: null,
   result: null,
 
@@ -156,6 +176,29 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
         model.defaults,
       ),
     })),
+
+  setUpscaleModels: (models) =>
+    set((state) => {
+      if (state.upscaleModelId && models.some((m) => m.id === state.upscaleModelId)) {
+        return { upscaleModels: models };
+      }
+      return { upscaleModels: models, upscaleModelId: defaultUpscaleModel(models)?.id ?? null };
+    }),
+
+  replaceUpscaleModelsAfterDelete: (models, deletedModelId) =>
+    set((state) => ({
+      upscaleModels: models,
+      upscaleModelId: state.upscaleModelId === deletedModelId ? null : state.upscaleModelId,
+    })),
+
+  selectUpscaleModel: (modelId) => set({ upscaleModelId: modelId }),
+
+  setUpscaleInput: (input) => set({ upscaleInput: input }),
+
+  setUpscaleInputSize: (size) =>
+    set((state) =>
+      state.upscaleInput ? { upscaleInput: { ...state.upscaleInput, sourceSize: size } } : {},
+    ),
 
   startDownload: (modelId) =>
     set((state) => ({
@@ -232,7 +275,7 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
       if (!job || job.jobId !== result.jobId) return {};
       return {
         job: null,
-        result: { ...result, device: job.device, inputPath: job.inputPath },
+        result: { ...result, kind: job.kind, device: job.device, inputPath: job.inputPath },
       };
     }),
 }));

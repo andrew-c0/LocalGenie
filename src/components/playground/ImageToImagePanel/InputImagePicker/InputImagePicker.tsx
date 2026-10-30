@@ -16,6 +16,8 @@ interface InputImagePickerProps {
   error: string | null;
   /** A job runs, so the picture cannot change. */
   disabled: boolean;
+  /** The line under the button. Defaults to the image to image hint. */
+  hint?: string;
   onChoose: () => void;
   /** The picture's pixel size, reported once its preview has loaded. */
   onSourceSize: (size: ImageSize) => void;
@@ -26,6 +28,7 @@ export function InputImagePicker({
   input,
   error,
   disabled,
+  hint = INPUT_HINT,
   onChoose,
   onSourceSize,
 }: InputImagePickerProps) {
@@ -50,7 +53,7 @@ export function InputImagePicker({
         </Button>
         {input && <Meta>Input: {input.name}</Meta>}
       </Flex>
-      <Meta>{INPUT_HINT}</Meta>
+      <Meta>{hint}</Meta>
       {error && <ErrorBanner message={error} />}
       {preview.error && <ErrorBanner message={preview.error} />}
       {input && !preview.error && !preview.dataUrl && <Spinner label="Opening the picture…" />}
@@ -58,7 +61,7 @@ export function InputImagePicker({
         <img
           className="input-image-picker__preview"
           src={preview.dataUrl}
-          alt="Input image"
+          alt="Input"
           onLoad={(event) => handlePreviewLoad(event.currentTarget)}
         />
       )}

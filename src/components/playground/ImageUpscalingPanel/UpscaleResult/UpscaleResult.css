@@ -1,0 +1,4 @@
+/* The saved path can be long with no spaces to wrap on. */
+.upscale-result__path {
+  overflow-wrap: anywhere;
+}

@@ -441,6 +441,9 @@ export interface PlaygroundImageDone {
   error?: string | null;
   seed: number;
   seconds: number | null;
+  /** Size of an upscaled picture, set only on a finished upscale job. */
+  width?: number;
+  height?: number;
 }
 
 /** The text-to-image form. Kept in the Playground store between visits. Width and height are always valid sizes. */
@@ -466,9 +469,33 @@ export interface PlaygroundDownloadState {
   error: string | null;
 }
 
+/** `generate` is text to image and image to image; `upscale` is Image upscaling. Each tab shows only its own kind. */
+export type ImageJobKind = "generate" | "upscale";
+
+/** An upscaling model the Playground can download and run (CPU only), from `playground_upscale_models`. */
+export interface UpscaleModel {
+  id: string;
+  name: string;
+  description: string;
+  license: string;
+  licenseUrl: string;
+  sizeBytes: number;
+  downloaded: boolean;
+  /** What the model suits, e.g. "Illustrations and anime". */
+  bestFor: string;
+}
+
+/** Request for `playground_upscale_image`. The result arrives as `playground-image-done`. */
+export interface UpscaleRequest {
+  jobId: string;
+  modelId: string;
+  inputPath: string;
+}
+
 /** A generation running now. Starts in the `loading` phase; `step` is 0 until the first sampling step. */
 export interface ImageJob {
   jobId: string;
+  kind: ImageJobKind;
   modelId: string;
   /** The form's compute choice when the job started: "auto" or a device name. */
   device: string;
@@ -484,6 +511,7 @@ export interface ImageJob {
 /** The last generation that ended, kept until the next one starts. `seed` is null when the job never started. `device` is the job's compute choice; `inputPath` is the picture it edited, or null for text to image. */
 export interface ImageResult {
   jobId: string;
+  kind: ImageJobKind;
   status: "done" | "error" | "cancelled";
   path: string | null;
   error: string | null;
@@ -494,7 +522,7 @@ export interface ImageResult {
 }
 
 /** What the backend reports for a generation, before the store adds the job's device and input. */
-export type ImageOutcome = Omit<ImageResult, "device" | "inputPath">;
+export type ImageOutcome = Omit<ImageResult, "kind" | "device" | "inputPath">;
 
 /** The picture an image to image job edits. `sourceSize` is its pixel size, known once its preview has loaded. */
 export interface InputImage {

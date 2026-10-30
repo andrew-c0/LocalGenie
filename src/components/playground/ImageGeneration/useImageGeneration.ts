@@ -24,6 +24,7 @@ export function useImageGeneration() {
   const generate = (request: ImageGenerateRequest, form: ImageForm, inputPath: string | null) => {
     startJob({
       jobId: request.jobId,
+      kind: "generate",
       modelId: request.modelId,
       device: form.device,
       inputPath,

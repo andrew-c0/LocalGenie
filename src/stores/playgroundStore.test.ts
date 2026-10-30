@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { ImageModel, PlaygroundDevice } from "../types";
+import type { ImageModel, PlaygroundDevice, UpscaleModel } from "../types";
 import { DEFAULT_IMAGE_FORM, DEVICE_AUTO } from "../utils/playground";
 import { usePlaygroundStore } from "./playgroundStore";
 
@@ -75,6 +75,7 @@ describe("finishJob", () => {
     usePlaygroundStore.setState({
       job: {
         jobId: "img-1",
+        kind: "generate",
         modelId: "qwen",
         device: "GPU0",
         inputPath: null,
@@ -101,6 +102,7 @@ describe("finishJob", () => {
     usePlaygroundStore.setState({
       job: {
         jobId: "edit-1",
+        kind: "generate",
         modelId: "sd15",
         device: "auto",
         inputPath: "C:/in/cat.png",
@@ -175,5 +177,88 @@ describe("image to image input", () => {
   it("keeps the strength inside its range", () => {
     usePlaygroundStore.getState().setStrength(3);
     expect(usePlaygroundStore.getState().strength).toBe(1);
+  });
+});
+
+describe("image upscaling", () => {
+  const upscaleModel = (id: string, downloaded: boolean): UpscaleModel => ({
+    id,
+    name: id,
+    description: "",
+    license: "",
+    licenseUrl: "",
+    sizeBytes: 1,
+    downloaded,
+    bestFor: "",
+  });
+
+  beforeEach(() => {
+    usePlaygroundStore.setState({
+      upscaleModels: null,
+      upscaleModelId: null,
+      upscaleInput: null,
+    });
+  });
+
+  it("selects the first downloaded model when the catalog arrives", () => {
+    usePlaygroundStore
+      .getState()
+      .setUpscaleModels([upscaleModel("a", false), upscaleModel("b", true)]);
+    expect(usePlaygroundStore.getState().upscaleModelId).toBe("b");
+  });
+
+  it("keeps a selection that is still listed", () => {
+    usePlaygroundStore.setState({ upscaleModelId: "a" });
+    usePlaygroundStore
+      .getState()
+      .setUpscaleModels([upscaleModel("a", false), upscaleModel("b", true)]);
+    expect(usePlaygroundStore.getState().upscaleModelId).toBe("a");
+  });
+
+  it("clears the selection when the selected model is deleted", () => {
+    usePlaygroundStore.setState({ upscaleModelId: "a" });
+    usePlaygroundStore
+      .getState()
+      .replaceUpscaleModelsAfterDelete([upscaleModel("a", false), upscaleModel("b", true)], "a");
+    expect(usePlaygroundStore.getState().upscaleModelId).toBeNull();
+  });
+
+  it("stores the input's size once its preview has loaded", () => {
+    usePlaygroundStore.getState().setUpscaleInputSize({ width: 1, height: 1 });
+    expect(usePlaygroundStore.getState().upscaleInput).toBeNull();
+    usePlaygroundStore
+      .getState()
+      .setUpscaleInput({ path: "C:/in/a.png", name: "a.png", sourceSize: null });
+    usePlaygroundStore.getState().setUpscaleInputSize({ width: 256, height: 128 });
+    expect(usePlaygroundStore.getState().upscaleInput?.sourceSize).toEqual({
+      width: 256,
+      height: 128,
+    });
+  });
+
+  it("keeps the job's kind with its result", () => {
+    usePlaygroundStore.setState({
+      job: {
+        jobId: "up-1",
+        kind: "upscale",
+        modelId: "a",
+        device: "auto",
+        inputPath: "C:/in/a.png",
+        startedAt: 0,
+        phase: "loading",
+        step: 0,
+        steps: 0,
+        secondsPerStep: null,
+      },
+    });
+    usePlaygroundStore.getState().finishJob({
+      jobId: "up-1",
+      status: "done",
+      path: "C:/out/a.png",
+      error: null,
+      seed: null,
+      seconds: 12,
+    });
+    expect(usePlaygroundStore.getState().result?.kind).toBe("upscale");
   });
 });

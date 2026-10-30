@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { pickAttachment } from "../../../../services/attachments";
-import { usePlaygroundStore } from "../../../../stores/playgroundStore";
+import type { InputImage } from "../../../../types";
 import { errorMessage } from "../../../../utils/errorMessage";
 import { inputFileName, isSupportedInputPath } from "../../../../utils/imageToImage";
 import { UNSUPPORTED_INPUT_MESSAGE } from "../../../../utils/imageToImageText";
@@ -11,9 +11,10 @@ export interface InputImagePickerState {
   error: string | null;
 }
 
-/** Picks the input picture with the app's image file dialog, offering PNG and JPG only. */
-export function useInputImagePicker(): InputImagePickerState {
-  const setInputImage = usePlaygroundStore((s) => s.setInputImage);
+/** Picks the input picture, handed to `setInputImage`, with the app's image file dialog, offering PNG and JPG only. */
+export function useInputImagePicker(
+  setInputImage: (input: InputImage) => void,
+): InputImagePickerState {
   const [error, setError] = useState<string | null>(null);
 
   const chooseFile = () => {

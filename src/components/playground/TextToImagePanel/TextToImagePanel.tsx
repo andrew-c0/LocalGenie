@@ -7,6 +7,7 @@ import {
   SD_CPP_RUNTIME_ID,
 } from "../../../utils/playground";
 import { runtimeMissingMessage } from "../../../utils/playgroundText";
+import { jobOfKind, resultOfKind } from "../../../utils/upscale";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../ui/Flex/Flex";
 import { StateBlock } from "../../ui/StateBlock/StateBlock";
@@ -39,8 +40,14 @@ export default function TextToImagePanel({ onOpenImageToImage }: TextToImagePane
   const setForm = usePlaygroundStore((s) => s.setForm);
   const applySeed = usePlaygroundStore((s) => s.applySeed);
   const setInputImage = usePlaygroundStore((s) => s.setInputImage);
-  const job = usePlaygroundStore((s) => s.job);
-  const result = usePlaygroundStore((s) => s.result);
+  const job = jobOfKind(
+    usePlaygroundStore((s) => s.job),
+    "generate",
+  );
+  const result = resultOfKind(
+    usePlaygroundStore((s) => s.result),
+    "generate",
+  );
 
   const selected = models?.find((m) => m.id === selectedModelId) ?? null;
   const blockedReason = generateBlockedReason({

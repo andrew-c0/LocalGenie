@@ -8,6 +8,8 @@ import type {
   SpeechModel,
   SpeechSynthesizeRequest,
   SpeechTranscribeRequest,
+  UpscaleModel,
+  UpscaleRequest,
 } from "../types";
 import { cancelDownload } from "./download";
 
@@ -62,6 +64,26 @@ export async function generateImage(request: ImageGenerateRequest): Promise<void
 /** Stop a running generation. The backend reports the stop through `playground-image-done`. */
 export async function cancelImage(jobId: string): Promise<void> {
   return invoke("playground_cancel_image", { jobId });
+}
+
+/** Every upscaling model the Playground knows, with its download state. */
+export async function listUpscaleModels(): Promise<UpscaleModel[]> {
+  return invoke("playground_upscale_models");
+}
+
+/** Download an upscaling model. Progress and the end arrive as the `playground-download-*` events. Resolves when the download has finished. */
+export async function downloadUpscaleModel(modelId: string): Promise<void> {
+  return invoke("playground_download_upscale_model", { modelId });
+}
+
+/** Delete an upscaling model's file. Rejects while it downloads or a job runs. */
+export async function deleteUpscaleModel(modelId: string): Promise<PlaygroundDeleteResult> {
+  return invoke("playground_delete_upscale_model", { modelId });
+}
+
+/** Start an upscale job. Resolves right after the job starts; the result comes as `playground-image-done`. Cancel with `cancelImage`. */
+export async function upscaleImage(request: UpscaleRequest): Promise<void> {
+  return invoke("playground_upscale_image", { request });
 }
 
 /** Read a saved image as a data URL, so the webview can show it. */

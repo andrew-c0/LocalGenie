@@ -1,11 +1,6 @@
 import type { ReactNode } from "react";
 import { usePlaygroundStore } from "../../../stores/playgroundStore";
 import type { ImageModel } from "../../../types";
-import { StatusBadge } from "../../ui/StatusBadge/StatusBadge";
-import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
-import { Flex } from "../../ui/Flex/Flex";
-import { StateBlock } from "../../ui/StateBlock/StateBlock";
-import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
 import {
   buildEditRequest,
   editBlockedReason,
@@ -15,6 +10,12 @@ import {
 import { EDIT_SECTION_TITLE } from "../../../utils/imageToImageText";
 import { SD_CPP_NAME, SD_CPP_RUNTIME_ID } from "../../../utils/playground";
 import { runtimeMissingMessage } from "../../../utils/playgroundText";
+import { jobOfKind, resultOfKind } from "../../../utils/upscale";
+import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
+import { Flex } from "../../ui/Flex/Flex";
+import { StateBlock } from "../../ui/StateBlock/StateBlock";
+import { StatusBadge } from "../../ui/StatusBadge/StatusBadge";
+import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
 import GeneratedImage from "../ImageGeneration/GeneratedImage/GeneratedImage";
 import GenerationProgress from "../ImageGeneration/GenerationProgress/GenerationProgress";
 import { useComputeDevices } from "../ImageGeneration/useComputeDevices";
@@ -42,7 +43,8 @@ export default function ImageToImagePanel() {
   const runtime = useRuntimeCheck(SD_CPP_RUNTIME_ID);
   const { generate, cancel: cancelJob } = useImageGeneration();
   const compute = useComputeDevices(runtime.status);
-  const inputPicker = useInputImagePicker();
+  const setInputImage = usePlaygroundStore((s) => s.setInputImage);
+  const inputPicker = useInputImagePicker(setInputImage);
 
   const selectedModelId = usePlaygroundStore((s) => s.selectedModelId);
   const selectEditModel = usePlaygroundStore((s) => s.selectEditModel);
@@ -53,8 +55,14 @@ export default function ImageToImagePanel() {
   const setInputSourceSize = usePlaygroundStore((s) => s.setInputSourceSize);
   const strength = usePlaygroundStore((s) => s.strength);
   const setStrength = usePlaygroundStore((s) => s.setStrength);
-  const job = usePlaygroundStore((s) => s.job);
-  const result = usePlaygroundStore((s) => s.result);
+  const job = jobOfKind(
+    usePlaygroundStore((s) => s.job),
+    "generate",
+  );
+  const result = resultOfKind(
+    usePlaygroundStore((s) => s.result),
+    "generate",
+  );
 
   const editModels = models ? imageToImageModels(models) : [];
   const selected = editModels.find((m) => m.id === selectedModelId) ?? null;

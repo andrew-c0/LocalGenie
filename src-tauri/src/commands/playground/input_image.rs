@@ -46,6 +46,15 @@ pub(super) fn validate_input_image(raw: &str) -> Result<InputImage, String> {
     })
 }
 
+/// The width and height of the image file, read from its header without decoding the pixels.
+pub(super) fn image_dimensions(path: &Path) -> Result<(u32, u32), String> {
+    image::ImageReader::open(path)
+        .and_then(|reader| reader.with_guessed_format())
+        .map_err(|e| format!("Cannot read {}: {e}", path.display()))?
+        .into_dimensions()
+        .map_err(|e| format!("Cannot read the size of {}: {e}", path.display()))
+}
+
 /// Refuses a file larger than the input cap.
 fn check_size(bytes: u64) -> Result<(), String> {
     if bytes > MAX_INPUT_BYTES {
@@ -150,6 +159,19 @@ mod tests {
         assert!(check_size(MAX_INPUT_BYTES + 1).is_err());
         let message = check_size(MAX_INPUT_BYTES + 1).expect_err("too large");
         assert!(message.contains("30 MB"), "{message}");
+    }
+
+    #[test]
+    fn dimensions_come_from_the_file_header() {
+        let scratch = Scratch::new("input-dimensions");
+        let png = scratch.path().join("pic.png");
+        image::RgbImage::new(7, 3).save(&png).expect("write png");
+        assert_eq!(image_dimensions(&png), Ok((7, 3)));
+
+        let broken = scratch.path().join("broken.png");
+        fs::write(&broken, b"not an image").expect("broken");
+        assert!(image_dimensions(&broken).is_err());
+        assert!(image_dimensions(&scratch.path().join("missing.png")).is_err());
     }
 
     #[test]

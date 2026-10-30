@@ -1,0 +1,4 @@
+/* The model column keeps a fixed width so the picture and result beside it take the rest of the page. */
+.upscale-model-column {
+  flex: 0 0 320px;
+}

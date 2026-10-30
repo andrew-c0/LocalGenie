@@ -34,10 +34,14 @@ pub(super) struct ImageJob {
     pub steps: u32,
     /// The seed sd-cli is given, already chosen when the request asked for a random one.
     pub seed: i64,
+    /// The pixel size (width, height) of the result, when the job knows it before it runs. An
+    /// upscaling job does; a generation job's size is in its request.
+    pub result_size: Option<(u32, u32)>,
 }
 
 /// `playground-image-done`. `path` is set when done, `error` when it failed. `seed` is the seed
-/// used, also when the request asked for a random one.
+/// used, also when the request asked for a random one (0 for an upscaling job, which has none).
+/// `width` and `height` are set for a finished upscaling job.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct ImageDoneEvent {
@@ -49,6 +53,10 @@ pub(super) struct ImageDoneEvent {
     pub error: Option<String>,
     pub seed: i64,
     pub seconds: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
 }
 
 /// The job that holds the one image slot.
@@ -235,6 +243,7 @@ fn done_event(job: &ImageJob, outcome: ImageOutcome, seconds: f64) -> ImageDoneE
         ImageOutcome::Cancelled => (JobStatus::Cancelled, None, None),
         ImageOutcome::Failed(message) => (JobStatus::Error, None, Some(message)),
     };
+    let size = job.result_size.filter(|_| status == JobStatus::Done);
     ImageDoneEvent {
         job_id: job.job_id.clone(),
         status,
@@ -242,6 +251,8 @@ fn done_event(job: &ImageJob, outcome: ImageOutcome, seconds: f64) -> ImageDoneE
         error,
         seed: job.seed,
         seconds,
+        width: size.map(|(width, _)| width),
+        height: size.map(|(_, height)| height),
     }
 }
 
@@ -265,7 +276,27 @@ mod tests {
             output: PathBuf::from(output),
             steps: 4,
             seed: 77,
+            result_size: None,
         }
+    }
+
+    #[test]
+    fn a_finished_job_with_a_known_size_reports_it_and_other_endings_do_not() {
+        let mut upscale = job("out/up.png");
+        upscale.result_size = Some((1024, 512));
+        let done = done_event(&upscale, ImageOutcome::Done, 1.0);
+        assert_eq!((done.width, done.height), (Some(1024), Some(512)));
+        let json = serde_json::to_value(&done).expect("json");
+        assert_eq!(json["width"], 1024);
+        assert_eq!(json["height"], 512);
+
+        for outcome in [ImageOutcome::Cancelled, ImageOutcome::Failed("x".into())] {
+            let event = done_event(&upscale, outcome, 1.0);
+            assert_eq!((event.width, event.height), (None, None));
+        }
+        let plain =
+            serde_json::to_value(done_event(&job("o.png"), ImageOutcome::Done, 1.0)).expect("json");
+        assert!(plain.get("width").is_none());
     }
 
     #[test]

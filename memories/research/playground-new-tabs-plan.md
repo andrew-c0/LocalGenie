@@ -38,5 +38,11 @@ Added after audio to audio, at the user's request. Same runtime and program (`sh
 - Contract: `SpeechModel.needsReference` (true for `pocket-tts-int8`, no voices); `SpeechSynthesizeRequest.referenceAudioPath` (wav). Voice and speed are ignored for it. The reference clip uses the shared audio slot, like audio to audio.
 - Status: built and checked by tests and a real CLI run; not tested in the app by the user yet (see manual checklist).
 
+## 2b. Image upscaling: spike and build result
+
+- Spike: 256 px to 1024 px with `sd-cli -M upscale` took 107 s (Nomos2) and 143 s (anime 6B) on the old `arm64-77b72a2` build, but 10 s and 16 s on the newest fork build `arm64-0769f70` (CPU). GPU (OpenCL) aborts with `GGML_ASSERT(dst->extra)` in `ggml_cl_add` on every build tried, for both the mosr and the ESRGAN architecture, so the tab is CPU only. The fork has no code patches (upstream plus CI files), so a fix would mean patching upstream ggml.
+- Models: `realesrgan-x4plus-anime-6b` (BSD-3-Clause), `nomos2-hq-mosr-x4` (CC-BY; the author writes "CC-BY-0.4"). Input png/jpg/jpeg, 30 MB and 1024 px longest side caps; output `upscaled-…png` in Pictures\LocalGenie.
+- Status: built and checked by tests; NOT manually tested in the app yet (see manual checklist).
+
 ## Status
-Audio to audio: done, user-tested, committed. Voice cloning: built, committed, user test pending. Next: 2 image upscaling spike.
+Audio to audio: done, user-tested, committed. Voice cloning and image upscaling: built and committed, user test pending. Next: 3 OCR spike.
