@@ -10,6 +10,8 @@ Source: the official GenieX repo (github.com/qualcomm/GenieX, read-only), checke
 - There is no per-model unload route or CLI command. The model leaves memory only when the server stops or the keepalive sweep frees it after the idle timeout (`--keepalive`, default 300 s).
 - Reported live result: a warmup and then a chat with identical load params did not reload. Changing `nctx` destroyed and reloaded the model.
 
+- Several models at once: run one `geniex serve --host 127.0.0.1:<port>` per model. Tested live on 2026-10-30 (CLI v0.10.0): two servers on 18191 and 18192, Qwen3.5-2B Q4_0 on one and Gemma 4 E4B IQ4_XS on the other, both on CPU. Each answered a simultaneous chat request and `/status` on each showed only its own model. Not tried: mixed compute units (for example CPU on one and NPU on the other), and RAM limits with large models.
+
 ## Consequences for LocalGenie
 - Load parameters (`nctx`, `ngl`, `compute`, `power_mode`, `spec_*`) must be sent with the warmup and with every chat request, or the first message reloads the model (`commands/chat_helpers.rs` `apply_load_params`).
 - Origins and keepalive are server-start options only; changing them restarts the server.

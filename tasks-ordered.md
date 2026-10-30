@@ -4,7 +4,7 @@ Source: `tasks.md`. Done items are removed; what is done and what was dropped is
 
 | # | Task | Estimate | Why |
 |---|------|----------|-----|
-| 1 | Run multiple models at once on the CLI | Small to find out, large to build | Start with a short check of what the GenieX server supports. If it cannot hold several models, the task is blocked and ends there. The app runs one server and unload-all is the only unload path, so a real build would touch loading, status and the model selector. |
+| 1 | Run multiple models at once on the CLI | Medium to large | Not blocked: one `geniex serve` per model on its own port works (tested live, see `memories/repo/geniex-server-behaviour.md`). The app runs one server on one port and unload-all is the only unload path, so the build is a server manager (start and stop per model, port choice), per-model status, and a chat that picks which server to talk to. Mixed compute units and memory limits are untested. |
 | 2 | Automatic conversation compaction (if enabled) | Large | One bounded feature: a summary call through the model, storage of the summary, and changes to history and retry. No new design question beyond the trigger and the setting. |
 | 3 | Research adding native tools (web search, file explorer) with user consent | Large | Needs a consent and approval design before any tool runs, then tool execution, a permission model and UI. Open-ended; touches safety. |
 | 4 | Research agentic mode, similar to OpenClaw or Atomic Agent | Largest | Broad; touches tools, planning and safety. Depends on item 2 (compaction) and item 3 (tools), so it comes last. |
