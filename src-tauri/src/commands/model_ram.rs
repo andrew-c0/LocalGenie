@@ -28,8 +28,9 @@ pub struct ModelRamEstimate {
     pub approximate: bool,
 }
 
-/// RAM each downloaded model needs once loaded. `nctx` sets the context for every model; `None`
-/// uses each model's native context, capped at 8192.
+/// RAM each downloaded model needs once loaded. `nctx` sets the context for every model, capped at
+/// each model's native context when its header gives one, since a model cannot use more. `None`
+/// uses each model's native context, capped at 8192. A non-positive `nctx` is an error.
 #[tauri::command]
 pub async fn model_ram_estimates(nctx: Option<i32>) -> Result<Vec<ModelRamEstimate>, String> {
     let requested = ram_estimate::requested_context(nctx)?;
@@ -83,6 +84,7 @@ fn estimate_for_precision(
         .as_ref()
         .map_or(0, |projector| projector.size);
     // An unreadable header leaves the KV cache unknown, so the estimate falls back to a flat factor.
+    // The header's native context also caps a requested one.
     let header = gguf::read_header(&weights.path).ok();
     let native_context = header.as_ref().and_then(|header| header.context_length);
     let context = ram_estimate::context_for_estimate(requested, native_context);
@@ -158,13 +160,24 @@ mod tests {
 
     /// A llama header: 2 layers, 2 KV heads of 16 + 16 elements at 2 bytes, so 256 bytes per token.
     fn llama_header() -> Vec<u8> {
-        build_header(&[
+        build_header(&llama_entries())
+    }
+
+    /// The llama header with a native context length of `context` tokens.
+    fn llama_header_with_context(context: u32) -> Vec<u8> {
+        let mut entries = llama_entries();
+        entries.push(kv_u32("llama.context_length", context));
+        build_header(&entries)
+    }
+
+    fn llama_entries() -> Vec<Vec<u8>> {
+        vec![
             kv_string("general.architecture", "llama"),
             kv_u32("llama.block_count", 2),
             kv_u32("llama.embedding_length", 64),
             kv_u32("llama.attention.head_count", 4),
             kv_u32("llama.attention.head_count_kv", 2),
-        ])
+        ]
     }
 
     fn projector_header() -> Vec<u8> {
@@ -208,6 +221,23 @@ mod tests {
 
         assert_eq!(got[0].kv_bytes, 256 * 1000);
         assert!(!got[0].approximate);
+    }
+
+    #[test]
+    fn a_requested_context_above_the_native_length_is_capped_at_it() {
+        let folder = fresh_folder("capped");
+        write_padded(
+            &folder,
+            "model-Q4_0.gguf",
+            &llama_header_with_context(512),
+            2000,
+        );
+
+        let got = estimates_for_folder("org/model", &folder, &precisions(&["Q4_0"]), Some(1000));
+        let _ = std::fs::remove_dir_all(&folder);
+
+        // The model's native context is 512, so a 1000-token request sizes the cache for 512.
+        assert_eq!(got[0].kv_bytes, 256 * 512);
     }
 
     #[test]

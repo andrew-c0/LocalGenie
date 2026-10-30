@@ -1,5 +1,12 @@
 import type { ComputeTarget } from "../types";
-import { COMPUTE_PORT_KEYS, type ComputePorts, isValidPort } from "../utils/serverPorts";
+import {
+  COMPUTE_PORT_KEYS,
+  type ComputePorts,
+  isValidPort,
+  PORT_FREE,
+  type PortUse,
+  portUseOf,
+} from "../utils/serverPorts";
 import {
   type SaveOutcome,
   type SettingWrite,
@@ -30,6 +37,23 @@ export async function getComputePorts(): Promise<ComputePorts> {
  */
 export function saveServerPorts(writes: SettingWrite[]): Promise<SaveOutcome> {
   return writeAllOrRollBack(writes, (key, value) => db.setPreference(key, value, "number"));
+}
+
+/**
+ * What holds `port` for a field of `target` (null for the main port). Reads this app's servers and
+ * probes the port. Never rejects: a failed read counts as "nothing answers", and an aborted probe
+ * reports the port free (the caller ignores results it no longer wants).
+ */
+export async function probePortUse(
+  port: number,
+  target: ComputeTarget | null,
+  signal?: AbortSignal,
+): Promise<PortUse> {
+  const [servers, answering] = await Promise.all([
+    geniex.listServers().catch(() => []),
+    geniex.isPortServing(port, signal).catch(() => false),
+  ]);
+  return signal?.aborted ? PORT_FREE : portUseOf(port, target, servers, answering);
 }
 
 /**

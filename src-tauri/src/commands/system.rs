@@ -11,16 +11,10 @@ pub struct SystemMemoryInfo {
     pub available_bytes: u64,
 }
 
-/// Report total and available System RAM for the precision fit calculator.
+/// Report total and available System RAM for the precision fit calculator, the model RAM estimate
+/// and the load check.
 #[tauri::command]
 pub async fn get_system_memory() -> Result<SystemMemoryInfo, String> {
-    read_system_memory().await
-}
-
-/// Report total and available System RAM for the model RAM estimate and the load check. Same
-/// reading as `get_system_memory`.
-#[tauri::command]
-pub async fn system_memory() -> Result<SystemMemoryInfo, String> {
     read_system_memory().await
 }
 
@@ -76,7 +70,7 @@ mod tests {
 
     #[tokio::test]
     async fn system_memory_reports_available_within_total() {
-        let info = system_memory().await.expect("system memory");
+        let info = get_system_memory().await.expect("system memory");
         assert!(info.total_bytes > 0);
         assert!(info.available_bytes <= info.total_bytes);
     }

@@ -32,9 +32,9 @@ use std::sync::Mutex;
 
 /// Shared application state managed by Tauri.
 pub struct AppState {
-    /// PIDs of the `geniex serve` child processes the app started, keyed by port.
+    /// The `geniex serve` child processes the app started, keyed by port, with their compute.
     /// An entry is removed by the server's exit watcher or by a stop request.
-    pub server_processes: Mutex<HashMap<u16, u32>>,
+    pub server_processes: Mutex<server::ServerMap>,
     /// Shared HTTP client for talking to the GenieX server.
     /// `reqwest::Client` manages a connection pool internally — reusing it
     /// avoids allocating a new pool and TCP connections per request.

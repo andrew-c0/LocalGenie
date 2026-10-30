@@ -123,6 +123,8 @@ export interface ServerStatus {
   running: boolean;
   port: number;
   models: string[];
+  /** Lowercase "cpu" | "gpu" | "npu". Null when unknown or the server is not one this app started. */
+  compute?: string | null;
 }
 
 /**

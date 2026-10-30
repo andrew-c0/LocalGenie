@@ -12,7 +12,7 @@ import {
   portsToProbe,
   validateComputePorts,
 } from "../../../utils/serverPorts";
-import { usePortServing } from "./usePortServing";
+import { usePortUse } from "./usePortUse";
 
 const BLANK_DRAFTS: ComputePortDrafts = { cpu: "", gpu: "", npu: "" };
 const NO_PORTS: ComputePorts = { cpu: null, gpu: null, npu: null };
@@ -49,13 +49,13 @@ export function useComputePortDrafts(mainPort: number | null) {
   const draftPorts = draftsToPorts(drafts);
   const validationErrors = validateComputePorts(drafts, mainPort);
   const probe = portsToProbe(draftPorts, savedPorts, validationErrors);
-  const cpuProbe = usePortServing(probe.cpu);
-  const gpuProbe = usePortServing(probe.gpu);
-  const npuProbe = usePortServing(probe.npu);
+  const cpuProbe = usePortUse(probe.cpu, "cpu");
+  const gpuProbe = usePortUse(probe.gpu, "gpu");
+  const npuProbe = usePortUse(probe.npu, "npu");
 
-  const serving = { cpu: cpuProbe.serving, gpu: gpuProbe.serving, npu: npuProbe.serving };
+  const uses = { cpu: cpuProbe.use, gpu: gpuProbe.use, npu: npuProbe.use };
   const checking = { cpu: cpuProbe.checking, gpu: gpuProbe.checking, npu: npuProbe.checking };
-  const errors: ComputePortErrors = addPortInUseErrors(validationErrors, draftPorts, serving);
+  const errors: ComputePortErrors = addPortInUseErrors(validationErrors, draftPorts, uses);
   const mainClash = computeUsingPort(drafts, mainPort);
 
   return { drafts, setDraft, errors, checking, mainClash, draftPorts, savedPorts, markSaved };

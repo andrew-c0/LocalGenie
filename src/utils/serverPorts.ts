@@ -1,4 +1,4 @@
-import type { ComputeTarget } from "../types";
+import type { ComputeTarget, ServerStatus, ServerStoppedEvent } from "../types";
 import type { SettingWrite } from "./writeAllOrRollBack";
 
 /** Ports a GenieX server may use. */
@@ -112,6 +112,67 @@ export function portInUseMessage(port: number): string {
 }
 
 /**
+ * What holds a port, as seen from one field. `free` covers a port nothing answers on, and a port
+ * this app's server for the same compute runs on (that server is the field's own, not a conflict).
+ * `other-server` is this app's server for a different compute. `other-process` is anything else.
+ */
+export type PortUse =
+  | { kind: "free" }
+  | { kind: "other-process" }
+  | { kind: "other-server"; compute: ComputeTarget };
+
+export const PORT_FREE: PortUse = { kind: "free" };
+
+/** The compute a server reports, or null when it is unknown or not one of the three computes. */
+export function computeOfServer(compute: string | null | undefined): ComputeTarget | null {
+  return COMPUTE_PORT_TARGETS.find((target) => target === compute) ?? null;
+}
+
+/**
+ * The use of `port` for a field of `target` (null for the main port). `servers` are this app's
+ * servers and `answering` says whether anything answers on the port. A running server of ours
+ * decides it when its compute is known: its own compute is free, another compute is a conflict. An
+ * unknown compute falls back to whether the port answers.
+ */
+export function portUseOf(
+  port: number,
+  target: ComputeTarget | null,
+  servers: ServerStatus[],
+  answering: boolean,
+): PortUse {
+  const owner = servers.find((server) => server.running && server.port === port);
+  const ownerCompute = owner ? computeOfServer(owner.compute) : null;
+  if (ownerCompute !== null) {
+    return ownerCompute === target ? PORT_FREE : { kind: "other-server", compute: ownerCompute };
+  }
+  return answering ? { kind: "other-process" } : PORT_FREE;
+}
+
+/** The message for a port in use, or undefined when the port is free for this field. */
+export function portUseMessage(port: number, use: PortUse): string | undefined {
+  switch (use.kind) {
+    case "free":
+      return undefined;
+    case "other-process":
+      return portInUseMessage(port);
+    case "other-server":
+      return `Port ${port} is already used by the ${COMPUTE_PORT_LABELS[use.compute]} server`;
+  }
+}
+
+/**
+ * Whether a `server-stopped` event concerns the main server. A payload of null or missing (older
+ * emits) counts as the main server; otherwise only the main port does.
+ */
+export function stopAffectsMainServer(
+  payload: ServerStoppedEvent | null | undefined,
+  mainPort: number,
+): boolean {
+  if (payload === null || payload === undefined) return true;
+  return payload.port === mainPort;
+}
+
+/**
  * The port to check for a field, or null when there is nothing new to check. A port is checked only
  * when it differs from the saved one (an unchanged port is the one the server already uses, so it is
  * not a conflict) and passed validation (`error` is the field's validation message, if any).
@@ -139,20 +200,20 @@ export function portsToProbe(
 }
 
 /**
- * Adds the in-use message to each compute whose port answered the probe. A field that already has an
- * error keeps its first error.
+ * Adds the in-use message to each compute whose port is taken for it (see `portUseMessage`). A field
+ * that already has an error keeps its first error.
  */
 export function addPortInUseErrors(
   errors: ComputePortErrors,
   ports: ComputePorts,
-  serving: Record<ComputeTarget, boolean>,
+  uses: Record<ComputeTarget, PortUse>,
 ): ComputePortErrors {
   const merged: ComputePortErrors = { ...errors };
   for (const target of COMPUTE_PORT_TARGETS) {
     const port = ports[target];
-    if (port !== null && serving[target] && merged[target] === undefined) {
-      merged[target] = portInUseMessage(port);
-    }
+    if (port === null || merged[target] !== undefined) continue;
+    const message = portUseMessage(port, uses[target]);
+    if (message !== undefined) merged[target] = message;
   }
   return merged;
 }

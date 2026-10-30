@@ -12,7 +12,7 @@ const COMPUTE_BUFFER_MIN_BYTES: u64 = 256 * MIB;
 const UNREADABLE_HEADER_PERCENT: u64 = 120;
 /// Total as a share of the weights, in percent, for a QAIRT bundle (its context is fixed in the bundle).
 const QAIRT_BUNDLE_PERCENT: u64 = 110;
-/// Largest context a default estimate assumes. A requested context is not capped.
+/// Largest context a default estimate assumes, when the model's native length is above it.
 pub const DEFAULT_CONTEXT_CAP: u64 = 8192;
 /// Context assumed for a default estimate when the model does not state its native length.
 const FALLBACK_CONTEXT: u64 = 4096;
@@ -102,16 +102,19 @@ pub fn requested_context(nctx: Option<i32>) -> Result<Option<u64>, String> {
     }
 }
 
-/// Context length the KV cache is sized for. A requested context wins as given. Otherwise the
-/// model's native length, capped at `DEFAULT_CONTEXT_CAP`, or `FALLBACK_CONTEXT` when it is unknown.
+/// Context length the KV cache is sized for. A requested context is capped at the model's native
+/// length, since the model cannot use more. With no request, the native length is capped at
+/// `DEFAULT_CONTEXT_CAP`. `FALLBACK_CONTEXT` stands in when the native length is unknown.
 pub fn context_for_estimate(requested: Option<u64>, native_context: Option<i64>) -> u64 {
-    requested.unwrap_or_else(|| {
-        native_context
-            .and_then(|native| u64::try_from(native).ok())
-            .filter(|native| *native > 0)
-            .unwrap_or(FALLBACK_CONTEXT)
-            .min(DEFAULT_CONTEXT_CAP)
-    })
+    let native = native_context
+        .and_then(|native| u64::try_from(native).ok())
+        .filter(|native| *native > 0);
+    match (requested, native) {
+        (Some(requested), Some(native)) => requested.min(native),
+        (Some(requested), None) => requested,
+        (None, Some(native)) => native.min(DEFAULT_CONTEXT_CAP),
+        (None, None) => FALLBACK_CONTEXT,
+    }
 }
 
 /// Whether a file name carries `precision` as a whole token, so `Q4_0` matches `model-Q4_0.gguf`,
@@ -200,8 +203,15 @@ mod tests {
     }
 
     #[test]
-    fn a_requested_context_wins_even_above_the_cap() {
+    fn a_requested_context_is_used_as_given_below_the_native_length() {
         assert_eq!(context_for_estimate(Some(16384), Some(40960)), 16384);
+        assert_eq!(context_for_estimate(Some(1000), None), 1000);
+    }
+
+    #[test]
+    fn a_requested_context_is_capped_at_the_native_length() {
+        assert_eq!(context_for_estimate(Some(16384), Some(2048)), 2048);
+        assert_eq!(context_for_estimate(Some(4096), Some(0)), 4096);
     }
 
     #[test]

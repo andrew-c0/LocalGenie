@@ -13,6 +13,7 @@ import {
   resolveLoadParams,
   sameServerOptions,
 } from "../../../utils/modelSettings";
+import { stopAffectsMainServer } from "../../../utils/serverPorts";
 import { toast } from "../../../utils/toast";
 
 /** Key used for `loading` while all models are being unloaded. */
@@ -48,11 +49,13 @@ export function useModelLoader() {
     if (selectorOpen) setError(null);
   }, [selectorOpen]);
 
-  // The server process exited on its own. The payload may be missing (the backend sends none today)
-  // or carry the port; the handler does not use it yet.
-  useTauriEvent<ServerStoppedEvent | null | undefined>("server-stopped", () => {
+  // A server process exited on its own. Only the main server's stop resets the status here; stops of
+  // other per-compute servers are not the main server's business.
+  useTauriEvent<ServerStoppedEvent | null | undefined>("server-stopped", (payload) => {
+    const mainPort = useModelStore.getState().serverPort;
+    if (!stopAffectsMainServer(payload, mainPort)) return;
     console.warn("[app] Server process exited unexpectedly");
-    setServerStatus({ running: false, port: useModelStore.getState().serverPort, models: [] });
+    setServerStatus({ running: false, port: mainPort, models: [] });
     setServerOptions(null);
     toast.error("GenieX server stopped", "The server process exited unexpectedly.");
   });

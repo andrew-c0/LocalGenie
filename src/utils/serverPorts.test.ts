@@ -1,24 +1,31 @@
 import { describe, expect, it } from "vitest";
+import type { ComputeTarget } from "../types";
 import {
   addPortInUseErrors,
   type ComputePortDrafts,
   type ComputePorts,
+  computeOfServer,
   computeUsingPort,
   draftsToPorts,
   isValidPort,
   MAIN_PORT_KEY,
+  PORT_FREE,
+  type PortUse,
   parsePortDraft,
   portInUseMessage,
   portSettingWrites,
   portsToDrafts,
   portsToProbe,
   portToProbe,
+  portUseMessage,
+  portUseOf,
+  stopAffectsMainServer,
   validateComputePorts,
 } from "./serverPorts";
 
 const blank: ComputePortDrafts = { cpu: "", gpu: "", npu: "" };
 const noPorts: ComputePorts = { cpu: null, gpu: null, npu: null };
-const noServing = { cpu: false, gpu: false, npu: false };
+const noUses: Record<ComputeTarget, PortUse> = { cpu: PORT_FREE, gpu: PORT_FREE, npu: PORT_FREE };
 
 describe("isValidPort", () => {
   it("accepts the ends of the range and the default port", () => {
@@ -159,29 +166,124 @@ describe("portsToProbe", () => {
 });
 
 describe("addPortInUseErrors", () => {
-  it("adds the in-use message to a compute whose port answered", () => {
+  it("adds the in-use message to a compute whose port another process holds", () => {
     const errors = addPortInUseErrors(
       {},
       { cpu: 5001, gpu: null, npu: null },
-      {
-        ...noServing,
-        cpu: true,
-      },
+      { ...noUses, cpu: { kind: "other-process" } },
     );
     expect(errors).toEqual({ cpu: portInUseMessage(5001) });
+  });
+
+  it("adds the other-server message to a compute whose port is another compute's server", () => {
+    const errors = addPortInUseErrors(
+      {},
+      { cpu: null, gpu: 5001, npu: null },
+      { ...noUses, gpu: { kind: "other-server", compute: "npu" } },
+    );
+    expect(errors).toEqual({ gpu: "Port 5001 is already used by the NPU server" });
   });
 
   it("keeps the existing error when a field has one", () => {
     const errors = addPortInUseErrors(
       { cpu: "Same port as the GPU server" },
       { cpu: 5001, gpu: 5001, npu: null },
-      { ...noServing, cpu: true },
+      { ...noUses, cpu: { kind: "other-process" } },
     );
     expect(errors).toEqual({ cpu: "Same port as the GPU server" });
   });
 
-  it("returns the errors unchanged when nothing answers", () => {
-    expect(addPortInUseErrors({}, { cpu: 5001, gpu: null, npu: null }, noServing)).toEqual({});
+  it("returns the errors unchanged when every port is free", () => {
+    expect(addPortInUseErrors({}, { cpu: 5001, gpu: null, npu: null }, noUses)).toEqual({});
+  });
+});
+
+describe("computeOfServer", () => {
+  it("returns the compute of a known server", () => {
+    expect(computeOfServer("gpu")).toBe("gpu");
+  });
+
+  it("returns null for an unknown, missing or unexpected compute", () => {
+    expect(computeOfServer(null)).toBeNull();
+    expect(computeOfServer(undefined)).toBeNull();
+    expect(computeOfServer("GPU")).toBeNull();
+    expect(computeOfServer("tpu")).toBeNull();
+  });
+});
+
+describe("portUseOf", () => {
+  const cpuServer = { running: true, port: 5000, models: [], compute: "cpu" };
+  const npuServer = { running: true, port: 5002, models: [], compute: "npu" };
+
+  it("is free when our server for the same compute runs on the port", () => {
+    expect(portUseOf(5000, "cpu", [cpuServer], true)).toEqual(PORT_FREE);
+  });
+
+  it("is a conflict when our server for another compute runs on the port", () => {
+    expect(portUseOf(5002, "cpu", [npuServer], true)).toEqual({
+      kind: "other-server",
+      compute: "npu",
+    });
+  });
+
+  it("is a conflict with another process when something answers and no server of ours holds it", () => {
+    expect(portUseOf(5001, "cpu", [cpuServer, npuServer], true)).toEqual({
+      kind: "other-process",
+    });
+  });
+
+  it("is free when nothing answers and no server of ours holds the port", () => {
+    expect(portUseOf(5001, "cpu", [cpuServer], false)).toEqual(PORT_FREE);
+  });
+
+  it("ignores a stopped server of ours, so its port is judged by whether it answers", () => {
+    const stopped = { ...cpuServer, running: false };
+    expect(portUseOf(5000, "cpu", [stopped], true)).toEqual({ kind: "other-process" });
+    expect(portUseOf(5000, "cpu", [stopped], false)).toEqual(PORT_FREE);
+  });
+
+  it("falls back to whether the port answers when our server's compute is unknown", () => {
+    const unknown = { ...cpuServer, compute: null };
+    expect(portUseOf(5000, "gpu", [unknown], true)).toEqual({ kind: "other-process" });
+    expect(portUseOf(5000, "gpu", [unknown], false)).toEqual(PORT_FREE);
+  });
+
+  it("treats a server of ours as another compute's when checking the main port", () => {
+    expect(portUseOf(5000, null, [cpuServer], true)).toEqual({
+      kind: "other-server",
+      compute: "cpu",
+    });
+  });
+});
+
+describe("portUseMessage", () => {
+  it("is undefined for a free port", () => {
+    expect(portUseMessage(5000, PORT_FREE)).toBeUndefined();
+  });
+
+  it("names the other process for a port another program answers on", () => {
+    expect(portUseMessage(5000, { kind: "other-process" })).toBe(portInUseMessage(5000));
+  });
+
+  it("names the compute whose server holds the port", () => {
+    expect(portUseMessage(5000, { kind: "other-server", compute: "npu" })).toBe(
+      "Port 5000 is already used by the NPU server",
+    );
+  });
+});
+
+describe("stopAffectsMainServer", () => {
+  it("counts a stop of the main port", () => {
+    expect(stopAffectsMainServer({ port: 18181 }, 18181)).toBe(true);
+  });
+
+  it("ignores a stop of another port", () => {
+    expect(stopAffectsMainServer({ port: 5000 }, 18181)).toBe(false);
+  });
+
+  it("treats a null or missing payload as the main server", () => {
+    expect(stopAffectsMainServer(null, 18181)).toBe(true);
+    expect(stopAffectsMainServer(undefined, 18181)).toBe(true);
   });
 });
 

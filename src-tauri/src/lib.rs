@@ -110,7 +110,6 @@ pub fn run() {
             logs::clear_server_logs,
             // System
             system::get_system_memory,
-            system::system_memory,
             system::get_platform_info,
             system_usage::get_system_usage,
             // Chat attachments (image, audio, text picked for a message)

@@ -1,6 +1,5 @@
 use tauri::{AppHandle, Emitter, State};
 
-use tauri::Manager;
 use super::chat_helpers::{
     apply_load_params, build_chat_body, chat_done_payload, finish_reason_from_chunk,
     is_first_output, no_output_error, resolve_model_for_server, strip_precision, usage_from_chunk,
@@ -8,6 +7,7 @@ use super::chat_helpers::{
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
+use tauri::Manager;
 
 /// Cancel flag shared between the cancel command and a streaming loop.
 type CancelFlag = Arc<AtomicBool>;
@@ -124,10 +124,12 @@ pub async fn load_model(
         ));
     }
 
+    let compute = super::server::tracked_compute(&state, port)?;
     Ok(super::server::ServerStatus {
         running: true,
         port,
         models,
+        compute,
     })
 }
 

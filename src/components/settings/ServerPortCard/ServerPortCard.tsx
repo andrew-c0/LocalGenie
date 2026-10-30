@@ -18,16 +18,16 @@ import {
   isValidPort,
   PORT_RANGE_MESSAGE,
   PORT_VALID_RANGE,
-  portInUseMessage,
   portSettingWrites,
   portToProbe,
+  portUseMessage,
 } from "../../../utils/serverPorts";
 import { toast } from "../../../utils/toast";
 import { describeSaveFailure } from "../../../utils/writeAllOrRollBack";
 import { Flex } from "../../ui/Flex/Flex";
 import { Meta } from "../../ui/Typography/Typography";
 import { useComputePortDrafts } from "./useComputePortDrafts";
-import { usePortServing } from "./usePortServing";
+import { usePortUse } from "./usePortUse";
 import "./ServerPortCard.css";
 
 /**
@@ -44,10 +44,14 @@ export default function ServerPortCard() {
   const [saving, setSaving] = useState(false);
 
   const mainPort = isValidPort(Number(portValue)) ? Number(portValue) : null;
-  const mainProbe = usePortServing(portToProbe(mainPort, serverPort, undefined));
+  const mainProbePort = portToProbe(mainPort, serverPort, undefined);
+  const mainProbe = usePortUse(mainProbePort, null);
+  const mainUseMessage =
+    mainProbePort === null ? undefined : portUseMessage(mainProbePort, mainProbe.use);
   const { drafts, setDraft, errors, checking, mainClash, draftPorts, savedPorts, markSaved } =
     useComputePortDrafts(mainPort);
   const hasComputeErrors = mainClash !== null || Object.keys(errors).length > 0;
+  const hasError = mainUseMessage !== undefined || hasComputeErrors;
 
   const handleSave = async () => {
     const parsed = Number(portValue);
@@ -56,7 +60,7 @@ export default function ServerPortCard() {
       return;
     }
     setPortError(null);
-    if (mainProbe.serving || hasComputeErrors) return;
+    if (hasError) return;
 
     setSaving(true);
     const outcome = await saveServerPorts(
@@ -86,8 +90,7 @@ export default function ServerPortCard() {
   const mainClashMessage = mainClash
     ? `Port ${portValue} is already used by the ${COMPUTE_PORT_LABELS[mainClash]} server`
     : undefined;
-  const mainInUseMessage = mainProbe.serving ? portInUseMessage(Number(portValue)) : undefined;
-  const portMessage = portError ?? mainClashMessage ?? mainInUseMessage;
+  const portMessage = portError ?? mainClashMessage ?? mainUseMessage;
 
   return (
     <Card>
@@ -135,7 +138,7 @@ export default function ServerPortCard() {
             appearance="primary"
             icon={saving ? <Spinner size="tiny" /> : <SaveRegular />}
             onClick={handleSave}
-            disabled={saving || mainProbe.serving || hasComputeErrors}
+            disabled={saving || hasError}
           >
             {saving ? "Saving…" : "Save"}
           </Button>
