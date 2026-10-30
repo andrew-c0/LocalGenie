@@ -35,16 +35,16 @@ import "./ServerPortCard.css";
  * port is taken, and saves them together. An empty compute port means a random free port.
  */
 export default function ServerPortCard() {
-  const serverPort = useModelStore((s) => s.serverPort);
+  const mainServerPort = useModelStore((s) => s.mainServerPort);
   const setServerPort = useModelStore((s) => s.setServerPort);
   const setServerStatus = useModelStore((s) => s.setServerStatus);
 
-  const [portValue, setPortValue] = useState(String(serverPort));
+  const [portValue, setPortValue] = useState(String(mainServerPort));
   const [portError, setPortError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const mainPort = isValidPort(Number(portValue)) ? Number(portValue) : null;
-  const mainProbePort = portToProbe(mainPort, serverPort, undefined);
+  const mainProbePort = portToProbe(mainPort, mainServerPort, undefined);
   const mainProbe = usePortUse(mainProbePort, null);
   const mainUseMessage =
     mainProbePort === null ? undefined : portUseMessage(mainProbePort, mainProbe.use);
@@ -65,13 +65,11 @@ export default function ServerPortCard() {
     setSaving(true);
     const outcome = await saveServerPorts(
       portSettingWrites(
-        { previous: serverPort, next: parsed },
+        { previous: mainServerPort, next: parsed },
         { previous: savedPorts, next: draftPorts },
       ),
     );
-    let storedPort = serverPort;
     if (outcome.ok) {
-      storedPort = parsed;
       setServerPort(parsed);
       markSaved(draftPorts);
       toast.success("Server settings saved");
@@ -80,7 +78,8 @@ export default function ServerPortCard() {
     }
 
     try {
-      setServerStatus(await geniex.getServerStatus(storedPort));
+      // The status of the active server; the main port when none is loaded.
+      setServerStatus(await geniex.getServerStatus(useModelStore.getState().serverPort));
     } catch {
       // server may not be running on the port
     }

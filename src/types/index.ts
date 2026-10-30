@@ -125,6 +125,8 @@ export interface ServerStatus {
   models: string[];
   /** Lowercase "cpu" | "gpu" | "npu". Null when unknown or the server is not one this app started. */
   compute?: string | null;
+  /** Compute unit each loaded model runs on, by model id. Absent when the server does not report it. */
+  devices?: { id: string; device: string }[];
 }
 
 /**

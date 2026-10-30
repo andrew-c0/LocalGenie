@@ -111,26 +111,23 @@ pub async fn load_model(
     eprintln!("[load] model '{}' loaded successfully", clean_model);
 
     // Refresh server status to reflect newly loaded models
-    let models = super::server::fetch_loaded_models(&state.http_client, &resolved_base).await?;
+    let body = super::server::fetch_status_body(&state.http_client, &resolved_base).await?;
+    let status = super::server::running_status(port, &body);
 
     // Verify the model actually appears in the loaded list
-    let found = models
+    let found = status
+        .models
         .iter()
         .any(|m| m == clean_model || m.starts_with(&format!("{}:", clean_model)));
     if !found {
         return Err(format!(
             "Model '{}' does not appear loaded on the server. Loaded models: {:?}",
-            clean_model, models
+            clean_model, status.models
         ));
     }
 
     let compute = super::server::tracked_compute(&state, port)?;
-    Ok(super::server::ServerStatus {
-        running: true,
-        port,
-        models,
-        compute,
-    })
+    Ok(super::server::ServerStatus { compute, ..status })
 }
 
 /// Unload all models by stopping the GenieX server.

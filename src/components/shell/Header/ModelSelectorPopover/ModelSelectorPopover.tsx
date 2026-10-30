@@ -20,16 +20,21 @@ import { PlugDisconnectedRegular, SearchRegular } from "@fluentui/react-icons";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { COMPUTE_TARGETS, type ComputeChoice, useModelStore } from "../../../../stores/modelStore";
-import type { ModelInfo } from "../../../../types";
 import { FAMILY_ALL, familyFilterOptions, matchesFamily } from "../../../../utils/modelFamily";
-import { shortModelKey } from "../../../../utils/modelKey";
 import { modelRamLine } from "../../../../utils/modelRam";
+import {
+  occupantOf,
+  replacedRamBytes,
+  type SelectorRow,
+  selectorGroups,
+} from "../../../../utils/modelSelector";
 import { Flex } from "../../../ui/Flex/Flex";
 import { Body, Meta } from "../../../ui/Typography/Typography";
-import { LOADING_UNLOAD } from "../useModelLoader";
-import { CapabilityModelOption } from "./CapabilityModelOption/CapabilityModelOption";
-import type { ModelOptionButtonProps } from "./ModelOptionButton/ModelOptionButton";
+import { LOADING_UNLOAD, type ModelLoader } from "../useModelLoader";
+import { ModelSelectorRow } from "./ModelSelectorRow/ModelSelectorRow";
+import { ReplaceModelNotice } from "./ReplaceModelNotice/ReplaceModelNotice";
 import { useRamSnapshot } from "./useRamSnapshot";
+import { useResolvedComputes } from "./useResolvedComputes";
 import "./ModelSelectorPopover.css";
 
 /** Label + description for each compute target. */
@@ -39,29 +44,28 @@ const COMPUTE_META: Record<ComputeChoice, { label: string; hint: string }> = {
   cpu: { label: "CPU", hint: "Baseline; slowest but always available" },
 };
 
+/** Footer button text: what is running, or "Unload all" when idle. */
+function unloadAllLabel(loading: string | null): string {
+  if (loading === LOADING_UNLOAD) return "Unloading…";
+  if (loading !== null) return "Loading…";
+  return "Unload all";
+}
+
 interface ModelSelectorPopoverProps {
-  /** Model name, or a LOADING_* key, while an action is in progress. */
-  loading: string | null;
-  error: string | null;
-  onSelect: (name: string) => void;
-  onComputeChange: (next: ComputeChoice) => void;
-  onUnload: () => void;
+  /** The header's loader: actions, the in-progress marker and the last error. */
+  loader: ModelLoader;
 }
 
 /**
  * Model switcher shown inside the header's Popover. Actions and their state come from the header
- * (`useModelLoader`); this component handles filtering and layout only.
+ * (`useModelLoader`); this component handles filtering, grouping and layout. A load that would replace
+ * the model on its compute asks for confirmation here first.
  */
-export default function ModelSelectorPopover({
-  loading,
-  error,
-  onSelect,
-  onComputeChange,
-  onUnload,
-}: ModelSelectorPopoverProps) {
+export default function ModelSelectorPopover({ loader }: ModelSelectorPopoverProps) {
+  const { loading, error, selectModel, changeCompute, unloadCompute, unloadAll } = loader;
   const navigate = useNavigate();
   const models = useModelStore((s) => s.models);
-  const serverStatus = useModelStore((s) => s.serverStatus);
+  const loadedServers = useModelStore((s) => s.loadedServers);
   const activeModelId = useModelStore((s) => s.activeModelId);
   const selectorOpen = useModelStore((s) => s.selectorOpen);
   const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
@@ -69,66 +73,79 @@ export default function ModelSelectorPopover({
 
   const [query, setQuery] = useState("");
   const [family, setFamily] = useState(FAMILY_ALL);
+  /** Name of a model whose load needs the model on its compute unloaded first. */
+  const [pendingReplace, setPendingReplace] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectorOpen) {
       setQuery("");
       setFamily(FAMILY_ALL);
+      setPendingReplace(null);
     }
   }, [selectorOpen]);
 
   const modelNames = useMemo(() => models.map((m) => m.name), [models]);
   const ramSnapshot = useRamSnapshot(selectorOpen, modelNames);
+  const resolved = useResolvedComputes(selectorOpen, modelNames);
   const familyOptions = useMemo(() => familyFilterOptions(modelNames), [modelNames]);
   const activeFamily = familyOptions.some(([id]) => id === family) ? family : FAMILY_ALL;
 
-  const { loadedModels, readyModels } = useMemo(() => {
-    const loadedNames = new Set(serverStatus.models.map(shortModelKey));
-    const loaded: ModelInfo[] = [];
-    const ready: ModelInfo[] = [];
+  const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    for (const m of models) {
+    return models.filter((m) => {
       const base = m.name.split("/").pop() ?? m.name;
-      if (q && !base.toLowerCase().includes(q)) continue;
-      if (!matchesFamily(m.name, activeFamily)) continue;
-      if (loadedNames.has(shortModelKey(m.name))) loaded.push(m);
-      else ready.push(m);
-    }
-    return { loadedModels: loaded, readyModels: ready };
-  }, [models, serverStatus.models, query, activeFamily]);
+      if (q && !base.toLowerCase().includes(q)) return false;
+      return matchesFamily(m.name, activeFamily);
+    });
+  }, [models, query, activeFamily]);
 
-  const hasRows = loadedModels.length > 0 || readyModels.length > 0;
-
-  // The header shows the first loaded model when none is chosen explicitly; match that here.
-  // The store keeps short names from server status, so compare base names.
-  const activeBase = (activeModelId ?? loadedModels[0]?.name)?.split("/").pop() ?? null;
-
-  const close = () => setSelectorOpen(false);
+  const groups = useMemo(
+    () => selectorGroups(filtered, loadedServers, activeModelId, resolved),
+    [filtered, loadedServers, activeModelId, resolved],
+  );
+  const hasRows = groups.loaded.length > 0 || groups.ready.length > 0;
+  const loadedCount = groups.loaded.length;
+  const anythingLoaded = activeModelId !== null || Object.keys(loadedServers).length > 0;
 
   const handleComputeSelect = (_: unknown, data: RadioGroupOnChangeData) => {
     const next = COMPUTE_TARGETS.find((t) => t === data.value);
-    if (next) onComputeChange(next);
+    if (next) changeCompute(next);
   };
 
-  const isLoadedOnServer = (m: ModelInfo) => {
-    const key = shortModelKey(m.name);
-    return serverStatus.models.some((lm) => shortModelKey(lm) === key);
+  /** Loads or switches to `name`. A load that would replace a model waits for confirmation. */
+  const choose = async (name: string) => {
+    const outcome = await selectModel(name);
+    if (outcome === "needs-replace") setPendingReplace(name);
   };
 
-  const optionProps = (m: ModelInfo): ModelOptionButtonProps => {
-    const loadedHere = isLoadedOnServer(m);
-    return {
-      model: m,
-      isActive: activeBase !== null && activeBase === (m.name.split("/").pop() ?? m.name),
-      loadedHere,
-      disabled: loading !== null,
-      onSelect,
-      ram: modelRamLine(ramSnapshot, m, loadedHere),
-    };
+  const confirmReplace = async (name: string) => {
+    setPendingReplace(null);
+    await selectModel(name, { replace: true });
   };
 
-  // Every row goes through the same wrapper, so each row loads its capability icons once, on mount.
-  const renderOption = (m: ModelInfo) => <CapabilityModelOption key={m.name} {...optionProps(m)} />;
+  // The occupant of the pending model's compute, for the confirmation text.
+  const pendingOccupant =
+    pendingReplace === null ? null : occupantOf(loadedServers, resolved[pendingReplace] ?? null);
+
+  /** The RAM line for a row. A loaded row is not checked; a ready row counts the model it replaces. */
+  const ramLineOf = (row: SelectorRow) =>
+    modelRamLine(
+      ramSnapshot,
+      row.model,
+      row.loaded,
+      row.loaded ? 0 : replacedRamBytes(ramSnapshot, models, loadedServers, row.compute),
+    );
+
+  const renderRow = (row: SelectorRow) => (
+    <ModelSelectorRow
+      key={row.model.name}
+      row={row}
+      ram={ramLineOf(row)}
+      loading={loading}
+      onChoose={(name) => void choose(name)}
+      onUnload={(target) => void unloadCompute(target)}
+    />
+  );
 
   return (
     <PopoverSurface className="model-selector" aria-label="Switch active model">
@@ -162,6 +179,16 @@ export default function ModelSelectorPopover({
         <MessageBar intent="error">
           <MessageBarBody>{error}</MessageBarBody>
         </MessageBar>
+      )}
+
+      {pendingReplace !== null && (
+        <ReplaceModelNotice
+          modelName={pendingReplace}
+          occupant={pendingOccupant}
+          disabled={loading !== null}
+          onCancel={() => setPendingReplace(null)}
+          onConfirm={() => void confirmReplace(pendingReplace)}
+        />
       )}
 
       <Flex direction="column" align="stretch">
@@ -199,19 +226,17 @@ export default function ModelSelectorPopover({
             </MenuGroupHeader>
           )}
 
-          {loadedModels.length > 0 && (
+          {groups.loaded.length > 0 && (
             <MenuGroup>
-              <MenuGroupHeader>
-                Loaded & Active · {serverStatus.running ? COMPUTE_META[compute].label : "Server"}
-              </MenuGroupHeader>
-              {loadedModels.map(renderOption)}
+              <MenuGroupHeader>Loaded · {loadedCount}</MenuGroupHeader>
+              {groups.loaded.map(renderRow)}
             </MenuGroup>
           )}
 
-          {readyModels.length > 0 && (
+          {groups.ready.length > 0 && (
             <MenuGroup>
-              <MenuGroupHeader>Installed & Ready to Load · {readyModels.length}</MenuGroupHeader>
-              {readyModels.map(renderOption)}
+              <MenuGroupHeader>Installed & Ready to Load · {groups.ready.length}</MenuGroupHeader>
+              {groups.ready.map(renderRow)}
             </MenuGroup>
           )}
         </MenuList>
@@ -228,7 +253,7 @@ export default function ModelSelectorPopover({
           <Button
             appearance="secondary"
             onClick={() => {
-              close();
+              setSelectorOpen(false);
               navigate("/settings");
             }}
           >
@@ -236,15 +261,15 @@ export default function ModelSelectorPopover({
           </Button>
         </Flex>
         {/* The footer button shows progress for any load or unload, so a load is visible here too. */}
-        {(loading !== null || (serverStatus.running && serverStatus.models.length > 0)) && (
+        {(loading !== null || anythingLoaded) && (
           <Button
             appearance="secondary"
             icon={loading !== null ? <Spinner size="tiny" /> : <PlugDisconnectedRegular />}
             title={loading !== null ? "Working" : "Unload all models"}
             disabled={loading !== null}
-            onClick={onUnload}
+            onClick={() => void unloadAll()}
           >
-            {loading === LOADING_UNLOAD ? "Unloading…" : loading !== null ? "Loading…" : "Unload"}
+            {unloadAllLabel(loading)}
           </Button>
         )}
       </Flex>

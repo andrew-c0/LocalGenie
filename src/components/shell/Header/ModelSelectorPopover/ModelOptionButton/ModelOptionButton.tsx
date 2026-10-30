@@ -1,70 +1,84 @@
-import { Badge, MenuItem } from "@fluentui/react-components";
+import { Badge, MenuItem, Spinner } from "@fluentui/react-components";
 import type { ReactNode } from "react";
 import { precisionInfo } from "../../../../../services/hubApi";
-import type { ModelInfo } from "../../../../../types";
 import { shortName } from "../../../../../utils/format";
 import type { CapabilityBadge } from "../../../../../utils/modelCapabilities";
 import type { ModelRamLine } from "../../../../../utils/modelRam";
+import { rowStatusText, type SelectorRow } from "../../../../../utils/modelSelector";
 import { bitsBadgeColor } from "../../../../../utils/quantBadge";
+import { Meta } from "../../../../ui/Typography/Typography";
 import { ModelCapabilityIcons } from "./ModelCapabilityIcons/ModelCapabilityIcons";
 import { ModelRamNote } from "./ModelRamNote/ModelRamNote";
 import "./ModelOptionButton.css";
 
 export interface ModelOptionButtonProps {
-  model: ModelInfo;
-  isActive: boolean;
-  loadedHere: boolean;
+  row: SelectorRow;
   /** True while any model action is in progress. */
   disabled: boolean;
+  /** This row's model is the one being loaded right now. */
+  loadingHere: boolean;
   onSelect: (name: string) => void;
   /** Confirmed capability icons for this row. Empty when none are confirmed or not loaded yet. */
   badges?: CapabilityBadge[];
-  /** RAM estimate line under the name. Null when there is no estimate yet. */
+  /** RAM line under the name. Null when there is no estimate yet. */
   ram?: ModelRamLine | null;
 }
 
+/** The status beside a name: a badge for a loaded model, plain text for one not loaded yet. */
+function statusNode(row: SelectorRow, text: string | null): ReactNode {
+  if (text === null) return null;
+  if (!row.loaded) return <Meta>{text}</Meta>;
+  return (
+    <Badge
+      appearance={row.active ? "filled" : "tint"}
+      color={row.active ? "brand" : "success"}
+      size="small"
+    >
+      {text}
+    </Badge>
+  );
+}
+
 /**
- * One selectable installed model in the model selector popover, drawn as a table row. The cells are
- * name, quant, size and capabilities; the column widths come from the list (ModelSelectorPopover.css).
- * The name cell also carries the model's RAM estimate under the name.
- * The capabilities cell holds the capability icons, then the status: an Active badge for an active
- * model that is not loaded on the server. Loading progress is shown by the footer button, not the row.
- * Loaded rows carry no text status. Clicking any row that is not active loads it, or switches to it
- * when it is loaded.
+ * One installed model in the model selector popover, drawn as a table row. The cells are name,
+ * quant, size and capabilities; the column widths come from the list (ModelSelectorPopover.css).
+ * The name cell carries the status beside the name (an Active or Loaded badge, or the compute a load
+ * would use), the device the server reports under it, and the RAM line under that.
+ * Clicking a row loads it, or switches to it when it is loaded. The active row is not clickable.
+ * The unload button for a loaded row sits beside this row, not inside it (see ModelSelectorPopover).
  */
 export function ModelOptionButton({
-  model,
-  isActive,
-  loadedHere,
+  row,
   disabled,
+  loadingHere,
   onSelect,
   badges = [],
   ram = null,
 }: ModelOptionButtonProps) {
+  const { model } = row;
   const precision = model.precisions.length > 0 ? model.precisions[0] : null;
-
-  let trailingStatus: ReactNode;
-  // Loaded rows show no text status: the Loaded & Active group heading says so. The Active badge is only
-  // for an active model that is not loaded on the server (for example after the server stopped).
-  if (isActive && !loadedHere) {
-    trailingStatus = (
-      <Badge appearance="tint" color="brand" size="small">
-        Active
-      </Badge>
-    );
-  }
+  const status = statusNode(row, rowStatusText(row));
 
   return (
     <MenuItem
       // The active model is already selected, so it is not clickable and shows no pointer.
-      disabled={disabled || isActive}
-      className={isActive ? "model-option model-option--active" : "model-option"}
+      disabled={disabled || row.active}
+      className={row.active ? "model-option model-option--active" : "model-option"}
       onClick={() => onSelect(model.name)}
     >
       {/* Every cell is always rendered so rows without a quant or capabilities still line up. */}
       <span className="model-table__row">
         <span className="model-table__cell model-table__cell--name">
-          <span className="model-option__name">{shortName(model.name)}</span>
+          <span className="model-option__title">
+            <span className="model-option__name">{shortName(model.name)}</span>
+            {(loadingHere || status !== null) && (
+              <span className="model-option__status">
+                {loadingHere && <Spinner size="tiny" />}
+                {status}
+              </span>
+            )}
+          </span>
+          {row.device !== null && <Meta className="model-option__device">{row.device}</Meta>}
           {ram && <ModelRamNote ram={ram} />}
         </span>
         <span className="model-table__cell model-table__cell--quant">
@@ -80,7 +94,6 @@ export function ModelOptionButton({
         <span className="model-table__cell model-table__cell--size">{model.size}</span>
         <span className="model-table__cell model-table__cell--caps">
           <ModelCapabilityIcons badges={badges} />
-          <span className="model-option__status">{trailingStatus}</span>
         </span>
       </span>
     </MenuItem>

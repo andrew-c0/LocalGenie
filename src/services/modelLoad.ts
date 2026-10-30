@@ -1,57 +1,140 @@
 import { useChatStore } from "../stores/chatStore";
 import { useModelStore } from "../stores/modelStore";
-import type { ModelLoadParams } from "../types";
-import { engineOf, modelSettingsKey, resolveLoadParams } from "../utils/modelSettings";
+import type { ComputeTarget, ModelLoadParams } from "../types";
+import { computeForLoad, type LoadedServer, loadedServerFrom } from "../utils/loadedServers";
+import {
+  DEFAULT_CONTEXT_WINDOW,
+  engineOf,
+  modelSettingsKey,
+  resolveLoadParams,
+} from "../utils/modelSettings";
+import { ramGateMessage } from "../utils/ramGate";
 import * as db from "./database";
 import * as geniex from "./geniex";
+import { modelRamBytes } from "./modelRam";
+import { getRamHeadroomPercent } from "./ramHeadroom";
+import { serverPortForCompute } from "./serverPorts";
+import { getSystemMemory } from "./system";
 
 /**
- * Load parameters a model is started and chatted with, from its saved settings. Read from storage,
- * so unsaved edits in the settings screen are not used.
+ * Load parameters for `name` on `compute`, from its saved settings. Read from storage, so unsaved
+ * edits in the settings screen are not used.
+ */
+export async function loadParamsFor(
+  name: string,
+  compute: ComputeTarget,
+): Promise<ModelLoadParams> {
+  const key = modelSettingsKey(name);
+  const model = useModelStore.getState().models.find((m) => m.name === name);
+  const saved = await db.loadModelSettings(key).catch(() => ({}));
+  const nativeContext = await db.loadNativeContext(key).catch(() => null);
+  return resolveLoadParams(saved, engineOf(model), compute, nativeContext);
+}
+
+/**
+ * Load parameters a model is started and chatted with, from its saved settings, on the default
+ * compute. Read from storage, so unsaved edits in the settings screen are not used.
  */
 export async function savedLoadParams(name: string): Promise<ModelLoadParams> {
-  const store = useModelStore.getState();
-  const key = modelSettingsKey(name);
-  const model = store.models.find((m) => m.name === name);
-  const saved = await db.loadModelSettings(key);
-  const nativeContext = await db.loadNativeContext(key);
-  return resolveLoadParams(saved, engineOf(model), store.compute, nativeContext);
+  return loadParamsFor(name, useModelStore.getState().compute);
+}
+
+/** The compute a model would load on: its saved compute setting, else the default compute. */
+export async function resolveModelCompute(name: string): Promise<ComputeTarget> {
+  return computeForLoad(await savedLoadParams(name), useModelStore.getState().compute);
 }
 
 /**
- * Unloads every model. The server has no per-model unload, so this stops the server, and the store
- * is cleared to match. Rejects when the server cannot be stopped.
+ * Why `name` may not load for RAM, or null when it may. `replaced` is the model whose server is
+ * stopped first, so its RAM counts as free. Unknown figures never block.
  */
-export async function unloadModels(): Promise<void> {
-  const store = () => useModelStore.getState();
-  const stopped = await geniex.unloadAllModels(store().serverPort);
-  store().setServerStatus(stopped);
-  store().setServerOptions(null);
-  store().setActiveModel(null);
+export async function ramRefusal(name: string, replaced: string | null): Promise<string | null> {
+  const [estimateBytes, memory, headroomPercent, replacedBytes] = await Promise.all([
+    modelRamBytes(name),
+    getSystemMemory().catch(() => null),
+    getRamHeadroomPercent(),
+    replaced === null ? null : modelRamBytes(replaced),
+  ]);
+  return ramGateMessage({
+    estimateBytes,
+    memory,
+    headroomPercent,
+    freedBytes: replacedBytes ?? 0,
+  });
 }
 
 /**
- * Reloads a model. The server has no per-model unload, so this stops the server (which unloads every
- * model), starts it again, and loads `name` with `load`, or with its saved settings when `load` is
- * not given. Reads the stores at each step, so it does not depend on a React render having happened
- * in between.
+ * Starts the GenieX server for `compute` on `port`, unless one already answers there. Returns true
+ * when this call started it, so the caller can stop it again if the load fails.
+ */
+export async function ensureComputeServer(compute: ComputeTarget, port: number): Promise<boolean> {
+  const running = await geniex
+    .getServerStatus(port)
+    .then((status) => status.running)
+    .catch(() => false);
+  if (running) return false;
+  const settings = await db.getLoadedServerSettings();
+  await geniex.startServer({ port, compute, ...settings });
+  return true;
+}
+
+/** Loads `name` on the server at `port` with `params`. Returns the entry for that server. */
+export async function loadModelOnServer(
+  name: string,
+  params: ModelLoadParams,
+  compute: ComputeTarget,
+  port: number,
+): Promise<LoadedServer> {
+  const status = await geniex.loadModel(name, params, geniex.serverBaseUrl(port));
+  return loadedServerFrom({
+    compute,
+    port,
+    model: name,
+    nctx: params.nctx ?? DEFAULT_CONTEXT_WINDOW,
+    status,
+  });
+}
+
+/**
+ * Loads `name` on the server of `compute`, starting that server first when nothing answers on its
+ * port. When this call started the server and the load fails, the server is stopped again.
+ */
+export async function loadModelOnCompute(
+  name: string,
+  compute: ComputeTarget,
+): Promise<LoadedServer> {
+  const port = await serverPortForCompute(compute);
+  const started = await ensureComputeServer(compute, port);
+  try {
+    const params = await loadParamsFor(name, compute);
+    return await loadModelOnServer(name, params, compute, port);
+  } catch (err) {
+    if (started) await geniex.stopServer(port).catch(() => undefined);
+    throw err;
+  }
+}
+
+/**
+ * Reloads a model on the server of its compute. That server is stopped (which unloads its model),
+ * started again and the model loaded with `load`, or with its saved settings when `load` is not
+ * given. The model becomes the active one. Reads the store at each step.
  */
 export async function reloadModel(name: string, load?: ModelLoadParams): Promise<void> {
   const store = () => useModelStore.getState();
-  const port = store().serverPort;
-
-  await unloadModels();
-
-  const serverSettings = await db.getServerSettings();
-  const started = await geniex.startServer({ port, ...serverSettings });
-  store().setServerStatus(started);
-  store().setServerOptions(serverSettings);
-
   const params = load ?? (await savedLoadParams(name));
+  const compute = computeForLoad(params, store().compute);
 
-  const status = await geniex.loadModel(name, params, geniex.serverBaseUrl(port));
-  store().setServerStatus(status);
-  store().setActiveModel(name);
+  const current = store().loadedServers[compute];
+  if (current) {
+    await geniex.stopServer(current.port);
+    store().setLoadedServer(compute, null);
+  }
+  const port = current?.port ?? (await serverPortForCompute(compute));
+  await ensureComputeServer(compute, port);
+
+  const server = await loadModelOnServer(name, params, compute, port);
+  store().setLoadedServer(compute, server);
+  store().setActiveCompute(compute);
   const activeId = useChatStore.getState().activeSessionId;
   if (activeId) useChatStore.getState().setSessionModel(activeId, name);
 }

@@ -9,6 +9,6 @@ import { useModelCapabilityBadges } from "./useModelCapabilityBadges";
  * every row loads its badges the same way: once, when the row mounts.
  */
 export function CapabilityModelOption(props: ModelOptionButtonProps) {
-  const badges = useModelCapabilityBadges(props.model.name);
+  const badges = useModelCapabilityBadges(props.row.model.name);
   return <ModelOptionButton {...props} badges={badges} />;
 }

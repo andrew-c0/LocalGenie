@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
+import { useModelStore } from "../stores/modelStore";
 import type { ModelRamEstimate } from "../types";
+import { pickModelRamRow } from "../utils/modelRam";
 import { modelSettingsKey, sameModel } from "../utils/modelSettings";
 import * as db from "./database";
 
@@ -42,4 +44,18 @@ export async function loadModelRamEstimates(
       (rowsByContext.get(nctx) ?? []).filter((row) => sameModel(row.name, name)),
     ]),
   );
+}
+
+/**
+ * Estimated RAM of one downloaded model at its saved context, in bytes, at the precision the selector
+ * shows for it. Null when there is no estimate or it cannot be read (a missing estimate never blocks).
+ */
+export async function modelRamBytes(modelName: string): Promise<number | null> {
+  try {
+    const rows = (await loadModelRamEstimates([modelName]))[modelName] ?? [];
+    const model = useModelStore.getState().models.find((m) => m.name === modelName);
+    return pickModelRamRow(rows, model?.precisions[0])?.totalBytes ?? null;
+  } catch {
+    return null;
+  }
 }

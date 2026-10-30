@@ -14,8 +14,18 @@ pub struct ServerStatus {
     pub running: bool,
     pub port: u16,
     pub models: Vec<String>,
+    /// One entry per loaded model, in the order `/status` lists them.
+    pub devices: Vec<ModelDevice>,
     /// Compute the server was started with, lowercased. Null when unknown or not started by the app.
     pub compute: Option<String>,
+}
+
+/// A loaded model and the device it runs on, as `/status` reports it. `device` is empty when the
+/// server gives none.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelDevice {
+    pub id: String,
+    pub device: String,
 }
 
 /// A `geniex serve` process the app started, and the compute it was started with.
@@ -72,13 +82,11 @@ pub async fn kill_process(pid: u32) {
     }
 }
 
-/// Fetch the ids (`org/repo:precision`) of the models loaded on the server, from `GET /status`.
-/// `/v1/models` is not used: it lists every cached model, loaded or not. An empty list means
-/// nothing is loaded; an error means the server does not answer.
-pub(crate) async fn fetch_loaded_models(
+/// Fetch the body of `GET /status`. An error means the server does not answer.
+pub(crate) async fn fetch_status_body(
     client: &reqwest::Client,
     base_url: &str,
-) -> Result<Vec<String>, String> {
+) -> Result<serde_json::Value, String> {
     let resp = client
         .get(format!("{base_url}/status"))
         .timeout(std::time::Duration::from_secs(
@@ -90,7 +98,17 @@ pub(crate) async fn fetch_loaded_models(
     if !resp.status().is_success() {
         return Err(format!("Server returned {} for /status", resp.status()));
     }
-    let body: serde_json::Value = resp.json().await.unwrap_or_default();
+    Ok(resp.json().await.unwrap_or_default())
+}
+
+/// Fetch the ids (`org/repo:precision`) of the models loaded on the server, from `GET /status`.
+/// `/v1/models` is not used: it lists every cached model, loaded or not. An empty list means
+/// nothing is loaded; an error means the server does not answer.
+pub(crate) async fn fetch_loaded_models(
+    client: &reqwest::Client,
+    base_url: &str,
+) -> Result<Vec<String>, String> {
+    let body = fetch_status_body(client, base_url).await?;
     Ok(loaded_ids(&body))
 }
 
@@ -104,6 +122,35 @@ fn loaded_ids(body: &serde_json::Value) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// Model id and device from the `models` array of a `/status` body. Entries without a string id are
+/// skipped; a missing or non-string `device` reads as an empty string.
+fn loaded_devices(body: &serde_json::Value) -> Vec<ModelDevice> {
+    body["models"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| {
+                    Some(ModelDevice {
+                        id: m["id"].as_str()?.to_string(),
+                        device: m["device"].as_str().unwrap_or_default().to_string(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The running status of a server that answered `/status` with `body`. `compute` is left unset.
+pub(crate) fn running_status(port: u16, body: &serde_json::Value) -> ServerStatus {
+    ServerStatus {
+        running: true,
+        port,
+        models: loaded_ids(body),
+        devices: loaded_devices(body),
+        compute: None,
+    }
 }
 
 fn local_base_url(port: u16) -> String {
@@ -443,13 +490,8 @@ async fn probe_tracked_status(state: &AppState, port: u16) -> Result<ServerStatu
 /// Status of the server on `port`: running with its loaded models when it answers `/status`,
 /// otherwise not running. `compute` is left unset; the caller reports the tracked compute.
 async fn probe_status(client: &reqwest::Client, port: u16) -> ServerStatus {
-    match fetch_loaded_models(client, &local_base_url(port)).await {
-        Ok(models) => ServerStatus {
-            running: true,
-            port,
-            models,
-            compute: None,
-        },
+    match fetch_status_body(client, &local_base_url(port)).await {
+        Ok(body) => running_status(port, &body),
         Err(_) => stopped_status(port),
     }
 }
@@ -459,6 +501,7 @@ fn stopped_status(port: u16) -> ServerStatus {
         running: false,
         port,
         models: vec![],
+        devices: vec![],
         compute: None,
     }
 }
@@ -466,9 +509,9 @@ fn stopped_status(port: u16) -> ServerStatus {
 #[cfg(test)]
 mod tests {
     use super::{
-        compute_of, loaded_ids, normalize_compute, reserve_free_port, serve_args, take_all_servers,
-        track_server, tracked_listing, untrack_server, ServerMap, ServerStartOptions,
-        TrackedServer,
+        compute_of, loaded_devices, loaded_ids, normalize_compute, reserve_free_port,
+        running_status, serve_args, take_all_servers, track_server, tracked_listing,
+        untrack_server, ModelDevice, ServerMap, ServerStartOptions, TrackedServer,
     };
     use serde_json::json;
 
@@ -512,6 +555,82 @@ mod tests {
     fn skips_entries_without_a_string_id() {
         let body = json!({"models": [{"state": "idle"}, {"id": 7}, {"id": "org/repo:Q4"}]});
         assert_eq!(loaded_ids(&body), vec!["org/repo:Q4"]);
+    }
+
+    fn device(id: &str, device: &str) -> ModelDevice {
+        ModelDevice {
+            id: id.to_string(),
+            device: device.to_string(),
+        }
+    }
+
+    #[test]
+    fn reads_device_of_each_loaded_model() {
+        let body = json!({
+            "models": [
+                {"id": "qualcomm/Qwen3-4B:W4A16", "device": "HTP0", "state": "idle"},
+                {"id": "unsloth/gemma-4-E4B-it-GGUF:Q4_K_M", "device": "CPU", "state": "busy"}
+            ]
+        });
+        assert_eq!(
+            loaded_devices(&body),
+            vec![
+                device("qualcomm/Qwen3-4B:W4A16", "HTP0"),
+                device("unsloth/gemma-4-E4B-it-GGUF:Q4_K_M", "CPU"),
+            ]
+        );
+    }
+
+    #[test]
+    fn missing_device_reads_as_empty_string() {
+        let body = json!({"models": [{"id": "org/repo:Q4", "state": "idle"}]});
+        assert_eq!(loaded_devices(&body), vec![device("org/repo:Q4", "")]);
+    }
+
+    #[test]
+    fn non_string_device_reads_as_empty_string() {
+        let body = json!({"models": [
+            {"id": "org/repo:Q4", "device": 3},
+            {"id": "org/other:Q8", "device": null}
+        ]});
+        assert_eq!(
+            loaded_devices(&body),
+            vec![device("org/repo:Q4", ""), device("org/other:Q8", "")]
+        );
+    }
+
+    #[test]
+    fn devices_skip_entries_without_a_string_id() {
+        let body = json!({"models": [
+            {"device": "HTP0"},
+            {"id": 7, "device": "HTP0"},
+            {"id": "org/repo:Q4", "device": "GPU"}
+        ]});
+        assert_eq!(loaded_devices(&body), vec![device("org/repo:Q4", "GPU")]);
+    }
+
+    #[test]
+    fn devices_are_empty_when_nothing_is_loaded() {
+        assert!(loaded_devices(&json!({"models": []})).is_empty());
+        assert!(loaded_devices(&json!({"alive": true})).is_empty());
+        assert!(loaded_devices(&json!(null)).is_empty());
+    }
+
+    #[test]
+    fn running_status_lists_models_and_devices_in_order() {
+        let body = json!({"models": [
+            {"id": "org/repo:Q4", "device": "HTP0"},
+            {"id": "org/other:Q8"}
+        ]});
+        let status = running_status(18181, &body);
+        assert!(status.running);
+        assert_eq!(status.port, 18181);
+        assert_eq!(status.models, vec!["org/repo:Q4", "org/other:Q8"]);
+        assert_eq!(
+            status.devices,
+            vec![device("org/repo:Q4", "HTP0"), device("org/other:Q8", "")]
+        );
+        assert_eq!(status.compute, None);
     }
 
     #[test]

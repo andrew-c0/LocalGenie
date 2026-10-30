@@ -7,6 +7,16 @@ import type {
   ServerStatus,
   UpdateInfo,
 } from "../types/index.js";
+import {
+  activeComputeUpdate,
+  type LoadedServer,
+  type LoadedServers,
+  loadedServerUpdate,
+  serverPortUpdate,
+  serverStatusUpdate,
+} from "../utils/loadedServers";
+
+export type { LoadedServer } from "../utils/loadedServers";
 
 const DEFAULT_PORT = 18181;
 
@@ -20,11 +30,15 @@ export type ComputeChoice = (typeof COMPUTE_TARGETS)[number];
 interface ModelState {
   cliInstalled: boolean;
   models: ModelInfo[];
+  /** Status of the ACTIVE server (the one chat, OCR and benchmarks talk to). */
   serverStatus: ServerStatus;
+  /** Port of the ACTIVE server. The main port when no server is loaded. */
   serverPort: number;
+  /** Port from the Settings "server port" preference. */
+  mainServerPort: number;
   searchResults: SearchModel[];
   isSearching: boolean;
-  /** The model currently loaded on the server — single source of truth. */
+  /** The model the ACTIVE server has loaded. */
   activeModelId: string | null;
   /** Result of the latest CLI update check. */
   updateInfo: UpdateInfo | null;
@@ -36,17 +50,20 @@ interface ModelState {
   selectorOpen: boolean;
   /** Chipset name from the CLI host probe, read once at startup. Null when unknown. */
   chipset: string | null;
-  /** Compute target the loaded model was loaded on. Null when no model was loaded by this app. */
+  /** Compute target of the ACTIVE server's model. Null when no model was loaded by this app. */
   loadedCompute: ComputeChoice | null;
-  /** Context window (tokens) the loaded model was loaded with. Null when no model was loaded by this app. */
+  /** Context window of the ACTIVE server's model. Null when no model was loaded by this app. */
   loadedContext: number | null;
+  /** Every model loaded by this app, one per compute, each on its own server. */
+  loadedServers: LoadedServers;
+  /** The compute whose loaded model is active. Null when no model is loaded. */
+  activeCompute: ComputeChoice | null;
 
   setCliInstalled: (v: boolean) => void;
   setChipset: (chipset: string | null) => void;
   setModels: (models: ModelInfo[]) => void;
   setServerStatus: (status: ServerStatus) => void;
   setServerPort: (port: number) => void;
-  setActiveModel: (modelId: string | null) => void;
   setSearchResults: (results: SearchModel[]) => void;
   setIsSearching: (v: boolean) => void;
   setUpdateInfo: (info: UpdateInfo | null) => void;
@@ -55,6 +72,10 @@ interface ModelState {
   setLoadedCompute: (c: ComputeChoice | null) => void;
   setLoadedContext: (n: number | null) => void;
   setSelectorOpen: (open: boolean) => void;
+  /** Sets (or with null, removes) the loaded server of one compute. */
+  setLoadedServer: (compute: ComputeChoice, server: LoadedServer | null) => void;
+  /** Makes a loaded compute active. Ignored for a compute with no loaded server. Null clears it. */
+  setActiveCompute: (compute: ComputeChoice | null) => void;
 }
 
 export const useModelStore = create<ModelState>((set) => ({
@@ -62,6 +83,7 @@ export const useModelStore = create<ModelState>((set) => ({
   models: [],
   serverStatus: { running: false, port: DEFAULT_PORT, models: [] },
   serverPort: DEFAULT_PORT,
+  mainServerPort: DEFAULT_PORT,
   searchResults: [],
   isSearching: false,
   activeModelId: null,
@@ -72,38 +94,15 @@ export const useModelStore = create<ModelState>((set) => ({
   chipset: null,
   loadedCompute: null,
   loadedContext: null,
+  loadedServers: {},
+  activeCompute: null,
 
   setCliInstalled: (v) => set({ cliInstalled: v }),
   setChipset: (chipset) => set({ chipset }),
   setSelectorOpen: (open: boolean) => set({ selectorOpen: open }),
   setModels: (models) => set({ models }),
-  setServerStatus: (status) =>
-    set((state) => {
-      // Auto-sync activeModelId when server status changes
-      const firstModel = status.models.length > 0 ? status.models[0] : null;
-      let activeModelId = null;
-      if (firstModel) {
-        if (state.activeModelId && status.models.includes(state.activeModelId)) {
-          activeModelId = state.activeModelId; // keep current if still loaded
-        } else {
-          activeModelId = firstModel; // otherwise fall back to first loaded
-        }
-      }
-      // Nothing loaded means no compute target to report.
-      const loaded = status.models.length > 0;
-      return {
-        serverStatus: status,
-        activeModelId,
-        loadedCompute: loaded ? state.loadedCompute : null,
-        loadedContext: loaded ? state.loadedContext : null,
-      };
-    }),
-  setServerPort: (port) =>
-    set((state) => ({
-      serverPort: port,
-      serverStatus: { ...state.serverStatus, port },
-    })),
-  setActiveModel: (modelId) => set({ activeModelId: modelId }),
+  setServerStatus: (status) => set((state) => serverStatusUpdate(state, status)),
+  setServerPort: (port) => set((state) => serverPortUpdate(state, port)),
   setSearchResults: (results) => set({ searchResults: results }),
   setIsSearching: (v) => set({ isSearching: v }),
   setUpdateInfo: (info) => set({ updateInfo: info }),
@@ -111,6 +110,8 @@ export const useModelStore = create<ModelState>((set) => ({
   setServerOptions: (o) => set({ serverOptions: o }),
   setLoadedCompute: (c) => set({ loadedCompute: c }),
   setLoadedContext: (n) => set({ loadedContext: n }),
+  setLoadedServer: (compute, server) => set((state) => loadedServerUpdate(state, compute, server)),
+  setActiveCompute: (compute) => set((state) => activeComputeUpdate(state, compute)),
 }));
 
 /** Default generation settings per model. */
