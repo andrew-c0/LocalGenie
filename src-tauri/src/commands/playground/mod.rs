@@ -1,11 +1,16 @@
-//! The Playground: text-to-image (stable-diffusion.cpp image jobs) and speech (sherpa-onnx speech to
-//! text and text to speech jobs). Image models live in `<app data>/playground-models/`; speech models
-//! in `<app data>/playground-models/k2-fsa--sherpa-onnx/`. Images are saved in `<Pictures>/LocalGenie/`,
-//! speech in `<Music>/LocalGenie/`. Images from before that were saved in `<app data>/playground/images/`
-//! and still open. Only catalogue URLs are fetched; the webview picks a model by id and never
-//! supplies a URL.
+//! The Playground: text-to-image (stable-diffusion.cpp image jobs), speech (sherpa-onnx speech to
+//! text and text to speech jobs) and audio to audio (sherpa-onnx denoise and source separation jobs,
+//! which share the speech job slot). Image models live in `<app data>/playground-models/`; speech and
+//! audio models in `<app data>/playground-models/k2-fsa--sherpa-onnx/`. Images are saved in
+//! `<Pictures>/LocalGenie/`, speech and audio in `<Music>/LocalGenie/`. Images from before that were
+//! saved in `<app data>/playground/images/` and still open. Only catalogue URLs are fetched; the
+//! webview picks a model by id and never supplies a URL.
 
 mod args;
+mod audio_args;
+mod audio_catalog;
+pub(crate) mod audio_commands;
+mod audio_job;
 mod catalog;
 mod devices;
 mod image_job;
@@ -264,6 +269,12 @@ fn pictures_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .picture_dir()
         .map_err(|e| format!("Pictures folder unavailable: {e}"))
+}
+
+fn music_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .audio_dir()
+        .map_err(|e| format!("Music folder unavailable: {e}"))
 }
 
 /// The local time as `yyyyMMdd-HHmmss`, for a file name.

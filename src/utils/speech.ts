@@ -1,4 +1,5 @@
 import type {
+  PlaygroundSpeechDone,
   SpeechAudioInput,
   SpeechForm,
   SpeechKind,
@@ -38,6 +39,14 @@ export const DEFAULT_SPEECH_FORM: SpeechForm = {
 /** The selected model of each speech tab, by kind. Null when none is selected. */
 export type SpeechSelection = Record<SpeechKind, string | null>;
 
+/** Nothing selected for any kind. */
+export const NO_SPEECH_SELECTION: SpeechSelection = {
+  stt: null,
+  tts: null,
+  denoise: null,
+  separate: null,
+};
+
 /** The models of one kind, in the order the catalog lists them. */
 export function speechModelsOfKind(models: SpeechModel[], kind: SpeechKind): SpeechModel[] {
   return models.filter((model) => model.kind === kind);
@@ -68,6 +77,8 @@ export function keepSpeechSelection(
   return {
     stt: keepOneSelection(selected.stt, models, "stt"),
     tts: keepOneSelection(selected.tts, models, "tts"),
+    denoise: keepOneSelection(selected.denoise, models, "denoise"),
+    separate: keepOneSelection(selected.separate, models, "separate"),
   };
 }
 
@@ -79,6 +90,8 @@ export function clearDeletedSelection(
   return {
     stt: selected.stt === deletedModelId ? null : selected.stt,
     tts: selected.tts === deletedModelId ? null : selected.tts,
+    denoise: selected.denoise === deletedModelId ? null : selected.denoise,
+    separate: selected.separate === deletedModelId ? null : selected.separate,
   };
 }
 
@@ -149,15 +162,15 @@ export function recordingName(seconds: number): string {
   return `Recording (${formatElapsed(seconds * 1000)})`;
 }
 
-interface TranscribeGate {
+interface AudioJobGate {
   runtime: RuntimeStatus;
   model: SpeechModel | null;
   audioPath: string | null;
   jobRunning: boolean;
 }
 
-/** What stops Transcribe from running, in the order the user can fix it. Null when it can run. */
-export function transcribeBlockedReason(gate: TranscribeGate): string | null {
+/** What stops a job that reads an audio input (Transcribe, Run on the audio to audio tab) from starting, in the order the user can fix it. Null when it can run. */
+export function audioJobBlockedReason(gate: AudioJobGate): string | null {
   if (gate.jobRunning) return "A speech job is already running.";
   const runtimeReason = runtimeBlockedReason(gate.runtime, SHERPA_NAME);
   if (runtimeReason) return runtimeReason;
@@ -220,8 +233,24 @@ export function failedSpeechResult(jobId: string, kind: SpeechKind, error: strin
     status: "error",
     text: null,
     outputPath: null,
+    outputs: [],
     audioSeconds: null,
     elapsedSeconds: null,
     error,
+  };
+}
+
+/** The store's result for a finished job, from its `playground-speech-done` event. A payload without outputs has none. */
+export function speechResultOf(done: PlaygroundSpeechDone): SpeechResult {
+  return {
+    jobId: done.jobId,
+    kind: done.kind,
+    status: done.status,
+    text: done.text ?? null,
+    outputPath: done.outputPath ?? null,
+    outputs: done.outputs ?? [],
+    audioSeconds: done.audioSeconds ?? null,
+    elapsedSeconds: done.elapsedSeconds ?? null,
+    error: done.error ?? null,
   };
 }

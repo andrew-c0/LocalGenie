@@ -22,6 +22,8 @@ export const TRANSCRIPT_COPIED_TITLE = "Transcript copied";
 const SPEECH_PHASE_LABELS: Record<SpeechKind, Record<SpeechPhase, string>> = {
   stt: { loading: "Loading model", running: "Transcribing", saving: "Saving" },
   tts: { loading: "Loading model", running: "Generating speech", saving: "Saving" },
+  denoise: { loading: "Loading model", running: "Cleaning up speech", saving: "Saving" },
+  separate: { loading: "Loading model", running: "Splitting voice and music", saving: "Saving" },
 };
 
 /** Label of one stage of a speech job, e.g. "Transcribing". */
@@ -32,6 +34,8 @@ export function speechPhaseLabel(kind: SpeechKind, phase: SpeechPhase): string {
 const SPEECH_JOB_TITLES: Record<SpeechKind, string> = {
   stt: "Transcribing",
   tts: "Generating speech",
+  denoise: "Cleaning up speech",
+  separate: "Splitting voice and music",
 };
 
 /** Title of the card that shows a running speech job. */
@@ -39,19 +43,40 @@ export function speechJobTitle(kind: SpeechKind): string {
   return SPEECH_JOB_TITLES[kind];
 }
 
+const SPEECH_DONE_TITLES: Record<SpeechKind, string> = {
+  stt: "Transcript ready",
+  tts: "Speech ready",
+  denoise: "Speech cleaned up",
+  separate: "Voice and music split",
+};
+
 /** Toast title for a speech job that finished. */
 export function speechDoneTitle(kind: SpeechKind): string {
-  return kind === "stt" ? "Transcript ready" : "Speech ready";
+  return SPEECH_DONE_TITLES[kind];
 }
+
+const SPEECH_FAILED_TITLES: Record<SpeechKind, string> = {
+  stt: "Transcription failed",
+  tts: "Speech generation failed",
+  denoise: "Clean-up failed",
+  separate: "Split failed",
+};
 
 /** Toast title for a speech job that failed. */
 export function speechFailedTitle(kind: SpeechKind): string {
-  return kind === "stt" ? "Transcription failed" : "Speech generation failed";
+  return SPEECH_FAILED_TITLES[kind];
 }
+
+const SPEECH_CANCELLED_TEXTS: Record<SpeechKind, string> = {
+  stt: "Transcription cancelled.",
+  tts: "Speech generation cancelled.",
+  denoise: "Clean-up cancelled.",
+  separate: "Split cancelled.",
+};
 
 /** Line shown in place of a result when the user stopped the job. */
 export function speechCancelledText(kind: SpeechKind): string {
-  return kind === "stt" ? "Transcription cancelled." : "Speech generation cancelled.";
+  return SPEECH_CANCELLED_TEXTS[kind];
 }
 
 const MICROPHONE_DENIED =

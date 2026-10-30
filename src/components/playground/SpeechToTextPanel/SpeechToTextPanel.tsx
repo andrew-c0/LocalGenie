@@ -1,18 +1,18 @@
 import { Button } from "@fluentui/react-components";
 import { useSpeechStore } from "../../../stores/speechStore";
 import { runtimeMissingMessage } from "../../../utils/playgroundText";
-import { SHERPA_NAME, SHERPA_RUNTIME_ID, transcribeBlockedReason } from "../../../utils/speech";
-import { SPEECH_CPU_NOTE } from "../../../utils/speechText";
+import { audioJobBlockedReason, SHERPA_NAME, SHERPA_RUNTIME_ID } from "../../../utils/speech";
+import { AUDIO_INPUT_HINT, SPEECH_CPU_NOTE } from "../../../utils/speechText";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../ui/Flex/Flex";
 import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
 import { Meta } from "../../ui/Typography/Typography";
+import { AudioInput } from "../AudioInput/AudioInput";
 import { RuntimeNotice } from "../RuntimeNotice/RuntimeNotice";
 import { SpeechJobProgress } from "../SpeechJobProgress/SpeechJobProgress";
 import { useSpeechJobCancel } from "../SpeechJobProgress/useSpeechJobCancel";
 import { SpeechModelColumn } from "../SpeechModels/SpeechModelColumn";
 import { useRuntimeCheck } from "../useRuntimeCheck";
-import { AudioInput } from "./AudioInput/AudioInput";
 import { TranscriptResult } from "./TranscriptResult/TranscriptResult";
 import { useTranscription } from "./useTranscription";
 
@@ -29,7 +29,7 @@ export default function SpeechToTextPanel() {
 
   const selected = models?.find((m) => m.id === selectedModelId && m.kind === "stt") ?? null;
   const sttJob = job?.kind === "stt" ? job : null;
-  const blockedReason = transcribeBlockedReason({
+  const blockedReason = audioJobBlockedReason({
     runtime: runtime.status,
     model: selected,
     audioPath: audio?.audioPath ?? null,
@@ -48,7 +48,7 @@ export default function SpeechToTextPanel() {
 
         <SurfaceCard title="Transcribe">
           <Flex direction="column" gap="m">
-            <AudioInput audio={audio} disabled={job !== null} />
+            <AudioInput audio={audio} disabled={job !== null} hint={AUDIO_INPUT_HINT} />
             <Flex gap="m" align="center" wrap>
               <Button
                 appearance="primary"

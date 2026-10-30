@@ -1,5 +1,5 @@
-import { Button, Spinner } from "@fluentui/react-components";
-import { readAudio, revealAudio } from "../../../../services/playground";
+import { Button } from "@fluentui/react-components";
+import { revealAudio } from "../../../../services/playground";
 import type { SpeechResult } from "../../../../types";
 import { errorMessage } from "../../../../utils/errorMessage";
 import { speechTimingLabel } from "../../../../utils/speech";
@@ -9,7 +9,7 @@ import { ErrorBanner } from "../../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../../ui/Flex/Flex";
 import { SurfaceCard } from "../../../ui/SurfaceCard/SurfaceCard";
 import { Body, Meta } from "../../../ui/Typography/Typography";
-import { useSavedDataUrl } from "../../useSavedDataUrl";
+import { SavedAudioPlayer } from "../../SavedAudioPlayer/SavedAudioPlayer";
 import "./SpeechOutput.css";
 
 interface SpeechOutputProps {
@@ -19,7 +19,6 @@ interface SpeechOutputProps {
 /** The last speech synthesis: a player for the saved file, its folder, and how long it took. */
 export function SpeechOutput({ result }: SpeechOutputProps) {
   const path = result.status === "ok" ? result.outputPath : null;
-  const audio = useSavedDataUrl(path, readAudio, "Could not open the audio.");
 
   if (result.status === "error") {
     return (
@@ -57,13 +56,7 @@ export function SpeechOutput({ result }: SpeechOutputProps) {
     >
       <Flex direction="column" gap="s">
         {!path && <ErrorBanner message="The speech was not saved." />}
-        {audio.error && <ErrorBanner message={audio.error} />}
-        {path && !audio.error && !audio.dataUrl && <Spinner label="Opening the audio…" />}
-        {audio.dataUrl && (
-          // The speech is generated, not captioned, so there is no caption track to offer.
-          // biome-ignore lint/a11y/useMediaCaption: synthesized speech has no caption track
-          <audio className="speech-output__player" controls src={audio.dataUrl} />
-        )}
+        {path && <SavedAudioPlayer path={path} />}
         {timing && <Meta>{timing}</Meta>}
         {path && <Meta className="speech-output__path">Saved to {path}</Meta>}
       </Flex>

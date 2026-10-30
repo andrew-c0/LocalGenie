@@ -56,8 +56,22 @@ pub(super) struct SpeechProgressEvent {
     pub phase: SpeechPhase,
 }
 
-/// `playground-speech-done`. `text` is set for speech to text, `output_path` for text to speech;
-/// `error` when the status is `error`.
+/// One WAV an audio to audio job writes, with the label the webview shows for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct AudioOutput {
+    pub label: &'static str,
+    pub path: PathBuf,
+}
+
+/// An `AudioOutput` as the webview sees it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(super) struct AudioOutputEvent {
+    pub label: &'static str,
+    pub path: String,
+}
+
+/// `playground-speech-done`. `text` is set for speech to text, `output_path` for text to speech,
+/// `outputs` for speech denoising and source separation; `error` when the status is `error`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct SpeechDoneEvent {
@@ -68,7 +82,10 @@ pub(super) struct SpeechDoneEvent {
     pub text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_path: Option<String>,
-    /// Length of the audio: the recording for speech to text, the saved speech for text to speech.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outputs: Option<Vec<AudioOutputEvent>>,
+    /// Length of the audio: the recording for speech to text, the saved speech for text to speech,
+    /// the input for an audio to audio job.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_seconds: Option<f64>,
     pub elapsed_seconds: f64,
@@ -86,9 +103,23 @@ pub(super) struct SpeechJob {
     /// The folder the program runs from: the `bin` folder, where its DLLs are.
     pub folder: PathBuf,
     pub args: Vec<String>,
-    /// The WAV whose length is reported: the input for speech to text, the saved speech for text
-    /// to speech.
+    /// The WAV whose length is reported: the input for speech to text and audio to audio, the saved
+    /// speech for text to speech.
     pub audio: PathBuf,
+    /// The WAV files an audio to audio job writes. Empty for speech jobs.
+    pub outputs: Vec<AudioOutput>,
+}
+
+impl SpeechJob {
+    /// True when the job's WAV output is on disk: the speech for text to speech, or every output
+    /// for an audio to audio job.
+    fn wav_written(&self) -> bool {
+        if self.outputs.is_empty() {
+            self.audio.is_file()
+        } else {
+            self.outputs.iter().all(|output| output.path.is_file())
+        }
+    }
 }
 
 /// The job that holds the one speech slot.
@@ -194,11 +225,12 @@ fn spawn_program(program: &Path, folder: &Path, args: &[String]) -> Result<Child
 }
 
 /// The phase a job starts in. The recogniser prints `Started` once its model is loaded, so it starts
-/// in `loading`. The synthesiser prints nothing before it generates, so it starts in `running`.
+/// in `loading`. The synthesiser and the audio programs print nothing before they work, so they
+/// start in `running`.
 fn starting_phase(kind: SpeechKind) -> SpeechPhase {
     match kind {
         SpeechKind::Stt => SpeechPhase::Loading,
-        SpeechKind::Tts => SpeechPhase::Running,
+        SpeechKind::Tts | SpeechKind::Denoise | SpeechKind::Separate => SpeechPhase::Running,
     }
 }
 
@@ -236,7 +268,7 @@ async fn run_job(app: AppHandle, mut child: Child, job: SpeechJob, cancel: Arc<A
         cancel.load(Ordering::Relaxed),
         exit_code,
         &stdout,
-        job.audio.is_file(),
+        job.wav_written(),
         &tail.to_vec(),
     );
     let audio_seconds = match outcome {
@@ -274,6 +306,7 @@ fn done_event(
         status: SpeechStatus::Error,
         text: None,
         output_path: None,
+        outputs: None,
         audio_seconds: None,
         elapsed_seconds,
         error: None,
@@ -284,8 +317,17 @@ fn done_event(
             event.text = text;
             event.output_path = match job.kind {
                 SpeechKind::Tts => Some(job.audio.to_string_lossy().into_owned()),
-                SpeechKind::Stt => None,
+                SpeechKind::Stt | SpeechKind::Denoise | SpeechKind::Separate => None,
             };
+            event.outputs = (!job.outputs.is_empty()).then(|| {
+                job.outputs
+                    .iter()
+                    .map(|output| AudioOutputEvent {
+                        label: output.label,
+                        path: output.path.to_string_lossy().into_owned(),
+                    })
+                    .collect()
+            });
             event.audio_seconds = audio_seconds;
         }
         SpeechOutcome::Cancelled => event.status = SpeechStatus::Cancelled,
@@ -316,13 +358,122 @@ mod tests {
             folder: PathBuf::from("bin"),
             args: Vec::new(),
             audio: PathBuf::from(audio),
+            outputs: Vec::new(),
+        }
+    }
+
+    /// An audio to audio job whose outputs are `paths`, labelled as the program's outputs are.
+    fn enhance_job(kind: SpeechKind, input: &str, paths: &[&str]) -> SpeechJob {
+        let labels: &[&'static str] = match kind {
+            SpeechKind::Separate => &["Voice", "Music and other sounds"],
+            _ => &["Cleaned speech"],
+        };
+        SpeechJob {
+            outputs: labels
+                .iter()
+                .zip(paths)
+                .map(|(label, path)| AudioOutput {
+                    label,
+                    path: PathBuf::from(path),
+                })
+                .collect(),
+            ..job(kind, input)
         }
     }
 
     #[test]
-    fn a_recogniser_starts_loading_and_a_synthesiser_starts_running() {
+    fn a_recogniser_starts_loading_and_the_others_start_running() {
         assert_eq!(starting_phase(SpeechKind::Stt), SpeechPhase::Loading);
         assert_eq!(starting_phase(SpeechKind::Tts), SpeechPhase::Running);
+        assert_eq!(starting_phase(SpeechKind::Denoise), SpeechPhase::Running);
+        assert_eq!(starting_phase(SpeechKind::Separate), SpeechPhase::Running);
+    }
+
+    #[test]
+    fn a_done_enhancement_lists_its_outputs_with_labels_and_no_output_path() {
+        let event = done_event(
+            &enhance_job(SpeechKind::Separate, "in.wav", &["voice.wav", "music.wav"]),
+            SpeechOutcome::Done { text: None },
+            Some(10.9),
+            0.4,
+        );
+        assert_eq!(event.status, SpeechStatus::Ok);
+        assert_eq!(event.output_path, None);
+        assert_eq!(event.text, None);
+        assert_eq!(event.audio_seconds, Some(10.9));
+        assert_eq!(
+            event.outputs,
+            Some(vec![
+                AudioOutputEvent {
+                    label: "Voice",
+                    path: "voice.wav".to_string(),
+                },
+                AudioOutputEvent {
+                    label: "Music and other sounds",
+                    path: "music.wav".to_string(),
+                },
+            ])
+        );
+    }
+
+    #[test]
+    fn a_denoise_done_event_has_one_labelled_output() {
+        let event = done_event(
+            &enhance_job(SpeechKind::Denoise, "in.wav", &["clean.wav"]),
+            SpeechOutcome::Done { text: None },
+            Some(2.4),
+            0.13,
+        );
+        let json = serde_json::to_value(&event).expect("json");
+        assert_eq!(json["kind"], "denoise");
+        assert_eq!(json["status"], "ok");
+        assert_eq!(json["outputs"][0]["label"], "Cleaned speech");
+        assert_eq!(json["outputs"][0]["path"], "clean.wav");
+        assert!(
+            json.get("outputPath").is_none(),
+            "outputPath is for tts only"
+        );
+        assert_eq!(json["audioSeconds"], 2.4);
+    }
+
+    #[test]
+    fn a_speech_done_event_has_no_outputs_field() {
+        let event = done_event(
+            &job(SpeechKind::Tts, "out.wav"),
+            SpeechOutcome::Done { text: None },
+            Some(1.0),
+            0.5,
+        );
+        let json = serde_json::to_value(&event).expect("json");
+        assert!(json.get("outputs").is_none());
+        assert_eq!(json["outputPath"], "out.wav");
+    }
+
+    #[test]
+    fn an_enhancement_is_written_only_when_every_output_is_on_disk() {
+        let scratch = crate::commands::playground::test_support::Scratch::new("speech-written");
+        let voice = scratch.path().join("voice.wav");
+        let music = scratch.path().join("music.wav");
+        let job = enhance_job(
+            SpeechKind::Separate,
+            "in.wav",
+            &[&voice.to_string_lossy(), &music.to_string_lossy()],
+        );
+        assert!(!job.wav_written());
+        std::fs::write(&voice, b"RIFF").expect("voice");
+        assert!(!job.wav_written(), "one of two is not enough");
+        std::fs::write(&music, b"RIFF").expect("music");
+        assert!(job.wav_written());
+    }
+
+    #[test]
+    fn a_speech_job_is_written_when_its_own_wav_is_there() {
+        let scratch = crate::commands::playground::test_support::Scratch::new("speech-own-wav");
+        let wav = scratch.path().join("speech.wav");
+        let job = job(SpeechKind::Tts, &wav.to_string_lossy());
+        assert!(!job.wav_written());
+        std::fs::write(&wav, b"RIFF").expect("wav");
+        assert!(job.wav_written());
     }
 
     #[test]

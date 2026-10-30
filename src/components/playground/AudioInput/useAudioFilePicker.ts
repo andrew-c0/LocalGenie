@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { pickAttachment } from "../../../../services/attachments";
-import { useSpeechStore } from "../../../../stores/speechStore";
-import { errorMessage } from "../../../../utils/errorMessage";
-import { fileNameOf, isWavPath } from "../../../../utils/speech";
-import { NOT_WAV_MESSAGE } from "../../../../utils/speechText";
+import { pickAttachment } from "../../../services/attachments";
+import { useSpeechStore } from "../../../stores/speechStore";
+import { errorMessage } from "../../../utils/errorMessage";
+import { fileNameOf, isWavPath } from "../../../utils/speech";
+import { NOT_WAV_MESSAGE } from "../../../utils/speechText";
 
 export interface AudioFilePicker {
   /** Open the file dialog. A WAV file becomes the speech input; another file is refused. */

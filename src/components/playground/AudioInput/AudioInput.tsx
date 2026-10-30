@@ -1,12 +1,11 @@
 import { Button } from "@fluentui/react-components";
 import { DocumentRegular, MicRegular, StopRegular } from "@fluentui/react-icons";
-import type { SpeechAudioInput } from "../../../../types";
-import { formatElapsed } from "../../../../utils/playground";
-import { AUDIO_INPUT_HINT } from "../../../../utils/speechText";
-import { ErrorBanner } from "../../../ui/ErrorBanner/ErrorBanner";
-import { Flex } from "../../../ui/Flex/Flex";
-import { Meta } from "../../../ui/Typography/Typography";
-import { useNow } from "../../useNow";
+import type { SpeechAudioInput } from "../../../types";
+import { formatElapsed } from "../../../utils/playground";
+import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
+import { Flex } from "../../ui/Flex/Flex";
+import { Meta } from "../../ui/Typography/Typography";
+import { useNow } from "../useNow";
 import { useAudioFilePicker } from "./useAudioFilePicker";
 import { useMicrophoneRecording } from "./useMicrophoneRecording";
 
@@ -17,10 +16,12 @@ interface AudioInputProps {
   audio: SpeechAudioInput | null;
   /** A job runs, so the input cannot change. */
   disabled: boolean;
+  /** What the tab says under the buttons, e.g. how long a longer recording takes. */
+  hint: string;
 }
 
-/** The speech to text input: a WAV file from disk, or a recording from the microphone. */
-export function AudioInput({ audio, disabled }: AudioInputProps) {
+/** The speech input: a WAV file from disk, or a recording from the microphone. Shared by the speech tabs. */
+export function AudioInput({ audio, disabled, hint }: AudioInputProps) {
   const picker = useAudioFilePicker();
   const recording = useMicrophoneRecording();
   const now = useNow(CLOCK_TICK_MS);
@@ -54,7 +55,7 @@ export function AudioInput({ audio, disabled }: AudioInputProps) {
           </Button>
         )}
       </Flex>
-      <Meta>{AUDIO_INPUT_HINT}</Meta>
+      <Meta>{hint}</Meta>
       {audio && <Meta>Input: {audio.audioName}</Meta>}
       {recording.isSaving && <Meta>Saving recording…</Meta>}
       {error && <ErrorBanner message={error} />}

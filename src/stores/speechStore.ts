@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type {
+  EnhanceKind,
   PlaygroundSpeechProgress,
   SpeechAudioInput,
   SpeechForm,
@@ -8,26 +9,30 @@ import type {
   SpeechModel,
   SpeechResult,
 } from "../types";
+import { DEFAULT_ENHANCE_KIND } from "../utils/audioEnhance";
 import {
   clearDeletedSelection,
   DEFAULT_SPEECH_FORM,
   keepSpeechSelection,
+  NO_SPEECH_SELECTION,
   type SpeechSelection,
 } from "../utils/speech";
 
 /**
- * Speech state, kept across page visits: the catalog, each tab's selected model, the speech to text
- * input, the text to speech form, the running job and the last result of each kind. Downloads stay in
- * the Playground store, since their events carry only a model id. The event listeners and the service
- * calls live outside the store (`PlaygroundRuntime` and the panel hooks).
+ * Speech state, kept across page visits: the catalog, each tab's selected model, the speech input, the
+ * text to speech form, the Audio to audio task, the running job and the last result of each kind. Downloads
+ * stay in the Playground store, since their events carry only a model id. The event listeners and the
+ * service calls live outside the store (`PlaygroundRuntime` and the panel hooks).
  */
 interface SpeechState {
-  /** Both kinds of speech model. Null until the catalog has been read. Each tab shows its own kind. */
+  /** Every speech model, of all kinds. Null until the catalog has been read. Each tab shows its own kind. */
   models: SpeechModel[] | null;
   selectedModelIds: SpeechSelection;
-  /** The recording or file the speech to text tab transcribes. */
+  /** The recording or file the speech to text and audio to audio tabs read. */
   audio: SpeechAudioInput | null;
   form: SpeechForm;
+  /** The task the Audio to audio tab runs: clean up speech or split voice and music. */
+  enhanceKind: EnhanceKind;
   job: SpeechJob | null;
   /** The last job of each kind that ended, kept until the next job of that kind starts. */
   results: Record<SpeechKind, SpeechResult | null>;
@@ -40,6 +45,7 @@ interface SpeechState {
   selectModel: (model: SpeechModel) => void;
   setAudio: (audio: SpeechAudioInput | null) => void;
   setForm: (patch: Partial<SpeechForm>) => void;
+  setEnhanceKind: (kind: EnhanceKind) => void;
 
   /** Start a job and clear the previous result of its kind. */
   startJob: (job: SpeechJob) => void;
@@ -50,11 +56,12 @@ interface SpeechState {
 
 export const useSpeechStore = create<SpeechState>((set) => ({
   models: null,
-  selectedModelIds: { stt: null, tts: null },
+  selectedModelIds: NO_SPEECH_SELECTION,
   audio: null,
   form: DEFAULT_SPEECH_FORM,
+  enhanceKind: DEFAULT_ENHANCE_KIND,
   job: null,
-  results: { stt: null, tts: null },
+  results: { stt: null, tts: null, denoise: null, separate: null },
 
   setModels: (models) =>
     set((state) => ({
@@ -76,6 +83,8 @@ export const useSpeechStore = create<SpeechState>((set) => ({
   setAudio: (audio) => set({ audio }),
 
   setForm: (patch) => set((state) => ({ form: { ...state.form, ...patch } })),
+
+  setEnhanceKind: (enhanceKind) => set({ enhanceKind }),
 
   startJob: (job) =>
     set((state) => ({

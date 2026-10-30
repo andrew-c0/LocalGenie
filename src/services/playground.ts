@@ -4,6 +4,7 @@ import type {
   ImageModel,
   PlaygroundDeleteResult,
   PlaygroundDevice,
+  SpeechEnhanceRequest,
   SpeechModel,
   SpeechSynthesizeRequest,
   SpeechTranscribeRequest,
@@ -18,7 +19,7 @@ export const PLAYGROUND_DOWNLOAD_DONE_EVENT = "playground-download-done";
 export const PLAYGROUND_IMAGE_PROGRESS_EVENT = "playground-image-progress";
 /** Event carrying `PlaygroundImageDone` once a generation ends. */
 export const PLAYGROUND_IMAGE_DONE_EVENT = "playground-image-done";
-/** Event carrying `PlaygroundSpeechProgress` while a transcription or a speech synthesis runs. */
+/** Event carrying `PlaygroundSpeechProgress` while a transcription, a speech synthesis or an audio to audio job runs. */
 export const PLAYGROUND_SPEECH_PROGRESS_EVENT = "playground-speech-progress";
 /** Event carrying `PlaygroundSpeechDone` once a speech job ends. */
 export const PLAYGROUND_SPEECH_DONE_EVENT = "playground-speech-done";
@@ -101,6 +102,11 @@ export async function transcribeSpeech(request: SpeechTranscribeRequest): Promis
 /** Start a speech synthesis. Resolves right after the job starts; the saved file comes as an event. */
 export async function synthesizeSpeech(request: SpeechSynthesizeRequest): Promise<void> {
   return invoke("playground_synthesize", { request });
+}
+
+/** Start an audio to audio job (clean up or split). Resolves right after the job starts; the saved files come as an event. */
+export async function enhanceAudio(request: SpeechEnhanceRequest): Promise<void> {
+  return invoke("playground_enhance_audio", { request });
 }
 
 /** Stop a running speech job. The backend reports the stop through `playground-speech-done`. */

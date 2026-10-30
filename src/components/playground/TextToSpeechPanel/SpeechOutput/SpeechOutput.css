@@ -1,9 +1,3 @@
-/* The player fills the card width. */
-.speech-output__player {
-  display: block;
-  width: 100%;
-}
-
 .speech-output__path {
   overflow-wrap: anywhere;
 }

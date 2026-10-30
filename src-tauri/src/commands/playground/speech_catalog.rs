@@ -1,25 +1,45 @@
-//! The curated speech models: the sherpa-onnx archive each one is downloaded as, the files it
-//! unpacks to, the sherpa-onnx flags that load them, and the voices of a text to speech model.
+//! The curated speech models: what each one is downloaded as, the files it reads, the sherpa-onnx
+//! flags that load them, and the voices of a text to speech model. The audio models are in
+//! `audio_catalog`, and they are listed and downloaded from here too.
 //!
-//! Each model is one `.tar.bz2` release asset from `k2-fsa/sherpa-onnx`. It is unpacked into its own
-//! folder, `<models root>/k2-fsa--sherpa-onnx/<model id>/`, so models never share files.
+//! Each model is one release asset from `k2-fsa/sherpa-onnx`: a `.tar.bz2` archive unpacked into its
+//! own folder, or a single `.onnx` file saved into it. The folder is
+//! `<models root>/k2-fsa--sherpa-onnx/<model id>/`, so models never share files.
 
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
+use super::audio_catalog::{self, DenoiseEngine, SeparateEngine};
 use super::catalog::APACHE_LICENSE_URL;
 use crate::commands::download::validate_file_name;
 
-/// The folder under the models root that holds every speech model and its archive.
+/// The folder under the models root that holds every speech model and its files.
 const REPO_DIR: &str = "k2-fsa--sherpa-onnx";
-/// Where the release assets are downloaded from. Only these tags are allowed.
+/// Where the release assets are downloaded from. Only the tags in `ALLOWED_RELEASES` are allowed.
 const RELEASE_PREFIX: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/download/";
 const SPEECH_RECOGNITION_TAG: &str = "asr-models";
 const SPEECH_SYNTHESIS_TAG: &str = "tts-models";
 const MIT_LICENSE_URL_WHISPER: &str = "https://github.com/openai/whisper/blob/main/LICENSE";
 const MIT_LICENSE_URL_MOONSHINE: &str =
     "https://github.com/moonshine-ai/moonshine/blob/main/LICENSE";
+
+/// The release tags a model may be downloaded from, each with the file endings it may publish.
+/// Anything else is refused.
+const ALLOWED_RELEASES: &[(&str, &[&str])] = &[
+    (SPEECH_RECOGNITION_TAG, &[ARCHIVE_ENDING]),
+    (SPEECH_SYNTHESIS_TAG, &[ARCHIVE_ENDING]),
+    (
+        audio_catalog::SPEECH_ENHANCEMENT_TAG,
+        &[ONNX_ENDING, ARCHIVE_ENDING],
+    ),
+    (
+        audio_catalog::SOURCE_SEPARATION_TAG,
+        &[ONNX_ENDING, ARCHIVE_ENDING],
+    ),
+];
+const ARCHIVE_ENDING: &str = ".tar.bz2";
+const ONNX_ENDING: &str = ".onnx";
 
 /// Kokoro v1.0 speakers by speaker id, as the model's `id2speaker` metadata names them. Only the
 /// English voices are offered: `af_` and `am_` (US), `bf_` and `bm_` (GB). Ids 28 to 53 are other
@@ -55,12 +75,14 @@ const KOKORO_SPEAKERS: &[(u32, &str)] = &[
     (27, "bm_lewis"),
 ];
 
-/// Speech to text or text to speech.
+/// What a model does: speech to text, text to speech, speech denoising or source separation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SpeechKind {
     Stt,
     Tts,
+    Denoise,
+    Separate,
 }
 
 /// A speech to text model and the sherpa-onnx flags that load it.
@@ -98,6 +120,8 @@ pub(super) enum TtsEngine {
 pub(super) enum Engine {
     Stt(SttEngine),
     Tts(TtsEngine),
+    Denoise(DenoiseEngine),
+    Separate(SeparateEngine),
 }
 
 impl Engine {
@@ -105,6 +129,8 @@ impl Engine {
         match self {
             Engine::Stt(_) => SpeechKind::Stt,
             Engine::Tts(_) => SpeechKind::Tts,
+            Engine::Denoise(_) => SpeechKind::Denoise,
+            Engine::Separate(_) => SpeechKind::Separate,
         }
     }
 
@@ -129,8 +155,20 @@ impl Engine {
                 lexicon,
                 dict_dir,
             }) => vec![model, voices, tokens, lexicon, dict_dir],
+            Engine::Denoise(engine) => vec![engine.model_file()],
+            Engine::Separate(engine) => engine.model_files().to_vec(),
         }
     }
+}
+
+/// What a model is downloaded as. An archive is unpacked into the model's folder; a single file is
+/// saved straight into it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Delivery {
+    /// A `.tar.bz2` release asset, saved in the repo folder and unpacked into the model's folder.
+    Archive { archive_name: &'static str },
+    /// One release asset, saved under its own name in the model's folder.
+    SingleFile { file_name: &'static str },
 }
 
 /// One curated speech model.
@@ -141,11 +179,10 @@ pub(super) struct SpeechRecipe {
     pub description: &'static str,
     pub license: &'static str,
     pub license_url: &'static str,
-    /// The release asset's file name, which is also the name the archive is saved under.
-    pub archive_name: &'static str,
+    pub delivery: Delivery,
     /// The GitHub release tag the asset is published under.
     pub release_tag: &'static str,
-    /// Size of the archive on GitHub, in bytes. Checked after each download.
+    /// Size of the download on GitHub, in bytes. Checked after each download.
     pub size_bytes: u64,
     pub languages: &'static [&'static str],
     pub engine: Engine,
@@ -160,7 +197,9 @@ const WHISPER_TINY_EN: SpeechRecipe = SpeechRecipe {
     description: "OpenAI's smallest Whisper model, English only. Quick on the CPU, but the least accurate of the Whisper sizes.",
     license: "MIT",
     license_url: MIT_LICENSE_URL_WHISPER,
-    archive_name: "sherpa-onnx-whisper-tiny.en.tar.bz2",
+    delivery: Delivery::Archive {
+        archive_name: "sherpa-onnx-whisper-tiny.en.tar.bz2",
+    },
     release_tag: SPEECH_RECOGNITION_TAG,
     size_bytes: 118_071_777,
     languages: &["en"],
@@ -179,7 +218,9 @@ const MOONSHINE_BASE_EN: SpeechRecipe = SpeechRecipe {
         "Moonshine's base model, English only. Compact, and quick on the CPU for short clips.",
     license: "MIT",
     license_url: MIT_LICENSE_URL_MOONSHINE,
-    archive_name: "sherpa-onnx-moonshine-base-en-quantized-2026-02-27.tar.bz2",
+    delivery: Delivery::Archive {
+        archive_name: "sherpa-onnx-moonshine-base-en-quantized-2026-02-27.tar.bz2",
+    },
     release_tag: SPEECH_RECOGNITION_TAG,
     size_bytes: 111_266_225,
     languages: &["en"],
@@ -197,7 +238,9 @@ const KOKORO_MULTI_V1: SpeechRecipe = SpeechRecipe {
     description: "A small text to speech model with 28 English voices, American and British. Speed from 0.5x to 2x.",
     license: "Apache-2.0",
     license_url: APACHE_LICENSE_URL,
-    archive_name: "kokoro-int8-multi-lang-v1_0.tar.bz2",
+    delivery: Delivery::Archive {
+        archive_name: "kokoro-int8-multi-lang-v1_0.tar.bz2",
+    },
     release_tag: SPEECH_SYNTHESIS_TAG,
     size_bytes: 132_353_410,
     languages: &["en-US", "en-GB"],
@@ -211,15 +254,31 @@ const KOKORO_MULTI_V1: SpeechRecipe = SpeechRecipe {
     speakers: KOKORO_SPEAKERS,
 };
 
-/// Every curated speech model, in the order the Playground lists them.
+/// The speech to text and text to speech models, in the order the Playground lists them.
 pub(super) const RECIPES: &[SpeechRecipe] = &[WHISPER_TINY_EN, MOONSHINE_BASE_EN, KOKORO_MULTI_V1];
+
+/// Every curated model the speech job slot runs: the speech models, then the audio models.
+pub(super) fn all_recipes() -> impl Iterator<Item = &'static SpeechRecipe> {
+    RECIPES.iter().chain(audio_catalog::RECIPES.iter())
+}
 
 /// The recipe with this id, or an error for an id that is not in the catalogue.
 pub(super) fn find_recipe(id: &str) -> Result<&'static SpeechRecipe, String> {
-    RECIPES
-        .iter()
+    all_recipes()
         .find(|recipe| recipe.id == id)
         .ok_or_else(|| format!("Unknown speech model: {id}"))
+}
+
+/// Fails with a request to download the model first, when it is not on disk.
+pub(super) fn require_downloaded(recipe: &SpeechRecipe, models_root: &Path) -> Result<(), String> {
+    if is_downloaded(recipe, models_root) {
+        Ok(())
+    } else {
+        Err(format!(
+            "{} is not downloaded yet. Download it first.",
+            recipe.name
+        ))
+    }
 }
 
 /// A voice of a text to speech model. `label` reads as "Heart (US female)".
@@ -250,6 +309,14 @@ pub struct SpeechModel {
 impl SpeechRecipe {
     pub(super) fn kind(&self) -> SpeechKind {
         self.engine.kind()
+    }
+
+    /// The release asset's file name, which is also the name it is saved under.
+    pub(super) fn asset_name(&self) -> &'static str {
+        match self.delivery {
+            Delivery::Archive { archive_name } => archive_name,
+            Delivery::SingleFile { file_name } => file_name,
+        }
     }
 
     /// The voices a text to speech model offers. Empty for speech to text.
@@ -330,21 +397,27 @@ pub(super) fn model_dir(models_root: &Path, recipe: &SpeechRecipe) -> PathBuf {
     repo_dir(models_root).join(recipe.id)
 }
 
-/// Where the archive is saved while it is downloaded and unpacked.
-pub(super) fn archive_path(models_root: &Path, recipe: &SpeechRecipe) -> PathBuf {
-    repo_dir(models_root).join(recipe.archive_name)
+/// Where the download is saved while it is fetched: the archive in the repo folder, or the single
+/// file in the model's folder.
+pub(super) fn download_target(models_root: &Path, recipe: &SpeechRecipe) -> PathBuf {
+    match recipe.delivery {
+        Delivery::Archive { archive_name } => repo_dir(models_root).join(archive_name),
+        Delivery::SingleFile { file_name } => model_dir(models_root, recipe).join(file_name),
+    }
 }
 
-/// The GitHub release asset the archive is downloaded from.
+/// The GitHub release asset the download is fetched from.
 pub(super) fn download_url(recipe: &SpeechRecipe) -> String {
     format!(
         "{RELEASE_PREFIX}{}/{}",
-        recipe.release_tag, recipe.archive_name
+        recipe.release_tag,
+        recipe.asset_name()
     )
 }
 
-/// True for a release asset of `k2-fsa/sherpa-onnx` under one of the speech tags, with a
-/// `.tar.bz2` name and nothing else in the path. Every other URL is refused.
+/// True for a release asset of `k2-fsa/sherpa-onnx` under one of the `ALLOWED_RELEASES` tags, with
+/// a file name that ends in one of that tag's endings and nothing else in the path. Every other URL
+/// is refused.
 pub(super) fn is_allowed_speech_url(url: &str) -> bool {
     let Some(path) = url.strip_prefix(RELEASE_PREFIX) else {
         return false;
@@ -352,8 +425,10 @@ pub(super) fn is_allowed_speech_url(url: &str) -> bool {
     let Some((tag, file)) = path.split_once('/') else {
         return false;
     };
-    let allowed_tag = tag == SPEECH_RECOGNITION_TAG || tag == SPEECH_SYNTHESIS_TAG;
-    allowed_tag && file.ends_with(".tar.bz2") && validate_file_name(file).is_ok()
+    let Some((_, endings)) = ALLOWED_RELEASES.iter().find(|(allowed, _)| *allowed == tag) else {
+        return false;
+    };
+    endings.iter().any(|ending| file.ends_with(ending)) && validate_file_name(file).is_ok()
 }
 
 #[cfg(test)]
@@ -365,9 +440,10 @@ mod tests {
 
     #[test]
     fn ids_are_unique_and_findable() {
-        let ids: HashSet<&str> = RECIPES.iter().map(|recipe| recipe.id).collect();
-        assert_eq!(ids.len(), RECIPES.len());
-        for recipe in RECIPES {
+        let recipes: Vec<&SpeechRecipe> = all_recipes().collect();
+        let ids: HashSet<&str> = recipes.iter().map(|recipe| recipe.id).collect();
+        assert_eq!(ids.len(), recipes.len());
+        for recipe in recipes {
             assert_eq!(find_recipe(recipe.id).map(|r| r.id), Ok(recipe.id));
         }
         assert!(find_recipe("../etc").is_err());
@@ -375,10 +451,10 @@ mod tests {
 
     #[test]
     fn every_download_url_is_on_the_allowlist() {
-        for recipe in RECIPES {
+        for recipe in all_recipes() {
             let url = download_url(recipe);
             assert!(is_allowed_speech_url(&url), "{url} is not allowed");
-            assert!(url.ends_with(recipe.archive_name), "{url}");
+            assert!(url.ends_with(recipe.asset_name()), "{url}");
         }
         assert_eq!(
             download_url(&WHISPER_TINY_EN),
@@ -403,6 +479,7 @@ mod tests {
             "http://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/a.tar.bz2",
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/other-tag/a.tar.bz2",
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/a.zip",
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/a.onnx",
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/../x.tar.bz2",
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sub/a.tar.bz2",
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/",
@@ -413,6 +490,25 @@ mod tests {
         for url in refused {
             assert!(!is_allowed_speech_url(url), "{url} should be refused");
         }
+    }
+
+    #[test]
+    fn the_audio_tags_allow_onnx_and_archives_and_nothing_else() {
+        let base = "https://github.com/k2-fsa/sherpa-onnx/releases/download/";
+        for tag in ["speech-enhancement-models", "source-separation-models"] {
+            for file in ["gtcrn_simple.onnx", "sherpa-onnx-spleeter.tar.bz2"] {
+                let url = format!("{base}{tag}/{file}");
+                assert!(is_allowed_speech_url(&url), "{url}");
+            }
+            for file in ["model.bin", "model.zip", "model.onnx.exe", "../model.onnx"] {
+                let url = format!("{base}{tag}/{file}");
+                assert!(!is_allowed_speech_url(&url), "{url} should be refused");
+            }
+        }
+        // The speech tags keep their archive-only rule.
+        assert!(!is_allowed_speech_url(&format!(
+            "{base}asr-models/model.onnx"
+        )));
     }
 
     #[test]
@@ -496,13 +592,48 @@ mod tests {
             root.join(REPO_DIR).join("whisper-tiny-en")
         );
         assert_eq!(
-            archive_path(root, &KOKORO_MULTI_V1),
+            download_target(root, &KOKORO_MULTI_V1),
             root.join(REPO_DIR)
                 .join("kokoro-int8-multi-lang-v1_0.tar.bz2")
         );
         assert_ne!(
             model_dir(root, &MOONSHINE_BASE_EN),
             model_dir(root, &WHISPER_TINY_EN)
+        );
+    }
+
+    #[test]
+    fn a_single_file_model_downloads_straight_into_its_folder() {
+        let root = Path::new("models");
+        let gtcrn = find_recipe("gtcrn-simple").expect("gtcrn");
+        assert_eq!(
+            download_target(root, gtcrn),
+            root.join(REPO_DIR)
+                .join("gtcrn-simple")
+                .join("gtcrn_simple.onnx")
+        );
+        assert_eq!(
+            download_url(gtcrn),
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/gtcrn_simple.onnx"
+        );
+    }
+
+    #[test]
+    fn the_listing_has_the_audio_kinds_after_the_speech_models() {
+        let scratch = Scratch::new("speech-kinds");
+        let kinds: Vec<SpeechKind> = all_recipes()
+            .map(|recipe| describe(recipe, scratch.path()).kind)
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                SpeechKind::Stt,
+                SpeechKind::Stt,
+                SpeechKind::Tts,
+                SpeechKind::Denoise,
+                SpeechKind::Denoise,
+                SpeechKind::Separate,
+            ]
         );
     }
 

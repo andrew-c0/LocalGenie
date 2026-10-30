@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { microphoneErrorMessage, speechPhaseLabel } from "./speechText";
+import {
+  microphoneErrorMessage,
+  speechCancelledText,
+  speechDoneTitle,
+  speechFailedTitle,
+  speechJobTitle,
+  speechPhaseLabel,
+} from "./speechText";
 
 describe("microphoneErrorMessage", () => {
   it("explains a denied permission and where to allow it", () => {
@@ -34,5 +41,27 @@ describe("speechPhaseLabel", () => {
   it("labels the loading and saving stages the same for both kinds", () => {
     expect(speechPhaseLabel("stt", "loading")).toBe(speechPhaseLabel("tts", "loading"));
     expect(speechPhaseLabel("stt", "saving")).toBe("Saving");
+  });
+
+  it("names the work of each audio to audio task", () => {
+    expect(speechPhaseLabel("denoise", "running")).toBe("Cleaning up speech");
+    expect(speechPhaseLabel("separate", "running")).toBe("Splitting voice and music");
+    expect(speechPhaseLabel("denoise", "saving")).toBe("Saving");
+  });
+});
+
+describe("audio to audio job wording", () => {
+  it("gives each task its own title, done, failed and cancelled text", () => {
+    expect(speechJobTitle("denoise")).toBe("Cleaning up speech");
+    expect(speechDoneTitle("separate")).toBe("Voice and music split");
+    expect(speechFailedTitle("denoise")).toBe("Clean-up failed");
+    expect(speechCancelledText("separate")).toBe("Split cancelled.");
+  });
+
+  it("keeps the speech to text and speech synthesis wording unchanged", () => {
+    expect(speechDoneTitle("stt")).toBe("Transcript ready");
+    expect(speechDoneTitle("tts")).toBe("Speech ready");
+    expect(speechFailedTitle("tts")).toBe("Speech generation failed");
+    expect(speechCancelledText("stt")).toBe("Transcription cancelled.");
   });
 });

@@ -134,6 +134,8 @@ pub fn run() {
             playground::speech_commands::playground_store_audio,
             playground::speech_commands::playground_read_audio,
             playground::speech_commands::playground_reveal_audio,
+            // Playground audio to audio (sherpa-onnx denoise and source separation, shares the speech job slot)
+            playground::audio_commands::playground_enhance_audio,
             // Qualcomm AI Hub catalog (read-only)
             aihub::aihub_latest_version,
             aihub::aihub_list_models,

@@ -2,22 +2,22 @@
 //! text and text to speech jobs, and the microphone recordings and speech files the webview reads
 //! back. Each command checks its input and hands the work to the module that owns it.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use sea_orm::DatabaseConnection;
 use tauri::{AppHandle, Manager, State};
 
-use super::file_timestamp;
 use super::model_delete::ModelDeletion;
 use super::model_download;
 use super::paths;
 use super::recordings;
 use super::speech_args::{self, SynthesizeRequest, TranscribeRequest, WAV_EXTENSION};
-use super::speech_catalog::{self, Engine, SpeechKind, SpeechModel, SpeechRecipe};
+use super::speech_catalog::{self, Engine, SpeechKind, SpeechModel};
 use super::speech_delete;
 use super::speech_download;
 use super::speech_job::{self, SpeechJob, SpeechJobs};
+use super::{app_data_dir, file_timestamp, music_dir};
 use crate::commands::attachments;
 use crate::commands::download::DownloadRegistry;
 use crate::commands::runtimes::sherpa_cli;
@@ -29,8 +29,7 @@ const MAX_AUDIO_READ_BYTES: u64 = 200 * 1024 * 1024;
 #[tauri::command]
 pub fn playground_speech_models(app: AppHandle) -> Result<Vec<SpeechModel>, String> {
     let models_root = paths::models_root(&app_data_dir(&app)?);
-    Ok(speech_catalog::RECIPES
-        .iter()
+    Ok(speech_catalog::all_recipes()
         .map(|recipe| speech_catalog::describe(recipe, &models_root))
         .collect())
 }
@@ -106,7 +105,7 @@ pub async fn playground_transcribe(
         return Err(format!("{} is not a speech to text model.", recipe.name));
     };
     let models_root = paths::models_root(&app_data_dir(&app)?);
-    require_downloaded(recipe, &models_root)?;
+    speech_catalog::require_downloaded(recipe, &models_root)?;
     let audio = speech_args::checked_audio_input(&request.audio_path)?;
     let programs = sherpa_cli::sherpa_programs(&db).await?;
 
@@ -124,6 +123,7 @@ pub async fn playground_transcribe(
             folder: programs.bin_dir,
             args,
             audio,
+            outputs: Vec::new(),
         },
     )
 }
@@ -153,7 +153,7 @@ pub async fn playground_synthesize(
     let text = speech_args::checked_text(&request.text)?;
     let speed = speech_args::checked_speed(request.speed)?;
     let models_root = paths::models_root(&app_data_dir(&app)?);
-    require_downloaded(recipe, &models_root)?;
+    speech_catalog::require_downloaded(recipe, &models_root)?;
     let programs = sherpa_cli::sherpa_programs(&db).await?;
 
     let output_folder = paths::speech_output_folder(&music_dir(&app)?);
@@ -183,6 +183,7 @@ pub async fn playground_synthesize(
             folder: programs.bin_dir,
             args,
             audio: output,
+            outputs: Vec::new(),
         },
     )
 }
@@ -256,32 +257,8 @@ fn audio_roots(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
     ])
 }
 
-/// Fails with a request to download the model first, when it is not on disk.
-fn require_downloaded(recipe: &SpeechRecipe, models_root: &Path) -> Result<(), String> {
-    if speech_catalog::is_downloaded(recipe, models_root) {
-        Ok(())
-    } else {
-        Err(format!(
-            "{} is not downloaded yet. Download it first.",
-            recipe.name
-        ))
-    }
-}
-
-fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .app_data_dir()
-        .map_err(|e| format!("app data folder unavailable: {e}"))
-}
-
 fn cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_cache_dir()
         .map_err(|e| format!("app cache folder unavailable: {e}"))
-}
-
-fn music_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .audio_dir()
-        .map_err(|e| format!("Music folder unavailable: {e}"))
 }

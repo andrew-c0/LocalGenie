@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { SpeechForm, SpeechModel, SpeechVoice } from "../types";
+import type {
+  PlaygroundSpeechDone,
+  SpeechForm,
+  SpeechKind,
+  SpeechModel,
+  SpeechVoice,
+} from "../types";
 import {
+  audioJobBlockedReason,
   buildSynthesizeRequest,
   buildTranscribeRequest,
   clearDeletedSelection,
@@ -12,9 +19,10 @@ import {
   recordingName,
   resolveVoiceId,
   sortVoices,
+  speechModelsOfKind,
+  speechResultOf,
   speechTimingLabel,
   synthesizeBlockedReason,
-  transcribeBlockedReason,
   voiceGroup,
   voiceOptions,
 } from "./speech";
@@ -43,6 +51,24 @@ const tts = (overrides: Partial<SpeechModel> = {}): SpeechModel =>
     ...overrides,
   });
 
+const denoise = (overrides: Partial<SpeechModel> = {}): SpeechModel =>
+  model({
+    id: "gtcrn-simple",
+    kind: "denoise",
+    name: "GTCRN simple",
+    languages: [],
+    ...overrides,
+  });
+
+const separate = (overrides: Partial<SpeechModel> = {}): SpeechModel =>
+  model({
+    id: "spleeter-2stems-int8",
+    kind: "separate",
+    name: "Spleeter 2 stems int8",
+    languages: [],
+    ...overrides,
+  });
+
 const voice = (id: number, label: string): SpeechVoice => ({
   id,
   name: label.split(" (")[0],
@@ -68,33 +94,89 @@ describe("speech model selection", () => {
     model({ id: "whisper", downloaded: false }),
     model({ id: "moonshine", downloaded: true }),
     tts({ id: "kokoro", downloaded: false }),
+    denoise({ id: "gtcrn", downloaded: true }),
+    separate({ id: "spleeter", downloaded: false }),
   ];
 
   it("falls back to the first downloaded model of the kind, else the first listed", () => {
     expect(defaultSpeechModel(catalog, "stt")?.id).toBe("moonshine");
     expect(defaultSpeechModel(catalog, "tts")?.id).toBe("kokoro");
+    expect(defaultSpeechModel(catalog, "denoise")?.id).toBe("gtcrn");
+    expect(defaultSpeechModel(catalog, "separate")?.id).toBe("spleeter");
     expect(defaultSpeechModel([model({ downloaded: false })], "stt")?.downloaded).toBe(false);
     expect(defaultSpeechModel([], "tts")).toBeNull();
   });
 
   it("keeps each kind's selection while its model is still listed", () => {
-    const next = keepSpeechSelection({ stt: "whisper", tts: "kokoro" }, catalog);
-    expect(next).toEqual({ stt: "whisper", tts: "kokoro" });
+    const next = keepSpeechSelection(
+      { stt: "whisper", tts: "kokoro", denoise: "gtcrn", separate: "spleeter" },
+      catalog,
+    );
+    expect(next).toEqual({
+      stt: "whisper",
+      tts: "kokoro",
+      denoise: "gtcrn",
+      separate: "spleeter",
+    });
   });
 
   it("falls back for a kind whose selected model is gone", () => {
-    const next = keepSpeechSelection({ stt: "gone", tts: null }, catalog);
-    expect(next).toEqual({ stt: "moonshine", tts: "kokoro" });
+    const next = keepSpeechSelection(
+      { stt: "gone", tts: null, denoise: null, separate: "gone" },
+      catalog,
+    );
+    expect(next).toEqual({
+      stt: "moonshine",
+      tts: "kokoro",
+      denoise: "gtcrn",
+      separate: "spleeter",
+    });
   });
 
-  it("does not select a model of the other kind", () => {
-    const next = keepSpeechSelection({ stt: "kokoro", tts: null }, catalog);
+  it("does not select a model of another kind", () => {
+    const next = keepSpeechSelection(
+      { stt: "kokoro", tts: "gtcrn", denoise: "moonshine", separate: "kokoro" },
+      catalog,
+    );
     expect(next.stt).toBe("moonshine");
+    expect(next.tts).toBe("kokoro");
+    expect(next.denoise).toBe("gtcrn");
+    expect(next.separate).toBe("spleeter");
   });
 
   it("clears only the selection of the deleted model", () => {
-    const next = clearDeletedSelection({ stt: "moonshine", tts: "kokoro" }, "moonshine");
-    expect(next).toEqual({ stt: null, tts: "kokoro" });
+    const next = clearDeletedSelection(
+      { stt: "moonshine", tts: "kokoro", denoise: "gtcrn", separate: "spleeter" },
+      "gtcrn",
+    );
+    expect(next).toEqual({ stt: "moonshine", tts: "kokoro", denoise: null, separate: "spleeter" });
+  });
+});
+
+describe("speechModelsOfKind", () => {
+  const catalog = [
+    model({ id: "whisper" }),
+    tts({ id: "kokoro" }),
+    denoise({ id: "gtcrn" }),
+    denoise({ id: "dpdfnet4" }),
+    separate({ id: "spleeter" }),
+  ];
+
+  it("lists only the models of the tab's kind", () => {
+    expect(speechModelsOfKind(catalog, "denoise").map((m) => m.id)).toEqual(["gtcrn", "dpdfnet4"]);
+    expect(speechModelsOfKind(catalog, "separate").map((m) => m.id)).toEqual(["spleeter"]);
+  });
+
+  it("keeps the audio to audio models out of the speech to text and text to speech lists", () => {
+    const sttAndTts: SpeechKind[] = ["stt", "tts"];
+    for (const kind of sttAndTts) {
+      const ids = speechModelsOfKind(catalog, kind).map((m) => m.id);
+      expect(ids).not.toContain("gtcrn");
+      expect(ids).not.toContain("dpdfnet4");
+      expect(ids).not.toContain("spleeter");
+    }
+    expect(speechModelsOfKind(catalog, "stt").map((m) => m.id)).toEqual(["whisper"]);
+    expect(speechModelsOfKind(catalog, "tts").map((m) => m.id)).toEqual(["kokoro"]);
   });
 });
 
@@ -175,7 +257,7 @@ describe("audio paths", () => {
   });
 });
 
-describe("transcribeBlockedReason", () => {
+describe("audioJobBlockedReason", () => {
   const ready = {
     runtime: "installed" as const,
     model: model(),
@@ -184,29 +266,36 @@ describe("transcribeBlockedReason", () => {
   };
 
   it("is null when the job can run", () => {
-    expect(transcribeBlockedReason(ready)).toBeNull();
+    expect(audioJobBlockedReason(ready)).toBeNull();
   });
 
   it("names the runtime when it is missing", () => {
-    expect(transcribeBlockedReason({ ...ready, runtime: "missing" })).toBe(
+    expect(audioJobBlockedReason({ ...ready, runtime: "missing" })).toBe(
       "Install sherpa-onnx in Settings > Runtimes first.",
     );
   });
 
   it("asks for a model, a download and audio, in that order", () => {
-    expect(transcribeBlockedReason({ ...ready, model: null })).toBe("Choose a model first.");
-    expect(transcribeBlockedReason({ ...ready, model: model({ downloaded: false }) })).toBe(
+    expect(audioJobBlockedReason({ ...ready, model: null })).toBe("Choose a model first.");
+    expect(audioJobBlockedReason({ ...ready, model: model({ downloaded: false }) })).toBe(
       "Download the model first.",
     );
-    expect(transcribeBlockedReason({ ...ready, audioPath: null })).toBe(
+    expect(audioJobBlockedReason({ ...ready, audioPath: null })).toBe(
       "Choose a .wav file or record one first.",
     );
   });
 
   it("blocks while a speech job runs", () => {
-    expect(transcribeBlockedReason({ ...ready, jobRunning: true })).toBe(
+    expect(audioJobBlockedReason({ ...ready, jobRunning: true })).toBe(
       "A speech job is already running.",
     );
+  });
+
+  it("applies the same gate to a clean-up or split model", () => {
+    expect(audioJobBlockedReason({ ...ready, model: denoise({ downloaded: false }) })).toBe(
+      "Download the model first.",
+    );
+    expect(audioJobBlockedReason({ ...ready, model: separate() })).toBeNull();
   });
 });
 
@@ -245,7 +334,7 @@ describe("request builders", () => {
     ).toEqual({ jobId: "job-1", modelId: "whisper-tiny-en", audioPath: "/tmp/a.wav" });
   });
 
-  it("trims the text and sends the chosen voice and speed for a synthesis", () => {
+  it("sends the trimmed text and the chosen voice and speed for a synthesis", () => {
     expect(
       buildSynthesizeRequest("job-2", tts(), form({ text: "  Hi there  ", speed: 1.5 }), 3),
     ).toEqual({
@@ -266,9 +355,48 @@ describe("failedSpeechResult", () => {
       status: "error",
       text: null,
       outputPath: null,
+      outputs: [],
       audioSeconds: null,
       elapsedSeconds: null,
       error: "No runtime",
+    });
+  });
+});
+
+describe("speechResultOf", () => {
+  const done = (overrides: Partial<PlaygroundSpeechDone> = {}): PlaygroundSpeechDone => ({
+    jobId: "job-4",
+    kind: "separate",
+    status: "ok",
+    ...overrides,
+  });
+
+  it("keeps the outputs of an audio to audio job in the order the backend sent them", () => {
+    const outputs = [
+      { label: "Voice", path: "C:\\out\\voice.wav" },
+      { label: "Music and other sounds", path: "C:\\out\\accompaniment.wav" },
+    ];
+    const result = speechResultOf(done({ outputs }));
+    expect(result.outputs).toEqual(outputs);
+    expect(result.kind).toBe("separate");
+    expect(result.status).toBe("ok");
+  });
+
+  it("has no outputs when the event leaves them out", () => {
+    expect(speechResultOf(done({ kind: "stt", text: "hi" })).outputs).toEqual([]);
+  });
+
+  it("fills the missing optional fields with null", () => {
+    expect(speechResultOf(done({ status: "cancelled" }))).toEqual({
+      jobId: "job-4",
+      kind: "separate",
+      status: "cancelled",
+      text: null,
+      outputPath: null,
+      outputs: [],
+      audioSeconds: null,
+      elapsedSeconds: null,
+      error: null,
     });
   });
 });

@@ -16,9 +16,15 @@ import { usePlaygroundModelActions } from "../usePlaygroundModelActions";
 import { useSpeechModelDelete } from "./useSpeechModelDelete";
 import "./SpeechModelColumn.css";
 
-/** The lines a speech card shows beyond the common ones: the languages, and for speech synthesis the voice count. */
+/**
+ * The lines a speech card shows beyond the common ones: the languages when the model names any (the
+ * audio to audio models name none), and for speech synthesis the voice count.
+ */
 function speechModelDetails(model: SpeechModel): ModelDetail[] {
-  const details: ModelDetail[] = [{ label: "Languages", value: model.languages.join(", ") }];
+  const details: ModelDetail[] = [];
+  if (model.languages.length > 0) {
+    details.push({ label: "Languages", value: model.languages.join(", ") });
+  }
   if (model.kind === "tts") {
     details.push({ label: "Voices", value: String(model.voices.length) });
   }

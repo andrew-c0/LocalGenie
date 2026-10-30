@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { type MicrophoneCapture, startMicrophoneCapture } from "../../../../services/microphone";
-import { storeAudio } from "../../../../services/playground";
-import { useSpeechStore } from "../../../../stores/speechStore";
-import { errorMessage } from "../../../../utils/errorMessage";
-import { recordingName, STT_SAMPLE_RATE } from "../../../../utils/speech";
-import { EMPTY_RECORDING_MESSAGE, microphoneErrorMessage } from "../../../../utils/speechText";
-import { encodeResampledWav } from "../../../../utils/wav";
+import { type MicrophoneCapture, startMicrophoneCapture } from "../../../services/microphone";
+import { storeAudio } from "../../../services/playground";
+import { useSpeechStore } from "../../../stores/speechStore";
+import { errorMessage } from "../../../utils/errorMessage";
+import { recordingName, STT_SAMPLE_RATE } from "../../../utils/speech";
+import { EMPTY_RECORDING_MESSAGE, microphoneErrorMessage } from "../../../utils/speechText";
+import { encodeResampledWav } from "../../../utils/wav";
 
 export interface MicrophoneRecording {
   /** When the recording started, or null when none runs. */

@@ -1,6 +1,7 @@
 import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
 import { Tab, TabList } from "@fluentui/react-components";
 import { useState } from "react";
+import AudioToAudioPanel from "../../components/playground/AudioToAudioPanel/AudioToAudioPanel";
 import ImageToImagePanel from "../../components/playground/ImageToImagePanel/ImageToImagePanel";
 import SpeechToTextPanel from "../../components/playground/SpeechToTextPanel/SpeechToTextPanel";
 import TextToImagePanel from "../../components/playground/TextToImagePanel/TextToImagePanel";
@@ -12,14 +13,15 @@ const TEXT_TO_IMAGE = "text-to-image";
 const IMAGE_TO_IMAGE = "image-to-image";
 const SPEECH_TO_TEXT = "speech-to-text";
 const TEXT_TO_SPEECH = "text-to-speech";
+const AUDIO_TO_AUDIO = "audio-to-audio";
 
-/** Functions of the Playground. Video is listed and disabled until it is built. */
-const FUNCTIONS: { value: string; label: string; enabled: boolean }[] = [
-  { value: TEXT_TO_IMAGE, label: "Text to image", enabled: true },
-  { value: IMAGE_TO_IMAGE, label: "Image to image", enabled: true },
-  { value: SPEECH_TO_TEXT, label: "Speech to text", enabled: true },
-  { value: TEXT_TO_SPEECH, label: "Text to speech", enabled: true },
-  { value: "video", label: "Video", enabled: false },
+/** Functions of the Playground, in tab order. */
+const FUNCTIONS: { value: string; label: string }[] = [
+  { value: TEXT_TO_IMAGE, label: "Text to image" },
+  { value: IMAGE_TO_IMAGE, label: "Image to image" },
+  { value: SPEECH_TO_TEXT, label: "Speech to text" },
+  { value: TEXT_TO_SPEECH, label: "Text to speech" },
+  { value: AUDIO_TO_AUDIO, label: "Audio to audio" },
 ];
 
 /**
@@ -48,7 +50,7 @@ export default function PlaygroundPage() {
           onTabSelect={handleTabSelect}
         >
           {FUNCTIONS.map((fn) => (
-            <Tab key={fn.value} value={fn.value} disabled={!fn.enabled}>
+            <Tab key={fn.value} value={fn.value}>
               {fn.label}
             </Tab>
           ))}
@@ -59,6 +61,7 @@ export default function PlaygroundPage() {
         {functionId === IMAGE_TO_IMAGE && <ImageToImagePanel />}
         {functionId === SPEECH_TO_TEXT && <SpeechToTextPanel />}
         {functionId === TEXT_TO_SPEECH && <TextToSpeechPanel />}
+        {functionId === AUDIO_TO_AUDIO && <AudioToAudioPanel />}
       </div>
     </div>
   );

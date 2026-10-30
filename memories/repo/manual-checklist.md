@@ -80,7 +80,7 @@ Run through these checks manually after building or deploying the app. Automated
 
 ## Playground: text to image (not yet run)
 
-- [ ] Playground lists three models (SD 1.5 Q4, FLUX.2 klein 4B Q4, Z-Image Turbo Q4) with sizes, licence links and Download. Only the Video tab is disabled.
+- [ ] Playground lists three models (SD 1.5 Q4, FLUX.2 klein 4B Q4, Z-Image Turbo Q4) with sizes, licence links and Download.
 - [ ] Download SD 1.5 Q4 (about 1.7 GB): per-file progress, "Model downloaded" toast, the card shows Ready. Cancel part-way: the status says cancelled; Download again resumes.
 - [ ] FLUX.2 klein and Z-Image Turbo share the Qwen3-4B text encoder. Downloading the second one fetches only its own files. Deleting one keeps the encoder while the other is downloaded; deleting both removes it. Deleting shows the bytes freed.
 - [ ] Delete and Download are refused while the model is generating or downloading.

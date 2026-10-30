@@ -22,7 +22,7 @@ pub(super) async fn delete_speech_model_files(
 }
 
 fn delete_files(models_root: &Path, recipe: &SpeechRecipe) -> Result<ModelDeletion, String> {
-    let archive = speech_catalog::archive_path(models_root, recipe);
+    let archive = speech_catalog::download_target(models_root, recipe);
     let partial = partial_path(&archive);
     let folder = speech_catalog::model_dir(models_root, recipe);
 
@@ -92,7 +92,7 @@ mod tests {
         let root = scratch.path().join("playground-models");
         let recipe = speech_catalog::find_recipe("whisper-tiny-en").expect("recipe");
         write_model(recipe, &root);
-        let archive = speech_catalog::archive_path(&root, recipe);
+        let archive = speech_catalog::download_target(&root, recipe);
         std::fs::write(&archive, b"0123456789").expect("archive");
         std::fs::write(partial_path(&archive), b"01234").expect("partial");
         let other = speech_catalog::find_recipe("moonshine-base-en").expect("other");

@@ -146,6 +146,6 @@ Each phase ends with entries in `known-issues.md`, `manual-checklist.md`, the co
 - **FLUX.2 klein 4B edit (`-r`, `--sampling-method euler`):** 256 px, 4 steps took about 49 s; the edit was correct.
 - **Z-Image Turbo** has no edit path.
 - **Process model:** each job starts a fresh `sd-cli` that loads the model and releases it afterwards; a persistent `sd-server` is a possible later option.
-- **Video:** the only disabled Playground tab (large Wan/Hunyuan models, frame-count rules).
+- **Video:** dropped from the Playground (heavy: about 1000x the compute of one image per the estimate, large Wan/Hunyuan models, WebM/WebP off in our fork build). Revisit after a faster compute path.
 - **Later idea:** a middle layer that converts other image types to jpeg for input.
 - Code facts: `memories/repo/codebase-map.md`; open items: `memories/repo/known-issues.md`.

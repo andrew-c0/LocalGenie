@@ -32,6 +32,7 @@ const result = (overrides: Partial<SpeechResult> = {}): SpeechResult => ({
   status: "ok",
   text: "hello",
   outputPath: null,
+  outputs: [],
   audioSeconds: 2,
   elapsedSeconds: 0.5,
   error: null,
@@ -41,11 +42,12 @@ const result = (overrides: Partial<SpeechResult> = {}): SpeechResult => ({
 beforeEach(() => {
   useSpeechStore.setState({
     models: null,
-    selectedModelIds: { stt: null, tts: null },
+    selectedModelIds: { stt: null, tts: null, denoise: null, separate: null },
     audio: null,
     form: DEFAULT_SPEECH_FORM,
+    enhanceKind: "denoise",
     job: null,
-    results: { stt: null, tts: null },
+    results: { stt: null, tts: null, denoise: null, separate: null },
   });
 });
 
@@ -56,15 +58,21 @@ describe("setModels", () => {
       .setModels([
         model("whisper", { downloaded: true }),
         model("kokoro", { kind: "tts", downloaded: true }),
+        model("gtcrn", { kind: "denoise", downloaded: true }),
+        model("spleeter", { kind: "separate", downloaded: true }),
       ]);
     expect(useSpeechStore.getState().selectedModelIds).toEqual({
       stt: "whisper",
       tts: "kokoro",
+      denoise: "gtcrn",
+      separate: "spleeter",
     });
   });
 
   it("keeps a selection that is still listed", () => {
-    useSpeechStore.setState({ selectedModelIds: { stt: "moonshine", tts: null } });
+    useSpeechStore.setState({
+      selectedModelIds: { stt: "moonshine", tts: null, denoise: null, separate: null },
+    });
     useSpeechStore
       .getState()
       .setModels([model("whisper", { downloaded: true }), model("moonshine")]);
@@ -74,18 +82,41 @@ describe("setModels", () => {
 
 describe("replaceModelsAfterDelete", () => {
   it("clears only the selection of the deleted model", () => {
-    useSpeechStore.setState({ selectedModelIds: { stt: "whisper", tts: "kokoro" } });
+    useSpeechStore.setState({
+      selectedModelIds: { stt: "whisper", tts: "kokoro", denoise: "gtcrn", separate: null },
+    });
     useSpeechStore
       .getState()
       .replaceModelsAfterDelete([model("whisper"), model("kokoro", { kind: "tts" })], "whisper");
-    expect(useSpeechStore.getState().selectedModelIds).toEqual({ stt: null, tts: "kokoro" });
+    expect(useSpeechStore.getState().selectedModelIds).toEqual({
+      stt: null,
+      tts: "kokoro",
+      denoise: "gtcrn",
+      separate: null,
+    });
   });
 });
 
 describe("selectModel", () => {
   it("selects the model for its own kind only", () => {
     useSpeechStore.getState().selectModel(model("kokoro", { kind: "tts" }));
-    expect(useSpeechStore.getState().selectedModelIds).toEqual({ stt: null, tts: "kokoro" });
+    expect(useSpeechStore.getState().selectedModelIds).toEqual({
+      stt: null,
+      tts: "kokoro",
+      denoise: null,
+      separate: null,
+    });
+  });
+
+  it("keeps the clean-up and split selections apart", () => {
+    useSpeechStore.getState().selectModel(model("gtcrn", { kind: "denoise" }));
+    useSpeechStore.getState().selectModel(model("spleeter", { kind: "separate" }));
+    expect(useSpeechStore.getState().selectedModelIds).toEqual({
+      stt: null,
+      tts: null,
+      denoise: "gtcrn",
+      separate: "spleeter",
+    });
   });
 });
 
@@ -96,14 +127,33 @@ describe("setForm", () => {
   });
 });
 
+describe("setEnhanceKind", () => {
+  it("switches the audio to audio task and leaves the speech input alone", () => {
+    const audio = { audioPath: "/tmp/a.wav", audioName: "a.wav" };
+    useSpeechStore.setState({ audio });
+    useSpeechStore.getState().setEnhanceKind("separate");
+    expect(useSpeechStore.getState().enhanceKind).toBe("separate");
+    expect(useSpeechStore.getState().audio).toEqual(audio);
+  });
+});
+
 describe("speech job", () => {
   it("starts a job and clears the previous result of its kind only", () => {
-    useSpeechStore.setState({ results: { stt: result(), tts: result({ kind: "tts" }) } });
+    useSpeechStore.setState({
+      results: {
+        stt: result(),
+        tts: result({ kind: "tts" }),
+        denoise: null,
+        separate: result({ kind: "separate" }),
+      },
+    });
     useSpeechStore.getState().startJob(job());
     expect(useSpeechStore.getState().job?.jobId).toBe("job-1");
     expect(useSpeechStore.getState().results).toEqual({
       stt: null,
       tts: result({ kind: "tts" }),
+      denoise: null,
+      separate: result({ kind: "separate" }),
     });
   });
 
@@ -124,6 +174,14 @@ describe("speech job", () => {
     useSpeechStore.getState().finishJob(result());
     expect(useSpeechStore.getState().results.stt?.text).toBe("hello");
     expect(useSpeechStore.getState().job).toBeNull();
+  });
+
+  it("keeps the saved files of an audio to audio job under its own kind", () => {
+    const outputs = [{ label: "Cleaned speech", path: "C:\\out\\output_16k.wav" }];
+    useSpeechStore.setState({ job: job({ kind: "denoise" }) });
+    useSpeechStore.getState().finishJob(result({ jobId: "job-1", kind: "denoise", outputs }));
+    expect(useSpeechStore.getState().results.denoise?.outputs).toEqual(outputs);
+    expect(useSpeechStore.getState().results.separate).toBeNull();
   });
 
   it("ignores a result for another job", () => {

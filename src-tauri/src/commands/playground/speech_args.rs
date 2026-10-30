@@ -14,7 +14,7 @@ pub(super) const MAX_TTS_CHARS: usize = 2000;
 pub(super) const MIN_SPEED: f32 = 0.5;
 pub(super) const MAX_SPEED: f32 = 2.0;
 /// Threads the sherpa-onnx programs run the network with.
-const NUM_THREADS: u32 = 4;
+pub(super) const NUM_THREADS: u32 = 4;
 /// The one extension sherpa-onnx reads for speech input, and the one written for speech output.
 pub(super) const WAV_EXTENSION: &str = "wav";
 
@@ -107,8 +107,8 @@ pub(super) fn checked_speed(speed: f32) -> Result<f32, String> {
     }
 }
 
-/// The audio file a transcription reads: it must exist, be a file, and end in `.wav`. The path is
-/// returned resolved, with symbolic links followed.
+/// The audio file a speech or audio job reads: it must exist, be a file, and end in `.wav`. The path
+/// is returned resolved, with symbolic links followed.
 pub(super) fn checked_audio_input(raw: &str) -> Result<PathBuf, String> {
     let path = std::fs::canonicalize(raw).map_err(|_| format!("Audio file not found: {raw}"))?;
     let is_wav = path
@@ -116,7 +116,7 @@ pub(super) fn checked_audio_input(raw: &str) -> Result<PathBuf, String> {
         .and_then(|ext| ext.to_str())
         .is_some_and(|ext| ext.eq_ignore_ascii_case(WAV_EXTENSION));
     if !is_wav || !path.is_file() {
-        return Err(format!("Only WAV audio can be transcribed: {raw}"));
+        return Err(format!("Only WAV audio can be used here: {raw}"));
     }
     Ok(path)
 }
@@ -203,14 +203,14 @@ mod tests {
     fn stt_engine(id: &str) -> SttEngine {
         match find_recipe(id).expect("recipe").engine {
             Engine::Stt(engine) => engine,
-            Engine::Tts(_) => panic!("{id} is not speech to text"),
+            _ => panic!("{id} is not speech to text"),
         }
     }
 
     fn tts_engine(id: &str) -> TtsEngine {
         match find_recipe(id).expect("recipe").engine {
             Engine::Tts(engine) => engine,
-            Engine::Stt(_) => panic!("{id} is not text to speech"),
+            _ => panic!("{id} is not text to speech"),
         }
     }
 

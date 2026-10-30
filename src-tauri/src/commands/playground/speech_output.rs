@@ -39,13 +39,13 @@ pub(super) fn parse_transcript(stdout: &str) -> Option<String> {
 
 /// Decide the outcome from what happened. A cancel wins over any exit code, since a killed process
 /// reports a failure code. A run that exits cleanly still fails when it left no transcript
-/// (speech to text) or no WAV file (text to speech).
+/// (speech to text) or no WAV file (every other kind).
 pub(super) fn speech_outcome(
     kind: SpeechKind,
     cancelled: bool,
     exit_code: Option<i32>,
     stdout: &str,
-    audio_on_disk: bool,
+    wav_written: bool,
     tail: &[String],
 ) -> SpeechOutcome {
     if cancelled {
@@ -66,11 +66,15 @@ pub(super) fn speech_outcome(
                 tail,
             )),
         },
-        SpeechKind::Tts if audio_on_disk => SpeechOutcome::Done { text: None },
-        SpeechKind::Tts => SpeechOutcome::Failed(failure_message(
-            "sherpa-onnx finished without writing a WAV file".to_string(),
-            tail,
-        )),
+        SpeechKind::Tts | SpeechKind::Denoise | SpeechKind::Separate if wav_written => {
+            SpeechOutcome::Done { text: None }
+        }
+        SpeechKind::Tts | SpeechKind::Denoise | SpeechKind::Separate => {
+            SpeechOutcome::Failed(failure_message(
+                "sherpa-onnx finished without writing a WAV file".to_string(),
+                tail,
+            ))
+        }
     }
 }
 
@@ -207,6 +211,53 @@ mod tests {
             panic!("expected a failure");
         };
         assert!(message.contains("without writing a WAV file"), "{message}");
+    }
+
+    #[test]
+    fn a_denoise_run_is_done_when_its_wav_is_there_and_its_stdout_is_not_read() {
+        let stdout = "Elapsed seconds: 0.13\nSaved to output_16k.wav\n";
+        assert_eq!(
+            speech_outcome(SpeechKind::Denoise, false, Some(0), stdout, true, &[]),
+            SpeechOutcome::Done { text: None }
+        );
+    }
+
+    #[test]
+    fn a_separate_run_is_done_when_its_wavs_are_there() {
+        assert_eq!(
+            speech_outcome(SpeechKind::Separate, false, Some(0), "", true, &[]),
+            SpeechOutcome::Done { text: None }
+        );
+    }
+
+    #[test]
+    fn an_audio_run_that_exits_cleanly_without_its_wavs_is_a_failure() {
+        for kind in [SpeechKind::Denoise, SpeechKind::Separate] {
+            let SpeechOutcome::Failed(message) =
+                speech_outcome(kind, false, Some(0), "", false, &[])
+            else {
+                panic!("{kind:?} without its WAV should fail");
+            };
+            assert!(message.contains("without writing a WAV file"), "{message}");
+        }
+    }
+
+    #[test]
+    fn an_audio_run_that_fails_or_is_cancelled_follows_the_same_rules() {
+        let tail = lines(&["Failed to read 'in.wav'"]);
+        let SpeechOutcome::Failed(message) =
+            speech_outcome(SpeechKind::Separate, false, Some(-1), "", true, &tail)
+        else {
+            panic!("expected a failure");
+        };
+        assert_eq!(
+            message,
+            "sherpa-onnx exited with code -1\nFailed to read 'in.wav'"
+        );
+        assert_eq!(
+            speech_outcome(SpeechKind::Denoise, true, None, "", false, &[]),
+            SpeechOutcome::Cancelled
+        );
     }
 
     #[test]

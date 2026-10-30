@@ -10,10 +10,10 @@ import type {
   PlaygroundImageProgress,
   PlaygroundSpeechDone,
   PlaygroundSpeechProgress,
-  SpeechResult,
 } from "../../../types";
 import { errorMessage } from "../../../utils/errorMessage";
 import { formatDuration } from "../../../utils/format";
+import { speechResultOf } from "../../../utils/speech";
 import { speechDoneTitle, speechFailedTitle } from "../../../utils/speechText";
 import { toast } from "../../../utils/toast";
 
@@ -90,17 +90,7 @@ function handleImageDone(payload: PlaygroundImageDone) {
 function handleSpeechDone(payload: PlaygroundSpeechDone) {
   const store = useSpeechStore.getState();
   const isCurrentJob = store.job?.jobId === payload.jobId;
-  const result: SpeechResult = {
-    jobId: payload.jobId,
-    kind: payload.kind,
-    status: payload.status,
-    text: payload.text ?? null,
-    outputPath: payload.outputPath ?? null,
-    audioSeconds: payload.audioSeconds ?? null,
-    elapsedSeconds: payload.elapsedSeconds ?? null,
-    error: payload.error ?? null,
-  };
-  store.finishJob(result);
+  store.finishJob(speechResultOf(payload));
 
   if (!isCurrentJob) return;
   if (payload.status === "ok") {

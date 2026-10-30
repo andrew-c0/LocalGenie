@@ -16,6 +16,8 @@ const MAX_JOB_ID_CHARS: usize = 64;
 const SLUG_CHARS: usize = 40;
 /// Name used when the prompt has no letters or digits to make a slug from.
 const FALLBACK_SLUG: &str = "image";
+/// Name used when an audio file's name has no letters or digits to make a slug from.
+const FALLBACK_AUDIO_SLUG: &str = "audio";
 /// Highest `-n` suffix tried before giving up on a free file name.
 const MAX_NAME_SUFFIX: u32 = 1000;
 
@@ -54,7 +56,22 @@ pub(super) fn image_stem(prompt: &str, timestamp: &str, seed: i64) -> String {
 /// The first `SLUG_CHARS` characters of the prompt in lower case, with every run of other
 /// characters replaced by one `-`. `image` when nothing is left.
 pub(super) fn slug_from_prompt(prompt: &str) -> String {
-    let head: String = prompt.chars().take(SLUG_CHARS).collect();
+    slug_of(prompt, FALLBACK_SLUG)
+}
+
+/// The slug of a file's name without its extension, as `slug_from_prompt` makes it. `audio` when
+/// nothing is left.
+pub(super) fn slug_from_file_stem(file: &Path) -> String {
+    let stem = file
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("");
+    slug_of(stem, FALLBACK_AUDIO_SLUG)
+}
+
+/// The slug of `text`, or `fallback` when the slug is empty.
+fn slug_of(text: &str, fallback: &str) -> String {
+    let head: String = text.chars().take(SLUG_CHARS).collect();
     let mut slug = String::with_capacity(head.len());
     for c in head.chars().flat_map(char::to_lowercase) {
         if c.is_ascii_alphanumeric() {
@@ -65,7 +82,7 @@ pub(super) fn slug_from_prompt(prompt: &str) -> String {
     }
     let trimmed = slug.trim_matches('-');
     if trimmed.is_empty() {
-        FALLBACK_SLUG.to_string()
+        fallback.to_string()
     } else {
         trimmed.to_string()
     }
@@ -217,6 +234,17 @@ mod tests {
         for empty in ["", "   ", "!!! ???", "☕☕"] {
             assert_eq!(slug_from_prompt(empty), "image", "{empty:?}");
         }
+    }
+
+    #[test]
+    fn a_file_slug_leaves_out_the_extension_and_falls_back_to_audio() {
+        assert_eq!(
+            slug_from_file_stem(Path::new(r"C:\Users\me\My Clips\Speech With Noise.WAV")),
+            "speech-with-noise"
+        );
+        assert_eq!(slug_from_file_stem(Path::new("clip_01.wav")), "clip-01");
+        assert_eq!(slug_from_file_stem(Path::new("☕☕.wav")), "audio");
+        assert_eq!(slug_from_file_stem(Path::new("")), "audio");
     }
 
     #[test]
