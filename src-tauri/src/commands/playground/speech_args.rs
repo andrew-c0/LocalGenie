@@ -36,6 +36,9 @@ pub struct SynthesizeRequest {
     pub text: String,
     pub voice_id: u32,
     pub speed: f32,
+    /// The recording a voice cloning model copies the voice of. Ignored by models with voices.
+    #[serde(default)]
+    pub reference_audio_path: Option<String>,
 }
 
 /// The text as the program is given it. The command line cannot carry non-ASCII text (sherpa-onnx
@@ -121,6 +124,24 @@ pub(super) fn checked_audio_input(raw: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// The reference recording of a voice cloning request: a WAV file that can be read and is not empty.
+/// Returned resolved, with symbolic links followed.
+pub(super) fn checked_reference_audio(raw: Option<&str>) -> Result<PathBuf, String> {
+    let raw = raw
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .ok_or("Choose a reference recording to clone the voice from.")?;
+    let path = checked_audio_input(raw)?;
+    let size = std::fs::File::open(&path)
+        .and_then(|file| file.metadata())
+        .map_err(|e| format!("Cannot read the reference recording {raw}: {e}"))?
+        .len();
+    if size == 0 {
+        return Err(format!("The reference recording is empty: {raw}"));
+    }
+    Ok(path)
+}
+
 /// The arguments for `sherpa-onnx-offline` that transcribe `audio` with the Whisper or Moonshine
 /// model in `model_dir`. The audio path is last, as sherpa-onnx expects.
 pub(super) fn transcribe_args(engine: SttEngine, model_dir: &Path, audio: &Path) -> Vec<String> {
@@ -150,9 +171,73 @@ pub(super) fn transcribe_args(engine: SttEngine, model_dir: &Path, audio: &Path)
     args
 }
 
-/// The arguments for `sherpa-onnx-offline-tts` that speak `text` with one voice of the Kokoro model
-/// in `model_dir`, writing a WAV to `output`. The text is last, as sherpa-onnx expects.
+/// How a text to speech job picks the voice: a speaker of a model with voices, or the recording a
+/// cloning model copies.
+#[derive(Debug, Clone, Copy)]
+pub(super) enum VoiceChoice<'a> {
+    Speaker { voice_id: u32, speed: f32 },
+    Reference(&'a Path),
+}
+
+/// The arguments for `sherpa-onnx-offline-tts` that speak `text` with the model in `model_dir`,
+/// writing a WAV to `output`. The text is last, as sherpa-onnx expects. Fails when the voice choice
+/// is not the kind the engine takes.
 pub(super) fn synthesize_args(
+    engine: TtsEngine,
+    model_dir: &Path,
+    text: &str,
+    voice: VoiceChoice<'_>,
+    output: &Path,
+) -> Result<Vec<String>, String> {
+    match (engine, voice) {
+        (TtsEngine::Kokoro { .. }, VoiceChoice::Speaker { voice_id, speed }) => Ok(kokoro_args(
+            engine, model_dir, text, voice_id, speed, output,
+        )),
+        (TtsEngine::PocketTts { .. }, VoiceChoice::Reference(reference)) => {
+            Ok(pocket_args(engine, model_dir, text, reference, output))
+        }
+        _ => Err("The voice choice does not fit this text to speech model.".to_string()),
+    }
+}
+
+/// The Pocket TTS argument list: the voice comes from `reference`, with no speaker id or speed.
+fn pocket_args(
+    engine: TtsEngine,
+    model_dir: &Path,
+    text: &str,
+    reference: &Path,
+    output: &Path,
+) -> Vec<String> {
+    let file = |name: &str| model_dir.join(name).display().to_string();
+    let TtsEngine::PocketTts {
+        lm_flow,
+        lm_main,
+        encoder,
+        decoder,
+        text_conditioner,
+        vocab_json,
+        token_scores_json,
+    } = engine
+    else {
+        return Vec::new();
+    };
+    vec![
+        format!("--pocket-lm-flow={}", file(lm_flow)),
+        format!("--pocket-lm-main={}", file(lm_main)),
+        format!("--pocket-encoder={}", file(encoder)),
+        format!("--pocket-decoder={}", file(decoder)),
+        format!("--pocket-text-conditioner={}", file(text_conditioner)),
+        format!("--pocket-vocab-json={}", file(vocab_json)),
+        format!("--pocket-token-scores-json={}", file(token_scores_json)),
+        format!("--num-threads={NUM_THREADS}"),
+        format!("--reference-audio={}", reference.display()),
+        format!("--output-filename={}", output.display()),
+        spoken_text_arg(text),
+    ]
+}
+
+/// The Kokoro argument list: one speaker and a speed.
+fn kokoro_args(
     engine: TtsEngine,
     model_dir: &Path,
     text: &str,
@@ -167,7 +252,10 @@ pub(super) fn synthesize_args(
         tokens,
         lexicon,
         dict_dir,
-    } = engine;
+    } = engine
+    else {
+        return Vec::new();
+    };
     vec![
         format!("--kokoro-model={}", file(model)),
         format!("--kokoro-voices={}", file(voices)),
@@ -268,10 +356,13 @@ mod tests {
             tts_engine("kokoro-int8-multi-v1"),
             dir,
             "Hello from LocalGenie.",
-            3,
-            1.5,
+            VoiceChoice::Speaker {
+                voice_id: 3,
+                speed: 1.5,
+            },
             output,
-        );
+        )
+        .expect("kokoro args");
         assert_eq!(
             args,
             vec![
@@ -293,6 +384,74 @@ mod tests {
     }
 
     #[test]
+    fn pocket_arguments_are_the_exact_list_with_the_text_last() {
+        let dir = Path::new(r"C:\models\pocket-tts-int8");
+        let reference = Path::new(r"C:\clips\me.wav");
+        let output = Path::new(r"C:\Users\me\Music\LocalGenie\speech-hi-20261029-101112.wav");
+        let args = synthesize_args(
+            tts_engine("pocket-tts-int8"),
+            dir,
+            "Hello there.",
+            VoiceChoice::Reference(reference),
+            output,
+        )
+        .expect("pocket args");
+        let file = |name: &str| dir.join(name).display().to_string();
+        assert_eq!(
+            args,
+            vec![
+                format!("--pocket-lm-flow={}", file("lm_flow.int8.onnx")),
+                format!("--pocket-lm-main={}", file("lm_main.int8.onnx")),
+                format!("--pocket-encoder={}", file("encoder.onnx")),
+                format!("--pocket-decoder={}", file("decoder.int8.onnx")),
+                format!(
+                    "--pocket-text-conditioner={}",
+                    file("text_conditioner.onnx")
+                ),
+                format!("--pocket-vocab-json={}", file("vocab.json")),
+                format!("--pocket-token-scores-json={}", file("token_scores.json")),
+                "--num-threads=4".to_string(),
+                format!("--reference-audio={}", reference.display()),
+                format!("--output-filename={}", output.display()),
+                "Hello there.".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_voice_choice_of_the_wrong_kind_is_refused() {
+        let out = Path::new("o.wav");
+        let speaker = VoiceChoice::Speaker {
+            voice_id: 0,
+            speed: 1.0,
+        };
+        let pocket = tts_engine("pocket-tts-int8");
+        assert!(synthesize_args(pocket, Path::new("m"), "a", speaker, out).is_err());
+        let kokoro = tts_engine("kokoro-int8-multi-v1");
+        let reference = VoiceChoice::Reference(Path::new("r.wav"));
+        assert!(synthesize_args(kokoro, Path::new("m"), "a", reference, out).is_err());
+    }
+
+    #[test]
+    fn the_reference_recording_must_be_a_readable_non_empty_wav() {
+        let scratch = crate::commands::playground::test_support::Scratch::new("speech-reference");
+        let wav = scratch.path().join("ref.wav");
+        std::fs::write(&wav, b"RIFF").expect("wav");
+        let empty = scratch.path().join("empty.wav");
+        std::fs::write(&empty, b"").expect("empty");
+        let txt = scratch.path().join("ref.txt");
+        std::fs::write(&txt, b"x").expect("txt");
+        let missing = scratch.path().join("missing.wav");
+
+        assert!(checked_reference_audio(Some(&wav.to_string_lossy())).is_ok());
+        assert!(checked_reference_audio(None).is_err());
+        assert!(checked_reference_audio(Some("  ")).is_err());
+        assert!(checked_reference_audio(Some(&empty.to_string_lossy())).is_err());
+        assert!(checked_reference_audio(Some(&txt.to_string_lossy())).is_err());
+        assert!(checked_reference_audio(Some(&missing.to_string_lossy())).is_err());
+    }
+
+    #[test]
     fn text_that_starts_with_a_dash_is_not_read_as_an_option() {
         assert_eq!(spoken_text_arg("-5 degrees"), " -5 degrees");
         assert_eq!(spoken_text_arg("Five degrees"), "Five degrees");
@@ -300,10 +459,13 @@ mod tests {
             tts_engine("kokoro-int8-multi-v1"),
             Path::new("m"),
             "--help",
-            0,
-            1.0,
+            VoiceChoice::Speaker {
+                voice_id: 0,
+                speed: 1.0,
+            },
             Path::new("o.wav"),
-        );
+        )
+        .expect("kokoro args");
         assert_eq!(args.last().map(String::as_str), Some(" --help"));
     }
 
@@ -367,6 +529,20 @@ mod tests {
         .expect("synthesize");
         assert_eq!(synth.voice_id, 3);
         assert_eq!(synth.speed, 1.0);
+        assert_eq!(synth.reference_audio_path, None);
+        let cloned: SynthesizeRequest = serde_json::from_value(serde_json::json!({
+            "jobId": "job-3",
+            "modelId": "pocket-tts-int8",
+            "text": "Hi",
+            "voiceId": 0,
+            "speed": 1.0,
+            "referenceAudioPath": "C:\\clips\\me.wav"
+        }))
+        .expect("synthesize with reference");
+        assert_eq!(
+            cloned.reference_audio_path.as_deref(),
+            Some("C:\\clips\\me.wav")
+        );
     }
 
     #[test]

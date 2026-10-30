@@ -14,6 +14,7 @@ const model = (id: string, overrides: Partial<SpeechModel> = {}): SpeechModel =>
   languages: [],
   downloaded: false,
   voices: [],
+  needsReference: false,
   ...overrides,
 });
 

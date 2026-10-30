@@ -10,6 +10,7 @@ import {
   audioJobBlockedReason,
   buildSynthesizeRequest,
   buildTranscribeRequest,
+  canSynthesize,
   clearDeletedSelection,
   defaultSpeechModel,
   failedSpeechResult,
@@ -38,6 +39,7 @@ const model = (overrides: Partial<SpeechModel> = {}): SpeechModel => ({
   languages: ["en"],
   downloaded: true,
   voices: [],
+  needsReference: false,
   ...overrides,
 });
 
@@ -305,6 +307,7 @@ describe("synthesizeBlockedReason", () => {
     model: tts(),
     text: "Hello there",
     voiceId: 3,
+    referencePath: null,
     jobRunning: false,
   };
 
@@ -324,6 +327,47 @@ describe("synthesizeBlockedReason", () => {
     expect(synthesizeBlockedReason({ ...ready, runtime: "checking", model: null })).toBe(
       "Checking the runtime…",
     );
+  });
+});
+
+describe("voice cloning", () => {
+  const cloner = tts({ id: "pocket-tts-int8", needsReference: true });
+  const gate = {
+    runtime: "installed" as const,
+    model: cloner,
+    text: "Hello",
+    voiceId: null,
+    referencePath: "/tmp/ref.wav",
+    jobRunning: false,
+  };
+
+  it("runs without a voice once a reference clip is chosen", () => {
+    expect(canSynthesize(gate)).toBe(true);
+  });
+
+  it("is blocked without a reference clip", () => {
+    expect(synthesizeBlockedReason({ ...gate, referencePath: null })).toBe(
+      "Choose or record a voice to copy first.",
+    );
+  });
+
+  it("still needs text", () => {
+    expect(canSynthesize({ ...gate, text: " " })).toBe(false);
+  });
+
+  it("does not need a reference for a normal model", () => {
+    expect(canSynthesize({ ...gate, model: tts(), voiceId: 3, referencePath: null })).toBe(true);
+  });
+
+  it("sends the clip and voice 0", () => {
+    expect(buildSynthesizeRequest("j", cloner, form({ text: "Hi" }), 5, "/tmp/ref.wav")).toEqual({
+      jobId: "j",
+      modelId: "pocket-tts-int8",
+      text: "Hi",
+      voiceId: 0,
+      speed: 1,
+      referenceAudioPath: "/tmp/ref.wav",
+    });
   });
 });
 

@@ -27,6 +27,7 @@ const gtcrn: SpeechModel = {
   languages: [],
   downloaded: true,
   voices: [],
+  needsReference: false,
 };
 
 describe("isEnhanceKind", () => {

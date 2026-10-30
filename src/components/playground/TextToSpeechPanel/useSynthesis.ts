@@ -9,13 +9,29 @@ import { buildSynthesizeRequest, failedSpeechResult } from "../../../utils/speec
  * A failed start is recorded here as the job's result.
  */
 export function useSynthesis(): {
-  synthesize: (model: SpeechModel, form: SpeechForm, voiceId: number) => void;
+  synthesize: (
+    model: SpeechModel,
+    form: SpeechForm,
+    voiceId: number,
+    referencePath?: string | null,
+  ) => void;
 } {
   const startJob = useSpeechStore((s) => s.startJob);
   const finishJob = useSpeechStore((s) => s.finishJob);
 
-  const synthesize = (model: SpeechModel, form: SpeechForm, voiceId: number) => {
-    const request = buildSynthesizeRequest(crypto.randomUUID(), model, form, voiceId);
+  const synthesize = (
+    model: SpeechModel,
+    form: SpeechForm,
+    voiceId: number,
+    referencePath: string | null = null,
+  ) => {
+    const request = buildSynthesizeRequest(
+      crypto.randomUUID(),
+      model,
+      form,
+      voiceId,
+      referencePath,
+    );
     startJob({
       jobId: request.jobId,
       kind: "tts",

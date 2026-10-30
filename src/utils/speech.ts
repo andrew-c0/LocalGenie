@@ -11,6 +11,7 @@ import type {
 } from "../types";
 import type { RuntimeStatus } from "./playground";
 import { formatElapsed, runtimeBlockedReason } from "./playground";
+import { REFERENCE_REQUIRED_MESSAGE } from "./speechText";
 
 /** Runtime id of sherpa-onnx in the runtime registry. Speech to text and text to speech both run on it. */
 export const SHERPA_RUNTIME_ID = "sherpa-onnx";
@@ -185,6 +186,8 @@ interface SynthesizeGate {
   model: SpeechModel | null;
   text: string;
   voiceId: number | null;
+  /** The saved reference clip, for a model that clones a voice. */
+  referencePath: string | null;
   jobRunning: boolean;
 }
 
@@ -196,6 +199,9 @@ export function synthesizeBlockedReason(gate: SynthesizeGate): string | null {
   if (!gate.model) return "Choose a model first.";
   if (!gate.model.downloaded) return "Download the model first.";
   if (!gate.text.trim()) return "Write some text first.";
+  if (gate.model.needsReference) {
+    return gate.referencePath ? null : REFERENCE_REQUIRED_MESSAGE;
+  }
   if (gate.voiceId === null) return "Choose a voice first.";
   return null;
 }
@@ -209,13 +215,29 @@ export function buildTranscribeRequest(
   return { jobId, modelId: model.id, audioPath: audio.audioPath };
 }
 
-/** The request for `playground_synthesize`. The text is trimmed. */
+/** True when Generate can run: nothing blocks it. */
+export function canSynthesize(gate: SynthesizeGate): boolean {
+  return synthesizeBlockedReason(gate) === null;
+}
+
+/** The request for `playground_synthesize`. The text is trimmed. A cloning model sends the reference clip and voice 0. */
 export function buildSynthesizeRequest(
   jobId: string,
   model: SpeechModel,
   form: SpeechForm,
   voiceId: number,
+  referencePath: string | null = null,
 ): SpeechSynthesizeRequest {
+  if (model.needsReference && referencePath) {
+    return {
+      jobId,
+      modelId: model.id,
+      text: form.text.trim(),
+      voiceId: 0,
+      speed: form.speed,
+      referenceAudioPath: referencePath,
+    };
+  }
   return {
     jobId,
     modelId: model.id,

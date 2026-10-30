@@ -21,6 +21,7 @@ const RELEASE_PREFIX: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/dow
 const SPEECH_RECOGNITION_TAG: &str = "asr-models";
 const SPEECH_SYNTHESIS_TAG: &str = "tts-models";
 const MIT_LICENSE_URL_WHISPER: &str = "https://github.com/openai/whisper/blob/main/LICENSE";
+const POCKET_TTS_LICENSE_URL: &str = "https://github.com/kyutai-labs/pocket-tts";
 const MIT_LICENSE_URL_MOONSHINE: &str =
     "https://github.com/moonshine-ai/moonshine/blob/main/LICENSE";
 
@@ -113,6 +114,16 @@ pub(super) enum TtsEngine {
         lexicon: &'static str,
         dict_dir: &'static str,
     },
+    /// Pocket TTS: voice cloning from a reference recording, with no built-in voices.
+    PocketTts {
+        lm_flow: &'static str,
+        lm_main: &'static str,
+        encoder: &'static str,
+        decoder: &'static str,
+        text_conditioner: &'static str,
+        vocab_json: &'static str,
+        token_scores_json: &'static str,
+    },
 }
 
 /// The engine of a model, which also says its kind.
@@ -155,6 +166,23 @@ impl Engine {
                 lexicon,
                 dict_dir,
             }) => vec![model, voices, tokens, lexicon, dict_dir],
+            Engine::Tts(TtsEngine::PocketTts {
+                lm_flow,
+                lm_main,
+                encoder,
+                decoder,
+                text_conditioner,
+                vocab_json,
+                token_scores_json,
+            }) => vec![
+                lm_flow,
+                lm_main,
+                encoder,
+                decoder,
+                text_conditioner,
+                vocab_json,
+                token_scores_json,
+            ],
             Engine::Denoise(engine) => vec![engine.model_file()],
             Engine::Separate(engine) => engine.model_files().to_vec(),
         }
@@ -254,8 +282,37 @@ const KOKORO_MULTI_V1: SpeechRecipe = SpeechRecipe {
     speakers: KOKORO_SPEAKERS,
 };
 
+const POCKET_TTS_INT8: SpeechRecipe = SpeechRecipe {
+    id: "pocket-tts-int8",
+    name: "Pocket TTS (voice cloning)",
+    description: "Clones a voice from a short reference recording and reads the text in it. English only, no built-in voices, and the speed cannot be changed.",
+    license: "Non-commercial (Kyutai Pocket TTS, ONNX export)",
+    license_url: POCKET_TTS_LICENSE_URL,
+    delivery: Delivery::Archive {
+        archive_name: "sherpa-onnx-pocket-tts-int8-2026-01-26.tar.bz2",
+    },
+    release_tag: SPEECH_SYNTHESIS_TAG,
+    size_bytes: 98_336_520,
+    languages: &["en"],
+    engine: Engine::Tts(TtsEngine::PocketTts {
+        lm_flow: "lm_flow.int8.onnx",
+        lm_main: "lm_main.int8.onnx",
+        encoder: "encoder.onnx",
+        decoder: "decoder.int8.onnx",
+        text_conditioner: "text_conditioner.onnx",
+        vocab_json: "vocab.json",
+        token_scores_json: "token_scores.json",
+    }),
+    speakers: &[],
+};
+
 /// The speech to text and text to speech models, in the order the Playground lists them.
-pub(super) const RECIPES: &[SpeechRecipe] = &[WHISPER_TINY_EN, MOONSHINE_BASE_EN, KOKORO_MULTI_V1];
+pub(super) const RECIPES: &[SpeechRecipe] = &[
+    WHISPER_TINY_EN,
+    MOONSHINE_BASE_EN,
+    KOKORO_MULTI_V1,
+    POCKET_TTS_INT8,
+];
 
 /// Every curated model the speech job slot runs: the speech models, then the audio models.
 pub(super) fn all_recipes() -> impl Iterator<Item = &'static SpeechRecipe> {
@@ -304,9 +361,16 @@ pub struct SpeechModel {
     pub languages: Vec<&'static str>,
     pub downloaded: bool,
     pub voices: Vec<SpeechVoice>,
+    /// True for a voice cloning model: a synthesis needs a reference recording, and `voices` is empty.
+    pub needs_reference: bool,
 }
 
 impl SpeechRecipe {
+    /// True when the model clones the voice of a reference recording instead of offering voices.
+    pub(super) fn needs_reference(&self) -> bool {
+        matches!(self.engine, Engine::Tts(TtsEngine::PocketTts { .. }))
+    }
+
     pub(super) fn kind(&self) -> SpeechKind {
         self.engine.kind()
     }
@@ -374,6 +438,7 @@ pub(super) fn describe(recipe: &SpeechRecipe, models_root: &Path) -> SpeechModel
         languages: recipe.languages.to_vec(),
         downloaded: is_downloaded(recipe, models_root),
         voices: recipe.voices(),
+        needs_reference: recipe.needs_reference(),
     }
 }
 
@@ -459,6 +524,10 @@ mod tests {
         assert_eq!(
             download_url(&WHISPER_TINY_EN),
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.en.tar.bz2"
+        );
+        assert_eq!(
+            download_url(&POCKET_TTS_INT8),
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-pocket-tts-int8-2026-01-26.tar.bz2"
         );
         assert_eq!(
             download_url(&KOKORO_MULTI_V1),
@@ -630,6 +699,7 @@ mod tests {
                 SpeechKind::Stt,
                 SpeechKind::Stt,
                 SpeechKind::Tts,
+                SpeechKind::Tts,
                 SpeechKind::Denoise,
                 SpeechKind::Denoise,
                 SpeechKind::Separate,
@@ -648,8 +718,28 @@ mod tests {
         assert_eq!(json["voices"][3]["id"], 3);
         assert_eq!(json["voices"][3]["label"], "Heart (US female)");
         assert_eq!(json["languages"][0], "en-US");
+        assert_eq!(json["needsReference"], false);
         let stt = serde_json::to_value(describe(&WHISPER_TINY_EN, scratch.path())).expect("json");
         assert_eq!(stt["kind"], "stt");
         assert_eq!(stt["voices"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn pocket_tts_is_a_cloning_model_with_no_voices() {
+        let scratch = Scratch::new("speech-pocket");
+        assert_eq!(POCKET_TTS_INT8.kind(), SpeechKind::Tts);
+        assert!(POCKET_TTS_INT8.voices().is_empty());
+        assert!(POCKET_TTS_INT8.needs_reference());
+        assert!(!KOKORO_MULTI_V1.needs_reference());
+        assert_eq!(POCKET_TTS_INT8.engine.entries().len(), 7);
+        let json = serde_json::to_value(describe(&POCKET_TTS_INT8, scratch.path())).expect("json");
+        assert_eq!(json["id"], "pocket-tts-int8");
+        assert_eq!(json["sizeBytes"], 98_336_520u64);
+        assert_eq!(json["needsReference"], true);
+        assert_eq!(json["voices"], serde_json::json!([]));
+        assert_eq!(
+            json["license"],
+            "Non-commercial (Kyutai Pocket TTS, ONNX export)"
+        );
     }
 }

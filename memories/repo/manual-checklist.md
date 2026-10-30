@@ -113,3 +113,5 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] Cancel a speech job: the status is cancelled and no process remains. Close the window during a job: the process ends. Leave the tab and return: the progress or result is still there.
 - [ ] Both speech tabs say CPU only; there is no GPU or NPU choice.
 - [ ] A device that sd-cli no longer lists is refused with the "Pick a device from the list" message.
+- [ ] Voice cloning: in Text to speech pick Pocket TTS (voice cloning) and download it (98 MB). The voice and speed controls are hidden and a Voice to copy input appears. Generate stays disabled until a clip is chosen; the output plays and sounds like the clip. Kokoro still shows its voices and speed.
+- [ ] Audio to audio (not yet checked in the app by the user beyond the first pass): clean up and split both play, Show in folder works, Cancel stops the process.

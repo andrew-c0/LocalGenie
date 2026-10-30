@@ -12,7 +12,7 @@ use super::model_delete::ModelDeletion;
 use super::model_download;
 use super::paths;
 use super::recordings;
-use super::speech_args::{self, SynthesizeRequest, TranscribeRequest, WAV_EXTENSION};
+use super::speech_args::{self, SynthesizeRequest, TranscribeRequest, VoiceChoice, WAV_EXTENSION};
 use super::speech_catalog::{self, Engine, SpeechKind, SpeechModel};
 use super::speech_delete;
 use super::speech_download;
@@ -130,7 +130,8 @@ pub async fn playground_transcribe(
 
 /// Start a text to speech job in the background and return. The speech is saved as a WAV in
 /// `<Music>/LocalGenie/` and its path comes in `playground-speech-done`. Fails at once when the
-/// model is not a text to speech model, the voice or speed is not allowed, the text is empty or too
+/// model is not a text to speech model, the voice or speed is not allowed (a voice cloning model
+/// needs a readable, non-empty WAV in `referenceAudioPath` instead and ignores both), the text is empty or too
 /// long, the model is not downloaded, the runtime is not installed, or another speech job is running.
 #[tauri::command]
 pub async fn playground_synthesize(
@@ -144,14 +145,27 @@ pub async fn playground_synthesize(
     let Engine::Tts(engine) = recipe.engine else {
         return Err(format!("{} is not a text to speech model.", recipe.name));
     };
-    if recipe.voice(request.voice_id).is_none() {
-        return Err(format!(
-            "{} has no voice {}.",
-            recipe.name, request.voice_id
-        ));
-    }
+    // A cloning model takes its voice from the reference recording and ignores voice and speed; the
+    // other models ignore the recording.
+    let reference = if recipe.needs_reference() {
+        Some(speech_args::checked_reference_audio(
+            request.reference_audio_path.as_deref(),
+        )?)
+    } else {
+        None
+    };
+    let speaker = if reference.is_some() {
+        None
+    } else {
+        if recipe.voice(request.voice_id).is_none() {
+            return Err(format!(
+                "{} has no voice {}.",
+                recipe.name, request.voice_id
+            ));
+        }
+        Some((request.voice_id, speech_args::checked_speed(request.speed)?))
+    };
     let text = speech_args::checked_text(&request.text)?;
-    let speed = speech_args::checked_speed(request.speed)?;
     let models_root = paths::models_root(&app_data_dir(&app)?);
     speech_catalog::require_downloaded(recipe, &models_root)?;
     let programs = sherpa_cli::sherpa_programs(&db).await?;
@@ -166,14 +180,18 @@ pub async fn playground_synthesize(
         file_timestamp()
     );
     let output = paths::free_path(&output_folder, &stem, WAV_EXTENSION)?;
+    let voice = match (&reference, speaker) {
+        (Some(path), _) => VoiceChoice::Reference(path),
+        (None, Some((voice_id, speed))) => VoiceChoice::Speaker { voice_id, speed },
+        (None, None) => return Err("No voice was chosen.".to_string()),
+    };
     let args = speech_args::synthesize_args(
         engine,
         &speech_catalog::model_dir(&models_root, recipe),
         &text,
-        request.voice_id,
-        speed,
+        voice,
         &output,
-    );
+    )?;
     jobs.start(
         &app,
         SpeechJob {

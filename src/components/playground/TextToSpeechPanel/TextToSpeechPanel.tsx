@@ -11,13 +11,19 @@ import {
   synthesizeBlockedReason,
   voiceOptions,
 } from "../../../utils/speech";
-import { SPEECH_CPU_NOTE, SPEED_HELP } from "../../../utils/speechText";
+import {
+  REFERENCE_HINT,
+  REFERENCE_SECTION_TITLE,
+  SPEECH_CPU_NOTE,
+  SPEED_HELP,
+} from "../../../utils/speechText";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../ui/Flex/Flex";
 import { HelpLabel } from "../../ui/HelpLabel/HelpLabel";
 import { OptionDropdown } from "../../ui/OptionDropdown/OptionDropdown";
 import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
 import { Body, Meta } from "../../ui/Typography/Typography";
+import { AudioInput } from "../AudioInput/AudioInput";
 import { RuntimeNotice } from "../RuntimeNotice/RuntimeNotice";
 import { SpeechJobProgress } from "../SpeechJobProgress/SpeechJobProgress";
 import { useSpeechJobCancel } from "../SpeechJobProgress/useSpeechJobCancel";
@@ -35,18 +41,22 @@ export default function TextToSpeechPanel() {
   const setForm = useSpeechStore((s) => s.setForm);
   const job = useSpeechStore((s) => s.job);
   const result = useSpeechStore((s) => s.results.tts);
+  const audio = useSpeechStore((s) => s.audio);
   const { synthesize } = useSynthesis();
   const cancel = useSpeechJobCancel();
 
   const selected = models?.find((m) => m.id === selectedModelId && m.kind === "tts") ?? null;
   const voices = selected?.voices ?? [];
   const voiceId = resolveVoiceId(form.voiceId, voices);
+  const needsReference = selected?.needsReference ?? false;
+  const referencePath = audio?.audioPath ?? null;
   const ttsJob = job?.kind === "tts" ? job : null;
   const blockedReason = synthesizeBlockedReason({
     runtime: runtime.status,
     model: selected,
     text: form.text,
     voiceId,
+    referencePath,
     jobRunning: job !== null,
   });
 
@@ -72,36 +82,46 @@ export default function TextToSpeechPanel() {
               />
             </Field>
 
-            <OptionDropdown
-              label="Voice"
-              fullWidth
-              options={voiceOptions(voices)}
-              value={voiceId === null ? null : String(voiceId)}
-              onChange={(value) => setForm({ voiceId: Number(value) })}
-              disabled={voiceId === null}
-            />
+            {needsReference ? (
+              <Field label={REFERENCE_SECTION_TITLE}>
+                <AudioInput audio={audio} disabled={job !== null} hint={REFERENCE_HINT} />
+              </Field>
+            ) : (
+              <>
+                <OptionDropdown
+                  label="Voice"
+                  fullWidth
+                  options={voiceOptions(voices)}
+                  value={voiceId === null ? null : String(voiceId)}
+                  onChange={(value) => setForm({ voiceId: Number(value) })}
+                  disabled={voiceId === null}
+                />
 
-            <Field label={<HelpLabel label="Speed" help={SPEED_HELP} />}>
-              <Flex gap="m" align="center">
-                <div className="flex-grow">
-                  <Slider
-                    min={SPEED_MIN}
-                    max={SPEED_MAX}
-                    step={SPEED_STEP}
-                    value={form.speed}
-                    onChange={(_, data) => setForm({ speed: data.value })}
-                  />
-                </div>
-                <Body>{form.speed.toFixed(1)}x</Body>
-              </Flex>
-            </Field>
+                <Field label={<HelpLabel label="Speed" help={SPEED_HELP} />}>
+                  <Flex gap="m" align="center">
+                    <div className="flex-grow">
+                      <Slider
+                        min={SPEED_MIN}
+                        max={SPEED_MAX}
+                        step={SPEED_STEP}
+                        value={form.speed}
+                        onChange={(_, data) => setForm({ speed: data.value })}
+                      />
+                    </div>
+                    <Body>{form.speed.toFixed(1)}x</Body>
+                  </Flex>
+                </Field>
+              </>
+            )}
 
             <Flex gap="m" align="center" wrap>
               <Button
                 appearance="primary"
                 disabled={blockedReason !== null}
                 onClick={() => {
-                  if (selected && voiceId !== null) synthesize(selected, form, voiceId);
+                  if (!selected) return;
+                  if (needsReference) synthesize(selected, form, 0, referencePath);
+                  else if (voiceId !== null) synthesize(selected, form, voiceId);
                 }}
               >
                 Generate

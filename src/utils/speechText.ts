@@ -11,6 +11,13 @@ export const SPEED_HELP =
 export const AUDIO_INPUT_HINT =
   "Choose a .wav file, or record from the microphone. A longer recording takes longer to transcribe.";
 
+export const REFERENCE_SECTION_TITLE = "Voice to copy";
+
+export const REFERENCE_HINT =
+  "Choose a .wav file, or record from the microphone. A clean 5 to 15 second clip of one speaker works best.";
+
+export const REFERENCE_REQUIRED_MESSAGE = "Choose or record a voice to copy first.";
+
 export const NOT_WAV_MESSAGE = "Choose a .wav file.";
 
 export const EMPTY_RECORDING_MESSAGE = "Nothing was recorded.";

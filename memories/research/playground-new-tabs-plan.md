@@ -30,5 +30,13 @@ No OCR engine is installed. Options, to be spiked in this order:
 - C. A vision model through GenieX (Qwen3-VL class): already in the app via chat, handles layout and handwriting, slow.
 UI: image in, text out (copy, save .txt), maybe language choice.
 
+## 1b. Voice cloning (sherpa-onnx Pocket TTS, in the Text to speech tab)
+
+Added after audio to audio, at the user's request. Same runtime and program (`sherpa-onnx-offline-tts`).
+- Spike: Pocket TTS int8 (98 MB `.tar.bz2`, `tts-models` tag) cloned a voice from `bria.wav`; 24 kHz output; RTF 0.38 on 1 thread, 0.26 on 4 threads. Needs a reference wav only (no transcript). English. ZipVoice (needs reference text, vocoder and lexicon; zh/en) was left out.
+- Licence conflict: the archive `LICENSE` is CC-BY 4.0 but its README says the ONNX export is non-commercial. The card shows "Non-commercial (Kyutai Pocket TTS, ONNX export)" until checked.
+- Contract: `SpeechModel.needsReference` (true for `pocket-tts-int8`, no voices); `SpeechSynthesizeRequest.referenceAudioPath` (wav). Voice and speed are ignored for it. The reference clip uses the shared audio slot, like audio to audio.
+- Status: built and checked by tests and a real CLI run; not tested in the app by the user yet (see manual checklist).
+
 ## Status
-Plan written. Next: spike and implement 1.
+Audio to audio: done, user-tested, committed. Voice cloning: built, committed, user test pending. Next: 2 image upscaling spike.
