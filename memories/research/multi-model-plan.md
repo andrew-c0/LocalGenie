@@ -1,6 +1,6 @@
 # Multiple loaded models, one per compute
 
-Plan, written 2026-10-30. Not started. Source of the idea: the user wants dedicated models for different jobs loaded at once (for example a chat model on the NPU and a vision model on the CPU), with a way to hand work between them later.
+Plan, written 2026-10-30. Status (knowledge sync, 2026-10-30): steps 1 and 2 are built but not manually tested; steps 3 and 4 are not started. Open gaps are in `memories/repo/known-issues.md`. Source of the idea: the user wants dedicated models for different jobs loaded at once (for example a chat model on the NPU and a vision model on the CPU), with a way to hand work between them later.
 
 ## Findings that make it possible
 - A `geniex serve` process holds one model. Loading another model on it drops the first (`memories/repo/geniex-server-behaviour.md`). So one server per model is the way to hold several.
@@ -28,13 +28,15 @@ Plan, written 2026-10-30. Not started. Source of the idea: the user wants dedica
 11. **Handoff between models and tools** is out of scope here. It overlaps the native tools and agentic mode tasks.
 
 ## Steps
-1. **Per-compute servers (backend and settings).**
+1. **Per-compute servers (backend and settings).** Built (afed418, 3c79047, 0cc9a85); not manually tested.
    - Settings: a port per compute (CPU, GPU, NPU), empty means random. Stored in `user_preferences`.
    - Backend: per-compute start, stop and status; a map of running servers by compute; stop all on exit; random port picked and kept. Existing single-server commands keep working for the active compute until the frontend moves over.
    - Frontend: the Settings fields and the service wrappers. No selector change yet.
-2. **RAM estimate and load check.** Estimate per downloaded model, shown in the dropdown; a headroom setting; the check before a load.
-3. **Multi-load in the selector.** The loaded and active states; chat bound to the active server; per-conversation rule from gap 6.
-4. **Benchmarks and OCR** follow the active and slot rules (gaps 7 and 8).
+   - Built state: a random port is not stored (known-issues). The per-compute ports are saved, but no load path uses them yet, so the UI still uses one server, on the main port.
+2. **RAM estimate and load check.** Estimate per downloaded model, shown in the dropdown; a headroom setting; the check before a load. Built (ae6e31a, 0cc9a85); not manually tested.
+   - Built state: the estimate and the headroom check show as a warning in the selector row. Nothing checks or blocks before a load, so gap 1's "refuses" option is not done.
+3. **Multi-load in the selector.** Not started.
+4. **Benchmarks and OCR** follow the active and slot rules (gaps 7 and 8). Not started.
 
 Each step ends in a state the app runs in, so the work can stop after any of them.
 

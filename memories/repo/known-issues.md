@@ -1,6 +1,6 @@
 # Known issues
 
-Status labels: **code-verified** = read in the source (committed up to 694a036, or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-26, 2026-10-27, 2026-10-28 or 2026-10-29 syncs (the benchmark suite and the chat settings were read, not run). Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
+Status labels: **code-verified** = read in the source (committed up to 694a036, or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-26 to 2026-10-30 syncs (the benchmark suite and the chat settings were read, not run). The multi-server live test of 2026-10-30 is recorded in `memories/research/multi-model-plan.md`, not re-run here. Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
 
 ## Active
 - Model load/chat hangs: the GenieX warmup request in `load_model` may never get a response. The warmup carries the model's load params (committed in 6068a81), so it matches chat. Not re-validated (runtime-unverified).
@@ -17,6 +17,11 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Hub facets and the filter panel (committed 2122ed2; code-read, runtime-unverified): the filters are sent as Hub tags and `num_parameters`, and the tag catalogue comes from `/api/models-tags-by-type`. The Hub's tag and filter semantics are not checked against a live response in this sync.
 - Fixed: the local model lookups in `pages/models/useHubModelDetail.ts` matched rows with a substring test (`repoId.includes(name)`). They now match the exact id or the id with a precision suffix (`isSameRepo`).
 - Vision and audio probes match whole words only (`has_word`), so a reply that names the colour or number only inside another word does not count (`capability_scan.rs` tests `names_match_whole_words_only`).
+
+## Multiple servers and RAM estimate (committed afed418 to 0cc9a85; runtime-unverified)
+- Random-port servers are not stored: a server started on a random port (`free_port`, no port set) is tracked only in memory while the app runs (`server_processes`). Its port is not saved, so after a restart the app cannot find it. No code starts such a server yet (`serverPortForCompute` has no caller).
+- RAM estimate constants are unverified: the 10% compute buffer with a 256 MiB floor, the 120% and 110% flat factors, the 8192 context cap and the 4096 fallback (`ram_estimate.rs`, `model_ram.rs`) are not checked against the measured memory of a loaded model.
+- Nothing yet loads more than one model from the UI: the loader, chat, OCR and benchmarks use the main port only, and the per-compute ports are not used by the selector.
 
 ## Playground and optional runtimes (committed 42dea0c..b9617e6; runtime-unverified)
 - **GPU (Adreno, OpenCL): blank white image with CFG above 1.** sd.cpp's batched CFG forward breaks on the OpenCL backend (CFG 1.0 works). The app passes `--batched-cfg off` for every non-CPU device and for every init-image (Image to image re-draw) job on CPU too: batched CFG gave blank images there as well (maintainer-verified; `playground/args.rs`). The cause inside ggml-opencl is not confirmed. Re-test both cases after each fork sync; drop the flag when fixed. Reported by the maintainer (research notes, section 11, 2026-10-29), not re-run here.
@@ -93,7 +98,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 ## Operational notes
 - No per-model unload endpoint in the GenieX CLI; stopping the server is the only unload.
 - The port is configurable and persisted in `user_preferences` (default `18181`).
-- The running server PID is cleared when the `geniex serve` child exits, so a crashed server can be started again (code-verified in `server.rs`; runtime-unverified).
+- The tracked entry for a port is removed when its `geniex serve` child exits, so a crashed server can be started again on that port (code-verified in `server.rs` `untrack_server`; runtime-unverified).
 
 ## Resolved (code-verified; runtime-unverified)
 - Benchmark "Run Benchmark" only toggled visual state, and run history was in memory only (`benchmarkStore`). A suite now runs through `start_benchmark_run` and each run is saved to `benchmark_runs` (63f1fbc: `commands/benchmark_runner.rs`, `commands/benchmark_runs.rs`). The Playground, Performance Dashboard and `benchmarkStore` were removed, with their disabled Export and Save Preset buttons.
