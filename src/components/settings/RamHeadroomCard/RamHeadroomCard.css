@@ -4,6 +4,17 @@
   gap: var(--spacingVerticalS);
 }
 
+/* The slider fills the row; its default is a fixed minimum width. */
+.ram-headroom-card__slider {
+  width: 100%;
+}
+
+/* Fixed width so the value does not shift the slider as it moves between 1 % and 50 %. */
+.ram-headroom-card__value {
+  min-width: 4.5em;
+  text-align: right;
+}
+
 .ram-headroom-card__actions {
   display: flex;
   align-items: center;
