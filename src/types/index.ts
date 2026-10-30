@@ -271,6 +271,20 @@ export interface ServerSettings {
   keepalive: number;
 }
 
+/** RAM estimate for one downloaded model at one precision, from `model_ram_estimates`. Bytes. */
+export interface ModelRamEstimate {
+  /** The model's GenieX name (`org/repo`). */
+  name: string;
+  /** Precision label; empty when the model names none. */
+  precision: string;
+  weightsBytes: number;
+  kvBytes: number;
+  extraBytes: number;
+  totalBytes: number;
+  /** True when the estimate used a flat factor or the model's files could not be measured. */
+  approximate: boolean;
+}
+
 /** Settings for one chat request: sampling plus the load parameters the server keys its cache on. */
 export type ChatSettings = GenerationSettings & ModelLoadParams;
 

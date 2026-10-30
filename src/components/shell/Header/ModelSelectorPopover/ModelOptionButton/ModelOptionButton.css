@@ -18,6 +18,15 @@
   min-width: 0;
 }
 
+/* The name sits on its own line; the RAM note goes under it. Long names truncate. */
+.model-option__name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Quant chip sits at the left of its column. */
 .model-table__cell--quant {
   display: flex;

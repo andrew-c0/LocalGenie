@@ -4,8 +4,10 @@ import { precisionInfo } from "../../../../../services/hubApi";
 import type { ModelInfo } from "../../../../../types";
 import { shortName } from "../../../../../utils/format";
 import type { CapabilityBadge } from "../../../../../utils/modelCapabilities";
+import type { ModelRamLine } from "../../../../../utils/modelRam";
 import { bitsBadgeColor } from "../../../../../utils/quantBadge";
 import { ModelCapabilityIcons } from "./ModelCapabilityIcons/ModelCapabilityIcons";
+import { ModelRamNote } from "./ModelRamNote/ModelRamNote";
 import "./ModelOptionButton.css";
 
 export interface ModelOptionButtonProps {
@@ -17,11 +19,14 @@ export interface ModelOptionButtonProps {
   onSelect: (name: string) => void;
   /** Confirmed capability icons for this row. Empty when none are confirmed or not loaded yet. */
   badges?: CapabilityBadge[];
+  /** RAM estimate line under the name. Null when there is no estimate yet. */
+  ram?: ModelRamLine | null;
 }
 
 /**
  * One selectable installed model in the model selector popover, drawn as a table row. The cells are
  * name, quant, size and capabilities; the column widths come from the list (ModelSelectorPopover.css).
+ * The name cell also carries the model's RAM estimate under the name.
  * The capabilities cell holds the capability icons, then the status: an Active badge for an active
  * model that is not loaded on the server. Loading progress is shown by the footer button, not the row.
  * Loaded rows carry no text status. Clicking any row that is not active loads it, or switches to it
@@ -34,6 +39,7 @@ export function ModelOptionButton({
   disabled,
   onSelect,
   badges = [],
+  ram = null,
 }: ModelOptionButtonProps) {
   const precision = model.precisions.length > 0 ? model.precisions[0] : null;
 
@@ -57,7 +63,10 @@ export function ModelOptionButton({
     >
       {/* Every cell is always rendered so rows without a quant or capabilities still line up. */}
       <span className="model-table__row">
-        <span className="model-table__cell model-table__cell--name">{shortName(model.name)}</span>
+        <span className="model-table__cell model-table__cell--name">
+          <span className="model-option__name">{shortName(model.name)}</span>
+          {ram && <ModelRamNote ram={ram} />}
+        </span>
         <span className="model-table__cell model-table__cell--quant">
           {precision && (
             <Badge

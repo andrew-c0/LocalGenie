@@ -23,11 +23,13 @@ import { COMPUTE_TARGETS, type ComputeChoice, useModelStore } from "../../../../
 import type { ModelInfo } from "../../../../types";
 import { FAMILY_ALL, familyFilterOptions, matchesFamily } from "../../../../utils/modelFamily";
 import { shortModelKey } from "../../../../utils/modelKey";
+import { modelRamLine } from "../../../../utils/modelRam";
 import { Flex } from "../../../ui/Flex/Flex";
 import { Body, Meta } from "../../../ui/Typography/Typography";
 import { LOADING_UNLOAD } from "../useModelLoader";
 import { CapabilityModelOption } from "./CapabilityModelOption/CapabilityModelOption";
 import type { ModelOptionButtonProps } from "./ModelOptionButton/ModelOptionButton";
+import { useRamSnapshot } from "./useRamSnapshot";
 import "./ModelSelectorPopover.css";
 
 /** Label + description for each compute target. */
@@ -75,7 +77,9 @@ export default function ModelSelectorPopover({
     }
   }, [selectorOpen]);
 
-  const familyOptions = useMemo(() => familyFilterOptions(models.map((m) => m.name)), [models]);
+  const modelNames = useMemo(() => models.map((m) => m.name), [models]);
+  const ramSnapshot = useRamSnapshot(selectorOpen, modelNames);
+  const familyOptions = useMemo(() => familyFilterOptions(modelNames), [modelNames]);
   const activeFamily = familyOptions.some(([id]) => id === family) ? family : FAMILY_ALL;
 
   const { loadedModels, readyModels } = useMemo(() => {
@@ -111,13 +115,17 @@ export default function ModelSelectorPopover({
     return serverStatus.models.some((lm) => shortModelKey(lm) === key);
   };
 
-  const optionProps = (m: ModelInfo): ModelOptionButtonProps => ({
-    model: m,
-    isActive: activeBase !== null && activeBase === (m.name.split("/").pop() ?? m.name),
-    loadedHere: isLoadedOnServer(m),
-    disabled: loading !== null,
-    onSelect,
-  });
+  const optionProps = (m: ModelInfo): ModelOptionButtonProps => {
+    const loadedHere = isLoadedOnServer(m);
+    return {
+      model: m,
+      isActive: activeBase !== null && activeBase === (m.name.split("/").pop() ?? m.name),
+      loadedHere,
+      disabled: loading !== null,
+      onSelect,
+      ram: modelRamLine(ramSnapshot, m, loadedHere),
+    };
+  };
 
   // Every row goes through the same wrapper, so each row loads its capability icons once, on mount.
   const renderOption = (m: ModelInfo) => <CapabilityModelOption key={m.name} {...optionProps(m)} />;

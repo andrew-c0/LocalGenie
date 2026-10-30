@@ -1,0 +1,14 @@
+/* Secondary line under a model name. Inline so the icon sits on the text baseline. */
+.model-ram-note {
+  display: flex;
+  align-items: center;
+  gap: var(--spacingHorizontalXS);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-ram-note--warning {
+  color: var(--colorPaletteDarkOrangeForeground1);
+}
