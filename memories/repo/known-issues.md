@@ -18,8 +18,8 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Fixed: the local model lookups in `pages/models/useHubModelDetail.ts` matched rows with a substring test (`repoId.includes(name)`). They now match the exact id or the id with a precision suffix (`isSameRepo`).
 - Vision and audio probes match whole words only (`has_word`), so a reply that names the colour or number only inside another word does not count (`capability_scan.rs` tests `names_match_whole_words_only`).
 
-## RAM estimate (committed ae6e31a to 0cc9a85; runtime-unverified)
-- RAM estimate constants are unverified: the 10% compute buffer with a 256 MiB floor, the 120% and 110% flat factors, the 8192 context cap and the 4096 fallback (`ram_estimate.rs`, `model_ram.rs`) are not checked against the measured memory of a loaded model.
+## RAM estimate (committed ae6e31a to 0cc9a85; tested in the app by the user, 2026-10-31)
+- RAM estimate constants are not validated: the 10% compute buffer with a 256 MiB floor, the 120% and 110% flat factors, the 8192 context cap and the 4096 fallback (`ram_estimate.rs`, `model_ram.rs`) are not checked against the measured memory of a loaded model.
 
 ## Playground and optional runtimes (committed 42dea0c..b9617e6; runtime-unverified)
 - **GPU (Adreno, OpenCL): blank white image with CFG above 1.** sd.cpp's batched CFG forward breaks on the OpenCL backend (CFG 1.0 works). The app passes `--batched-cfg off` for every non-CPU device and for every init-image (Image to image re-draw) job on CPU too: batched CFG gave blank images there as well (maintainer-verified; `playground/args.rs`). The cause inside ggml-opencl is not confirmed. Re-test both cases after each fork sync; drop the flag when fixed. Reported by the maintainer (research notes, section 11, 2026-10-29), not re-run here.
@@ -38,7 +38,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - **OCR cancel does not stop the server.** A cancel drops the HTTP request; the GenieX server may keep generating until it notices the closed connection (`ocr_job.rs`). Code-read.
 - **OCR needs the GenieX server running.** The run fails with "Start the GenieX server first" otherwise; the tab can start it. Whether the server loads the OCR model on the first request, and the `compute` / `vit_compute` request fields, are read from the code only (see `geniex-server-behaviour.md` for what is verified).
 - **Duplicated server-start sequence.** `components/playground/OcrPanel/useOcrServer.ts` repeats the start sequence of `shell/Header/useModelLoader.ts` (read server settings, `startServer` on the configured port, `setServerStatus`, `setServerOptions`). Chat has no shared function for it, so a change to one must be mirrored by hand. Code-read; not unified.
-- **Nothing in the Playground or Runtimes areas has been run in the app**: install, update, uninstall, model download and delete, generation, cancel and the device list are runtime-unverified. The maintainer's test runs cover the Rust and TypeScript code only.
+- **Runtime status of the Playground**: text to image, image to image, speech, audio to audio, image upscaling and OCR have been run in the app by the user. Voice cloning is still unverified there; the Runtimes update and uninstall flows have no recorded result.
 
 ## Qualcomm AI Hub tab (committed 7664d01..55219bc; code-read 2026-10-28, runtime-unverified)
 - Reported on 2026-10-28 (not re-run here): runtime 11 (QAIRT Genie bundles: `genie_config.json` plus `ctx-bins`) and runtime 12 (llama.cpp GGUF) load in GenieX. Runtime 6 (Genie bundle) failed to load because it had no `metadata.json`; runtimes 2 (QNN DLC) and 3 (QNN context binary) failed on import or load. Runtimes 2, 3 and 6 are not listed in the tab now (see `codebase-map.md`). The `metadata.json` requirement matches GenieX's `localfs` zip reader (`sdk/model-manager/crates/core/src/source/localfs.rs`, read-only checkout `C:\Work\GenieX`).

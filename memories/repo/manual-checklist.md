@@ -115,9 +115,3 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] A device that sd-cli no longer lists is refused with the "Pick a device from the list" message.
 - [ ] Voice cloning: in Text to speech pick Pocket TTS (voice cloning) and download it (98 MB). The voice and speed controls are hidden and a Voice to copy input appears. Generate stays disabled until a clip is chosen; the output plays and sounds like the clip. Kokoro still shows its voices and speed.
 - [ ] Audio to audio (not yet checked in the app by the user beyond the first pass): clean up and split both play, Show in folder works, Cancel stops the process.
-
-## RAM headroom and estimate (ae6e31a, 0cc9a85)
-- [ ] Settings > RAM headroom card loads 10, saves a valid value and rejects blank or above 50.
-- [ ] The model selector shows "RAM ~X GB" under each model; compare with Task Manager after loading one (the constants are a guess).
-- [ ] With headroom 50, models that do not fit show the orange warning and tooltip; with 0 they do not. Loading is not blocked.
-- [ ] A model already loaded shows its estimate but no warning. The names still truncate at the popover width.

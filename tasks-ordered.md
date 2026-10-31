@@ -11,7 +11,9 @@ Source: `tasks.md`. Done items are removed; what is done and what was dropped is
 ## Done (removed from the list)
 - Qualcomm AI Hub models in downloads (merged in PR #2, not tested).
 - Code quality analysis and agent updates (merged in PR #2, not tested).
-- Playground page and the model-type research, tested there: text to image, image to image, text to speech, speech to text, audio to audio. Also built: voice cloning, image upscaling and OCR (not tested in the app yet; see `memories/repo/manual-checklist.md`).
+- Playground page and the model-type research, tested there: text to image, image to image, text to speech, speech to text, audio to audio, image upscaling and OCR (the last two tested in the app on 2026-10-31).
+- RAM estimate per downloaded model, the RAM headroom setting with its slider and memory bar, and the selector warning (tested).
+- Built, not tested in the app: voice cloning in Text to speech (Pocket TTS). Steps in `memories/repo/manual-checklist.md`.
 - Runtime and compute compatibility is written up in `memories/repo/runtime-compatibility.md`.
 
 ## Scrapped
