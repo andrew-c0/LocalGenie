@@ -18,33 +18,8 @@
   min-width: 0;
 }
 
-/* Name and status share the first line. The name truncates; the status never shrinks. */
-.model-option__title {
-  display: flex;
-  align-items: center;
-  gap: var(--spacingHorizontalXS);
-  min-width: 0;
-}
-
-/* Long names truncate with an ellipsis. */
+/* The name sits on its own line; the RAM note goes under it. Long names truncate. */
 .model-option__name {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Status badge or text, and the spinner while this row's model loads. */
-.model-option__status {
-  display: flex;
-  align-items: center;
-  gap: var(--spacingHorizontalXS);
-  flex-shrink: 0;
-}
-
-/* Device the loaded server reports, under the name. */
-.model-option__device {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -56,4 +31,13 @@
 .model-table__cell--quant {
   display: flex;
   align-items: center;
+}
+
+/* Status (Active badge, spinner) at the right end of the capabilities column. */
+.model-option__status {
+  display: flex;
+  align-items: center;
+  gap: var(--spacingHorizontalXS);
+  margin-left: auto;
+  flex-shrink: 0;
 }

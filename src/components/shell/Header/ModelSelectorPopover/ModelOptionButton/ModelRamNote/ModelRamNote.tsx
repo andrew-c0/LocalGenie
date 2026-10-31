@@ -5,8 +5,8 @@ import { Meta } from "../../../../../ui/Typography/Typography";
 import "./ModelRamNote.css";
 
 /**
- * The RAM estimate under a model's name. A model that does not fit the free RAM reads "Won't load" in
- * the warning colour, with a warning icon; the tooltip gives the same reason the loader refuses it with.
+ * The RAM estimate under a model's name. A model that does not fit the free RAM gets a warning colour
+ * and a warning icon, and the reason shows in a tooltip. It is a warning only; loading is not blocked.
  */
 export function ModelRamNote({ ram }: { ram: ModelRamLine }) {
   if (!ram.warning) {

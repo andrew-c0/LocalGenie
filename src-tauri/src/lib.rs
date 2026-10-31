@@ -2,8 +2,8 @@ mod aihub_proto;
 mod commands;
 mod gguf;
 pub mod model_capabilities;
-pub mod model_settings;
 mod ram_estimate;
+pub mod model_settings;
 mod tray;
 
 pub mod entities;
@@ -78,7 +78,6 @@ pub fn run() {
             models::set_model_type,
             capabilities::get_model_capabilities,
             capabilities::get_context_memory,
-            model_ram::model_ram_estimates,
             capability_scan::load_model_capabilities,
             capability_scan::scan_model_capabilities,
             capability_scan::cancel_capability_scan,
@@ -86,9 +85,6 @@ pub fn run() {
             server::start_server,
             server::stop_server,
             server::get_server_status,
-            server::list_servers,
-            server::stop_all_servers,
-            server::free_port,
             // Chat
             chat::chat_completion,
             chat::cancel_chat_completion,
@@ -110,6 +106,7 @@ pub fn run() {
             logs::clear_server_logs,
             // System
             system::get_system_memory,
+            model_ram::model_ram_estimates,
             system::get_platform_info,
             system_usage::get_system_usage,
             // Chat attachments (image, audio, text picked for a message)
@@ -198,7 +195,14 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 let state = window.state::<commands::AppState>();
-                server::kill_all_servers_sync(&state);
+                let pid = state
+                    .server_process
+                    .lock()
+                    .ok()
+                    .and_then(|mut proc| proc.take());
+                if let Some(pid) = pid {
+                    server::kill_process_sync(pid);
+                }
                 window
                     .state::<playground::PlaygroundJobs>()
                     .kill_active_sync();

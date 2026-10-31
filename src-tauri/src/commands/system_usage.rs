@@ -31,7 +31,10 @@ const MAX_PROCESS_DEPTH: usize = 32;
 /// `port` is the GenieX server port. It finds the server when the app did not start it.
 #[tauri::command]
 pub async fn get_system_usage(state: State<'_, AppState>, port: u16) -> Result<SystemUsage, String> {
-    let server_pid = super::server::tracked_pid(&state, port)?;
+    let server_pid = *state
+        .server_process
+        .lock()
+        .map_err(|e| format!("server state unavailable: {e}"))?;
     tokio::task::spawn_blocking(move || sample_usage(server_pid, port))
         .await
         .map_err(|e| format!("system usage probe failed: {e}"))

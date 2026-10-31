@@ -487,9 +487,12 @@ async fn execute(
     cancel: &AtomicBool,
 ) -> RunResult {
     let client = app.state::<AppState>().http_client.clone();
-    let pid = super::server::tracked_pid(&app.state::<AppState>(), request.port)
+    let pid = app
+        .state::<AppState>()
+        .server_process
+        .lock()
         .ok()
-        .flatten();
+        .and_then(|guard| *guard);
     let url = format!("http://127.0.0.1:{}/v1/chat/completions", request.port);
     let settings = match settings_for(request) {
         Ok(settings) => settings,

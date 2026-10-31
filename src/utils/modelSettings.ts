@@ -33,12 +33,6 @@ export const DEFAULT_SERVER_SETTINGS: ServerSettings = {
   keepalive: 300,
 };
 
-/**
- * Keepalive (seconds) for a server that hosts loaded models, used while the user has not set one.
- * A loaded model then stays loaded for an hour of idle time instead of five minutes.
- */
-export const LOADED_MODEL_KEEPALIVE = 3600;
-
 /** Speculative decoding types accepted by `geniex serve --spec-type` (one at a time in the UI). */
 export const SPEC_TYPES = [
   "draft-mtp",
@@ -196,4 +190,10 @@ export function chatSettingsFor(
     ...(generation as ChatSettings),
     ...resolveLoadParams(stored, engine, fallbackCompute, nativeContext),
   };
+}
+
+/** True when two server setting sets would start the same server. */
+export function sameServerOptions(a: ServerSettings | null, b: ServerSettings): boolean {
+  if (!a) return false;
+  return a.origins === b.origins && a.keepalive === b.keepalive;
 }

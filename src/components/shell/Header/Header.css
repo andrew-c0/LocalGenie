@@ -12,14 +12,6 @@
   overflow: hidden;
 }
 
-/* The model name truncates first; the compute and "+N loaded" badges keep their size beside it. */
-.header .header__model-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* Connection status:a square the height of the model dropdown, keeping the tint badge border and background. */
 .header .header__status {
   width: 32px;

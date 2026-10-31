@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-type ToastKind = "success" | "error" | "info" | "warning";
+type ToastKind = "success" | "error" | "info";
 type Notifier = (kind: ToastKind, title: string, body?: ReactNode) => void;
 
 let notifier: Notifier | null = null;
@@ -17,6 +17,5 @@ export function registerToastNotifier(fn: Notifier | null) {
 export const toast = {
   success: (title: string, body?: ReactNode) => notifier?.("success", title, body),
   info: (title: string, body?: ReactNode) => notifier?.("info", title, body),
-  warning: (title: string, body?: ReactNode) => notifier?.("warning", title, body),
   error: (title: string, body?: ReactNode) => notifier?.("error", title, body),
 };

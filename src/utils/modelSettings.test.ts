@@ -8,6 +8,7 @@ import {
   resolveLoadParams,
   SCAN_RECIPE,
   sameModel,
+  sameServerOptions,
   usesDraftModel,
 } from "./modelSettings";
 
@@ -166,5 +167,15 @@ describe("chatSettingsFor", () => {
       ngl: -1,
       compute: "npu",
     });
+  });
+});
+
+describe("sameServerOptions", () => {
+  const options = { origins: "*", keepalive: 300 };
+
+  it("matches identical server settings and rejects any difference", () => {
+    expect(sameServerOptions(options, { ...options })).toBe(true);
+    expect(sameServerOptions(options, { ...options, keepalive: 60 })).toBe(false);
+    expect(sameServerOptions(null, options)).toBe(false);
   });
 });

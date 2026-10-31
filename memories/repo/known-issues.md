@@ -1,6 +1,6 @@
 # Known issues
 
-Status labels: **code-verified** = read in the source (committed up to 694a036, or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-26 to 2026-10-30 syncs (the benchmark suite and the chat settings were read, not run). The multi-server live test of 2026-10-30 is recorded in `memories/research/multi-model-plan.md`, not re-run here. Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
+Status labels: **code-verified** = read in the source (committed up to 694a036, or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-26 to 2026-10-30 syncs (the benchmark suite and the chat settings were read, not run). Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
 
 ## Active
 - Model load/chat hangs: the GenieX warmup request in `load_model` may never get a response. The warmup carries the model's load params (committed in 6068a81), so it matches chat. Not re-validated (runtime-unverified).
@@ -18,10 +18,8 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Fixed: the local model lookups in `pages/models/useHubModelDetail.ts` matched rows with a substring test (`repoId.includes(name)`). They now match the exact id or the id with a precision suffix (`isSameRepo`).
 - Vision and audio probes match whole words only (`has_word`), so a reply that names the colour or number only inside another word does not count (`capability_scan.rs` tests `names_match_whole_words_only`).
 
-## Multiple servers and RAM estimate (committed afed418 to 0cc9a85; runtime-unverified)
-- Random-port servers are not stored: a server started on a random port (`free_port`, no port set) is tracked only in memory while the app runs (`server_processes`). Its port is not saved, so after a restart the app cannot find it. No code starts such a server yet (`serverPortForCompute` has no caller).
+## RAM estimate (committed ae6e31a to 0cc9a85; runtime-unverified)
 - RAM estimate constants are unverified: the 10% compute buffer with a 256 MiB floor, the 120% and 110% flat factors, the 8192 context cap and the 4096 fallback (`ram_estimate.rs`, `model_ram.rs`) are not checked against the measured memory of a loaded model.
-- Nothing yet loads more than one model from the UI: the loader, chat, OCR and benchmarks use the main port only, and the per-compute ports are not used by the selector.
 
 ## Playground and optional runtimes (committed 42dea0c..b9617e6; runtime-unverified)
 - **GPU (Adreno, OpenCL): blank white image with CFG above 1.** sd.cpp's batched CFG forward breaks on the OpenCL backend (CFG 1.0 works). The app passes `--batched-cfg off` for every non-CPU device and for every init-image (Image to image re-draw) job on CPU too: batched CFG gave blank images there as well (maintainer-verified; `playground/args.rs`). The cause inside ggml-opencl is not confirmed. Re-test both cases after each fork sync; drop the flag when fixed. Reported by the maintainer (research notes, section 11, 2026-10-29), not re-run here.
@@ -36,7 +34,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - **Latest release for installs (fixed in code).** At 0e0dcb5, `runtime_install` (no version) and `runtime_check_update` use GitHub's `releases/latest`. Upstream stable-diffusion.cpp publishes x64-only builds as latest, so that could fail or pick a build with no ARM64 archive. The code now picks the newest non-draft, non-prerelease release that has the ARM64 archive (`runtimes/spec.rs` `newest_release`, `runtimes/mod.rs` `latest_matching_release`). Code-read; a unit test covers it; not run against GitHub.
 - **Release cache can hide a newer release.** `ReleaseCache` keeps the lookup for one hour (`RUNTIME_RELEASE_CACHE_SECS`), so an install or update check soon after a new release can see the older one (code-read).
 - **Playground model downloads** check the exact byte count from the catalog, not a hash (`model_download.rs`). A file of the right size but different content would pass (code-read).
-- **Voice cloning, Image upscaling and OCR are untested in the app.** Pocket TTS (Text to speech), the upscale tab (`sd-cli --upscale-model`, CPU only; the GPU backend crashes on upscaling) and the OCR tab (PaddleOCR-VL, MiniCPM-OCR through the GenieX server) were committed as "not manually tested yet"; only unit tests cover them. Steps: `manual-checklist.md`.
+- **Voice cloning is untested in the app** (Image upscaling and OCR were tested by the user, 2026-10-31). Pocket TTS (Text to speech) was committed as "not manually tested yet"; only unit tests cover it. Upscaling runs `sd-cli --upscale-model`, CPU only (the GPU backend crashes on upscaling). Steps: `manual-checklist.md`.
 - **OCR cancel does not stop the server.** A cancel drops the HTTP request; the GenieX server may keep generating until it notices the closed connection (`ocr_job.rs`). Code-read.
 - **OCR needs the GenieX server running.** The run fails with "Start the GenieX server first" otherwise; the tab can start it. Whether the server loads the OCR model on the first request, and the `compute` / `vit_compute` request fields, are read from the code only (see `geniex-server-behaviour.md` for what is verified).
 - **Duplicated server-start sequence.** `components/playground/OcrPanel/useOcrServer.ts` repeats the start sequence of `shell/Header/useModelLoader.ts` (read server settings, `startServer` on the configured port, `setServerStatus`, `setServerOptions`). Chat has no shared function for it, so a change to one must be mirrored by hand. Code-read; not unified.
@@ -98,7 +96,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 ## Operational notes
 - No per-model unload endpoint in the GenieX CLI; stopping the server is the only unload.
 - The port is configurable and persisted in `user_preferences` (default `18181`).
-- The tracked entry for a port is removed when its `geniex serve` child exits, so a crashed server can be started again on that port (code-verified in `server.rs` `untrack_server`; runtime-unverified).
+- The tracked PID is cleared when the `geniex serve` child exits, so a crashed server can be started again (code-verified in the `server.rs` exit watcher; runtime-unverified).
 
 ## Resolved (code-verified; runtime-unverified)
 - Benchmark "Run Benchmark" only toggled visual state, and run history was in memory only (`benchmarkStore`). A suite now runs through `start_benchmark_run` and each run is saved to `benchmark_runs` (63f1fbc: `commands/benchmark_runner.rs`, `commands/benchmark_runs.rs`). The Playground, Performance Dashboard and `benchmarkStore` were removed, with their disabled Export and Save Preset buttons.

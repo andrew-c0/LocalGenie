@@ -6,90 +6,102 @@ import {
   Input,
   Spinner,
   Subtitle1,
+  Toast,
+  ToastTitle,
+  useToastController,
 } from "@fluentui/react-components";
 import { SaveRegular } from "@fluentui/react-icons";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import * as db from "../../../services/database";
 import * as geniex from "../../../services/geniex";
-import { saveServerPorts } from "../../../services/serverPorts";
 import { useModelStore } from "../../../stores/modelStore";
-import {
-  COMPUTE_PORT_LABELS,
-  COMPUTE_PORT_TARGETS,
-  isValidPort,
-  PORT_RANGE_MESSAGE,
-  PORT_VALID_RANGE,
-  portSettingWrites,
-  portToProbe,
-  portUseMessage,
-} from "../../../utils/serverPorts";
-import { toast } from "../../../utils/toast";
-import { describeSaveFailure } from "../../../utils/writeAllOrRollBack";
-import { Flex } from "../../ui/Flex/Flex";
-import { Meta } from "../../ui/Typography/Typography";
-import { useComputePortDrafts } from "./useComputePortDrafts";
-import { usePortUse } from "./usePortUse";
 import "./ServerPortCard.css";
 
-/**
- * Edits the GenieX server port and the optional port of each compute. Validates them, warns when a
- * port is taken, and saves them together. An empty compute port means a random free port.
- */
+const PORT_VALID_RANGE = { min: 1024, max: 65535 };
+
+const isValidPort = (port: number) =>
+  Number.isInteger(port) && port >= PORT_VALID_RANGE.min && port <= PORT_VALID_RANGE.max;
+
+/** Edits the GenieX server port: validates it, warns when it is taken, and saves it. */
 export default function ServerPortCard() {
-  const mainServerPort = useModelStore((s) => s.mainServerPort);
+  const { dispatchToast } = useToastController("app-toaster");
+  const serverPort = useModelStore((s) => s.serverPort);
   const setServerPort = useModelStore((s) => s.setServerPort);
   const setServerStatus = useModelStore((s) => s.setServerStatus);
 
-  const [portValue, setPortValue] = useState(String(mainServerPort));
+  const [portValue, setPortValue] = useState(String(serverPort));
   const [portError, setPortError] = useState<string | null>(null);
+  const [portInUse, setPortInUse] = useState(false);
+  const [portChecking, setPortChecking] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const mainPort = isValidPort(Number(portValue)) ? Number(portValue) : null;
-  const mainProbePort = portToProbe(mainPort, mainServerPort, undefined);
-  const mainProbe = usePortUse(mainProbePort, null);
-  const mainUseMessage =
-    mainProbePort === null ? undefined : portUseMessage(mainProbePort, mainProbe.use);
-  const { drafts, setDraft, errors, checking, mainClash, draftPorts, savedPorts, markSaved } =
-    useComputePortDrafts(mainPort);
-  const hasComputeErrors = mainClash !== null || Object.keys(errors).length > 0;
-  const hasError = mainUseMessage !== undefined || hasComputeErrors;
+  const isPortChanged = Number(portValue) !== serverPort;
 
-  const handleSave = async () => {
+  // Debounced probe: check if the new port is already occupied
+  useEffect(() => {
+    const port = Number(portValue);
+    if (!isValidPort(port) || !isPortChanged) {
+      setPortInUse(false);
+      setPortChecking(false);
+      return;
+    }
+
+    setPortChecking(true);
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      geniex
+        .isPortServing(port, controller.signal)
+        .then(setPortInUse)
+        .catch(() => setPortInUse(false))
+        .finally(() => setPortChecking(false));
+    }, 400);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [portValue, isPortChanged]);
+
+  const handleSave = useCallback(async () => {
     const parsed = Number(portValue);
     if (!isValidPort(parsed)) {
-      setPortError(PORT_RANGE_MESSAGE);
+      setPortError(`Port must be ${PORT_VALID_RANGE.min}–${PORT_VALID_RANGE.max}`);
       return;
     }
     setPortError(null);
-    if (hasError) return;
+    if (isPortChanged && portInUse) return;
 
     setSaving(true);
-    const outcome = await saveServerPorts(
-      portSettingWrites(
-        { previous: mainServerPort, next: parsed },
-        { previous: savedPorts, next: draftPorts },
-      ),
-    );
-    if (outcome.ok) {
+    let saved = false;
+    try {
+      await db.setPreference("server_port", parsed, "number");
       setServerPort(parsed);
-      markSaved(draftPorts);
-      toast.success("Server settings saved");
-    } else {
-      toast.error(`Could not save the ${outcome.failed}`, describeSaveFailure(outcome));
+      saved = true;
+    } catch (err) {
+      console.error("Failed to save server settings:", err);
     }
 
     try {
-      // The status of the active server; the main port when none is loaded.
-      setServerStatus(await geniex.getServerStatus(useModelStore.getState().serverPort));
+      setServerStatus(await geniex.getServerStatus(parsed));
     } catch {
-      // server may not be running on the port
+      // server may not be running on the new port
     }
-    setSaving(false);
-  };
 
-  const mainClashMessage = mainClash
-    ? `Port ${portValue} is already used by the ${COMPUTE_PORT_LABELS[mainClash]} server`
-    : undefined;
-  const portMessage = portError ?? mainClashMessage ?? mainUseMessage;
+    setSaving(false);
+    if (saved) {
+      dispatchToast(
+        <Toast>
+          <ToastTitle>Server settings saved</ToastTitle>
+        </Toast>,
+        { intent: "success" },
+      );
+    }
+  }, [portValue, setServerPort, setServerStatus, isPortChanged, portInUse, dispatchToast]);
+
+  const portInUseMessage =
+    isPortChanged && portInUse
+      ? `Port ${portValue} is already in use by another process`
+      : undefined;
 
   return (
     <Card>
@@ -97,9 +109,9 @@ export default function ServerPortCard() {
         <Subtitle1>Server</Subtitle1>
         <Field
           label="Port"
-          validationState={portMessage ? "error" : "none"}
-          validationMessage={portMessage}
-          hint={mainProbe.checking ? "Checking port…" : undefined}
+          validationState={portError || portInUseMessage ? "error" : "none"}
+          validationMessage={portError ?? portInUseMessage}
+          hint={isPortChanged && portChecking ? "Checking port…" : undefined}
         >
           <Input
             type="number"
@@ -113,31 +125,12 @@ export default function ServerPortCard() {
           />
         </Field>
         <Caption1>GenieX server endpoint: 127.0.0.1:{portValue || "…"}</Caption1>
-        <Flex gap="m" wrap>
-          {COMPUTE_PORT_TARGETS.map((target) => (
-            <Field
-              key={target}
-              label={`${COMPUTE_PORT_LABELS[target]} port`}
-              validationState={errors[target] ? "error" : "none"}
-              validationMessage={errors[target]}
-              hint={checking[target] ? "Checking port…" : undefined}
-            >
-              <Input
-                type="number"
-                value={drafts[target]}
-                placeholder="Random"
-                onChange={(_, data) => setDraft(target, data.value)}
-              />
-            </Field>
-          ))}
-        </Flex>
-        <Meta>Each compute can run its own server. An empty port uses a random free port.</Meta>
         <div className="server-port-card__actions">
           <Button
             appearance="primary"
             icon={saving ? <Spinner size="tiny" /> : <SaveRegular />}
             onClick={handleSave}
-            disabled={saving || hasError}
+            disabled={saving || (isPortChanged && portInUse)}
           >
             {saving ? "Saving…" : "Save"}
           </Button>

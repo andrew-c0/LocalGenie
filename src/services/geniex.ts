@@ -66,21 +66,6 @@ export async function getServerStatus(port?: number): Promise<ServerStatus> {
   return invoke("get_server_status", { port });
 }
 
-/** Stops every GenieX server the app runs, whatever its compute. */
-export async function stopAllServers(): Promise<void> {
-  return invoke("stop_all_servers");
-}
-
-/** Status of every GenieX server the app runs. */
-export async function listServers(): Promise<ServerStatus[]> {
-  return invoke("list_servers");
-}
-
-/** A free local port, picked by the OS. */
-export async function freePort(): Promise<number> {
-  return invoke("free_port");
-}
-
 // ─── Model Loading ──────────────────────────────────────────────
 
 /** Load a model with the given parameters. They must match the ones chat requests send. */

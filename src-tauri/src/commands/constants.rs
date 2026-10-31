@@ -13,10 +13,6 @@ pub const HTTP_CONNECT_TIMEOUT_SECS: u64 = 10;
 /// may take to return response headers.
 pub const HTTP_TIMEOUT_SECS: u64 = 300;
 
-/// Upper bound for one `/status` probe when listing every server, in seconds. A server that does
-/// not answer in time is listed as not running, so one hung server cannot stall the list.
-pub const SERVER_STATUS_TIMEOUT_SECS: u64 = 10;
-
 /// Number of readiness probe retries when starting the server.
 pub const SERVER_STARTUP_PROBES: u32 = 15;
 

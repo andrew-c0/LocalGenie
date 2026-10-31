@@ -71,31 +71,10 @@ describe("modelRamLine", () => {
     expect(modelRamLine(snapshot(10 * GB), model, false)?.warning).toBeNull();
   });
 
-  it("says it will not load, with the need and the free RAM, when it does not fit", () => {
+  it("warns with the need, the free RAM and the kept-free RAM when it does not fit", () => {
     // 5 GB free minus 4 GB leaves 1 GB, less than the 1.6 GB kept free.
     const line = modelRamLine(snapshot(5 * GB), model, false);
-    expect(line?.label).toBe("Won't load: needs ~4.00 GB, 5.00 GB free");
-  });
-
-  it("gives the loader's refusal reason as the warning when it does not fit", () => {
-    const line = modelRamLine(snapshot(5 * GB), model, false);
-    expect(line?.warning).toBe("Needs about 4.00 GB, 5.00 GB free, 1.60 GB kept free");
-  });
-
-  it("counts the RAM of the model it replaces as free", () => {
-    // 5 GB + 2 GB freed = 7 GB free, 3 GB left after loading: fits.
-    const line = modelRamLine(snapshot(5 * GB), model, false, 2 * GB);
-    expect(line?.label).toBe("RAM ~4.00 GB");
-    expect(line?.warning).toBeNull();
-  });
-
-  it("says the replaced model stops in the warning when that is still not enough", () => {
-    // 5 GB + 0.5 GB freed = 5.5 GB free, 1.5 GB left after loading: below the 1.6 GB kept free.
-    const line = modelRamLine(snapshot(5 * GB), model, false, 0.5 * GB);
-    expect(line?.label).toBe("Won't load: needs ~4.00 GB, 5.50 GB free");
-    expect(line?.warning).toBe(
-      "Needs about 4.00 GB, 5.50 GB free after the replaced model stops, 1.60 GB kept free",
-    );
+    expect(line?.warning).toBe("Needs ~4.00 GB, 5.00 GB free, 1.60 GB kept free");
   });
 
   it("does not check a model that is already loaded", () => {

@@ -52,4 +52,4 @@ Added after audio to audio, at the user's request. Same runtime and program (`sh
 - Status: built, unit tests pass; NOT manually tested in the app yet (see manual checklist). Not tested: photos, handwriting, other languages, dots.ocr (MIT, 1.9 GB + 1.3 GB projector).
 
 ## Status
-Audio to audio: done, user-tested. Voice cloning, image upscaling and OCR: built and committed, user test pending. All three planned tabs are built.
+Audio to audio: done, user-tested. Image upscaling: done, user-tested. OCR: done, user-tested. Voice cloning: built and committed, user test pending. All three planned tabs are built.

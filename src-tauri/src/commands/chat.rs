@@ -1,5 +1,6 @@
 use tauri::{AppHandle, Emitter, State};
 
+use tauri::Manager;
 use super::chat_helpers::{
     apply_load_params, build_chat_body, chat_done_payload, finish_reason_from_chunk,
     is_first_output, no_output_error, resolve_model_for_server, strip_precision, usage_from_chunk,
@@ -7,7 +8,6 @@ use super::chat_helpers::{
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
-use tauri::Manager;
 
 /// Cancel flag shared between the cancel command and a streaming loop.
 type CancelFlag = Arc<AtomicBool>;
@@ -111,23 +111,24 @@ pub async fn load_model(
     eprintln!("[load] model '{}' loaded successfully", clean_model);
 
     // Refresh server status to reflect newly loaded models
-    let body = super::server::fetch_status_body(&state.http_client, &resolved_base).await?;
-    let status = super::server::running_status(port, &body);
+    let models = super::server::fetch_loaded_models(&state.http_client, &resolved_base).await?;
 
     // Verify the model actually appears in the loaded list
-    let found = status
-        .models
+    let found = models
         .iter()
         .any(|m| m == clean_model || m.starts_with(&format!("{}:", clean_model)));
     if !found {
         return Err(format!(
             "Model '{}' does not appear loaded on the server. Loaded models: {:?}",
-            clean_model, status.models
+            clean_model, models
         ));
     }
 
-    let compute = super::server::tracked_compute(&state, port)?;
-    Ok(super::server::ServerStatus { compute, ..status })
+    Ok(super::server::ServerStatus {
+        running: true,
+        port,
+        models,
+    })
 }
 
 /// Unload all models by stopping the GenieX server.

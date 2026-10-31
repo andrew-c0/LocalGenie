@@ -123,18 +123,6 @@ export interface ServerStatus {
   running: boolean;
   port: number;
   models: string[];
-  /** Lowercase "cpu" | "gpu" | "npu". Null when unknown or the server is not one this app started. */
-  compute?: string | null;
-  /** Compute unit each loaded model runs on, by model id. Absent when the server does not report it. */
-  devices?: { id: string; device: string }[];
-}
-
-/**
- * Payload of `server-stopped`. The backend may send no payload (null or missing) or the port of the
- * server that exited.
- */
-export interface ServerStoppedEvent {
-  port: number;
 }
 
 /** Per-request sampling settings, sent with each chat completion. */

@@ -10,7 +10,7 @@ import type {
 } from "../types";
 import { chatErrorContent } from "../utils/chatError";
 import { cleanOverrides, parseStoredOverrides } from "../utils/chatOverrides";
-import { DEFAULT_SERVER_SETTINGS, LOADED_MODEL_KEEPALIVE } from "../utils/modelSettings";
+import { DEFAULT_SERVER_SETTINGS } from "../utils/modelSettings";
 
 /** Valid message roles — used to validate DB values at runtime. */
 const VALID_ROLES = new Set<Message["role"]>(["user", "assistant", "system"]);
@@ -269,17 +269,6 @@ export async function getServerSettings(): Promise<ServerSettings> {
     origins: origins ?? DEFAULT_SERVER_SETTINGS.origins,
     keepalive: keepalive ?? DEFAULT_SERVER_SETTINGS.keepalive,
   };
-}
-
-/**
- * Server settings for a server that hosts a loaded model. Same as `getServerSettings`, except that an
- * unset keepalive becomes `LOADED_MODEL_KEEPALIVE`, so an idle loaded model is not unloaded after
- * five minutes. A keepalive the user saved is used as it is.
- */
-export async function getLoadedServerSettings(): Promise<ServerSettings> {
-  const settings = await getServerSettings();
-  const savedKeepalive = await getPreference<number>("server_keepalive").catch(() => null);
-  return savedKeepalive === null ? { ...settings, keepalive: LOADED_MODEL_KEEPALIVE } : settings;
 }
 
 export async function saveServerSettings(settings: ServerSettings): Promise<void> {
