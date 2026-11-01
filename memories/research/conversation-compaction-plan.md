@@ -1,57 +1,57 @@
-# Automatic conversation compaction
+# Conversation compaction (optional)
 
-Plan, written 2026-11-01. Research only; nothing is built. Waiting for the user's approval and answers to the open questions at the end.
+Plan, updated 2026-11-01 with the user's decisions. Research only; nothing is built. Waiting for the user's approval of the points under "Still to confirm".
+
+## Decisions (user)
+- **Off by default.** Compaction is an option the user turns on, never automatic unless enabled.
+- **Summarise the whole conversation up to that point**, not just the old part. Input to the summary is the user's requests and the model's replies only. Thinking sections are never used. The summary is then sent to the model with the next prompt.
+- **Same model** for chat and summary. No loading or unloading mid-flight.
+- **Context overflow with compaction off:** show the error as today, no button.
+- **Per-chat override and a "Compact now" button:** later. **Stripping `<think>` blocks from the normal history:** later, separate change.
+- **Retry:** only the last user message may be retried. After a compaction, messages before the summary cannot be retried.
 
 ## What exists today
-- The app sends the whole chat history on every request. `historyFor` (`ChatInput.tsx`) maps all messages except `kind: "system"` lines; assistant replies keep their inline `<think>` blocks; stored attachments are re-read from disk each turn. The Rust side (`chat.rs` `chat_completion`) builds the body and streams the reply. Nothing is truncated or summarised.
-- The window is the saved `nctx`, else the model's native context, else the server default 4096 (`resolveLoadParams`, `ChatContextHeader`). Used tokens come from `contextUsageOf` (`utils/contextUsage.ts`): the last reply's exact `prompt + completion`, plus a chars/4 estimate for anything newer.
-- When the prompt exceeds the window the server answers HTTP 400 `context_length_exceeded`; the app shows an error message. Nothing proactive happens before that.
-- Retry, edit and delete all rebuild the history from the stored messages, and delete removes a message and everything after it.
-- GenieX has no compaction. It holds one model, serialises requests with a global lock, and keeps the KV cache only while each request extends the previous one (a hash of the messages, `utils/hash.go`). Any other request clears the KV (no model reload); load params must be repeated on any helper call or the model reloads.
+- The whole history is sent on every request. `historyFor` (`ChatInput.tsx`) maps all messages except `kind: "system"` lines; assistant replies keep inline `<think>` blocks; stored attachments are re-read from disk. Nothing is trimmed.
+- Window = saved `nctx`, else the native context, else 4096 (`resolveLoadParams`, `ChatContextHeader`). Used tokens: `contextUsageOf` (`utils/contextUsage.ts`) = last reply's exact `prompt + completion` plus a chars/4 estimate for newer messages.
+- A prompt over the window gets HTTP 400 `context_length_exceeded`, shown as an error message.
+- Retry already exists only on the last user message (`MessageBubble.tsx`, `isLastUserMessage`). Delete is allowed on any message and removes it and everything after it.
+- GenieX has no compaction. It holds one model, serialises requests with a global lock, and keeps the KV cache only while a request extends the previous one. Any other request clears the KV (no reload); load params must be repeated on a helper call or the model reloads.
 
 ## Design
+**Summary row.** On compaction the app adds one message: `kind = "system"`, `system_type = "summary"`, `content` = the summary, plus a nullable `messages.covers_through_id` (the last message folded in). One migration (`m20261035_…`, like `m20261031_000001_message_kind.rs`), the entity, `save_message`, `services/database.ts` and the `Message` type.
 
-**Non-destructive.** Old messages stay in the database and on screen. A compaction adds one summary message and the history sent to the model is built as: system prompt, the summary, then the messages after the summarised range.
+**History sent to the model.** System prompt, then the summary (as a block in the system turn, so the transcript stays user/assistant only), then the messages after the summary, which is the new prompt. `historyFor` uses the newest summary row; everything before `covers_through_id` is not sent. A later compaction folds in the previous summary plus the messages since, so summaries do not chain.
 
-**Storage.** One new message row: `kind = "system"`, `system_type = "summary"`, `content` = the summary text, plus one new nullable column `messages.covers_through_id` (the last message the summary replaces). One migration (`m20261035_…`, pattern of `m20261031_000001_message_kind.rs`), the entity, `save_message`, `services/database.ts` and the `Message` type. `historyFor` finds the newest summary row and uses `[summary] + messages after covers_through_id`; every other path (retry, edit, delete) keeps working from stored messages.
+**Trigger.** Only when the setting is on. Before a send: `(used tokens + estimate of the new prompt) / window >= threshold`. Then: summarise everything before the new prompt, store the row, send summary + new prompt. Also on `context_length_exceeded` (setting on only): compact the history before the new prompt, then retry once; if it still does not fit, show the error. Setting off: the error as today.
 
-**Consistency for free.** The summary row is created at compaction time, so it sits after every message it covers. Delete and retry remove "this message and everything after", so removing any covered message also removes the summary and the full history is used again. A later summary covers the earlier summary plus the messages since, so summaries do not chain.
+**The summary call.** New Rust command `compact_conversation`: non-streamed `POST /v1/chat/completions` on the active server, same model and load params, `enable_think: false`, `reasoning_format: "none"`, a fixed prompt, `max_tokens` about 15% of the window (cap 1024). Input: the previous summary (if any) and the messages to fold in, each user request and each reply with `<think>` blocks removed, attachments reduced to "user attached <name>". The frontend also strips any think block from the answer (`parseThinking`). Cancellable; progress as a system line. If the input does not fit the window with the prompt and output budget, summarise the older half first, then the rest.
+- Cost: the summary call blocks chat on the server and reads a large prompt once. The next request is cheap (summary + new prompt only), but it re-reads from scratch because the KV is cleared. Not measured on the NPU.
 
-**Trigger.** Before a send: when `(used tokens + estimate of the new message) / window >= threshold` and the setting is on. Fallback: when the server returns `context_length_exceeded`, compact once and retry the send automatically (also when the setting is off? see open questions).
+**Delete and retry rules.**
+- Retry stays on the last user message only. After a compaction nothing before the summary offers retry.
+- Covered messages (up to `covers_through_id`) cannot be deleted one by one; the summary line has **Undo**, which deletes the summary row and brings the full history back. Messages after the summary delete as today. Deleting the summary row is the only way back, so the full history can never come back by accident.
 
-**What is kept verbatim.** The last N exchanges (default 2 user/assistant pairs, never less than the latest user message) plus the system prompt. Everything older is summarised.
+**UI.** A system line "Earlier messages summarised" at the summary's position, expandable to read the text, with Undo; covered messages greyed. While compacting, the input is disabled and the stop button cancels (history unchanged). If the summary call fails or returns nothing, show a toast and send the original history unchanged.
 
-**The summary call.** A new Rust command (`compact_conversation`) does a non-streamed `POST /v1/chat/completions` on the active server: same model, same load params, `enable_think: false`, `reasoning_format: "none"`, a fixed summarising prompt, `max_tokens` about 15% of the window (capped at 1024). It returns the text; the frontend strips any think block (`parseThinking`) and writes the row. Input is the previous summary, if any, plus the messages to fold in, with `<think>` blocks removed, attachments reduced to "user attached <name>" and long code blocks left as they are. The call can be cancelled; the progress shows as a system line ("Summarising the conversation…").
-- The summariser input has to fit the window together with the prompt and the output budget. At a 70% trigger that is about 70% + prompt + 15%, which just fits; if the old part is still too large, summarise it in two passes (oldest half first).
-- Cost: one extra model call, which blocks chat on the same server, plus one full re-prefill on the next send because the history prefix changed (the KV is cleared). On a small NPU context this is a few seconds to tens of seconds; not measured.
+**Token accounting.** `contextUsageOf` must count the history as sent: usage from replies before the summary is stale and is ignored; count from the summary onward (summary text and later messages as estimates until the next reply gives exact counts). The ring uses the same.
 
-**Settings.**
-- App-wide card in Settings, same pattern as the RAM headroom card (`services/…` + `utils/…` key, default and validator + a Card): "Compact long conversations" switch (default off), threshold slider 50 to 90% (default 70%), "keep the last N exchanges" (default 2). Stored in `user_preferences`.
-- Per-chat override (Inherit / On / Off) through the existing chat overrides (`CHAT_OVERRIDE_KEYS` in `utils/chatOverrides.ts` and `model_settings.rs`, the chat settings drawer). Phase 3, not required for a first version.
-
-**UI.**
-- The summary shows as a system line in the chat: "Earlier messages summarised", expandable to read the text, with "Undo" (deletes the summary row) and the covered messages greyed or collapsed behind it.
-- The context ring and `contextUsageOf` must count the history as sent (summary + remaining), not the stored messages; right after a compaction the figure is an estimate until the next reply gives exact counts.
+**Settings.** App-wide card in Settings, like the RAM headroom card: "Compact long conversations" switch (default off) and a threshold slider 50 to 90% (default 70%). Keys in `user_preferences`. No "keep last N" setting: everything before the new prompt is summarised.
 
 ## Phases
-1. **Backend and storage.** Migration, entity, `save_message`, `compact_conversation` command, request builder and prompt as pure, unit-tested functions. Rust agent.
-2. **Frontend core.** Settings card and service, `historyFor` with summaries, the trigger in `doSend`, the summary system line (expand, undo), the context ring using the sent history. React agent. Pure functions with vitest: should-compact, range selection, history with summary.
-3. **Hardening.** Reactive fallback on `context_length_exceeded`, cancel and progress, two-pass for oversized input, per-chat override, manual "Compact now" button in the chat header.
+1. **Backend and storage.** Migration, entity, `save_message`, `compact_conversation`, request builder and prompt as pure unit-tested functions. Rust agent.
+2. **Frontend core.** Settings card and service, `historyFor` with summaries, the trigger in `doSend`, the summary line with Undo, covered messages greyed and not deletable, token accounting. Pure functions with vitest. React agent.
+3. **Hardening.** Overflow fallback and retry, cancel and progress, two-pass for oversized input.
 Each phase leaves the app working. Docs sync after each.
 
 ## Risks
-- **Quality.** Small local models summarise poorly and can invent or drop facts. Mitigation: visible, undoable summary; a strict prompt (facts, decisions, open tasks, names, numbers, file names); default off.
-- **Latency and the global lock.** The summary call stalls chat, and the next send re-prefills. Compaction happens at send time, so the user waits once.
-- **Wrong token counts.** The chars/4 estimate can be off by 30% or more (code, non-English). The trigger uses the exact count when available and a lower default threshold to leave margin.
-- **Attachments and images.** Images and file contents in the summarised range are not carried over; the summary only names them.
-- **Think blocks.** History today resends inline `<think>` text, which wastes context. Stripping it from history (not only for the summariser) would delay the need to compact, but changes every request; kept as an open question.
-- **Retry and edit across the boundary** are handled by the delete rule above; edit of a covered message needs a test.
-- **Benchmarks and Playground** are not affected (they do not use chat history).
+- **Quality.** Small models summarise poorly and can drop or invent facts, and exact code or numbers can be lost. Mitigation: visible, undoable summary, a strict prompt (requests, decisions, results, names, numbers, file names, open tasks), off by default.
+- **Latency.** Summary call stalls chat once; summarising at 70% of the window reads a large prompt.
+- **Token estimate.** chars/4 can be 30% off; the threshold leaves margin.
+- **Attachments and images** in the summarised part are not carried over.
+- **Model switch.** The summary carries over, but a model with a smaller window may still not fit it.
+- **Benchmarks, Playground and OCR** do not use chat history; unaffected.
 
-## Open questions for the user
-1. Default off or on? (Proposed: off.)
-2. Threshold default 70% and keep the last 2 exchanges: agree?
-3. Fallback on `context_length_exceeded`: compact and retry automatically even when the setting is off, or only show a "Compact and retry" button?
-4. Per-chat override and a "Compact now" button in the first version, or later (proposed: later)?
-5. Strip `<think>` blocks from the history sent to the model (separate switch or always)? (Proposed: separate small change, after compaction.)
-6. A different, smaller model for summarising? (Proposed: no, same model; revisit only if quality is poor.)
+## Still to confirm
+1. Threshold default 70% (slider 50 to 90%).
+2. Summary placed in the system turn (proposed) rather than as a first user message.
+3. Covered messages not individually deletable, with Undo on the summary (proposed).
