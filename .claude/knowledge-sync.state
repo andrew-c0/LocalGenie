@@ -1,3 +1,3 @@
-last_synced_commit=0cc9a85dae21f5c733b718213b75cbdd70612871
-last_synced_date=2026-10-30
-note=Synced to HEAD 0cc9a85 (9 commits since b9617e6: docs and runtime matrix, per-port servers, compute ports, RAM estimate and headroom). Clean tree at sync; knowledge edits left uncommitted. Tests, biome and the app not run.
+last_synced_commit=705bef1aca3b30a74ed502cb0461c914bf78ce89
+last_synced_date=2026-11-01
+note=Synced to HEAD 705bef1. Multi-model work scrapped and reverted; RAM estimate and headroom kept; test status labels updated. Tests, biome and the app not run.
