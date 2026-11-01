@@ -10,9 +10,9 @@ use sea_orm_migration::MigratorTrait;
 use serde::{Deserialize, Serialize};
 
 use super::capability_scan;
-use crate::model_settings;
 use crate::entities::{chat_error, chat_session, downloaded_model, message, user_preference};
 use crate::migrations::Migrator;
+use crate::model_settings;
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -179,19 +179,37 @@ pub async fn delete_session(
 
 // ─── Messages ──────────────────────────────────────────────────────
 
+/// The system type of a compaction summary. Only a summary names the messages it covers.
+const SYSTEM_TYPE_SUMMARY: &str = "summary";
+
+/// A system type is made of lowercase letters and underscores.
+fn is_system_type(kind: &str) -> bool {
+    !kind.is_empty() && kind.chars().all(|c| c.is_ascii_lowercase() || c == '_')
+}
+
 /// A chat message is `text` with no system type. A system line is `system` and needs a type made of
-/// lowercase letters and underscores. Anything else is refused, so a bad row never reaches the history.
+/// lowercase letters and underscores. A summary needs the id of the last message it covers, and no
+/// other message may name one. Anything else is refused, so a bad row never reaches the history.
 fn check_message_kind(message: &message::Model) -> Result<(), String> {
+    let covers = message.covers_through_id.as_deref();
     match (message.kind.as_str(), message.system_type.as_deref()) {
-        ("text", None) => Ok(()),
+        ("text", None) => refuse_covers(covers),
         ("text", Some(_)) => Err("a chat message cannot have a system type".to_owned()),
-        ("system", Some(kind))
-            if !kind.is_empty() && kind.chars().all(|c| c.is_ascii_lowercase() || c == '_') =>
-        {
-            Ok(())
-        }
+        ("system", Some(SYSTEM_TYPE_SUMMARY)) => match covers {
+            Some(id) if !id.is_empty() => Ok(()),
+            _ => Err("a summary needs the id of the last message it covers".to_owned()),
+        },
+        ("system", Some(kind)) if is_system_type(kind) => refuse_covers(covers),
         ("system", _) => Err("a system message needs a system type".to_owned()),
         (other, _) => Err(format!("unknown message kind: {other}")),
+    }
+}
+
+/// Only a summary may name the messages it covers.
+fn refuse_covers(covers: Option<&str>) -> Result<(), String> {
+    match covers {
+        None => Ok(()),
+        Some(_) => Err("only a summary can cover earlier messages".to_owned()),
     }
 }
 
@@ -225,6 +243,7 @@ pub async fn save_message(
         kind: Set(message.kind),
         system_type: Set(message.system_type),
         compute: Set(message.compute),
+        covers_through_id: Set(message.covers_through_id),
     })
     .on_conflict(
         OnConflict::column(message::Column::Id)
@@ -245,6 +264,7 @@ pub async fn save_message(
                 message::Column::Kind,
                 message::Column::SystemType,
                 message::Column::Compute,
+                message::Column::CoversThroughId,
             ])
             .to_owned(),
     )
@@ -649,7 +669,13 @@ mod message_kind_tests {
             kind: kind.into(),
             system_type: system_type.map(str::to_owned),
             compute: None,
+            covers_through_id: None,
         }
+    }
+
+    fn covering(mut message: message::Model, covers: Option<&str>) -> message::Model {
+        message.covers_through_id = covers.map(str::to_owned);
+        message
     }
 
     #[test]
@@ -664,5 +690,21 @@ mod message_kind_tests {
         assert!(check_message_kind(&message("system", Some("Model Changed"))).is_err());
         assert!(check_message_kind(&message("text", Some("model_changed"))).is_err());
         assert!(check_message_kind(&message("other", None)).is_err());
+    }
+
+    #[test]
+    fn a_summary_needs_the_id_of_the_last_message_it_covers() {
+        let summary = message("system", Some("summary"));
+        assert!(check_message_kind(&covering(summary.clone(), None)).is_err());
+        assert!(check_message_kind(&covering(summary.clone(), Some(""))).is_err());
+        assert!(check_message_kind(&covering(summary, Some("m9"))).is_ok());
+    }
+
+    #[test]
+    fn no_other_message_may_name_covered_messages() {
+        let chat = message("text", None);
+        assert!(check_message_kind(&covering(chat, Some("m9"))).is_err());
+        let line = message("system", Some("model_changed"));
+        assert!(check_message_kind(&covering(line, Some("m9"))).is_err());
     }
 }

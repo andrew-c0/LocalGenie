@@ -58,6 +58,55 @@ describe("contextUsageOf", () => {
     expect(contextUsageOf(messages).total).toBe(320);
   });
 
+  describe("with a summary", () => {
+    const summary = (content: string): Message => ({
+      id: "s",
+      role: "system",
+      kind: "system",
+      systemType: "summary",
+      content,
+      timestamp: 1,
+      coversThroughId: "r1",
+    });
+
+    it("ignores counts from replies before the summary and estimates the summary text", () => {
+      const messages = [
+        message(undefined),
+        reply("r1", { promptTokens: 9000, completionTokens: 500 }),
+        summary("x".repeat(400)),
+        { id: "u2", role: "user" as const, content: "y".repeat(40), timestamp: 3 },
+      ];
+      // 400 + 40 characters at four per token, with no exact count after the summary.
+      expect(contextUsageOf(messages)).toEqual({ total: 110, fileTokens: 0, exact: false });
+    });
+
+    it("starts from a reply after the summary when it reported its counts", () => {
+      const messages = [
+        reply("r1", { promptTokens: 9000, completionTokens: 500 }),
+        summary("x".repeat(400)),
+        reply("r2", { promptTokens: 300, completionTokens: 20 }),
+        { id: "u3", role: "user" as const, content: "y".repeat(80), timestamp: 4 },
+      ];
+      // The summary is inside the exact count of r2; only the new message is estimated.
+      expect(contextUsageOf(messages)).toEqual({ total: 340, fileTokens: 0, exact: true });
+    });
+
+    it("does not count files sent before the summary", () => {
+      const messages = [
+        {
+          id: "u1",
+          role: "user" as const,
+          content: "",
+          timestamp: 1,
+          attachments: [{ id: "a", kind: "text" as const, name: "a.md", size: 4000, chars: 4000 }],
+        },
+        summary("x".repeat(40)),
+        { id: "u2", role: "user" as const, content: "y".repeat(40), timestamp: 3 },
+      ];
+      expect(contextUsageOf(messages)).toEqual({ total: 20, fileTokens: 0, exact: false });
+    });
+  });
+
   it("caps the file share at the total", () => {
     const messages = [
       {

@@ -174,6 +174,17 @@ export function resolveLoadParams(
 }
 
 /**
+ * The context window the chat shows for a model: the saved `nctx`, else the model's native context.
+ * Null when neither is known. The header and the send path both read it from here.
+ */
+export function contextWindowFor(
+  saved: Partial<ModelLoadSettings>,
+  nativeContext: number | null,
+): number | null {
+  return saved.nctx ?? nativeContext;
+}
+
+/**
  * Settings for one chat send: the sampling settings plus the model's load parameters.
  */
 export function chatSettingsFor(

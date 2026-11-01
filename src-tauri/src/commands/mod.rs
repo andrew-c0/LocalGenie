@@ -11,6 +11,7 @@ pub mod chat;
 pub mod chat_helpers;
 pub mod cli;
 pub mod cli_update;
+pub mod compaction;
 pub mod constants;
 pub mod database;
 pub mod download;

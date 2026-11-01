@@ -6,6 +6,7 @@ import type {
   Message,
   ReplyUsage,
 } from "../types";
+import { canRemoveFrom } from "../utils/compaction";
 
 /** Max characters used for auto-generated session titles from the first message. */
 const AUTO_TITLE_MAX_LENGTH = 50;
@@ -15,12 +16,21 @@ function calcContextChars(messages: Message[]): number {
   return messages.reduce((sum, m) => sum + m.content.length, 0);
 }
 
+/** The messages of a conversation, or none when it is not in the store. */
+export function messagesOf(sessionId: string): Message[] {
+  return useChatStore.getState().sessions.find((s) => s.id === sessionId)?.messages ?? [];
+}
+
 interface ChatState {
   sessions: ChatSession[];
   activeSessionId: string | null;
   isStreaming: boolean;
   /** Stream in flight. Events are matched by its id and written to its session. */
   activeStream: ActiveStream | null;
+  /** True while the conversation is summarised before a send. The input waits and stop cancels it. */
+  compacting: boolean;
+  /** Job of the running summary, for cancelling it. Null when none runs. */
+  compactionJobId: string | null;
   retryFromMessageId: string | null;
   /** Timestamp when the last send was triggered — used for generation stats. */
   lastSendTime: number;
@@ -40,6 +50,8 @@ interface ChatState {
   removeMessagesAfter: (sessionId: string, messageId: string) => void;
   setStreaming: (streaming: boolean) => void;
   setActiveStream: (stream: ActiveStream | null) => void;
+  /** Marks a summary as running under `jobId`, or clears the mark with null. */
+  setCompacting: (jobId: string | null) => void;
   setRetryFromMessageId: (id: string | null) => void;
   setLastSendTime: (time: number) => void;
   loadSessions: (sessions: ChatSession[]) => void;
@@ -59,6 +71,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeSessionId: null,
   isStreaming: false,
   activeStream: null,
+  compacting: false,
+  compactionJobId: null,
   retryFromMessageId: null,
   lastSendTime: 0,
 
@@ -196,7 +210,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       sessions: state.sessions.map((s) => {
         if (s.id !== sessionId) return s;
         const idx = s.messages.findIndex((m) => m.id === messageId);
-        if (idx < 0) return s;
+        // A covered message or a summary row is never removed, so the store refuses the whole range.
+        if (idx < 0 || !canRemoveFrom(s.messages, idx)) return s;
         const kept = s.messages.slice(0, idx);
         return {
           ...s,
@@ -213,7 +228,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       sessions: state.sessions.map((s) => {
         if (s.id !== sessionId) return s;
         const idx = s.messages.findIndex((m) => m.id === messageId);
-        if (idx < 0) return s;
+        // Removes the messages after `messageId`, so the same guard applies to the range it removes.
+        if (idx < 0 || !canRemoveFrom(s.messages, idx)) return s;
         const trimmed = s.messages.slice(0, idx + 1);
         return {
           ...s,
@@ -235,6 +251,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setRetryFromMessageId: (id: string | null) => {
     set({ retryFromMessageId: id });
+  },
+
+  setCompacting: (jobId: string | null) => {
+    set({ compacting: jobId !== null, compactionJobId: jobId });
   },
 
   setLastSendTime: (time: number) => {

@@ -8,7 +8,7 @@ import { useModelStore } from "../../../stores/modelStore";
 import { overrideCount } from "../../../utils/chatOverrides";
 import { contextUsageOf } from "../../../utils/contextUsage";
 import { formatCount } from "../../../utils/format";
-import { modelSettingsKey } from "../../../utils/modelSettings";
+import { contextWindowFor, modelSettingsKey } from "../../../utils/modelSettings";
 import { RenameDialog } from "../../ui/RenameDialog/RenameDialog";
 import { BodyStrong, Meta } from "../../ui/Typography/Typography";
 import { ChatSettingsDrawer } from "../ChatSettingsDrawer/ChatSettingsDrawer";
@@ -40,7 +40,7 @@ export function ChatContextHeader() {
     let cancelled = false;
     Promise.all([db.loadModelSettings(key), db.loadNativeContext(key)])
       .then(([saved, native]) => {
-        if (!cancelled) setContextWindow(saved.nctx ?? native);
+        if (!cancelled) setContextWindow(contextWindowFor(saved, native));
       })
       .catch(() => {
         if (!cancelled) setContextWindow(null);

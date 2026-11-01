@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use super::ocr_catalog::OcrMode;
 use super::ocr_table;
-use crate::commands::chat_helpers::{apply_load_params, ModelLoadParams};
+use crate::commands::chat_helpers::{apply_load_params, strip_think, ModelLoadParams};
 use crate::commands::constants::DEFAULT_PORT;
 
 /// Longest side of the picture, in pixels. A larger picture makes the vision encoder run for
@@ -134,27 +134,6 @@ pub(super) fn reply_text(body: &serde_json::Value) -> Result<String, String> {
         .as_str()
         .map(str::to_string)
         .ok_or_else(|| "The server sent no text.".to_string())
-}
-
-/// Remove the model's thinking from `text`: closed `<think>` blocks, a lone closing tag and what
-/// comes before it, and a block that never closed.
-pub(super) fn strip_think(text: &str) -> String {
-    const OPEN: &str = "<think>";
-    const CLOSE: &str = "</think>";
-    let mut rest = text.to_string();
-    while let Some(start) = rest.find(OPEN) {
-        let Some(length) = rest[start..].find(CLOSE) else {
-            break;
-        };
-        rest.replace_range(start..start + length + CLOSE.len(), "");
-    }
-    if let Some(end) = rest.rfind(CLOSE) {
-        rest = rest[end + CLOSE.len()..].to_string();
-    }
-    if let Some(start) = rest.find(OPEN) {
-        rest.truncate(start);
-    }
-    rest
 }
 
 /// The text the webview shows for a reply: thinking removed, trimmed, and a table converted to
@@ -290,15 +269,6 @@ mod tests {
         assert_eq!(reply_text(&failed), Err("model not found".to_string()));
         assert!(reply_text(&serde_json::json!({})).is_err());
         assert!(reply_text(&serde_json::json!({"choices": []})).is_err());
-    }
-
-    #[test]
-    fn thinking_is_removed() {
-        assert_eq!(strip_think("<think>hmm</think>Hello"), "Hello");
-        assert_eq!(strip_think("a<think>x</think>b<think>y</think>c"), "abc");
-        assert_eq!(strip_think("hmm</think>Hello"), "Hello");
-        assert_eq!(strip_think("Hello<think>never ends"), "Hello");
-        assert_eq!(strip_think("no thinking"), "no thinking");
     }
 
     #[test]

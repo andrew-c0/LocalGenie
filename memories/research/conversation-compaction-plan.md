@@ -51,7 +51,8 @@ Each phase leaves the app working. Docs sync after each.
 - **Model switch.** The summary carries over, but a model with a smaller window may still not fit it.
 - **Benchmarks, Playground and OCR** do not use chat history; unaffected.
 
-## Still to confirm
-1. Threshold default 70% (slider 50 to 90%).
-2. Summary placed in the system turn (proposed) rather than as a first user message.
-3. Covered messages not individually deletable, with Undo on the summary (proposed).
+## Confirmed by the user, 2026-11-01 (these replace the earlier proposals and the delete/undo rules above)
+- Threshold default 70% (slider 50 to 90%). The summary goes in the system turn.
+- The summary is also a visible system message in the conversation ("Conversation summarised automatically"). Clicking that row opens the actual summary text.
+- No undo and no deletion of the summarisation: it is automatic and permanent. Messages covered by a summary and the summary row cannot be deleted. Messages after the summary delete as today.
+- The summary row is stored just before the prompt that triggered it (created_at one millisecond earlier), so deleting or retrying that prompt does not remove the summary.

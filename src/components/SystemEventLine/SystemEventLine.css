@@ -19,3 +19,31 @@
 .system-event__icon {
   flex: 0 0 auto;
 }
+
+/* A summary row is a button: it takes the line's look, and shows focus like any control. */
+.system-event--toggle {
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.system-event--toggle:focus-visible {
+  outline: 2px solid var(--colorStrokeFocus2);
+  outline-offset: 2px;
+  border-radius: var(--borderRadiusSmall);
+}
+
+/* The summary text, opened under its line. Scrolls when it is long. */
+.system-event__summary {
+  max-width: 80%;
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 0 auto var(--spacingVerticalS);
+  padding: var(--spacingVerticalS) var(--spacingHorizontalM);
+  border-radius: var(--borderRadiusMedium);
+  background: var(--colorNeutralBackground3);
+}

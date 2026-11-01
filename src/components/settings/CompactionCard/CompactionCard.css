@@ -1,0 +1,10 @@
+/* Fluent gives the slider a default minimum width, so it is widened to fill its row. */
+.compaction-card__slider {
+  width: 100%;
+}
+
+/* Fixed width so the value does not shift the slider as it moves between 50 % and 90 %. */
+.compaction-card__value {
+  min-width: 4.5em;
+  text-align: right;
+}

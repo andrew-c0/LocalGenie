@@ -1,4 +1,5 @@
 import type { Message } from "../types";
+import { latestSummaryIndex } from "./compaction";
 import { isSystemEvent } from "./systemEvents";
 
 /** Rough characters-per-token ratio used to estimate how much of the window the chat fills. */
@@ -19,6 +20,11 @@ export function fileTokensOf(messages: Message[]): number {
   return Math.round(chars / CHARS_PER_TOKEN);
 }
 
+/** Estimated tokens one message adds to the context: its text and the text of its files. */
+export function estimatedTokensOf(message: Message): number {
+  return Math.round(message.content.length / CHARS_PER_TOKEN) + fileTokensOf([message]);
+}
+
 /** What the chat uses now: the total, the part from text files, and whether the total is exact. */
 export interface ContextUsage {
   /** Tokens in the context. Exact when the server reported the last reply's counts. */
@@ -33,10 +39,17 @@ export interface ContextUsage {
  * Context in use. The last reply that reported its counts gives the exact total up to that reply.
  * Messages after it are estimated, since the server has not counted them yet. Without such a reply,
  * everything is estimated.
+ *
+ * With a summary, the context is the summary plus the messages after it. Counts from replies before
+ * the summary describe a context that is gone, so they are ignored, and the summary text is estimated
+ * until a later reply reports its counts.
  */
 export function contextUsageOf(messages: Message[]): ContextUsage {
+  const summaryAt = latestSummaryIndex(messages);
+
+  // Only replies after the summary row can give an exact count (the row itself has none).
   let anchor = -1;
-  for (let i = messages.length - 1; i >= 0; i--) {
+  for (let i = messages.length - 1; i > summaryAt; i--) {
     if (messages[i].usage) {
       anchor = i;
       break;
@@ -45,14 +58,22 @@ export function contextUsageOf(messages: Message[]): ContextUsage {
 
   const usage = anchor >= 0 ? messages[anchor].usage : undefined;
   const base = usage ? usage.promptTokens + usage.completionTokens : 0;
+  // The summary text is in the context until a reply after it has reported its counts.
+  const summaryInContext = summaryAt >= 0 && anchor < summaryAt;
+  const summaryChars = summaryInContext ? (messages[summaryAt]?.content.length ?? 0) : 0;
   // System lines are not sent to the model, so they add nothing to the context.
-  const since = messages.slice(anchor + 1).filter((m) => !isSystemEvent(m));
-  const sinceChars = since.reduce((sum, m) => sum + m.content.length, 0);
+  const since = messages
+    .slice(summaryInContext ? summaryAt + 1 : anchor + 1)
+    .filter((m) => !isSystemEvent(m));
+  const sinceChars = summaryChars + since.reduce((sum, m) => sum + m.content.length, 0);
   const total = base + Math.round(sinceChars / CHARS_PER_TOKEN) + fileTokensOf(since);
+
+  // Files sent before the summary are no longer in the context.
+  const inContext = summaryAt >= 0 ? messages.slice(summaryAt + 1) : messages;
 
   return {
     total,
-    fileTokens: Math.min(fileTokensOf(messages), total),
+    fileTokens: Math.min(fileTokensOf(inContext), total),
     exact: usage !== undefined,
   };
 }

@@ -90,6 +90,27 @@ pub fn strip_precision(name: &str) -> &str {
     }
 }
 
+/// Remove the model's thinking from `text`: closed `<think>` blocks, a lone closing tag and what
+/// comes before it, and a block that never closed.
+pub fn strip_think(text: &str) -> String {
+    const OPEN: &str = "<think>";
+    const CLOSE: &str = "</think>";
+    let mut rest = text.to_string();
+    while let Some(start) = rest.find(OPEN) {
+        let Some(length) = rest[start..].find(CLOSE) else {
+            break;
+        };
+        rest.replace_range(start..start + length + CLOSE.len(), "");
+    }
+    if let Some(end) = rest.rfind(CLOSE) {
+        rest = rest[end + CLOSE.len()..].to_string();
+    }
+    if let Some(start) = rest.find(OPEN) {
+        rest.truncate(start);
+    }
+    rest
+}
+
 /// Resolve the model name to send to the server.
 /// The chat server expects "org/repo" WITHOUT precision suffix.
 pub fn resolve_model_for_server(model: Option<&str>) -> Option<String> {
@@ -300,8 +321,8 @@ pub fn no_output_error(url: &str, limit_secs: u64) -> String {
 mod tests {
     use super::{
         build_chat_body, chat_done_payload, finish_reason_from_chunk, is_first_output,
-        no_output_error, strip_precision, usage_from_chunk, GenerationSettings, ModelLoadParams,
-        ReplyUsage,
+        no_output_error, strip_precision, strip_think, usage_from_chunk, GenerationSettings,
+        ModelLoadParams, ReplyUsage,
     };
 
     #[test]
@@ -401,6 +422,15 @@ mod tests {
         };
         let body = build_chat_body(vec![], None, &settings);
         assert_eq!(body["stream_options"]["include_usage"], true);
+    }
+
+    #[test]
+    fn thinking_is_removed() {
+        assert_eq!(strip_think("<think>hmm</think>Hello"), "Hello");
+        assert_eq!(strip_think("a<think>x</think>b<think>y</think>c"), "abc");
+        assert_eq!(strip_think("hmm</think>Hello"), "Hello");
+        assert_eq!(strip_think("Hello<think>never ends"), "Hello");
+        assert_eq!(strip_think("no thinking"), "no thinking");
     }
 
     #[test]

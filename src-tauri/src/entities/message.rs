@@ -30,6 +30,9 @@ pub struct Model {
     pub system_type: Option<String>,
     /// The compute target (`npu`, `gpu` or `cpu`) an assistant reply was generated on. Null when not kept.
     pub compute: Option<String>,
+    /// For a compaction summary (`system_type = "summary"`): the id of the last message it covers.
+    /// Null for every other message.
+    pub covers_through_id: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

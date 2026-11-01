@@ -4,6 +4,7 @@ import { useState } from "react";
 import * as db from "../../services/database";
 import { useChatStore } from "../../stores/chatStore";
 import type { Message } from "../../types";
+import { canRemoveFrom } from "../../utils/compaction";
 import { formatDuration, formatTokPerSec } from "../../utils/format";
 import { parseThinking } from "../../utils/thinking";
 import { AttachmentList } from "../chat/AttachmentList/AttachmentList";
@@ -14,13 +15,14 @@ import "./MessageBubble.css";
 
 /**
  * Removes a message and every message after it, from the chat and the database. Its files then
- * stop being sent with later turns.
+ * stop being sent with later turns. Nothing is removed when a summary covers the message or the
+ * range holds a summary row; the store refuses the same range.
  */
 function removeFrom(sessionId: string, messageId: string) {
   const store = useChatStore.getState();
   const session = store.sessions.find((s) => s.id === sessionId);
   const idx = session?.messages.findIndex((m) => m.id === messageId) ?? -1;
-  if (!session || idx < 0) return;
+  if (!session || idx < 0 || !canRemoveFrom(session.messages, idx)) return;
 
   const removed = session.messages.slice(idx);
   store.removeMessagesFrom(sessionId, messageId);
@@ -36,6 +38,8 @@ interface MessageBubbleProps {
   isStreaming?: boolean;
   /** True for the reply that is being streamed right now. */
   isLive?: boolean;
+  /** True when a summary stands in for this message (or is the summary row). No delete or retry. */
+  isCovered?: boolean;
 }
 
 export default function MessageBubble({
@@ -43,6 +47,7 @@ export default function MessageBubble({
   isLastUserMessage = false,
   isStreaming = false,
   isLive = false,
+  isCovered = false,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
@@ -52,13 +57,15 @@ export default function MessageBubble({
 
   const hasAttachments = (message.attachments?.length ?? 0) > 0;
   // Every message is sent to the model on later turns, so any of them can be removed with the ones after it.
-  const showDelete = !isStreaming;
+  // A message a summary covers stays: the summary has replaced it, and it cannot be removed.
+  const showDelete = !isStreaming && !isCovered;
   // Files saved before paths were kept cannot be read again, so their message cannot be retried.
   const filesCanBeResent = (message.attachments ?? []).every((file) => !!file.path);
   const showRetry =
     isUser &&
     isLastUserMessage &&
     !isStreaming &&
+    !isCovered &&
     filesCanBeResent &&
     (message.content.trim() || hasAttachments);
 

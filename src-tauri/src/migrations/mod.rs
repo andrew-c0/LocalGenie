@@ -19,6 +19,7 @@ mod m20261031_000001_message_kind;
 mod m20261032_000001_message_compute;
 mod m20261033_000001_downloaded_model_facets;
 mod m20261034_000001_create_installed_runtimes;
+mod m20261035_000001_message_covers_through;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -44,6 +45,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261032_000001_message_compute::Migration),
             Box::new(m20261033_000001_downloaded_model_facets::Migration),
             Box::new(m20261034_000001_create_installed_runtimes::Migration),
+            Box::new(m20261035_000001_message_covers_through::Migration),
         ]
     }
 }
@@ -205,6 +207,7 @@ mod tests {
             kind: Set("text".into()),
             system_type: Set(None),
             compute: Set(None),
+            covers_through_id: Set(None),
         }
         .insert(&db)
         .await
@@ -220,8 +223,8 @@ mod tests {
         assert_eq!(msg.token_count, Some(42));
         assert_eq!(msg.prompt_chars, Some(7));
 
-        // Fifteen steps: the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets and installed runtimes migrations come after this one.
-        Migrator::down(&db, Some(15))
+        // Sixteen steps: the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes and message covers-through migrations come after this one.
+        Migrator::down(&db, Some(16))
             .await
             .expect("revert stats migration");
         let after_down = columns(db.clone()).await;
@@ -251,8 +254,8 @@ mod tests {
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
         // Put back the old JSON row, then apply the migrations again so it copies it.
-        // Fourteen steps: the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets and installed runtimes migrations come after the settings one.
-        Migrator::down(&db, Some(14))
+        // Fifteen steps: the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes and message covers-through migrations come after the settings one.
+        Migrator::down(&db, Some(15))
             .await
             .expect("revert settings migration");
         db.execute(Statement::from_string(
@@ -360,6 +363,7 @@ mod tests {
             kind: Set("text".into()),
             system_type: Set(None),
             compute: Set(None),
+            covers_through_id: Set(None),
         }
         .insert(&db)
         .await
@@ -574,8 +578,8 @@ mod tests {
         assert_eq!(row.facets.as_deref(), Some(facets));
 
         // Reverting drops the column; reapplying brings it back as null for old rows.
-        // Two steps: the installed runtimes migration comes after this one.
-        Migrator::down(&db, Some(2)).await.expect("revert facets");
+        // Three steps: the installed runtimes and message covers-through migrations come after this one.
+        Migrator::down(&db, Some(3)).await.expect("revert facets");
         assert!(!columns(db.clone()).await.iter().any(|c| c == "facets"));
         Migrator::up(&db, None).await.expect("reapply facets");
         let row = downloaded_model::Entity::find_by_id("org/model")
@@ -614,6 +618,68 @@ mod tests {
             .await
             .expect("query")
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn covers_through_is_stored_on_a_message_and_null_otherwise() {
+        let tmp = TempDb::new("migrate-covers");
+        let db = init_database(&tmp.url()).await.expect("migrations apply");
+
+        chat_session::ActiveModel {
+            id: Set("s1".into()),
+            title: Set("t".into()),
+            model_id: Set(None),
+            context_chars: Set(0),
+            created_at: Set(1),
+            updated_at: Set(1),
+            pinned: Set(false),
+            settings_overrides: Set(None),
+        }
+        .insert(&db)
+        .await
+        .expect("insert session");
+
+        message::ActiveModel {
+            id: Set("sum1".into()),
+            session_id: Set("s1".into()),
+            role: Set("system".into()),
+            content: Set("- Asked about 221.".into()),
+            model_id: Set(None),
+            created_at: Set(2),
+            kind: Set("system".into()),
+            system_type: Set(Some("summary".into())),
+            covers_through_id: Set(Some("m9".into())),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await
+        .expect("insert summary row");
+
+        message::ActiveModel {
+            id: Set("m1".into()),
+            session_id: Set("s1".into()),
+            role: Set("user".into()),
+            content: Set("hi".into()),
+            model_id: Set(None),
+            created_at: Set(3),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await
+        .expect("insert chat message");
+
+        let summary = message::Entity::find_by_id("sum1")
+            .one(&db)
+            .await
+            .expect("query")
+            .expect("row exists");
+        assert_eq!(summary.covers_through_id.as_deref(), Some("m9"));
+        let chat = message::Entity::find_by_id("m1")
+            .one(&db)
+            .await
+            .expect("query")
+            .expect("row exists");
+        assert_eq!(chat.covers_through_id, None);
     }
 
     #[tokio::test]

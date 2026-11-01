@@ -21,6 +21,7 @@ use commands::capability_scan;
 use commands::chat;
 use commands::cli;
 use commands::cli_update;
+use commands::compaction;
 use commands::database;
 use commands::files;
 use commands::hub;
@@ -90,6 +91,9 @@ pub fn run() {
             chat::cancel_chat_completion,
             chat::load_model,
             chat::unload_all_models,
+            // Conversation compaction
+            compaction::compact_conversation,
+            compaction::cancel_compaction,
             // CLI utilities
             cli::check_geniex_installed,
             cli::get_runtime_versions,

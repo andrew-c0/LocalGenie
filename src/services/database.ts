@@ -53,6 +53,7 @@ interface DbMessageRow {
   kind: string;
   system_type: string | null;
   compute: string | null;
+  covers_through_id: string | null;
 }
 
 /** Exact usage of a reply, when both counts are stored. */
@@ -116,6 +117,7 @@ export async function loadSessions(): Promise<ChatSession[]> {
       kind: m.kind === "system" ? "system" : "text",
       systemType: m.system_type ?? undefined,
       compute: m.compute ?? undefined,
+      coversThroughId: m.covers_through_id ?? undefined,
     }));
     // Errors come back as their own rows; show them in time order, after the reply they belong to.
     const errors: Message[] = row.errors.map((e) => ({
@@ -188,6 +190,7 @@ export async function saveMessage(sessionId: string, message: Message): Promise<
       kind: message.kind ?? "text",
       system_type: message.systemType ?? null,
       compute: message.compute ?? null,
+      covers_through_id: message.coversThroughId ?? null,
     },
   });
 }

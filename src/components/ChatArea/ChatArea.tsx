@@ -2,6 +2,7 @@ import { Caption1, Spinner } from "@fluentui/react-components";
 import { useEffect, useRef } from "react";
 import { useChatStore } from "../../stores/chatStore";
 import type { Message } from "../../types";
+import { coveredMessageIds } from "../../utils/compaction";
 import { isSystemEvent } from "../../utils/systemEvents";
 import { parseThinking } from "../../utils/thinking";
 import MessageBubble from "../MessageBubble/MessageBubble";
@@ -26,6 +27,7 @@ export default function ChatArea() {
   const activeSessionId = useChatStore((s) => s.activeSessionId);
   const sessions = useChatStore((s) => s.sessions);
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const compacting = useChatStore((s) => s.compacting);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const session = sessions.find((s) => s.id === activeSessionId);
@@ -39,11 +41,16 @@ export default function ChatArea() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: message length is the intended trigger, not array identity
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: isStreaming ? "auto" : "smooth" });
-  }, [session?.messages.length, lastMessageLength, isStreaming]);
+  }, [session?.messages.length, lastMessageLength, isStreaming, compacting]);
 
   if (!session) return null;
 
-  const statusLabel = streamingStatus(session.messages, isStreaming);
+  // A summary runs before the send, so it is shown in place of the streaming status.
+  const statusLabel = compacting
+    ? "Summarising the conversation…"
+    : streamingStatus(session.messages, isStreaming);
+  // Messages a summary stands in for: they cannot be deleted or retried.
+  const coveredIds = coveredMessageIds(session.messages);
 
   // Compute last user message ID once (avoids repeated .filter().slice() per bubble)
   let lastUserMsgId: string | undefined;
@@ -72,6 +79,7 @@ export default function ChatArea() {
         isLastUserMessage={msg.role === "user" && msg.id === lastUserMsgId}
         isStreaming={isStreaming}
         isLive={isStreaming && msg.id === lastMsgId}
+        isCovered={coveredIds.has(msg.id)}
       />,
     );
   }

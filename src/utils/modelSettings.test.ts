@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   chatSettingsFor,
+  contextWindowFor,
   draftModelDisabledReason,
   engineOf,
   loadSettingDisabledReason,
@@ -15,6 +16,14 @@ import {
 describe("SCAN_RECIPE", () => {
   it("is the default context window and nothing else", () => {
     expect(SCAN_RECIPE).toStrictEqual({ nctx: 4096 });
+  });
+});
+
+describe("contextWindowFor", () => {
+  it("is the saved window, else the native one, else null", () => {
+    expect(contextWindowFor({ nctx: 8192 }, 40960)).toBe(8192);
+    expect(contextWindowFor({}, 40960)).toBe(40960);
+    expect(contextWindowFor({}, null)).toBeNull();
   });
 });
 
