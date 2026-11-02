@@ -7,7 +7,7 @@ import type {
 import { DEFAULT_LOAD_SETTINGS, type ModelEngine, usesDraftModel } from "./modelSettings";
 
 /** Settings that can show a warning next to their control. */
-export type WarnedSetting = "nctx" | "ngl" | "compute" | "spec" | "draftModel";
+type WarnedSetting = "nctx" | "ngl" | "spec" | "draftModel";
 
 export type SettingWarnings = Partial<Record<WarnedSetting, string>>;
 
@@ -30,7 +30,6 @@ export function settingWarnings(
     if (settings.ngl != null && settings.ngl !== DEFAULT_LOAD_SETTINGS.ngl) {
       warnings.ngl = LLAMA_ONLY;
     }
-    if (settings.compute) warnings.compute = LLAMA_ONLY;
     if (settings.specType) warnings.spec = LLAMA_ONLY;
     if (settings.specDraftModel) warnings.draftModel = LLAMA_ONLY;
     return warnings;
@@ -72,7 +71,7 @@ export interface CapabilityRow {
  * "rejected" result means the scan tested it and the model does not support it in practice, so
  * it reads "Not supported". No result, or a stale one, reads "Not tested".
  */
-export function scanRowValue(entry: CapabilityEntry | undefined): string {
+function scanRowValue(entry: CapabilityEntry | undefined): string {
   if (!entry || entry.stale) return "Not tested";
   switch (entry.status) {
     case "works":

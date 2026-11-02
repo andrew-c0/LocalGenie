@@ -1,7 +1,6 @@
 import type { BenchmarkRunSummary, ComputeTarget } from "../types";
 
 export type CompareMetric = "ttft" | "tokensPerSec" | "totalMs" | "ram" | "keywords";
-export type GroupBy = "model" | "compute" | "time";
 
 export const METRICS: Record<CompareMetric, { label: string; unit: string }> = {
   ttft: { label: "Mean TTFT", unit: "s" },
@@ -111,7 +110,7 @@ export function timeSeries(runs: BenchmarkRunSummary[], metric: CompareMetric): 
 }
 
 /** One run's figure, placed at its position in start order. */
-export interface RunPoint {
+interface RunPoint {
   /** Run number: 1 for the earliest run of its series. */
   x: number;
   y: number;

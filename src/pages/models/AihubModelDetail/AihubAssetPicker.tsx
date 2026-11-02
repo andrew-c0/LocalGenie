@@ -16,6 +16,7 @@ import {
   isAssetForDevice,
 } from "../../../utils/aihub";
 import { parseGGUFFilename } from "../../../utils/gguf";
+import { useDownloadedPrecisions } from "../useHubModelDetail";
 
 interface Props {
   model: AihubModelDetail;
@@ -27,6 +28,12 @@ interface Props {
  */
 function assetKey(asset: AihubAsset): string {
   return `${asset.chipset ?? ""}|${asset.downloadUrl}`;
+}
+
+/** The precision an asset is stored under once imported: a GGUF file's encoding, else the asset's own. */
+function precisionOf(asset: AihubAsset): string {
+  const gguf = hfFileOf(asset.downloadUrl);
+  return (gguf && parseGGUFFilename(gguf.filename)?.encoding) || asset.precision;
 }
 
 /** Whether an asset is universal, for this device, or for another chipset. */
@@ -73,12 +80,18 @@ export function AihubAssetPicker({ model, assets }: Props) {
     assets.find((a) => assetKey(a) === chosenKey) ??
     assets.find((a) => isAssetForDevice(a.chipset, deviceChipset)) ??
     assets[0];
+  // Called for every render, so before the early return: the precisions already imported for this
+  // asset's repo (the Hugging Face repo of a GGUF asset, else the AI Hub model).
+  const downloadedPrecisions = useDownloadedPrecisions(
+    (selected && hfFileOf(selected.downloadUrl)?.repoId) || modelName,
+  );
   if (!selected) return null;
 
   const gguf = hfFileOf(selected.downloadUrl);
   const downloadId = gguf?.repoId ?? modelName;
   const busy = downloads.some((d) => d.id === downloadId && isDownloadActive(d.status));
   const allowed = isAssetForDevice(selected.chipset, deviceChipset);
+  const downloaded = downloadedPrecisions.has(precisionOf(selected));
 
   const options = assets.map((asset) => ({
     value: assetKey(asset),
@@ -89,6 +102,11 @@ export function AihubAssetPicker({ model, assets }: Props) {
         <Flex align="center" gap="s" wrap>
           <Badge appearance="outline">{asset.precision}</Badge>
           <Meta>{asset.chipset ?? "Any chipset"}</Meta>
+          {downloadedPrecisions.has(precisionOf(asset)) && (
+            <Badge appearance="tint" color="success" size="small">
+              Downloaded
+            </Badge>
+          )}
         </Flex>
         <DeviceMatchBadge chipset={asset.chipset} deviceChipset={deviceChipset} />
       </Flex>
@@ -140,10 +158,10 @@ export function AihubAssetPicker({ model, assets }: Props) {
         <Button
           appearance="primary"
           icon={busy ? <Spinner size="tiny" /> : <ArrowDownloadRegular />}
-          disabled={busy || !allowed}
+          disabled={busy || !allowed || downloaded}
           onClick={handleDownload}
         >
-          {busy ? "Pulling…" : "Download"}
+          {busy ? "Pulling…" : downloaded ? "Downloaded" : "Download"}
         </Button>
       </Flex>
     </Flex>

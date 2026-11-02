@@ -30,7 +30,10 @@ const MAX_PROCESS_DEPTH: usize = 32;
 /// Sample CPU, GPU, NPU and memory utilization over one window and report the averages.
 /// `port` is the GenieX server port. It finds the server when the app did not start it.
 #[tauri::command]
-pub async fn get_system_usage(state: State<'_, AppState>, port: u16) -> Result<SystemUsage, String> {
+pub async fn get_system_usage(
+    state: State<'_, AppState>,
+    port: u16,
+) -> Result<SystemUsage, String> {
     let server_pid = *state
         .server_process
         .lock()
@@ -106,11 +109,18 @@ mod listeners {
     const ERROR_INSUFFICIENT_BUFFER: u32 = 122;
 
     /// Process id listening on `port` over IPv4, or None when nothing listens there.
-    pub fn owner_of_listener(port: u16) -> Option<u32> {
+    pub(super) fn owner_of_listener(port: u16) -> Option<u32> {
         let mut size = 0_u32;
         // SAFETY: a null table with a live size out-pointer asks the API for the required size.
         let status = unsafe {
-            GetExtendedTcpTable(None, &mut size, false, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0)
+            GetExtendedTcpTable(
+                None,
+                &mut size,
+                false,
+                AF_INET,
+                TCP_TABLE_OWNER_PID_LISTENER,
+                0,
+            )
         };
         if status != ERROR_INSUFFICIENT_BUFFER || size == 0 {
             return None;
@@ -149,7 +159,7 @@ mod listeners {
 /// Non-Windows hosts have no IP Helper table, so the server is only found when the app started it.
 #[cfg(not(windows))]
 mod listeners {
-    pub fn owner_of_listener(_port: u16) -> Option<u32> {
+    pub(super) fn owner_of_listener(_port: u16) -> Option<u32> {
         None
     }
 }
@@ -163,15 +173,15 @@ mod engines {
     use windows::core::PCWSTR;
     use windows::Win32::System::Performance::{
         PdhAddEnglishCounterW, PdhCloseQuery, PdhCollectQueryData, PdhGetFormattedCounterArrayW,
-        PdhOpenQueryW, PDH_FMT_COUNTERVALUE_ITEM_W, PDH_FMT_DOUBLE, PDH_HCOUNTER, PDH_HQUERY,
-        PDH_CSTATUS_NEW_DATA, PDH_CSTATUS_VALID_DATA, PDH_MORE_DATA,
+        PdhOpenQueryW, PDH_CSTATUS_NEW_DATA, PDH_CSTATUS_VALID_DATA, PDH_FMT_COUNTERVALUE_ITEM_W,
+        PDH_FMT_DOUBLE, PDH_HCOUNTER, PDH_HQUERY, PDH_MORE_DATA,
     };
 
     const ENGINE_COUNTER: &str = r"\GPU Engine(*)\Utilization Percentage";
 
     /// An open query on the engine counter. The query is opened per sample, so engine instances of
     /// processes started during the window are included.
-    pub struct EngineSample {
+    pub(super) struct EngineSample {
         query: PDH_HQUERY,
         counter: PDH_HCOUNTER,
     }
@@ -198,7 +208,7 @@ mod engines {
         }
 
         /// Take the second reading and return (GPU, NPU) utilization.
-        pub fn finish(self) -> (Option<f64>, Option<f64>) {
+        pub(super) fn finish(self) -> (Option<f64>, Option<f64>) {
             // SAFETY: the query and counter were created in `begin` and are closed only in `drop`.
             unsafe {
                 if PdhCollectQueryData(self.query) != 0 {
@@ -225,13 +235,22 @@ mod engines {
         let mut item_count = 0u32;
         // SAFETY: a null buffer asks PDH for the required size; both out-pointers are live locals.
         let status = unsafe {
-            PdhGetFormattedCounterArrayW(counter, PDH_FMT_DOUBLE, &mut buffer_size, &mut item_count, None)
+            PdhGetFormattedCounterArrayW(
+                counter,
+                PDH_FMT_DOUBLE,
+                &mut buffer_size,
+                &mut item_count,
+                None,
+            )
         };
         if status != PDH_MORE_DATA {
             return Vec::new();
         }
         let item_size = std::mem::size_of::<PDH_FMT_COUNTERVALUE_ITEM_W>();
-        let mut items = vec![PDH_FMT_COUNTERVALUE_ITEM_W::default(); (buffer_size as usize).div_ceil(item_size)];
+        let mut items = vec![
+            PDH_FMT_COUNTERVALUE_ITEM_W::default();
+            (buffer_size as usize).div_ceil(item_size)
+        ];
         // SAFETY: `items` holds at least `buffer_size` bytes; PDH writes names into the same
         // allocation, so they are read before `items` is dropped.
         let status = unsafe {
@@ -249,7 +268,8 @@ mod engines {
         items[..item_count as usize]
             .iter()
             .filter(|item| {
-                item.FmtValue.CStatus == PDH_CSTATUS_VALID_DATA || item.FmtValue.CStatus == PDH_CSTATUS_NEW_DATA
+                item.FmtValue.CStatus == PDH_CSTATUS_VALID_DATA
+                    || item.FmtValue.CStatus == PDH_CSTATUS_NEW_DATA
             })
             .map(|item| {
                 // SAFETY: PDH's instance names are NUL-terminated and live in `items`'s allocation.
@@ -276,7 +296,9 @@ mod engines {
         let mut npu: Option<f64> = None;
         for engines in adapters.values() {
             let util = engines.values().copied().fold(0.0_f64, f64::max).min(100.0);
-            let is_npu = engines.keys().all(|engine| engine.to_ascii_lowercase().starts_with("compute"));
+            let is_npu = engines
+                .keys()
+                .all(|engine| engine.to_ascii_lowercase().starts_with("compute"));
             let slot = if is_npu { &mut npu } else { &mut gpu };
             *slot = Some(slot.map_or(util, |current| current.max(util)));
         }
@@ -295,14 +317,14 @@ mod engines {
 /// Non-Windows hosts have no engine counters, so GPU and NPU are reported as unavailable.
 #[cfg(not(windows))]
 mod engines {
-    pub struct EngineSample;
+    pub(super) struct EngineSample;
 
     impl EngineSample {
         pub fn begin() -> Option<Self> {
             None
         }
 
-        pub fn finish(self) -> (Option<f64>, Option<f64>) {
+        pub(super) fn finish(self) -> (Option<f64>, Option<f64>) {
             (None, None)
         }
     }
@@ -342,4 +364,3 @@ mod tests {
         assert_eq!(listeners::owner_of_listener(port), Some(std::process::id()));
     }
 }
-

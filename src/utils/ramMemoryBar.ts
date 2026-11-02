@@ -8,7 +8,7 @@ export interface MemoryFigures {
 }
 
 /** Widths of the three stacked segments, each in percent of total RAM. They add up to 100. */
-export interface MemoryBarSegments {
+interface MemoryBarSegments {
   usedPercent: number;
   freePercent: number;
   keptFreePercent: number;

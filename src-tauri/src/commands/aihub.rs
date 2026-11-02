@@ -22,7 +22,7 @@ use crate::aihub_proto::{
 
 /// Fallback catalog release, used when no probed version is found (network down, bucket error).
 /// Bump it when a new AI Hub release is adopted.
-pub const AIHUB_FALLBACK_VERSION: &str = "0.65.0";
+const AIHUB_FALLBACK_VERSION: &str = "0.65.0";
 
 /// Probe window, relative to the fallback: the next `PROBE_PATCHES` patch versions of the fallback,
 /// then patch versions `0..PROBE_PATCHES_PER_MINOR` of the next `PROBE_MINORS` minor versions.
@@ -90,15 +90,6 @@ pub struct AihubModelDetail {
     pub call_to_action: Option<String>,
     /// `None` when the release assets could not be read; the model info is still returned.
     pub assets: Option<Vec<AihubAsset>>,
-}
-
-/// Catalog release version for this session (probed once, see `resolve_version`).
-#[tauri::command]
-pub async fn aihub_latest_version(
-    state: State<'_, AppState>,
-    cache: State<'_, AihubCache>,
-) -> Result<String, String> {
-    Ok(resolve_version(&state.http_client, &cache).await)
 }
 
 /// Models in the catalog that have at least one runnable asset. A model whose release assets are
@@ -194,7 +185,7 @@ fn remember_asset_urls(cache: &AihubCache, assets: &[AihubAsset]) {
 
 /// Check an AI Hub URL before `download_file` fetches it. Only a zip that an opened model listed,
 /// for the chipset this device has (or one not tied to a chipset), is accepted.
-pub async fn check_asset_download(cache: &AihubCache, url: &str) -> Result<(), String> {
+pub(super) async fn check_asset_download(cache: &AihubCache, url: &str) -> Result<(), String> {
     require_https(url)?;
     let device = device_chipset().await;
     check_remembered(cache, url, device.as_deref())
@@ -228,7 +219,7 @@ fn check_remembered(cache: &AihubCache, url: &str, device: Option<&str>) -> Resu
 
 /// A chipset-specific asset is allowed only for the device's chipset. An asset with no chipset is
 /// allowed for any device. A device with no chipset set matches none.
-pub fn asset_allowed(asset_chipset: Option<&str>, device: Option<&str>) -> bool {
+fn asset_allowed(asset_chipset: Option<&str>, device: Option<&str>) -> bool {
     match asset_chipset {
         None => true,
         Some(asset) => device.is_some_and(|d| same_chipset(asset, d)),
@@ -426,7 +417,7 @@ fn probe_candidates(fallback: &str) -> Vec<String> {
 
 /// The highest of `fallback` and the versions that answered 200. Versions that do not parse
 /// are ignored. Pure, so the selection rule is testable without the network.
-pub fn highest_available(fallback: &str, available: &[String]) -> String {
+fn highest_available(fallback: &str, available: &[String]) -> String {
     let mut best = fallback.to_string();
     let mut best_key = parse_version(fallback);
     for v in available {
@@ -482,7 +473,7 @@ fn is_supported_runtime(runtime: i32) -> bool {
 }
 
 /// Only models with a runnable asset belong in this tab. Unknown enum values become empty strings.
-pub fn catalog_entries(manifest: &ReleaseManifest) -> Vec<AihubCatalogEntry> {
+fn catalog_entries(manifest: &ReleaseManifest) -> Vec<AihubCatalogEntry> {
     manifest
         .models
         .iter()
@@ -521,7 +512,7 @@ pub fn catalog_entries(manifest: &ReleaseManifest) -> Vec<AihubCatalogEntry> {
 
 /// Runnable assets: QAIRT zips (runtime 11) and llama.cpp GGUF files (runtime 12, a Hugging Face
 /// URL), sorted by precision then chipset.
-pub fn model_assets(assets: &[AssetDetails]) -> Vec<AihubAsset> {
+fn model_assets(assets: &[AssetDetails]) -> Vec<AihubAsset> {
     let mut out: Vec<AihubAsset> = assets
         .iter()
         .filter(|a| is_supported_runtime(a.runtime) && !a.download_url.is_empty())

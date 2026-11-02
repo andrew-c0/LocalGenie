@@ -11,7 +11,7 @@ import type {
 const DEFAULT_PORT = 18181;
 
 /** Default compute target used when the user has not picked one. */
-export const DEFAULT_COMPUTE = "npu";
+const DEFAULT_COMPUTE = "npu";
 
 /** Valid compute targets for the `geniex serve --compute` flag. */
 export const COMPUTE_TARGETS = ["npu", "gpu", "cpu"] as const;

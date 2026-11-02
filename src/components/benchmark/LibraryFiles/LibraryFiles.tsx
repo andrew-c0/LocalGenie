@@ -22,7 +22,7 @@ function FileIcon({ kind }: { kind: BenchmarkFile["kind"] }) {
 }
 
 /** Size and length of a library file, for display. */
-export function fileDetail(file: BenchmarkFile): string {
+function fileDetail(file: BenchmarkFile): string {
   const parts: string[] = [];
   if (file.chars != null) parts.push(`${file.chars.toLocaleString()} characters`);
   if (file.size != null) parts.push(`${(file.size / 1024).toFixed(1)} KB`);

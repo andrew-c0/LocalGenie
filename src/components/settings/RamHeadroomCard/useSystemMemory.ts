@@ -3,7 +3,7 @@ import type { SystemMemoryInfo } from "../../../services/system";
 import { getSystemMemory } from "../../../services/system";
 
 /** How often the memory figures refresh while the window is visible. */
-export const SYSTEM_MEMORY_POLL_MS = 5_000;
+const SYSTEM_MEMORY_POLL_MS = 5_000;
 
 /**
  * Total and available system RAM. Read on mount, then every `intervalMs` while the document is

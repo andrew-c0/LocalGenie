@@ -56,10 +56,31 @@ export function useModelLoader() {
     toast.error("GenieX server stopped", "The server process exited unexpectedly.");
   });
 
+  /**
+   * True when the model is loaded on another compute target than the one it would load on now (its
+   * own setting, else the header's). Unknown when the app did not load it, so that counts as no.
+   */
+  const loadedOnOtherCompute = async (name: string): Promise<boolean> => {
+    const loadedAs = useModelStore.getState().loadedCompute;
+    if (loadedAs === null) return false;
+    const key = modelSettingsKey(name);
+    const [saved, nativeContext] = await Promise.all([
+      db.loadModelSettings(key).catch(() => ({})),
+      db.loadNativeContext(key).catch(() => null),
+    ]);
+    const model = useModelStore.getState().models.find((m) => m.name === name);
+    const wanted = resolveLoadParams(saved, engineOf(model), compute, nativeContext).compute;
+    return wanted !== undefined && wanted !== loadedAs;
+  };
+
   /** Load a model and make it active. Starts or restarts the server first if its server settings differ. */
   const selectModel = async (name: string) => {
     const key = shortModelKey(name);
-    if (serverStatus.models.some((lm) => shortModelKey(lm) === key)) {
+    // A loaded model is only made active, unless the compute target changed: then it loads again.
+    if (
+      serverStatus.models.some((lm) => shortModelKey(lm) === key) &&
+      !(await loadedOnOtherCompute(name))
+    ) {
       setActiveModel(name);
       setSelectorOpen(false);
       return;
@@ -110,7 +131,7 @@ export function useModelLoader() {
   };
 
   /**
-   * Switch the default compute target. Models without their own compute setting use it, and the
+   * Switch the compute target. Every model loads on it, and the
    * change takes effect with the next message, so nothing restarts here.
    */
   const changeCompute = (next: ComputeChoice) => {

@@ -10,6 +10,7 @@ use sea_orm_migration::MigratorTrait;
 use serde::{Deserialize, Serialize};
 
 use super::capability_scan;
+use super::ram_store;
 use crate::entities::{chat_error, chat_session, downloaded_model, message, user_preference};
 use crate::migrations::Migrator;
 use crate::model_settings;
@@ -365,14 +366,25 @@ pub async fn load_model_settings(
     model_settings::load(&db, &model_id).await
 }
 
-/// Replaces the saved settings for a model with `settings`. Keys left out are removed.
+/// Replaces the saved settings for a model with `settings`. Keys left out are removed. A change of
+/// the saved context window (including a reset) recomputes the model's stored KV-cache RAM. That
+/// recompute never fails the save.
 #[tauri::command]
 pub async fn save_model_settings(
     db: tauri::State<'_, DatabaseConnection>,
     model_id: String,
     settings: HashMap<String, serde_json::Value>,
 ) -> Result<(), String> {
-    model_settings::save(&db, &model_id, settings).await
+    let before = model_settings::load(&db, &model_id)
+        .await
+        .ok()
+        .and_then(|saved| ram_store::saved_context(&saved));
+    let after = ram_store::saved_context(&settings);
+    model_settings::save(&db, &model_id, settings).await?;
+    if before != after {
+        ram_store::refresh_by_name_or_log(&db, &model_id).await;
+    }
+    Ok(())
 }
 
 // ─── User Preferences ──────────────────────────────────────────────
@@ -462,13 +474,16 @@ pub(super) struct DownloadedModelRow {
     pub facets: Option<String>,
 }
 
-/// Insert or update the metadata row of a model. Used by the command and by backend imports.
+/// Insert or update the metadata row of a model, then compute its RAM columns. Used by the command
+/// and by backend imports. The RAM columns are cleared first, so a failed compute leaves them null
+/// rather than stale. That compute never fails the store.
 pub(super) async fn store_downloaded_model(
     db: &DatabaseConnection,
     row: DownloadedModelRow,
 ) -> Result<(), String> {
     validate_facets(row.facets.as_deref())?;
     let now = now_millis();
+    let name = row.name.clone();
     downloaded_model::Entity::insert(downloaded_model::ActiveModel {
         name: Set(row.name),
         precision: Set(row.precision),
@@ -477,6 +492,9 @@ pub(super) async fn store_downloaded_model(
         repo_url: Set(row.repo_url),
         model_card: Set(row.model_card),
         facets: Set(row.facets),
+        base_ram_bytes: Set(None),
+        context_ram_bytes: Set(None),
+        ram_approximate: Set(None),
         created_at: Set(now),
         updated_at: Set(now),
     })
@@ -489,6 +507,9 @@ pub(super) async fn store_downloaded_model(
                 downloaded_model::Column::RepoUrl,
                 downloaded_model::Column::ModelCard,
                 downloaded_model::Column::Facets,
+                downloaded_model::Column::BaseRamBytes,
+                downloaded_model::Column::ContextRamBytes,
+                downloaded_model::Column::RamApproximate,
                 downloaded_model::Column::UpdatedAt,
             ])
             .to_owned(),
@@ -496,6 +517,7 @@ pub(super) async fn store_downloaded_model(
     .exec(db)
     .await
     .map_err(|e| e.to_string())?;
+    ram_store::refresh_by_name_or_log(db, &name).await;
     Ok(())
 }
 
@@ -548,7 +570,7 @@ pub async fn delete_downloaded_model(
 }
 
 /// Facets are stored as text the frontend reads back as an object, so anything else is refused.
-pub fn validate_facets(facets: Option<&str>) -> Result<(), String> {
+fn validate_facets(facets: Option<&str>) -> Result<(), String> {
     let Some(text) = facets else {
         return Ok(());
     };
@@ -560,12 +582,12 @@ pub fn validate_facets(facets: Option<&str>) -> Result<(), String> {
 
 /// Where a downloaded model came from. Kept in its facets JSON under `source`, set by the import
 /// command (not derived from the name). Same vocabulary as `ModelInfo.source`.
-pub const SOURCE_HF: &str = "hf";
-pub const SOURCE_AIHUB: &str = "aihub";
+pub(super) const SOURCE_HF: &str = "hf";
+pub(super) const SOURCE_AIHUB: &str = "aihub";
 
 /// Facets JSON with `source` set to `source`. Null facets become an object holding only the source.
 /// Anything that is not a JSON object is refused.
-pub fn facets_with_source(facets: Option<&str>, source: &str) -> Result<String, String> {
+pub(super) fn facets_with_source(facets: Option<&str>, source: &str) -> Result<String, String> {
     let mut map = match facets {
         None => serde_json::Map::new(),
         Some(text) => match serde_json::from_str::<serde_json::Value>(text) {
@@ -582,7 +604,7 @@ pub fn facets_with_source(facets: Option<&str>, source: &str) -> Result<String, 
 
 /// The stored source in a facets JSON text, or None when there is none (rows from before the
 /// source was kept, or an unknown value).
-pub fn source_of_facets(facets: Option<&str>) -> Option<String> {
+fn source_of_facets(facets: Option<&str>) -> Option<String> {
     let value: serde_json::Value = serde_json::from_str(facets?).ok()?;
     match value.get("source")?.as_str()? {
         s @ (SOURCE_HF | SOURCE_AIHUB) => Some(s.to_owned()),
@@ -591,7 +613,9 @@ pub fn source_of_facets(facets: Option<&str>) -> Option<String> {
 }
 
 /// Stored source for every downloaded model that has one, keyed by the model name.
-pub async fn stored_sources(db: &DatabaseConnection) -> Result<HashMap<String, String>, String> {
+pub(super) async fn stored_sources(
+    db: &DatabaseConnection,
+) -> Result<HashMap<String, String>, String> {
     let rows = downloaded_model::Entity::find()
         .all(db)
         .await

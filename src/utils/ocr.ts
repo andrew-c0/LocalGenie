@@ -17,7 +17,7 @@ import {
 } from "./ocrText";
 
 /** The backend refuses pictures with a longer side than this. */
-export const OCR_INPUT_MAX_SIDE = 2500;
+const OCR_INPUT_MAX_SIDE = 2500;
 
 /** The compute choices a session starts with: the language model on the CPU, the vision encoder on the NPU. */
 export const DEFAULT_OCR_COMPUTE: OcrComputeSettings = { compute: "cpu", visionCompute: "npu" };

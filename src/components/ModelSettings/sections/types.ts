@@ -6,7 +6,6 @@ export type CapabilityMap = ReturnType<typeof capabilityMap>;
 
 /** Why a load or speculation setting is disabled for this model. Unset when it can be changed. */
 export interface SettingReasons {
-  compute?: string;
   nctx?: string;
   ngl?: string;
   spec?: string;

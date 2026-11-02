@@ -22,7 +22,7 @@ export async function savedLoadParams(name: string): Promise<ModelLoadParams> {
  * Unloads every model. The server has no per-model unload, so this stops the server, and the store
  * is cleared to match. Rejects when the server cannot be stopped.
  */
-export async function unloadModels(): Promise<void> {
+async function unloadModels(): Promise<void> {
   const store = () => useModelStore.getState();
   const stopped = await geniex.unloadAllModels(store().serverPort);
   store().setServerStatus(stopped);

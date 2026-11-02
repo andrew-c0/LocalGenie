@@ -1,73 +1,11 @@
-//! RAM estimate for each downloaded model, for the model selector and the load check. The files are
-//! read here; the arithmetic lives in `ram_estimate`.
+//! RAM a downloaded model needs once loaded, computed from its files when its row is stored. The files
+//! are read here; the arithmetic lives in `ram_estimate`.
 
 use std::path::Path;
 
-use serde::Serialize;
-
 use super::capabilities::{self, CachedFile, FolderFiles};
-use super::models::{self, GeniexListModel};
 use crate::gguf;
 use crate::ram_estimate::{self, RamEstimate};
-
-/// One downloaded model at one precision, with its RAM estimate in bytes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelRamEstimate {
-    /// The model's GenieX name (`org/repo`).
-    pub name: String,
-    /// Precision label from `geniex list`; empty when the listing names none.
-    pub precision: String,
-    pub weights_bytes: u64,
-    /// KV cache for the context window. Zero for a QAIRT bundle, whose context is baked in.
-    pub kv_bytes: u64,
-    /// Compute buffers, plus the vision projector when the model has one.
-    pub extra_bytes: u64,
-    pub total_bytes: u64,
-    /// True when the estimate used a flat factor, or the model's files could not be measured.
-    pub approximate: bool,
-}
-
-/// RAM each downloaded model needs once loaded. `nctx` sets the context for every model, capped at
-/// each model's native context when its header gives one, since a model cannot use more. `None`
-/// uses each model's native context, capped at 8192. A non-positive `nctx` is an error.
-#[tauri::command]
-pub async fn model_ram_estimates(nctx: Option<i32>) -> Result<Vec<ModelRamEstimate>, String> {
-    let requested = ram_estimate::requested_context(nctx)?;
-    let listed = models::geniex_list().await?;
-    tokio::task::spawn_blocking(move || {
-        listed
-            .iter()
-            .flat_map(|model| estimates_for_model(model, requested))
-            .collect()
-    })
-    .await
-    .map_err(|e| format!("RAM estimate failed: {e}"))
-}
-
-/// Estimates for each precision of one model listed by `geniex list`.
-fn estimates_for_model(model: &GeniexListModel, requested: Option<u64>) -> Vec<ModelRamEstimate> {
-    // A name that is not a valid cache path has no files here, so its estimate is zero and approximate.
-    let folder = capabilities::model_folder(&model.name).unwrap_or_default();
-    estimates_for_folder(&model.name, &folder, &precisions_of(model), requested)
-}
-
-/// Estimates for each precision of the model whose files are in `folder`.
-fn estimates_for_folder(
-    name: &str,
-    folder: &Path,
-    precisions: &[String],
-    requested: Option<u64>,
-) -> Vec<ModelRamEstimate> {
-    let files = capabilities::scan_folder(folder);
-    precisions
-        .iter()
-        .map(|precision| {
-            let estimate = estimate_for_precision(&files, folder, precision, requested);
-            to_row(name, precision, estimate)
-        })
-        .collect()
-}
 
 /// The estimate for one precision: GGUF weights when the folder has them, else the bundle's size.
 fn estimate_for_precision(
@@ -115,24 +53,33 @@ fn folder_bytes(folder: &Path) -> u64 {
         .fold(0_u64, |sum, meta| sum.saturating_add(meta.len()))
 }
 
-/// The precisions `geniex list` names, or one unnamed row when it names none.
-fn precisions_of(model: &GeniexListModel) -> Vec<String> {
-    match model.precisions.as_deref() {
-        Some(list) if !list.is_empty() => list.to_vec(),
-        _ => vec![String::new()],
+/// The RAM a downloaded model needs, as the columns stored on its `downloaded_models` row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct StoredRam {
+    /// Weights, compute buffers and projector. Does not depend on the context window.
+    pub(super) base_bytes: u64,
+    /// KV cache for the context window. Zero for a QAIRT bundle.
+    pub(super) context_bytes: u64,
+    /// True when a flat factor stood in for the cache, or the model's files could not be measured.
+    pub(super) approximate: bool,
+}
+
+impl StoredRam {
+    fn from_estimate(estimate: RamEstimate) -> Self {
+        Self {
+            base_bytes: estimate.weights_bytes.saturating_add(estimate.extra_bytes),
+            context_bytes: estimate.kv_bytes,
+            approximate: estimate.approximate,
+        }
     }
 }
 
-fn to_row(name: &str, precision: &str, estimate: RamEstimate) -> ModelRamEstimate {
-    ModelRamEstimate {
-        name: name.to_string(),
-        precision: precision.to_string(),
-        weights_bytes: estimate.weights_bytes,
-        kv_bytes: estimate.kv_bytes,
-        extra_bytes: estimate.extra_bytes,
-        total_bytes: estimate.total_bytes,
-        approximate: estimate.approximate,
-    }
+/// The stored RAM for one precision of the model whose files are in `folder`. `requested` is the
+/// saved context window (`None` for the default). The folder listing and the weights' header are
+/// each read once.
+pub(super) fn stored_ram_for(folder: &Path, precision: &str, requested: Option<u64>) -> StoredRam {
+    let files = capabilities::scan_folder(folder);
+    StoredRam::from_estimate(estimate_for_precision(&files, folder, precision, requested))
 }
 
 #[cfg(test)]
@@ -184,48 +131,42 @@ mod tests {
         build_header(&[kv_string("general.architecture", "clip")])
     }
 
-    fn precisions(list: &[&str]) -> Vec<String> {
-        list.iter().map(|p| p.to_string()).collect()
-    }
-
     #[test]
-    fn each_precision_gets_its_own_weights_file_and_the_projector() {
-        let folder = fresh_folder("precisions");
+    fn each_precision_gets_its_own_weights_file() {
+        let folder = fresh_folder("stored-precisions");
         write_padded(&folder, "model-Q4_0.gguf", &llama_header(), 2000);
         write_padded(&folder, "model-Q8_0.gguf", &llama_header(), 5000);
+
+        let q4 = stored_ram_for(&folder, "Q4_0", None);
+        let q8 = stored_ram_for(&folder, "Q8_0", None);
+        let _ = std::fs::remove_dir_all(&folder);
+
+        // Both sizes sit under the 256 MiB compute-buffer floor, so the bases differ by the weights alone.
+        assert_eq!(q4.base_bytes, 2000 + 256 * MIB);
+        assert_eq!(q8.base_bytes, 5000 + 256 * MIB);
+        assert_eq!(q4.context_bytes, q8.context_bytes);
+        assert!(!q4.approximate);
+        assert!(!q8.approximate);
+    }
+
+    #[test]
+    fn stored_ram_splits_base_from_the_default_context() {
+        let folder = fresh_folder("stored-default");
+        write_padded(&folder, "model-Q4_0.gguf", &llama_header(), 2000);
         write_padded(&folder, "mmproj-model.gguf", &projector_header(), 300);
 
-        let got = estimates_for_folder("org/model", &folder, &precisions(&["Q4_0", "Q8_0"]), None);
+        let got = stored_ram_for(&folder, "Q4_0", None);
         let _ = std::fs::remove_dir_all(&folder);
 
-        // No context in the header, so the 4096 fallback sizes the cache: 256 bytes x 4096.
-        let kv = 256 * 4096;
-        assert_eq!(got.len(), 2);
-        assert_eq!(got[0].precision, "Q4_0");
-        assert_eq!(got[0].weights_bytes, 2000);
-        assert_eq!(got[0].kv_bytes, kv);
-        assert_eq!(got[0].extra_bytes, 256 * MIB + 300);
-        assert_eq!(got[0].total_bytes, 2000 + kv + 256 * MIB + 300);
-        assert!(!got[0].approximate);
-        assert_eq!(got[1].precision, "Q8_0");
-        assert_eq!(got[1].weights_bytes, 5000);
+        // Base is weights + compute buffers (256 MiB floor) + projector. Context is 256 x 4096.
+        assert_eq!(got.base_bytes, 2000 + 256 * MIB + 300);
+        assert_eq!(got.context_bytes, 256 * 4096);
+        assert!(!got.approximate);
     }
 
     #[test]
-    fn a_requested_context_sizes_the_kv_cache() {
-        let folder = fresh_folder("requested");
-        write_padded(&folder, "model-Q4_0.gguf", &llama_header(), 2000);
-
-        let got = estimates_for_folder("org/model", &folder, &precisions(&["Q4_0"]), Some(1000));
-        let _ = std::fs::remove_dir_all(&folder);
-
-        assert_eq!(got[0].kv_bytes, 256 * 1000);
-        assert!(!got[0].approximate);
-    }
-
-    #[test]
-    fn a_requested_context_above_the_native_length_is_capped_at_it() {
-        let folder = fresh_folder("capped");
+    fn stored_ram_context_follows_the_saved_window() {
+        let folder = fresh_folder("stored-requested");
         write_padded(
             &folder,
             "model-Q4_0.gguf",
@@ -233,71 +174,53 @@ mod tests {
             2000,
         );
 
-        let got = estimates_for_folder("org/model", &folder, &precisions(&["Q4_0"]), Some(1000));
+        // The model's native context is 512, so a 1000-token window is capped there.
+        let capped = stored_ram_for(&folder, "Q4_0", Some(1000));
+        let smaller = stored_ram_for(&folder, "Q4_0", Some(256));
         let _ = std::fs::remove_dir_all(&folder);
 
-        // The model's native context is 512, so a 1000-token request sizes the cache for 512.
-        assert_eq!(got[0].kv_bytes, 256 * 512);
+        assert_eq!(capped.context_bytes, 256 * 512);
+        assert_eq!(smaller.context_bytes, 256 * 256);
+        assert_eq!(capped.base_bytes, smaller.base_bytes);
     }
 
     #[test]
-    fn an_unreadable_gguf_uses_the_flat_factor_and_is_approximate() {
-        let folder = fresh_folder("unreadable");
+    fn stored_ram_of_an_unreadable_gguf_is_flat_and_has_no_context() {
+        let folder = fresh_folder("stored-flat");
         write_padded(&folder, "broken.gguf", b"NOPE", 1000);
 
-        let got = estimates_for_folder("org/broken", &folder, &precisions(&[""]), None);
+        let got = stored_ram_for(&folder, "", None);
         let _ = std::fs::remove_dir_all(&folder);
 
-        assert_eq!(got[0].precision, "");
-        assert_eq!(got[0].weights_bytes, 1000);
-        assert_eq!(got[0].kv_bytes, 0);
-        assert_eq!(got[0].extra_bytes, 200);
-        assert_eq!(got[0].total_bytes, 1200);
-        assert!(got[0].approximate);
+        assert_eq!(got.base_bytes, 1200);
+        assert_eq!(got.context_bytes, 0);
+        assert!(got.approximate);
     }
 
     #[test]
-    fn a_folder_without_gguf_is_a_bundle_with_no_kv_cache() {
-        let folder = fresh_folder("bundle");
+    fn stored_ram_of_a_bundle_has_no_context() {
+        let folder = fresh_folder("stored-bundle");
         write_padded(&folder, "genie_config.json", b"{}", 100);
         write_padded(&folder, "weights.raw", b"raw", 900);
 
-        let got = estimates_for_folder("qualcomm/Model", &folder, &precisions(&["w4a16"]), None);
+        let got = stored_ram_for(&folder, "w4a16", Some(4096));
         let _ = std::fs::remove_dir_all(&folder);
 
-        assert_eq!(got[0].weights_bytes, 1000);
-        assert_eq!(got[0].kv_bytes, 0);
-        assert_eq!(got[0].extra_bytes, 100);
-        assert_eq!(got[0].total_bytes, 1100);
-        assert!(!got[0].approximate);
+        // 1000 bytes of bundle plus a tenth.
+        assert_eq!(got.base_bytes, 1100);
+        assert_eq!(got.context_bytes, 0);
+        assert!(!got.approximate);
     }
 
     #[test]
-    fn a_missing_folder_is_zero_and_approximate() {
-        let folder = std::env::temp_dir().join("localgenie-ram-does-not-exist");
+    fn stored_ram_of_a_missing_folder_is_zero_and_approximate() {
+        let folder = std::env::temp_dir().join("localgenie-ram-stored-missing");
         let _ = std::fs::remove_dir_all(&folder);
 
-        let got = estimates_for_folder("org/gone", &folder, &precisions(&[""]), None);
+        let got = stored_ram_for(&folder, "", None);
 
-        assert_eq!(got[0].total_bytes, 0);
-        assert!(got[0].approximate);
-    }
-
-    #[test]
-    fn a_model_with_no_listed_precision_gets_one_unnamed_row() {
-        assert_eq!(precisions_of(&listed(None)), vec![String::new()]);
-        assert_eq!(precisions_of(&listed(Some(vec![]))), vec![String::new()]);
-        assert_eq!(
-            precisions_of(&listed(Some(vec!["Q4_0".into()]))),
-            vec!["Q4_0".to_string()]
-        );
-    }
-
-    fn listed(precisions: Option<Vec<String>>) -> GeniexListModel {
-        GeniexListModel {
-            name: "org/model".into(),
-            size: None,
-            precisions,
-        }
+        assert_eq!(got.base_bytes, 0);
+        assert_eq!(got.context_bytes, 0);
+        assert!(got.approximate);
     }
 }

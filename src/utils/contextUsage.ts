@@ -3,7 +3,7 @@ import { latestSummaryIndex } from "./compaction";
 import { isSystemEvent } from "./systemEvents";
 
 /** Rough characters-per-token ratio used to estimate how much of the window the chat fills. */
-export const CHARS_PER_TOKEN = 4;
+const CHARS_PER_TOKEN = 4;
 
 /**
  * Tokens that the text files of the sent messages add to the context. Estimated from the characters

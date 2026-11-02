@@ -10,6 +10,7 @@ import {
 import { convertToGGUFFiles, groupGGUFFiles } from "../../services/hubModels";
 import type { SystemMemoryInfo } from "../../services/system";
 import { getSystemMemory } from "../../services/system";
+import { useModelStore } from "../../stores/modelStore";
 import { type HubFacetSummary, parseFacets } from "../../utils/hubModelInfo";
 
 /** Loads the model, its file listing, README or stored model card, and derives GGUF groups. */
@@ -95,7 +96,10 @@ export function useHubModelData(repoId: string, isLocal = false) {
 /** Precisions of this repo that are already imported into the local DB. */
 export function useDownloadedPrecisions(repoId: string) {
   const [downloadedPrecisions, setDownloadedPrecisions] = useState<Set<string>>(new Set());
+  // The local model list changes when a download finishes its import, so the set is read again then.
+  const localModels = useModelStore((s) => s.models);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the model list is the trigger, the rows are read from the DB
   useEffect(() => {
     let cancelled = false;
     if (!repoId) {
@@ -119,7 +123,7 @@ export function useDownloadedPrecisions(repoId: string) {
     return () => {
       cancelled = true;
     };
-  }, [repoId]);
+  }, [repoId, localModels]);
 
   return downloadedPrecisions;
 }

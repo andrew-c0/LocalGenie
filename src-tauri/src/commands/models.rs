@@ -120,43 +120,6 @@ pub(super) async fn installed_model_sizes() -> Result<std::collections::HashMap<
         .collect())
 }
 
-/// One Qualcomm AI Hub model that GenieX can run on this chipset.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AihubModel {
-    /// Fully-qualified HF-style id, e.g. `qualcomm/Qwen3-4B-Instruct-2507`.
-    pub name: String,
-    /// `llm` | `vlm`
-    pub model_type: String,
-}
-
-/// List Qualcomm AI Hub models compatible with the current chipset.
-/// Parses the table emitted by `geniex model list` (no JSON output available).
-#[tauri::command]
-pub async fn list_aihub_models() -> Result<Vec<AihubModel>, String> {
-    let stdout = run_geniex(&["model", "list"], "list AI Hub models").await?;
-
-    // Rows look like: `│ qualcomm/Falcon3-7B-Instruct            │  llm │`
-    Ok(stdout
-        .lines()
-        .filter(|l| l.trim_start().starts_with('│'))
-        .filter_map(|line| {
-            let cells: Vec<&str> = line.split('│').collect();
-            if cells.len() < 3 {
-                return None;
-            }
-            let name = cells[1].trim();
-            let model_type = cells[2].trim();
-            if name.is_empty() || name == "NAME" {
-                return None;
-            }
-            Some(AihubModel {
-                name: name.to_string(),
-                model_type: model_type.to_string(),
-            })
-        })
-        .collect())
-}
-
 /// Remove ALL cached models, freeing up local storage.
 #[tauri::command]
 pub async fn clean_models() -> Result<(), String> {

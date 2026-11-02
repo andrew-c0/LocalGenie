@@ -13,14 +13,12 @@ const MIN_CONTEXT_WINDOW = 512;
 
 interface Props {
   form: ModelSettingsForm;
-  /** The compute the model will use: the model's own choice, else the header's. */
-  compute: string;
   reasons: SettingReasons;
   warnings: SettingWarnings;
 }
 
 /** Settings sent with every message. A change reloads the model on the next message. */
-export default function LoadSection({ form, compute, reasons, warnings }: Props) {
+export default function LoadSection({ form, reasons, warnings }: Props) {
   const { settings, update, nativeContext } = form;
   const maxContext = nativeContext ?? MAX_CONTEXT_WINDOW;
 
@@ -28,29 +26,9 @@ export default function LoadSection({ form, compute, reasons, warnings }: Props)
     <section className="model-settings__section">
       <Subtitle1>Load</Subtitle1>
       <Body className="model-settings__hint">
-        Sent with every message. If one of these changes, the model reloads on the next message.
+        Sent with every message. If one of these changes, the model reloads on the next message. The
+        compute target (NPU, GPU or CPU) is chosen in the model selector at the top.
       </Body>
-
-      <SettingField
-        label="Compute"
-        info="Where the model runs: NPU, GPU or CPU. Empty uses the header choice."
-        disabledReason={reasons.compute}
-        warning={warnings.compute}
-      >
-        <Dropdown
-          className="model-settings__full-width"
-          disabled={!!reasons.compute}
-          value={compute.toUpperCase()}
-          selectedOptions={[compute]}
-          onOptionSelect={(_, data) => {
-            if (data.optionValue) update("compute", data.optionValue);
-          }}
-        >
-          <Option value="npu">NPU</Option>
-          <Option value="gpu">GPU</Option>
-          <Option value="cpu">CPU</Option>
-        </Dropdown>
-      </SettingField>
 
       <SettingField
         label="Context Window"

@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { useChatStore } from "../../stores/chatStore";
 import type { Message } from "../../types";
 import { coveredMessageIds } from "../../utils/compaction";
+import { isNearBottom } from "../../utils/scroll";
 import { isSystemEvent } from "../../utils/systemEvents";
 import { parseThinking } from "../../utils/thinking";
 import MessageBubble from "../MessageBubble/MessageBubble";
@@ -36,11 +37,21 @@ export default function ChatArea() {
   const lastMessage = session?.messages[session.messages.length - 1];
   const lastMessageLength = lastMessage?.content.length ?? 0;
 
-  // Auto-scroll to bottom on new messages and while a reply streams in. Streaming scrolls
-  // instantly: smooth scrolling falls behind fast token output.
+  // Whether the view follows new text. It stops when the user scrolls up and resumes when they
+  // scroll back to the bottom, send a message, or open another conversation.
+  const followRef = useRef(true);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: opening another conversation is the trigger
+  useEffect(() => {
+    followRef.current = true;
+  }, [activeSessionId]);
+
+  // Scroll to the bottom on new messages and while a reply streams in, unless the user scrolled up.
+  // The scroll is instant: smooth scrolling falls behind fast token output.
   // biome-ignore lint/correctness/useExhaustiveDependencies: message length is the intended trigger, not array identity
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: isStreaming ? "auto" : "smooth" });
+    if (lastMessage?.role === "user") followRef.current = true;
+    if (followRef.current) bottomRef.current?.scrollIntoView({ behavior: "auto" });
   }, [session?.messages.length, lastMessageLength, isStreaming, compacting]);
 
   if (!session) return null;
@@ -85,7 +96,12 @@ export default function ChatArea() {
   }
 
   return (
-    <div className="chat-area__area">
+    <div
+      className="chat-area__area"
+      onScroll={(e) => {
+        followRef.current = isNearBottom(e.currentTarget);
+      }}
+    >
       <div className="chat-area__messages">
         {renderedMessages}
 

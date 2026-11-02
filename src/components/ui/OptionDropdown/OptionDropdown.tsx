@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Flex } from "../Flex/Flex";
 import { Body, Meta } from "../Typography/Typography";
 
-export interface DropdownOption<T extends string = string> {
+interface DropdownOption<T extends string = string> {
   value: T;
   /** Title of the option in the list. */
   label: string;

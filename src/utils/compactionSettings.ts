@@ -7,10 +7,10 @@ export const COMPACTION_ENABLED_KEY = "compaction_enabled";
 export const COMPACTION_THRESHOLD_KEY = "compaction_threshold_percent";
 
 /** Off until the user turns it on. A summary cannot be undone. */
-export const COMPACTION_ENABLED_DEFAULT = false;
+const COMPACTION_ENABLED_DEFAULT = false;
 
 /** Used until the user saves a threshold. */
-export const COMPACTION_THRESHOLD_DEFAULT = 70;
+const COMPACTION_THRESHOLD_DEFAULT = 70;
 
 export const COMPACTION_THRESHOLD_RANGE = { min: 50, max: 90 } as const;
 

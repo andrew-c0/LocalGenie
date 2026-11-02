@@ -28,7 +28,7 @@ export interface HubFacetFilters {
   baseOnly: boolean;
 }
 
-export const DEFAULT_FACETS: HubFacetFilters = {
+const DEFAULT_FACETS: HubFacetFilters = {
   task: null,
   library: null,
   license: null,

@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import * as db from "../../services/database";
 import { reloadModel } from "../../services/modelLoad";
 import { defaultSettings } from "../../stores/modelStore";
+import { useRamEstimateStore } from "../../stores/ramEstimateStore";
 import type { StoredModelSettings } from "../../types";
 import { withSystemBlocks } from "../../utils/systemPrompt";
 import { toast } from "../../utils/toast";
 
 /** A save action in progress. Null when idle. */
-export type SaveAction = "save" | "saveAndLoad";
+type SaveAction = "save" | "saveAndLoad";
 
 export interface ModelSettingsForm {
   settings: StoredModelSettings;
@@ -58,6 +59,8 @@ export function useModelSettingsForm(model: string, settingsKey: string): ModelS
     try {
       // An empty object removes every saved key for the model (see `model_settings::save`).
       await db.saveModelSettings(settingsKey, {});
+      // The context window sets the KV part of the RAM estimate.
+      void useRamEstimateStore.getState().refresh();
       setSettings({ ...defaultSettings });
       toast.success("Model settings reset", "The saved settings were deleted.");
     } catch (err) {
@@ -69,6 +72,7 @@ export function useModelSettingsForm(model: string, settingsKey: string): ModelS
   const write = useCallback(async (): Promise<boolean> => {
     try {
       await db.saveModelSettings(settingsKey, settings);
+      void useRamEstimateStore.getState().refresh();
       return true;
     } catch (err) {
       toast.error("Model settings not saved", String(err));

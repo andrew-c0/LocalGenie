@@ -8,7 +8,7 @@ const GGUF_MAGIC: &[u8; 4] = b"GGUF";
 /// Longest string accepted from the header; real keys and values are far shorter.
 const MAX_STRING_LEN: u64 = 1 << 20;
 /// Longest chat template read into memory. A longer template is skipped, so its hints stay unknown.
-pub const MAX_CHAT_TEMPLATE_BYTES: u64 = 256 * 1024;
+const MAX_CHAT_TEMPLATE_BYTES: u64 = 256 * 1024;
 
 const TYPE_UINT8: u32 = 0;
 const TYPE_INT8: u32 = 1;
@@ -431,7 +431,7 @@ pub(crate) mod test_support {
     }
 
     /// An array entry of integers (`TYPE_INT32`) or booleans (`TYPE_BOOL`), one value per element.
-    pub fn kv_array(key: &str, element_type: u32, values: &[i64]) -> Vec<u8> {
+    pub(super) fn kv_array(key: &str, element_type: u32, values: &[i64]) -> Vec<u8> {
         let mut buf = Vec::new();
         push_string(&mut buf, key);
         buf.extend_from_slice(&TYPE_ARRAY.to_le_bytes());

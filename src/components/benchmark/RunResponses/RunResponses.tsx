@@ -69,7 +69,7 @@ function StepReply({ step }: { step: BenchmarkRunStep }) {
  * The passes of one run, each an accordion item holding its steps. A step shows its prompt, outcome
  * and reply, drawn as a chat message. Loads the steps when it mounts; read-only.
  */
-export function RunPasses({ runId }: { runId: string }) {
+function RunPasses({ runId }: { runId: string }) {
   const [steps, setSteps] = useState<BenchmarkRunStep[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Passes that are open. The first pass starts open; the others start collapsed.

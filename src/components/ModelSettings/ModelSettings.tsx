@@ -73,11 +73,10 @@ export default function ModelSettings() {
 
   const model = downloadedModels.find((m) => modelSettingsKey(m.name) === settingsKey);
   const engine = engineOf(model);
-  const compute = settings.compute ?? headerCompute;
+  const compute = headerCompute;
 
   const warnings = settingWarnings(engine, settings);
   const reasons: SettingReasons = {
-    compute: loadSettingDisabledReason("compute", engine, compute),
     nctx: loadSettingDisabledReason("nctx", engine, compute),
     ngl: loadSettingDisabledReason("ngl", engine, compute),
     spec: loadSettingDisabledReason("spec", engine, compute),
@@ -140,7 +139,7 @@ export default function ModelSettings() {
 
       <Divider />
 
-      <LoadSection form={form} compute={compute} reasons={reasons} warnings={warnings} />
+      <LoadSection form={form} reasons={reasons} warnings={warnings} />
 
       <Divider />
 

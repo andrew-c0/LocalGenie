@@ -34,7 +34,7 @@ export function formatSize(bytes: number): string {
 }
 
 /** Current local date and time, for example "Thursday 22 October 2026 at 14:05:09". */
-export function formatDateTime(now: Date, timeZone: string): string {
+function formatDateTime(now: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
     day: "numeric",

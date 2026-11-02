@@ -27,7 +27,6 @@ use commands::files;
 use commands::hub;
 use commands::import;
 use commands::logs;
-use commands::model_ram;
 use commands::models;
 use commands::playground;
 use commands::runtimes;
@@ -72,7 +71,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Model management
             models::list_models,
-            models::list_aihub_models,
             models::remove_model,
             hub::search_models,
             models::clean_models,
@@ -110,7 +108,7 @@ pub fn run() {
             logs::clear_server_logs,
             // System
             system::get_system_memory,
-            model_ram::model_ram_estimates,
+            commands::ram_store::backfill_model_ram,
             system::get_platform_info,
             system_usage::get_system_usage,
             // Chat attachments (image, audio, text picked for a message)
@@ -156,7 +154,6 @@ pub fn run() {
             playground::ocr_commands::playground_cancel_ocr,
             playground::ocr_commands::playground_save_ocr_text,
             // Qualcomm AI Hub catalog (read-only)
-            aihub::aihub_latest_version,
             aihub::aihub_list_models,
             aihub::aihub_model_detail,
             aihub::aihub_model_readme,

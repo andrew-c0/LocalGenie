@@ -24,7 +24,7 @@ function modelStatusOf(downloaded: boolean, isDownloading: boolean): ModelStatus
 }
 
 /** What every Playground model card shows. Image and speech models both have these fields. */
-export interface PlaygroundModelInfo {
+interface PlaygroundModelInfo {
   name: string;
   description: string;
   license: string;

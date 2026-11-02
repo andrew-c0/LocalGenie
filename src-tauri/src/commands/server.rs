@@ -30,7 +30,7 @@ pub fn kill_process_sync(pid: u32) {
 }
 
 /// Async variant for command handlers.
-pub async fn kill_process(pid: u32) {
+pub(super) async fn kill_process(pid: u32) {
     #[cfg(target_os = "windows")]
     {
         let _ = Command::new("taskkill")
@@ -51,7 +51,7 @@ pub async fn kill_process(pid: u32) {
 /// Fetch the ids (`org/repo:precision`) of the models loaded on the server, from `GET /status`.
 /// `/v1/models` is not used: it lists every cached model, loaded or not. An empty list means
 /// nothing is loaded; an error means the server does not answer.
-pub(crate) async fn fetch_loaded_models(
+pub(super) async fn fetch_loaded_models(
     client: &reqwest::Client,
     base_url: &str,
 ) -> Result<Vec<String>, String> {

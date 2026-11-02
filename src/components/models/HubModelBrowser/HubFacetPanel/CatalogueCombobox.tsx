@@ -1,7 +1,7 @@
 import { Combobox, Option } from "@fluentui/react-components";
 import { useState } from "react";
 
-export interface CatalogueOption {
+interface CatalogueOption {
   value: string;
   label: string;
 }

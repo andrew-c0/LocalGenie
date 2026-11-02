@@ -118,10 +118,6 @@ describe("resolveLoadParams", () => {
     expect(cpu.compute).toBe("cpu");
   });
 
-  it("uses the saved compute target over the fallback", () => {
-    expect(resolveLoadParams({ compute: "gpu" }, "llama_cpp", "npu").compute).toBe("gpu");
-  });
-
   it("sends power mode when set, and omits it when empty", () => {
     expect(resolveLoadParams({ powerMode: "high_performance" }, "qairt", "npu").powerMode).toBe(
       "high_performance",

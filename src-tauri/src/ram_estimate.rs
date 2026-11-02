@@ -13,11 +13,11 @@ const UNREADABLE_HEADER_PERCENT: u64 = 120;
 /// Total as a share of the weights, in percent, for a QAIRT bundle (its context is fixed in the bundle).
 const QAIRT_BUNDLE_PERCENT: u64 = 110;
 /// Largest context a default estimate assumes, when the model's native length is above it.
-pub const DEFAULT_CONTEXT_CAP: u64 = 8192;
+const DEFAULT_CONTEXT_CAP: u64 = 8192;
 /// Context assumed for a default estimate when the model does not state its native length.
 const FALLBACK_CONTEXT: u64 = 4096;
 
-/// Estimated RAM of one model at one precision, split by what it is made of.
+/// Estimated RAM of one model at one precision, split by what it is made of. The total is their sum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RamEstimate {
     pub weights_bytes: u64,
@@ -25,21 +25,16 @@ pub struct RamEstimate {
     pub kv_bytes: u64,
     /// Compute buffers plus the vision projector.
     pub extra_bytes: u64,
-    pub total_bytes: u64,
     /// True when a flat factor stood in for a measured KV cache, or the size of the files is unknown.
     pub approximate: bool,
 }
 
 impl RamEstimate {
     fn new(weights_bytes: u64, kv_bytes: u64, extra_bytes: u64, approximate: bool) -> Self {
-        let total_bytes = weights_bytes
-            .saturating_add(kv_bytes)
-            .saturating_add(extra_bytes);
         Self {
             weights_bytes,
             kv_bytes,
             extra_bytes,
-            total_bytes,
             approximate,
         }
     }
@@ -51,7 +46,7 @@ fn percent_of(value: u64, percent: u64) -> u64 {
 }
 
 /// Compute-buffer allowance for `weights_bytes`: a tenth of the weights, at least 256 MiB.
-pub fn compute_buffer_bytes(weights_bytes: u64) -> u64 {
+fn compute_buffer_bytes(weights_bytes: u64) -> u64 {
     percent_of(weights_bytes, COMPUTE_BUFFER_PERCENT).max(COMPUTE_BUFFER_MIN_BYTES)
 }
 
@@ -88,18 +83,6 @@ pub fn gguf_estimate(
 pub fn qairt_estimate(bundle_bytes: u64) -> RamEstimate {
     let extra = percent_of(bundle_bytes, QAIRT_BUNDLE_PERCENT).saturating_sub(bundle_bytes);
     RamEstimate::new(bundle_bytes, 0, extra, bundle_bytes == 0)
-}
-
-/// The context a request names, checked: `None` keeps the default, a number must be positive.
-pub fn requested_context(nctx: Option<i32>) -> Result<Option<u64>, String> {
-    match nctx {
-        None => Ok(None),
-        Some(tokens) => u64::try_from(tokens)
-            .ok()
-            .filter(|tokens| *tokens > 0)
-            .map(Some)
-            .ok_or_else(|| format!("nctx must be a positive token count, got {tokens}")),
-    }
 }
 
 /// Context length the KV cache is sized for. A requested context is capped at the model's native
@@ -140,6 +123,11 @@ mod tests {
 
     const GIB: u64 = 1024 * MIB;
 
+    /// The total of an estimate: its three parts.
+    fn total(got: &RamEstimate) -> u64 {
+        got.weights_bytes + got.kv_bytes + got.extra_bytes
+    }
+
     #[test]
     fn compute_buffer_is_a_tenth_above_the_floor() {
         assert_eq!(compute_buffer_bytes(10 * GIB), GIB);
@@ -153,7 +141,7 @@ mod tests {
         assert_eq!(got.weights_bytes, 10 * GIB);
         assert_eq!(got.kv_bytes, 512 * MIB);
         assert_eq!(got.extra_bytes, GIB + 600 * MIB);
-        assert_eq!(got.total_bytes, 10 * GIB + 512 * MIB + GIB + 600 * MIB);
+        assert_eq!(total(&got), 10 * GIB + 512 * MIB + GIB + 600 * MIB);
         assert!(!got.approximate);
     }
 
@@ -163,11 +151,11 @@ mod tests {
         let got = gguf_estimate(10 * GIB, 0, None);
         assert_eq!(got.kv_bytes, 0);
         assert_eq!(got.extra_bytes, 2 * GIB);
-        assert_eq!(got.total_bytes, 12 * GIB);
+        assert_eq!(total(&got), 12 * GIB);
         assert!(got.approximate);
 
         let with_projector = gguf_estimate(10 * GIB, MIB, None);
-        assert_eq!(with_projector.total_bytes, 12 * GIB + MIB);
+        assert_eq!(total(&with_projector), 12 * GIB + MIB);
     }
 
     #[test]
@@ -175,23 +163,15 @@ mod tests {
         let got = qairt_estimate(10 * GIB);
         assert_eq!(got.kv_bytes, 0);
         assert_eq!(got.extra_bytes, GIB);
-        assert_eq!(got.total_bytes, 11 * GIB);
+        assert_eq!(total(&got), 11 * GIB);
         assert!(!got.approximate);
     }
 
     #[test]
     fn a_bundle_of_unknown_size_is_approximate_and_zero() {
         let got = qairt_estimate(0);
-        assert_eq!(got.total_bytes, 0);
+        assert_eq!(total(&got), 0);
         assert!(got.approximate);
-    }
-
-    #[test]
-    fn requested_context_must_be_positive() {
-        assert_eq!(requested_context(None), Ok(None));
-        assert_eq!(requested_context(Some(2048)), Ok(Some(2048)));
-        assert!(requested_context(Some(0)).is_err());
-        assert!(requested_context(Some(-5)).is_err());
     }
 
     #[test]

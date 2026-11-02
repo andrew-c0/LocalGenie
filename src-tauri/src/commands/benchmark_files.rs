@@ -47,7 +47,7 @@ impl From<benchmark_file::Model> for BenchmarkFileDto {
 }
 
 /// Where benchmark files are copied to, under the app data directory.
-pub fn store_root(app: &AppHandle) -> Result<PathBuf, String> {
+pub(super) fn store_root(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
         .map(|dir| dir.join(STORE_DIR))
@@ -80,7 +80,7 @@ pub async fn discard_benchmark_file(
 }
 
 /// Import a file into the library. Testable core of `import_benchmark_file`.
-pub async fn import_file(
+pub(super) async fn import_file(
     db: &DatabaseConnection,
     root: &Path,
     path: &str,
@@ -210,7 +210,7 @@ fn sha256_of(path: &Path) -> Result<String, String> {
 }
 
 /// The value stored in `benchmark_files.kind`.
-pub fn kind_name(kind: AttachmentKind) -> &'static str {
+fn kind_name(kind: AttachmentKind) -> &'static str {
     match kind {
         AttachmentKind::Image => "image",
         AttachmentKind::Audio => "audio",
@@ -220,7 +220,7 @@ pub fn kind_name(kind: AttachmentKind) -> &'static str {
 
 /// The library rows for `ids`, in the same order. A missing row means a broken link, which the
 /// restrict foreign keys should prevent, so it is reported rather than skipped.
-pub async fn load_files<C: ConnectionTrait>(
+pub(super) async fn load_files<C: ConnectionTrait>(
     db: &C,
     ids: &[String],
 ) -> Result<Vec<BenchmarkFileDto>, String> {
@@ -237,7 +237,7 @@ pub async fn load_files<C: ConnectionTrait>(
 }
 
 /// True while any prompt or suite step uses the file.
-pub async fn is_referenced<C: ConnectionTrait>(db: &C, id: &str) -> Result<bool, String> {
+async fn is_referenced<C: ConnectionTrait>(db: &C, id: &str) -> Result<bool, String> {
     let in_prompts = benchmark_prompt_file::Entity::find()
         .filter(benchmark_prompt_file::Column::FileId.eq(id))
         .count(db)
@@ -255,7 +255,7 @@ pub async fn is_referenced<C: ConnectionTrait>(db: &C, id: &str) -> Result<bool,
 }
 
 /// Delete the row and the copied folder for each id that nothing references any more.
-pub async fn remove_if_unreferenced<C: ConnectionTrait>(
+pub(super) async fn remove_if_unreferenced<C: ConnectionTrait>(
     db: &C,
     root: &Path,
     ids: &[String],
@@ -388,7 +388,10 @@ pub(crate) mod tests {
         let db = store.db().await;
         let exe = store.write("tool.exe", "x");
         assert!(import_file(&db, &store.root(), &exe, "f1").await.is_err());
-        assert!(!store.root().join("f1").exists(), "nothing copied for a rejected file");
+        assert!(
+            !store.root().join("f1").exists(),
+            "nothing copied for a rejected file"
+        );
 
         let txt = store.write("a.txt", "a");
         import_file(&db, &store.root(), &txt, "f2")

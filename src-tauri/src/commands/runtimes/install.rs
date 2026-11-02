@@ -17,7 +17,7 @@ use crate::commands::download::{
 /// Where an install is in its steps. Serialised as the `stage` of `runtime-install-progress`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum InstallStage {
+pub(super) enum InstallStage {
     Checking,
     Downloading,
     Verifying,
@@ -28,7 +28,7 @@ pub enum InstallStage {
 
 /// One `runtime-install-progress` event. `received` and `total` are 0 when there is no byte count.
 #[derive(Debug, Clone, Serialize)]
-pub struct InstallProgress {
+pub(super) struct InstallProgress {
     pub id: String,
     pub stage: InstallStage,
     pub received: u64,
@@ -41,7 +41,7 @@ pub(super) type Reporter<'a> = &'a (dyn Fn(InstallProgress) + Sync);
 
 /// A version that is now on disk and recorded as current.
 #[derive(Debug, Clone, PartialEq)]
-pub struct InstalledVersion {
+pub(super) struct InstalledVersion {
     pub version: String,
     pub install_dir: PathBuf,
     pub sha256: String,

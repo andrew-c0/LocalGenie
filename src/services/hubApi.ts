@@ -31,7 +31,7 @@ export interface HubModel {
 }
 
 /** Parameter-count bounds in billions. An unset bound is open-ended. */
-export interface ParamRange {
+interface ParamRange {
   min?: number;
   max?: number;
 }
@@ -71,7 +71,15 @@ function buildQuery(q: HubQuery): string {
   if (range) params.set("num_parameters", range);
   // With `expand[]` the Hub returns only the expanded fields, so the card fields are listed too:
   // counts and tags, plus the sizes and GGUF metadata for the card facets.
-  for (const field of ["downloads", "likes", "tags", "lastModified", "gated", "safetensors", "gguf"]) {
+  for (const field of [
+    "downloads",
+    "likes",
+    "tags",
+    "lastModified",
+    "gated",
+    "safetensors",
+    "gguf",
+  ]) {
     params.append("expand[]", field);
   }
   params.set("limit", String(q.limit ?? 30));
@@ -184,7 +192,7 @@ export function hubModelPageUrl(repoId: string): string {
 }
 
 /** One value of the filter catalogue: `id` is the tag sent to the API. */
-export interface HubTag {
+interface HubTag {
   id: string;
   label: string;
 }

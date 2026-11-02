@@ -78,7 +78,7 @@ export default function ModelSelectorPopover({
   }, [selectorOpen]);
 
   const modelNames = useMemo(() => models.map((m) => m.name), [models]);
-  const ramSnapshot = useRamSnapshot(selectorOpen, modelNames);
+  const ramSnapshot = useRamSnapshot(selectorOpen);
   const familyOptions = useMemo(() => familyFilterOptions(modelNames), [modelNames]);
   const activeFamily = familyOptions.some(([id]) => id === family) ? family : FAMILY_ALL;
 

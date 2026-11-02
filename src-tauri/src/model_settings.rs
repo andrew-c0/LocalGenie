@@ -18,7 +18,7 @@ macro_rules! setting_keys {
         /// Every setting stored per model. The name is the database key and the key the frontend
         /// uses in its settings object.
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub enum SettingKey {
+        enum SettingKey {
             $($variant),*
         }
 
@@ -65,7 +65,6 @@ setting_keys! {
     SystemBlocks => "systemBlocks": Vec<SystemBlock>,
     Nctx => "nctx": i64,
     Ngl => "ngl": i64,
-    Compute => "compute": String,
     PowerMode => "powerMode": String,
     SpecType => "specType": String,
     SpecDraftModel => "specDraftModel": String,
@@ -107,10 +106,17 @@ pub fn validate_chat_overrides(text: &str) -> Result<(), String> {
 /// frontend's types.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
-pub enum SystemBlock {
-    Text { id: String, text: String },
-    Datetime { id: String },
-    Platform { id: String },
+enum SystemBlock {
+    Text {
+        id: String,
+        text: String,
+    },
+    Datetime {
+        id: String,
+    },
+    Platform {
+        id: String,
+    },
     File {
         id: String,
         path: String,
@@ -247,7 +253,6 @@ mod tests {
         assert!(SettingKey::Temperature.validate(&json!(0.7)).is_ok());
         assert!(SettingKey::Nctx.validate(&json!(4096)).is_ok());
         assert!(SettingKey::Think.validate(&json!(false)).is_ok());
-        assert!(SettingKey::Compute.validate(&json!("npu")).is_ok());
     }
 
     #[test]
@@ -272,7 +277,10 @@ mod tests {
 
     #[test]
     fn unknown_names_are_not_keys() {
-        assert_eq!(SettingKey::from_name("temperature"), Some(SettingKey::Temperature));
+        assert_eq!(
+            SettingKey::from_name("temperature"),
+            Some(SettingKey::Temperature)
+        );
         assert_eq!(SettingKey::from_name("origins"), None);
         assert_eq!(SettingKey::from_name("systemPrompt"), None);
     }
@@ -284,12 +292,12 @@ mod tests {
 
         let first = HashMap::from([
             ("temperature".to_owned(), json!(0.2)),
-            ("compute".to_owned(), json!("gpu")),
+            ("topK".to_owned(), json!(20)),
         ]);
         save(&db, "org/model", first).await.expect("save");
         let loaded = load(&db, "org/model").await.expect("load");
         assert_eq!(loaded.get("temperature"), Some(&json!(0.2)));
-        assert_eq!(loaded.get("compute"), Some(&json!("gpu")));
+        assert_eq!(loaded.get("topK"), Some(&json!(20)));
 
         let second = HashMap::from([("think".to_owned(), json!(false))]);
         save(&db, "org/model", second).await.expect("save again");
@@ -339,7 +347,9 @@ mod tests {
 
     #[test]
     fn chat_overrides_accept_common_settings_and_reject_load_settings() {
-        assert!(validate_chat_overrides(r#"{"temperature":0.4,"topK":20,"systemBlocks":[]}"#).is_ok());
+        assert!(
+            validate_chat_overrides(r#"{"temperature":0.4,"topK":20,"systemBlocks":[]}"#).is_ok()
+        );
         assert!(validate_chat_overrides(r#"{"nctx":8192}"#).is_err());
         assert!(validate_chat_overrides(r#"{"think":true}"#).is_err());
         assert!(validate_chat_overrides(r#"{"temperature":"hot"}"#).is_err());

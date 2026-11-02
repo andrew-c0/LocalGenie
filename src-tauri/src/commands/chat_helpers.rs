@@ -51,7 +51,7 @@ pub struct ModelLoadParams {
 
 /// Write the load parameters that are set into a request body, using the server's field names.
 /// Empty strings are skipped so the server default applies.
-pub fn apply_load_params(body: &mut serde_json::Value, load: &ModelLoadParams) {
+pub(super) fn apply_load_params(body: &mut serde_json::Value, load: &ModelLoadParams) {
     if let Some(n) = load.nctx {
         body["nctx"] = serde_json::json!(n);
     }
@@ -83,7 +83,7 @@ pub fn apply_load_params(body: &mut serde_json::Value, load: &ModelLoadParams) {
 
 /// Strip precision suffix from a model name.
 /// e.g. "qualcomm/Qwen3-4B-Instruct-2507:W4A16" -> "qualcomm/Qwen3-4B-Instruct-2507"
-pub fn strip_precision(name: &str) -> &str {
+pub(super) fn strip_precision(name: &str) -> &str {
     match name.rfind(':') {
         Some(pos) => &name[..pos],
         None => name,
@@ -92,7 +92,7 @@ pub fn strip_precision(name: &str) -> &str {
 
 /// Remove the model's thinking from `text`: closed `<think>` blocks, a lone closing tag and what
 /// comes before it, and a block that never closed.
-pub fn strip_think(text: &str) -> String {
+pub(super) fn strip_think(text: &str) -> String {
     const OPEN: &str = "<think>";
     const CLOSE: &str = "</think>";
     let mut rest = text.to_string();
@@ -113,7 +113,7 @@ pub fn strip_think(text: &str) -> String {
 
 /// Resolve the model name to send to the server.
 /// The chat server expects "org/repo" WITHOUT precision suffix.
-pub fn resolve_model_for_server(model: Option<&str>) -> Option<String> {
+pub(super) fn resolve_model_for_server(model: Option<&str>) -> Option<String> {
     match model {
         Some(m) if !m.is_empty() => {
             let clean = strip_precision(m);
@@ -129,11 +129,11 @@ pub fn resolve_model_for_server(model: Option<&str>) -> Option<String> {
 
 /// The token that switches thinking on in templates such as Gemma 4's. Those templates ignore the
 /// `enable_think` field, so the token has to be in the prompt.
-pub const THINK_TOKEN: &str = "<|think|>";
+pub(super) const THINK_TOKEN: &str = "<|think|>";
 
 /// Put the think token at the start of the system turn, where the template reads it. The first
 /// message gets the token when it is a system turn with text; otherwise a system turn is added.
-pub fn with_think_token(messages: &mut Vec<serde_json::Value>) {
+pub(super) fn with_think_token(messages: &mut Vec<serde_json::Value>) {
     if let Some(first) = messages.first_mut() {
         if first["role"] == "system" {
             if let Some(text) = first["content"].as_str() {
@@ -163,7 +163,7 @@ fn mentions_think_token(message: &serde_json::Value) -> bool {
 
 /// Removes the think token from every message's text, so a token typed into a message or the system
 /// prompt cannot switch thinking on while the switch is off.
-pub fn strip_think_token(messages: &mut [serde_json::Value]) {
+fn strip_think_token(messages: &mut [serde_json::Value]) {
     for message in messages.iter_mut() {
         match message["content"].clone() {
             serde_json::Value::String(text) if text.contains(THINK_TOKEN) => {
@@ -187,7 +187,7 @@ pub fn strip_think_token(messages: &mut [serde_json::Value]) {
 
 /// Sets the think token for a template that reads it. On: the token is added once, unless a message
 /// already has it. Off: it is removed everywhere.
-pub fn set_think_token(messages: &mut Vec<serde_json::Value>, think: bool) {
+pub(super) fn set_think_token(messages: &mut Vec<serde_json::Value>, think: bool) {
     if think {
         if !messages.iter().any(mentions_think_token) {
             with_think_token(messages);
@@ -198,7 +198,7 @@ pub fn set_think_token(messages: &mut Vec<serde_json::Value>, think: bool) {
 }
 
 /// Build the JSON body for a chat completion request.
-pub fn build_chat_body(
+pub(super) fn build_chat_body(
     messages_json: Vec<serde_json::Value>,
     model_name: Option<String>,
     settings: &GenerationSettings,
@@ -258,7 +258,7 @@ pub fn build_chat_body(
 
 /// Return the `finish_reason` of a streamed SSE chunk, if the server set one.
 /// Intermediate chunks carry `null` or omit the field, which yields `None`.
-pub fn finish_reason_from_chunk(parsed: &serde_json::Value) -> Option<String> {
+pub(super) fn finish_reason_from_chunk(parsed: &serde_json::Value) -> Option<String> {
     parsed["choices"]
         .as_array()?
         .iter()
@@ -269,13 +269,13 @@ pub fn finish_reason_from_chunk(parsed: &serde_json::Value) -> Option<String> {
 /// Exact token counts the server reports for one reply. The prompt count covers the whole request:
 /// the system prompt, the history, the files and the images.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ReplyUsage {
+pub(super) struct ReplyUsage {
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
 }
 
 /// The usage of a streamed SSE chunk, if it is the usage chunk. The chunk has `usage` and no choices.
-pub fn usage_from_chunk(parsed: &serde_json::Value) -> Option<ReplyUsage> {
+pub(super) fn usage_from_chunk(parsed: &serde_json::Value) -> Option<ReplyUsage> {
     let usage = parsed.get("usage").filter(|u| u.is_object())?;
     Some(ReplyUsage {
         prompt_tokens: usage["prompt_tokens"].as_u64()?,
@@ -286,7 +286,7 @@ pub fn usage_from_chunk(parsed: &serde_json::Value) -> Option<ReplyUsage> {
 /// Payload for the `chat-done` event. `finish_reason` is the server's value,
 /// or `"cancelled"` when the user stopped the stream; `None` serializes as null. `usage` is null
 /// when the server did not report counts, such as after a stop.
-pub fn chat_done_payload(
+pub(super) fn chat_done_payload(
     stream_id: &str,
     finish_reason: Option<&str>,
     usage: Option<ReplyUsage>,
@@ -301,7 +301,7 @@ pub fn chat_done_payload(
 
 /// True when a streamed SSE chunk is the first real output: it carries non-empty
 /// `content` or a `finish_reason`. Role-only and empty chunks do not count.
-pub fn is_first_output(parsed: &serde_json::Value) -> bool {
+pub(super) fn is_first_output(parsed: &serde_json::Value) -> bool {
     parsed["choices"].as_array().is_some_and(|choices| {
         choices.iter().any(|choice| {
             choice["delta"]["content"]
@@ -313,7 +313,7 @@ pub fn is_first_output(parsed: &serde_json::Value) -> bool {
 }
 
 /// Error shown when no output started within the first-output limit.
-pub fn no_output_error(url: &str, limit_secs: u64) -> String {
+pub(super) fn no_output_error(url: &str, limit_secs: u64) -> String {
     format!("No response started within {limit_secs} s from GenieX server at {url}")
 }
 

@@ -7,12 +7,12 @@ import { toast } from "../../../utils/toast";
 
 export type RuntimeAction = "install" | "update" | "uninstall";
 
-export interface RuntimeOperation {
+interface RuntimeOperation {
   runtimeId: string;
   action: RuntimeAction;
 }
 
-export interface RuntimeFailure extends RuntimeOperation {
+interface RuntimeFailure extends RuntimeOperation {
   message: string;
 }
 

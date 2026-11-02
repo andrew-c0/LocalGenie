@@ -8,14 +8,14 @@ use super::release::{parse_release_list, Release, ReleaseAsset};
 /// Our fork of stable-diffusion.cpp. Upstream ships no Windows ARM64 build, so the fork's release
 /// workflow publishes one. A runtime with an official ARM64 release points at the official repo
 /// instead; a runtime without one gets its own fork or repo.
-pub const SD_CPP_REPO: &str = "andrew-c0/stable-diffusion.cpp";
+const SD_CPP_REPO: &str = "andrew-c0/stable-diffusion.cpp";
 
 /// Upstream sherpa-onnx, which publishes Windows ARM64 builds in its own releases.
-pub const SHERPA_ONNX_REPO: &str = "k2-fsa/sherpa-onnx";
+const SHERPA_ONNX_REPO: &str = "k2-fsa/sherpa-onnx";
 
 /// One optional runtime the app can install.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct RuntimeSpec {
+pub(crate) struct RuntimeSpec {
     /// Stable id used in commands, the database and the folder name.
     pub id: &'static str,
     pub display_name: &'static str,
@@ -54,7 +54,7 @@ pub const SD_CPP: RuntimeSpec = RuntimeSpec {
 /// sherpa-onnx (speech recognition and synthesis), the shared Windows ARM64 build with the
 /// MinSizeRel configuration and the static C runtime. The archive has one top-level folder, which
 /// is dropped on unpack, so the programs sit in `bin/`.
-pub const SHERPA_ONNX: RuntimeSpec = RuntimeSpec {
+pub(super) const SHERPA_ONNX: RuntimeSpec = RuntimeSpec {
     id: "sherpa-onnx",
     display_name: "sherpa-onnx",
     repo: SHERPA_ONNX_REPO,
@@ -76,10 +76,10 @@ pub const SHERPA_ONNX: RuntimeSpec = RuntimeSpec {
 };
 
 /// Every runtime the app knows about, in display order.
-pub const RUNTIME_SPECS: &[RuntimeSpec] = &[SD_CPP, SHERPA_ONNX];
+pub(super) const RUNTIME_SPECS: &[RuntimeSpec] = &[SD_CPP, SHERPA_ONNX];
 
 /// The spec with this id, or an error naming the unknown id.
-pub fn find_spec(id: &str) -> Result<&'static RuntimeSpec, String> {
+pub(super) fn find_spec(id: &str) -> Result<&'static RuntimeSpec, String> {
     RUNTIME_SPECS
         .iter()
         .find(|spec| spec.id == id)
@@ -88,19 +88,19 @@ pub fn find_spec(id: &str) -> Result<&'static RuntimeSpec, String> {
 
 impl RuntimeSpec {
     /// True when an asset name is this runtime's archive.
-    pub fn matches_asset(&self, name: &str) -> bool {
+    fn matches_asset(&self, name: &str) -> bool {
         self.asset_contains.iter().all(|part| name.contains(part))
             && !self.asset_excludes.iter().any(|part| name.contains(part))
             && name.ends_with(self.asset_suffix)
     }
 
     /// The git tag of a version, for example `v2.0.1` for version `2.0.1` of sherpa-onnx.
-    pub fn git_tag(&self, version: &str) -> String {
+    pub(super) fn git_tag(&self, version: &str) -> String {
         format!("{}{version}", self.tag_prefix)
     }
 
     /// The archive asset of a release, if it has one.
-    pub fn pick_asset<'a>(&self, release: &'a Release) -> Option<&'a ReleaseAsset> {
+    pub(super) fn pick_asset<'a>(&self, release: &'a Release) -> Option<&'a ReleaseAsset> {
         release
             .assets
             .iter()
@@ -110,7 +110,7 @@ impl RuntimeSpec {
     /// The newest release in a GitHub release list (see `parse_release_list`) that has this
     /// runtime's archive. Upstream may publish builds for other platforms as the latest release,
     /// so the first release without an archive is passed over.
-    pub fn newest_release(&self, list_json: &serde_json::Value) -> Result<Release, String> {
+    pub(super) fn newest_release(&self, list_json: &serde_json::Value) -> Result<Release, String> {
         parse_release_list(list_json, self.repo)?
             .into_iter()
             .find(|release| self.pick_asset(release).is_some())
@@ -118,7 +118,7 @@ impl RuntimeSpec {
     }
 
     /// Where the program sits inside a version folder.
-    pub fn exe_path(&self, version_dir: &Path) -> PathBuf {
+    pub(super) fn exe_path(&self, version_dir: &Path) -> PathBuf {
         version_dir.join(self.exe_relative_path)
     }
 }

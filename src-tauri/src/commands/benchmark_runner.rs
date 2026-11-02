@@ -50,7 +50,7 @@ struct ActiveRun {
 
 impl BenchmarkRunState {
     /// Id of the run in progress, if any.
-    pub fn active_run_id(&self) -> Option<String> {
+    fn active_run_id(&self) -> Option<String> {
         self.active
             .lock()
             .ok()
@@ -95,7 +95,7 @@ impl BenchmarkRunState {
 }
 
 /// Refuse work that would disturb a run in progress: chat and model loads or unloads.
-pub fn ensure_no_active_run(state: &BenchmarkRunState) -> Result<(), String> {
+pub(super) fn ensure_no_active_run(state: &BenchmarkRunState) -> Result<(), String> {
     match state.active_run_id() {
         Some(_) => Err(
             "A benchmark run is in progress. Chat and model changes wait until it finishes."

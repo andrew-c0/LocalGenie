@@ -22,6 +22,14 @@ pub struct Model {
     /// Hugging Face facet summary as JSON text (task, parameters, library, licence, base model,
     /// quantisation). Null when not kept.
     pub facets: Option<String>,
+    /// RAM for the weights, compute buffers and vision projector, in bytes. Does not depend on the
+    /// context window. Null until computed.
+    pub base_ram_bytes: Option<i64>,
+    /// RAM for the KV cache of the saved context window, in bytes. Zero for a QAIRT bundle. Null
+    /// until computed.
+    pub context_ram_bytes: Option<i64>,
+    /// True when the RAM estimate used a flat factor or the model's files could not be measured.
+    pub ram_approximate: Option<bool>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

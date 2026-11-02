@@ -16,10 +16,10 @@ use tokio::sync::oneshot;
 use super::files::{read_checked, TEXT_EXTENSIONS};
 
 /// Largest image or audio file that can be attached. Bigger files are rejected, not truncated.
-pub const MAX_MEDIA_FILE_BYTES: u64 = 10 * 1024 * 1024;
+pub(super) const MAX_MEDIA_FILE_BYTES: u64 = 10 * 1024 * 1024;
 
 /// Longest side, in pixels, of an image sent to the model. Larger images are scaled down.
-pub const MAX_IMAGE_EDGE: u32 = 1536;
+const MAX_IMAGE_EDGE: u32 = 1536;
 
 /// JPEG quality for a scaled-down image.
 const IMAGE_JPEG_QUALITY: u8 = 85;

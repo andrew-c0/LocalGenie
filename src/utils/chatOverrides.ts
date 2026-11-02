@@ -4,7 +4,7 @@ import type { ChatSettingsOverrides, StoredModelSettings } from "../types";
  * The settings a chat can override. Load settings and model-specific ones are not here: a chat can
  * switch models, and changing a load setting reloads the model.
  */
-export const CHAT_OVERRIDE_KEYS = [
+const CHAT_OVERRIDE_KEYS = [
   "temperature",
   "topP",
   "topK",

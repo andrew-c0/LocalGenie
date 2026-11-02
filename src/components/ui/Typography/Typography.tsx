@@ -6,7 +6,6 @@ import {
   Subtitle1,
   Subtitle2,
   Title2,
-  Title3,
 } from "@fluentui/react-components";
 import type { ComponentProps } from "react";
 import "./Typography.css";
@@ -22,7 +21,6 @@ import "./Typography.css";
  *   BodyStrong    Body1Strong     emphasised running text, list labels
  *   Secondary     Body1           supporting text under a title, muted colour
  *   Meta          Caption1        labels, hints, sizes, timestamps
- *   Metric        Title3          a single headline value in a stat card
  */
 export function Eyebrow(props: ComponentProps<typeof Caption1Strong>) {
   return <Caption1Strong block {...props} />;
@@ -60,8 +58,4 @@ export function Secondary({ className, ...props }: ComponentProps<typeof Body1>)
 
 export function Meta(props: ComponentProps<typeof Caption1>) {
   return <Caption1 {...props} />;
-}
-
-export function Metric(props: ComponentProps<typeof Title3>) {
-  return <Title3 {...props} />;
 }

@@ -178,10 +178,7 @@ pub enum Write {
 /// - A probe's `works` on a confirmed row refreshes only its detail and probed time. Its source and
 ///   fingerprint stay. A saved reply's `works` leaves a confirmed row alone.
 /// - Any other row takes the incoming record, or is removed when there is none.
-pub fn plan_write(
-    existing: Option<&CapabilityRecord>,
-    incoming: Option<CapabilityRecord>,
-) -> Write {
+fn plan_write(existing: Option<&CapabilityRecord>, incoming: Option<CapabilityRecord>) -> Write {
     match (existing.filter(|r| r.is_confirmed()), incoming) {
         (Some(confirmed), Some(new))
             if new.is_confirmed() && new.source == CapabilitySource::Probe =>

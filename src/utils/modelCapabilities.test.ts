@@ -39,11 +39,10 @@ describe("settingWarnings for QAIRT", () => {
 
   it("warns on the llama.cpp-only load and speculation settings", () => {
     const warnings = settingWarnings("qairt", {
-      compute: "gpu",
       specType: "ngram-simple",
       specDraftModel: "org/draft:Q4",
     });
-    expect(Object.keys(warnings).sort()).toEqual(["compute", "draftModel", "spec"]);
+    expect(Object.keys(warnings).sort()).toEqual(["draftModel", "spec"]);
     expect(warnings.spec).toMatch(/llama\.cpp/);
   });
 });

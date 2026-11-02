@@ -23,7 +23,7 @@ const baseName = (path: string) => path.split("/").pop() ?? path;
  * the repo lands here, so two repos that ship the same file name (such as `mmproj-F16.gguf`) never
  * share a file.
  */
-export function repoFolder(repoId: string): string {
+function repoFolder(repoId: string): string {
   return repoId.replace("/", "--");
 }
 

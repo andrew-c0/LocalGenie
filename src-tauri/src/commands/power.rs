@@ -2,7 +2,7 @@
 
 /// Power state at the time of a run. A field is None when Windows does not report it.
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct PowerState {
+pub(super) struct PowerState {
     /// Name of the active plan, for example `Balanced`, `Power saver` or `High performance`.
     pub windows_power_plan: Option<String>,
     /// True when the battery is supplying the machine. None on a machine without a battery.
@@ -11,7 +11,7 @@ pub struct PowerState {
 
 /// Read the active plan and the battery state. Blocking: it starts two Windows tools, so call it
 /// from `spawn_blocking`. Off Windows, both fields are None.
-pub fn read_power_state() -> PowerState {
+pub(super) fn read_power_state() -> PowerState {
     PowerState {
         windows_power_plan: active_plan_name(),
         on_battery: on_battery(),
@@ -57,7 +57,7 @@ fn on_battery() -> Option<bool> {
 }
 
 /// The name in `powercfg /getactivescheme` output: `Power Scheme GUID: <guid>  (<name>)`.
-pub fn parse_active_plan(output: &str) -> Option<String> {
+fn parse_active_plan(output: &str) -> Option<String> {
     let line = output.lines().find(|l| l.contains("Power Scheme GUID"))?;
     let open = line.rfind('(')?;
     let close = line.rfind(')')?;
@@ -67,7 +67,7 @@ pub fn parse_active_plan(output: &str) -> Option<String> {
 
 /// The `BatteryStatus` code from Win32_Battery. 1 (discharging), 4 (low) and 5 (critical) mean the
 /// battery is supplying the machine; the other codes mean mains power or charging.
-pub fn parse_battery_status(output: &str) -> Option<bool> {
+fn parse_battery_status(output: &str) -> Option<bool> {
     let code: u32 = output.trim().parse().ok()?;
     Some(matches!(code, 1 | 4 | 5))
 }

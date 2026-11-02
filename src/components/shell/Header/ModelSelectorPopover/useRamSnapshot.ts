@@ -1,30 +1,33 @@
 import { useEffect, useState } from "react";
-import { loadModelRamEstimates } from "../../../../services/modelRam";
 import { getRamHeadroomPercent } from "../../../../services/ramHeadroom";
 import { getSystemMemory } from "../../../../services/system";
+import { useRamEstimateStore } from "../../../../stores/ramEstimateStore";
 import type { RamSnapshot } from "../../../../utils/modelRam";
 
 /**
- * The RAM figures the model selector shows: free and total memory, the headroom setting and each
- * model's estimate. Read each time the popover opens, not on a timer. Null until the read finishes,
- * and stays null when it fails, so the rows show no RAM line.
+ * The RAM figures the model selector shows: free and total memory and the headroom setting, read each
+ * time the popover opens, plus each model's stored RAM. The stored figures are kept in `ramEstimateStore`
+ * (read when the model list or a context setting changes), so opening the popover does not read the
+ * model files again. Null until the read finishes, and stays null when it fails, so the rows show no
+ * RAM line.
  */
-export function useRamSnapshot(open: boolean, modelNames: string[]): RamSnapshot | null {
-  const [snapshot, setSnapshot] = useState<RamSnapshot | null>(null);
+export function useRamSnapshot(open: boolean): RamSnapshot | null {
+  const ramByModel = useRamEstimateStore((s) => s.ramByModel);
+  const [live, setLive] = useState<Pick<RamSnapshot, "memory" | "headroomPercent"> | null>(null);
 
   useEffect(() => {
     if (!open) return;
     let current = true;
-    setSnapshot(null);
-    Promise.all([getSystemMemory(), getRamHeadroomPercent(), loadModelRamEstimates(modelNames)])
-      .then(([memory, headroomPercent, rowsByModel]) => {
-        if (current) setSnapshot({ memory, headroomPercent, rowsByModel });
+    setLive(null);
+    Promise.all([getSystemMemory(), getRamHeadroomPercent()])
+      .then(([memory, headroomPercent]) => {
+        if (current) setLive({ memory, headroomPercent });
       })
-      .catch((err: unknown) => console.warn("[models] RAM estimates unavailable:", err));
+      .catch((err: unknown) => console.warn("[models] memory figures unavailable:", err));
     return () => {
       current = false;
     };
-  }, [open, modelNames]);
+  }, [open]);
 
-  return snapshot;
+  return live ? { ...live, ramByModel } : null;
 }

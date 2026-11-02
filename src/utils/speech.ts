@@ -24,10 +24,10 @@ export const STT_SAMPLE_RATE = 16000;
 export const SPEED_MIN = 0.5;
 export const SPEED_MAX = 2;
 export const SPEED_STEP = 0.1;
-export const SPEED_DEFAULT = 1;
+const SPEED_DEFAULT = 1;
 
 /** The voice a text to speech model starts on when the form has none. */
-export const DEFAULT_VOICE_NAME = "Heart";
+const DEFAULT_VOICE_NAME = "Heart";
 const OTHER_VOICE_GROUP = "Other";
 
 /** Starting form before a voice is picked. The voice id is resolved from the selected model. */

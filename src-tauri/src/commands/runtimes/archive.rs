@@ -9,7 +9,7 @@ use std::path::{Component, Path, PathBuf};
 
 /// The archive formats a runtime can ship.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ArchiveFormat {
+pub(crate) enum ArchiveFormat {
     Zip,
     TarBz2,
 }

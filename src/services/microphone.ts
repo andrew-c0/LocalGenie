@@ -4,7 +4,7 @@ import { concatSamples } from "../utils/wav";
 const CAPTURE_BUFFER_SIZE = 4096;
 
 /** Mono samples from -1 to 1, with the rate the audio device captured them at. */
-export interface RecordedAudio {
+interface RecordedAudio {
   samples: Float32Array;
   sampleRate: number;
 }

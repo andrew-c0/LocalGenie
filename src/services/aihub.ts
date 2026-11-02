@@ -37,11 +37,6 @@ export interface AihubModelDetail {
   assets: AihubAsset[] | null;
 }
 
-/** Catalog release used for every read (probed once per session in Rust). */
-export async function aihubLatestVersion(): Promise<string> {
-  return invoke("aihub_latest_version");
-}
-
 /** QAIRT models in the catalog. */
 export async function aihubListModels(): Promise<AihubCatalogEntry[]> {
   return invoke("aihub_list_models");

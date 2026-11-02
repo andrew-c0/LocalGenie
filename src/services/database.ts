@@ -291,6 +291,12 @@ export interface DbDownloadedModel {
   model_card: string | null;
   /** Facet summary as JSON text, or null. Parse with `parseFacets`. */
   facets: string | null;
+  /** RAM the model needs apart from the context window, in bytes. Null until computed. */
+  base_ram_bytes: number | null;
+  /** KV-cache RAM for the model's saved context window, in bytes. Null until computed. */
+  context_ram_bytes: number | null;
+  /** True when the RAM figures use a flat factor or the model's files could not be read. */
+  ram_approximate: boolean | null;
 }
 
 export async function listDownloadedModels(): Promise<DbDownloadedModel[]> {

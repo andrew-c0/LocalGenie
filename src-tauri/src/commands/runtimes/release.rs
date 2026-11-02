@@ -29,7 +29,7 @@ pub fn release_api_url(repo: &str, tag: Option<&str>) -> String {
 }
 
 /// API URL of a repo's most recent releases, newest first, as a JSON list.
-pub fn release_list_api_url(repo: &str) -> String {
+pub(super) fn release_list_api_url(repo: &str) -> String {
     format!("https://api.github.com/repos/{repo}/releases?per_page={RELEASE_LIST_PAGE_SIZE}")
 }
 
@@ -113,7 +113,10 @@ fn parse_asset(asset: &serde_json::Value) -> Option<ReleaseAsset> {
 /// Read a release list from GitHub's JSON, newest first. Drafts and prereleases are dropped, and
 /// the order comes from `published_at` (or `created_at` when a release has no publish time). An
 /// entry that is not a valid release is skipped rather than failing the whole list.
-pub fn parse_release_list(json: &serde_json::Value, repo: &str) -> Result<Vec<Release>, String> {
+pub(super) fn parse_release_list(
+    json: &serde_json::Value,
+    repo: &str,
+) -> Result<Vec<Release>, String> {
     let entries = json
         .as_array()
         .ok_or_else(|| "GitHub release list is not a JSON array".to_string())?;
@@ -153,7 +156,7 @@ pub struct ReleaseCache {
 impl ReleaseCache {
     /// The release stored under `key`, or the result of `load` when nothing fresh is cached. A
     /// failed load is not cached, so the next call tries again.
-    pub async fn get_or_load<F, Fut>(&self, key: &str, load: F) -> Result<Release, String>
+    pub(super) async fn get_or_load<F, Fut>(&self, key: &str, load: F) -> Result<Release, String>
     where
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<Release, String>>,
@@ -167,7 +170,7 @@ impl ReleaseCache {
     }
 
     /// The release at one tag's `api_url`, from the cache while it is under an hour old.
-    pub async fn get_or_fetch(&self, api_url: &str, repo: &str) -> Result<Release, String> {
+    pub(super) async fn get_or_fetch(&self, api_url: &str, repo: &str) -> Result<Release, String> {
         self.get_or_load(api_url, || async {
             let json = fetch_release_json(api_url).await?;
             parse_release(&json, repo)
@@ -208,7 +211,7 @@ pub fn version_less_than(a: &str, b: &str) -> bool {
 
 /// True when `latest` should be offered over `installed`. Dotted numbers compare by value. Any
 /// other tag (for example `master-1024-77b72a2`) counts as newer when it differs.
-pub fn is_update(installed: &str, latest: &str) -> bool {
+pub(super) fn is_update(installed: &str, latest: &str) -> bool {
     if is_dotted_numeric(installed) && is_dotted_numeric(latest) {
         version_less_than(installed, latest)
     } else {

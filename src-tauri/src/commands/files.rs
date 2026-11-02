@@ -5,7 +5,7 @@ use tauri_plugin_dialog::DialogExt;
 use tokio::sync::oneshot;
 
 /// Largest file that can be attached to a system prompt. Bigger files are rejected, not truncated.
-pub const MAX_TEXT_FILE_BYTES: u64 = 512 * 1024;
+const MAX_TEXT_FILE_BYTES: u64 = 512 * 1024;
 
 /// Extensions accepted for system prompt attachments.
 pub(super) const TEXT_EXTENSIONS: &[&str] = &["txt", "md"];

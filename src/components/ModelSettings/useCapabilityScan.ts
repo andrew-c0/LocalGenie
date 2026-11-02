@@ -19,7 +19,7 @@ interface StoredResults {
 }
 
 /** "loading" is the reload before a Reload & Scan. "scanning" is the test run. */
-export type ScanPhase = "loading" | "scanning";
+type ScanPhase = "loading" | "scanning";
 
 /** A run in progress, the model it is for and the setting it is on. */
 interface ActiveScan {

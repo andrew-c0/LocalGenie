@@ -4,7 +4,7 @@ import { shortName } from "./format";
 export const FAMILY_ALL = "all";
 
 /** Filter id for models whose name matches no known family. */
-export const FAMILY_OTHER = "other";
+const FAMILY_OTHER = "other";
 
 /** Known model families, checked in order: a more specific family (DeepSeek distills of Qwen) wins. */
 const FAMILY_RULES: { id: string; label: string; pattern: RegExp }[] = [

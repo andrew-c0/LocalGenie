@@ -1,20 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { ModelInfo, ModelRamEstimate } from "../types";
-import { modelRamLine, pickModelRamRow, type RamSnapshot } from "./modelRam";
+import type { ModelInfo } from "../types";
+import { modelRamLine, type RamSnapshot, type StoredRam } from "./modelRam";
 
 const GB = 1_073_741_824;
 
-function row(overrides: Partial<ModelRamEstimate> = {}): ModelRamEstimate {
-  return {
-    name: "org/model",
-    precision: "W4A16",
-    weightsBytes: 4 * GB,
-    kvBytes: 0,
-    extraBytes: 0,
-    totalBytes: 4 * GB,
-    approximate: false,
-    ...overrides,
-  };
+function stored(overrides: Partial<StoredRam> = {}): StoredRam {
+  return { baseBytes: 3 * GB, contextBytes: 1 * GB, approximate: false, ...overrides };
 }
 
 const model: ModelInfo = {
@@ -25,49 +16,41 @@ const model: ModelInfo = {
 };
 
 // 16 GB total, 10% kept free (1.6 GB).
-function snapshot(availableBytes: number, rows: ModelRamEstimate[] = [row()]): RamSnapshot {
+function snapshot(
+  availableBytes: number,
+  ram: Record<string, StoredRam> = { [model.name]: stored() },
+): RamSnapshot {
   return {
     memory: { totalBytes: 16 * GB, availableBytes },
     headroomPercent: 10,
-    rowsByModel: { [model.name]: rows },
+    ramByModel: ram,
   };
 }
 
-describe("pickModelRamRow", () => {
-  it("picks the row for the given precision", () => {
-    const rows = [row({ precision: "W4A16" }), row({ precision: "W8A16", totalBytes: 8 * GB })];
-    expect(pickModelRamRow(rows, "W8A16")?.totalBytes).toBe(8 * GB);
-  });
-
-  it("falls back to the first row when no precision matches", () => {
-    const rows = [row({ precision: "W4A16" })];
-    expect(pickModelRamRow(rows, "Q5_K_M")?.precision).toBe("W4A16");
-  });
-
-  it("returns null when there are no rows", () => {
-    expect(pickModelRamRow([], "W4A16")).toBeNull();
-  });
-});
-
 describe("modelRamLine", () => {
-  it("is null without a snapshot or an estimate for the model", () => {
+  it("is null without a snapshot or stored RAM for the model", () => {
     expect(modelRamLine(null, model, false)).toBeNull();
-    expect(modelRamLine(snapshot(10 * GB, []), model, false)).toBeNull();
+    expect(modelRamLine(snapshot(10 * GB, {}), model, false)).toBeNull();
   });
 
-  it("shows the estimate with a tilde when it is measured", () => {
+  it("adds the base and the context share, with a tilde when it is measured", () => {
     const line = modelRamLine(snapshot(10 * GB), model, false);
     expect(line?.label).toBe("RAM ~4.00 GB");
     expect(line?.warning).toBeNull();
   });
 
-  it("says about when the estimate is approximate", () => {
-    const line = modelRamLine(snapshot(10 * GB, [row({ approximate: true })]), model, false);
-    expect(line?.label).toBe("RAM about 4.00 GB");
+  it("finds the model by its settings key, ignoring a precision suffix", () => {
+    const withSuffix: ModelInfo = { ...model, name: "org/model:W4A16" };
+    expect(modelRamLine(snapshot(10 * GB), withSuffix, false)?.label).toBe("RAM ~4.00 GB");
+  });
+
+  it("says about when the figure is approximate", () => {
+    const ram = { [model.name]: stored({ approximate: true }) };
+    expect(modelRamLine(snapshot(10 * GB, ram), model, false)?.label).toBe("RAM about 4.00 GB");
   });
 
   it("has no warning when the load keeps the headroom free", () => {
-    // 10 GB free minus 4 GB estimate leaves 6 GB, more than 1.6 GB kept free.
+    // 10 GB free minus 4 GB leaves 6 GB, more than 1.6 GB kept free.
     expect(modelRamLine(snapshot(10 * GB), model, false)?.warning).toBeNull();
   });
 

@@ -20,6 +20,8 @@ mod m20261032_000001_message_compute;
 mod m20261033_000001_downloaded_model_facets;
 mod m20261034_000001_create_installed_runtimes;
 mod m20261035_000001_message_covers_through;
+mod m20261036_000001_downloaded_model_ram;
+mod m20261037_000001_drop_model_compute_setting;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -46,6 +48,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20261033_000001_downloaded_model_facets::Migration),
             Box::new(m20261034_000001_create_installed_runtimes::Migration),
             Box::new(m20261035_000001_message_covers_through::Migration),
+            Box::new(m20261036_000001_downloaded_model_ram::Migration),
+            Box::new(m20261037_000001_drop_model_compute_setting::Migration),
         ]
     }
 }
@@ -223,8 +227,8 @@ mod tests {
         assert_eq!(msg.token_count, Some(42));
         assert_eq!(msg.prompt_chars, Some(7));
 
-        // Sixteen steps: the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes and message covers-through migrations come after this one.
-        Migrator::down(&db, Some(16))
+        // Eighteen steps: the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM and dropped compute setting migrations come after this one.
+        Migrator::down(&db, Some(18))
             .await
             .expect("revert stats migration");
         let after_down = columns(db.clone()).await;
@@ -254,8 +258,8 @@ mod tests {
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
         // Put back the old JSON row, then apply the migrations again so it copies it.
-        // Fifteen steps: the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes and message covers-through migrations come after the settings one.
-        Migrator::down(&db, Some(15))
+        // Seventeen steps: the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM and dropped compute setting migrations come after the settings one.
+        Migrator::down(&db, Some(17))
             .await
             .expect("revert settings migration");
         db.execute(Statement::from_string(
@@ -280,7 +284,7 @@ mod tests {
 
         assert_eq!(stored.get("temperature").map(String::as_str), Some("0.2"));
         assert_eq!(stored.get("think").map(String::as_str), Some("false"));
-        assert_eq!(stored.get("compute").map(String::as_str), Some("\"npu\""));
+        assert!(!stored.contains_key("compute"), "the dropped compute setting is deleted");
         assert_eq!(stored.get("nctx").map(String::as_str), Some("4096"));
         assert!(!stored.contains_key("seed"), "null values are not copied");
         assert!(!stored.contains_key("origins"));
@@ -565,6 +569,9 @@ mod tests {
             repo_url: Set(None),
             model_card: Set(None),
             facets: Set(Some(facets.into())),
+            base_ram_bytes: Set(None),
+            context_ram_bytes: Set(None),
+            ram_approximate: Set(None),
         }
         .insert(&db)
         .await
@@ -578,8 +585,8 @@ mod tests {
         assert_eq!(row.facets.as_deref(), Some(facets));
 
         // Reverting drops the column; reapplying brings it back as null for old rows.
-        // Three steps: the installed runtimes and message covers-through migrations come after this one.
-        Migrator::down(&db, Some(3)).await.expect("revert facets");
+        // Five steps: this one, then the installed runtimes, message covers-through, downloaded model RAM and dropped compute setting migrations.
+        Migrator::down(&db, Some(5)).await.expect("revert facets");
         assert!(!columns(db.clone()).await.iter().any(|c| c == "facets"));
         Migrator::up(&db, None).await.expect("reapply facets");
         let row = downloaded_model::Entity::find_by_id("org/model")
@@ -680,6 +687,75 @@ mod tests {
             .expect("query")
             .expect("row exists");
         assert_eq!(chat.covers_through_id, None);
+    }
+
+    #[tokio::test]
+    async fn downloaded_model_ram_columns_round_trip() {
+        use crate::entities::downloaded_model;
+
+        let tmp = TempDb::new("migrate-ram");
+        let db = init_database(&tmp.url()).await.expect("migrations apply");
+
+        let columns = |db: sea_orm::DatabaseConnection| async move {
+            let rows = db
+                .query_all(sea_orm::Statement::from_string(
+                    sea_orm::DatabaseBackend::Sqlite,
+                    "PRAGMA table_info(downloaded_models)".to_owned(),
+                ))
+                .await
+                .expect("table_info");
+            rows.iter()
+                .map(|r| r.try_get::<String>("", "name").expect("name"))
+                .collect::<Vec<_>>()
+        };
+        let ram_cols = ["base_ram_bytes", "context_ram_bytes", "ram_approximate"];
+        let before = columns(db.clone()).await;
+        for col in ram_cols {
+            assert!(before.iter().any(|c| c == col), "{col} missing after up");
+        }
+
+        downloaded_model::ActiveModel {
+            name: Set("org/model".into()),
+            precision: Set(None),
+            context_size: Set(None),
+            param_count: Set(None),
+            created_at: Set(1),
+            updated_at: Set(1),
+            repo_url: Set(None),
+            model_card: Set(None),
+            facets: Set(None),
+            base_ram_bytes: Set(Some(3_000_000_000)),
+            context_ram_bytes: Set(Some(512)),
+            ram_approximate: Set(Some(true)),
+        }
+        .insert(&db)
+        .await
+        .expect("insert downloaded model with RAM");
+
+        let row = downloaded_model::Entity::find_by_id("org/model")
+            .one(&db)
+            .await
+            .expect("query")
+            .expect("row exists");
+        assert_eq!(row.base_ram_bytes, Some(3_000_000_000));
+        assert_eq!(row.context_ram_bytes, Some(512));
+        assert_eq!(row.ram_approximate, Some(true));
+
+        // Reverting drops the three columns; reapplying brings them back as null.
+        Migrator::down(&db, Some(2)).await.expect("revert RAM columns");
+        let after_down = columns(db.clone()).await;
+        for col in ram_cols {
+            assert!(!after_down.iter().any(|c| c == col), "{col} left after down");
+        }
+        Migrator::up(&db, None).await.expect("reapply RAM columns");
+        let row = downloaded_model::Entity::find_by_id("org/model")
+            .one(&db)
+            .await
+            .expect("query")
+            .expect("row exists");
+        assert_eq!(row.base_ram_bytes, None);
+        assert_eq!(row.context_ram_bytes, None);
+        assert_eq!(row.ram_approximate, None);
     }
 
     #[tokio::test]

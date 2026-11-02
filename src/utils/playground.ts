@@ -35,7 +35,7 @@ export const IMAGE_SIZE_MIN = 64;
 export const IMAGE_SIZE_MAX = 2048;
 
 /** Quick sizes offered beside the Width and Height fields. The selected model's default is added too. */
-export const IMAGE_SIZE_PRESETS: readonly ImageSize[] = [
+const IMAGE_SIZE_PRESETS: readonly ImageSize[] = [
   { width: 512, height: 512 },
   { width: 512, height: 768 },
   { width: 768, height: 512 },
@@ -46,7 +46,7 @@ export const IMAGE_SIZE_PRESETS: readonly ImageSize[] = [
 export const DEVICE_AUTO = "auto";
 
 /** Stages in the order the backend runs them. */
-export const IMAGE_PHASES: readonly ImagePhase[] = [
+const IMAGE_PHASES: readonly ImagePhase[] = [
   "loading",
   "encoding",
   "sampling",
@@ -83,7 +83,7 @@ export function applyModelDefaults(form: ImageForm, defaults: ImageModelDefaults
   };
 }
 
-export function imageSizeLabel(size: ImageSize): string {
+function imageSizeLabel(size: ImageSize): string {
   return `${size.width} x ${size.height}`;
 }
 
@@ -217,7 +217,7 @@ export interface ComputeOption {
 }
 
 /** True when the build lists a CPU. Auto runs on the CPU in that case, so the label says so. */
-export function hasCpuDevice(devices: PlaygroundDevice[]): boolean {
+function hasCpuDevice(devices: PlaygroundDevice[]): boolean {
   return devices.some((device) => device.kind === "cpu");
 }
 

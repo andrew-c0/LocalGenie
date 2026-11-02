@@ -6,7 +6,7 @@ import { StateBlock } from "../../ui/StateBlock/StateBlock";
 import { BodyStrong, Meta } from "../../ui/Typography/Typography";
 import "./LibraryPanel.css";
 
-export interface LibraryPanelItem {
+interface LibraryPanelItem {
   id: string;
   name: string;
   /** One line under the name, e.g. counts. */

@@ -50,7 +50,7 @@ pub struct RunMetrics {
 }
 
 /// Figures for one run from its steps. Pure, so it can be tested without a database.
-pub fn summarize(steps: &[benchmark_run_step::Model]) -> RunMetrics {
+pub(super) fn summarize(steps: &[benchmark_run_step::Model]) -> RunMetrics {
     let mut metrics = RunMetrics::default();
     for step in steps {
         match step.status.as_str() {

@@ -218,7 +218,7 @@ export interface ModelLoadParams {
 }
 
 /** Everything saved for one model in `model_settings`. */
-export type ModelLoadSettings = ModelLoadParams;
+export type ModelLoadSettings = Omit<ModelLoadParams, "compute">;
 
 export type StoredModelSettings = GenerationSettings & ModelLoadSettings;
 
@@ -261,7 +261,7 @@ export type CapabilityKey =
  * Scan result for one setting. `works`: the effect was seen. `accepted`: the server returned 200,
  * but the effect was not checked. `rejected`: the server refused the value.
  */
-export type CapabilityStatus = "works" | "accepted" | "rejected";
+type CapabilityStatus = "works" | "accepted" | "rejected";
 
 /** A stored scan result. `stale` is true when the model file or the GenieX version changed since. */
 export interface CapabilityEntry {
@@ -298,20 +298,6 @@ export interface RuntimeVersions {
 export interface ServerSettings {
   origins: string;
   keepalive: number;
-}
-
-/** RAM estimate for one downloaded model at one precision, from `model_ram_estimates`. Bytes. */
-export interface ModelRamEstimate {
-  /** The model's GenieX name (`org/repo`). */
-  name: string;
-  /** Precision label; empty when the model names none. */
-  precision: string;
-  weightsBytes: number;
-  kvBytes: number;
-  extraBytes: number;
-  totalBytes: number;
-  /** True when the estimate used a flat factor or the model's files could not be measured. */
-  approximate: boolean;
 }
 
 /** Settings for one chat request: sampling plus the load parameters the server keys its cache on. */
@@ -377,7 +363,7 @@ export interface RuntimeInstallProgress {
 }
 
 /** One file of an image model, as listed by `playground_image_models`. */
-export interface ImageModelFile {
+interface ImageModelFile {
   fileName: string;
   sizeBytes: number;
   present: boolean;
@@ -718,7 +704,7 @@ export interface PlaygroundSpeechProgress {
   phase: SpeechPhase;
 }
 
-export type SpeechStatus = "ok" | "cancelled" | "error";
+type SpeechStatus = "ok" | "cancelled" | "error";
 
 /** One file an audio to audio job saved. `label` is what the panel shows above its player, e.g. "Voice". */
 export interface SpeechOutputFile {
@@ -811,10 +797,10 @@ export interface ServerLogLine {
 
 // Benchmark suite (test runs). Mirrors the `benchmark_*` tables; see plans/benchmarks.md.
 export type BenchmarkMatchRule = "all" | "any";
-export type BenchmarkFileKind = "text" | "image" | "audio";
+type BenchmarkFileKind = "text" | "image" | "audio";
 export type BenchmarkSuiteMode = "conversation" | "independent";
-export type BenchmarkRunStatus = "running" | "completed" | "failed" | "cancelled";
-export type BenchmarkStepStatus = "completed" | "failed" | "skipped";
+type BenchmarkRunStatus = "running" | "completed" | "failed" | "cancelled";
+type BenchmarkStepStatus = "completed" | "failed" | "skipped";
 
 export interface BenchmarkPrompt {
   id: string;
@@ -853,7 +839,7 @@ export interface BenchmarkFile {
   createdAt: number;
 }
 
-export interface BenchmarkSuiteStep {
+interface BenchmarkSuiteStep {
   id: string;
   promptId: string;
   promptName: string;
@@ -864,7 +850,7 @@ export interface BenchmarkSuiteStep {
 }
 
 /** One step as the suite editor saves it. */
-export interface BenchmarkSuiteStepInput {
+interface BenchmarkSuiteStepInput {
   id: string;
   promptId: string;
   fileIds: string[];
@@ -893,37 +879,6 @@ export interface BenchmarkSuite {
   runCount: number;
   createdAt: number;
   updatedAt: number;
-}
-
-export interface BenchmarkRunSettings {
-  compute: ComputeTarget;
-  precision: string | null;
-  nctx: number | null;
-  ngl: number | null;
-  powerMode: string | null;
-  temperature: number | null;
-  topP: number | null;
-  seed: number | null;
-  maxTokens: number | null;
-}
-
-export interface BenchmarkRun {
-  id: string;
-  suiteId: string | null;
-  suiteName: string;
-  modelName: string;
-  modelKey: string;
-  settings: BenchmarkRunSettings;
-  mode: BenchmarkSuiteMode;
-  warmupRuns: number;
-  repetitions: number;
-  geniexVersion: string | null;
-  chipset: string | null;
-  totalMemoryBytes: number | null;
-  status: BenchmarkRunStatus;
-  error: string | null;
-  startedAt: number;
-  finishedAt: number | null;
 }
 
 export interface BenchmarkRunStep {
@@ -992,7 +947,7 @@ export interface BenchmarkFinishedEvent {
 }
 
 /** Figures for one run, from its steps. Means and peaks use the timed passes that completed. */
-export interface BenchmarkRunMetrics {
+interface BenchmarkRunMetrics {
   stepsCompleted: number;
   stepsFailed: number;
   stepsSkipped: number;

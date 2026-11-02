@@ -1,7 +1,7 @@
 import type { ElementType, HTMLAttributes, ReactNode } from "react";
 import "./Flex.css";
 
-export type FlexGap = "none" | "xxs" | "xs" | "s" | "m" | "l" | "xl";
+type FlexGap = "none" | "xxs" | "xs" | "s" | "m" | "l" | "xl";
 
 interface FlexProps extends HTMLAttributes<HTMLElement> {
   /** Element to render. Defaults to a div. */

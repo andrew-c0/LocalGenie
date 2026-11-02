@@ -10,7 +10,6 @@ dependencies = [
  "base64 0.22.1",
  "bzip2",
  "chrono",
- "flate2",
  "futures-util",
  "image",
  "prost",

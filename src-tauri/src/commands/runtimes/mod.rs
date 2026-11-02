@@ -63,7 +63,7 @@ pub struct RuntimeUpdateInfo {
 
 /// The version folder of the current install of `spec`, or None when it is not installed. The
 /// folder is not checked to exist; the caller does that.
-pub(crate) async fn current_install_dir(
+async fn current_install_dir(
     db: &DatabaseConnection,
     spec: &RuntimeSpec,
 ) -> Result<Option<PathBuf>, String> {
@@ -74,7 +74,7 @@ pub(crate) async fn current_install_dir(
 
 /// Path of the program in the current install of `spec`, or None when it is not installed. The
 /// program is not checked to exist; the caller does that.
-pub(crate) async fn current_program(
+pub(super) async fn current_program(
     db: &DatabaseConnection,
     spec: &RuntimeSpec,
 ) -> Result<Option<PathBuf>, String> {

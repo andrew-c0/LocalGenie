@@ -31,7 +31,7 @@ export const PLAYGROUND_SPEECH_DONE_EVENT = "playground-speech-done";
 export const PLAYGROUND_OCR_DONE_EVENT = "playground-ocr-done";
 
 /** The download id the backend uses for a model, image or speech. `cancel_download` takes this id. */
-export function playgroundDownloadId(modelId: string): string {
+function playgroundDownloadId(modelId: string): string {
   return `playground:${modelId}`;
 }
 

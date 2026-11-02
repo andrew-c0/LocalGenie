@@ -1,6 +1,7 @@
 import { Button, Spinner } from "@fluentui/react-components";
 import { ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useEffect, useRef, useState } from "react";
+import { isNearBottom } from "../../../utils/scroll";
 import { MarkdownContent } from "../../ui/MarkdownContent/MarkdownContent";
 import "./ThinkingBlock.css";
 
@@ -16,11 +17,15 @@ export function ThinkingBlock({ text, live }: ThinkingBlockProps) {
   const [expanded, setExpanded] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  // Keep the newest reasoning in view while it streams.
+  // Whether the panel follows the newest reasoning. It stops when the user scrolls up in the panel
+  // and resumes when they scroll back to its bottom.
+  const followRef = useRef(true);
+
+  // Keep the newest reasoning in view while it streams, unless the user scrolled up.
   // biome-ignore lint/correctness/useExhaustiveDependencies: text is the trigger, the scroll position is read from the DOM
   useEffect(() => {
     const body = bodyRef.current;
-    if (live && expanded && body) body.scrollTop = body.scrollHeight;
+    if (live && expanded && body && followRef.current) body.scrollTop = body.scrollHeight;
   }, [text, live, expanded]);
 
   return (
@@ -44,7 +49,13 @@ export function ThinkingBlock({ text, live }: ThinkingBlockProps) {
         {live ? "Thinking..." : "Thought process"}
       </Button>
       {expanded && (
-        <div ref={bodyRef} className="thinking-block__body">
+        <div
+          ref={bodyRef}
+          className="thinking-block__body"
+          onScroll={(e) => {
+            followRef.current = isNearBottom(e.currentTarget);
+          }}
+        >
           {text ? <MarkdownContent>{text}</MarkdownContent> : live && "Waiting for reasoning..."}
         </div>
       )}

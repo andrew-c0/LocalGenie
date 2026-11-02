@@ -84,7 +84,7 @@ export function attachmentRef(file: PendingAttachment): AttachmentRef {
 }
 
 /** Longest file name shown on a tile, extension and dots included. */
-export const MAX_SHOWN_NAME_LENGTH = 30;
+const MAX_SHOWN_NAME_LENGTH = 30;
 
 /**
  * File name for a tile. A name longer than the limit keeps its extension and ends with "..." before

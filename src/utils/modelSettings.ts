@@ -10,7 +10,7 @@ import type {
 /** Engine a model runs on: GGUF models use llama.cpp, Qualcomm AI Hub bundles use QAIRT. */
 export type ModelEngine = "llama_cpp" | "qairt";
 
-/** Defaults matching the GenieX CLI. `compute` falls back to the header choice. */
+/** Defaults matching the GenieX CLI. */
 export const DEFAULT_LOAD_SETTINGS: ModelLoadSettings = {
   ngl: -1,
 };
@@ -142,7 +142,8 @@ export function draftModelDisabledReason(
 
 /**
  * Load parameters for a model's chat requests. Disabled settings are left out so the server
- * default applies instead of a value the engine would ignore. The context window is the saved
+ * default applies instead of a value the engine would ignore. The compute target is always the
+ * header choice (`fallbackCompute`); a model has no compute setting of its own. The context window is the saved
  * one, else the model's own (`nativeContext`), else left to the server.
  */
 export function resolveLoadParams(
@@ -152,7 +153,7 @@ export function resolveLoadParams(
   nativeContext: number | null = null,
 ): ModelLoadParams {
   const merged = { ...DEFAULT_LOAD_SETTINGS, ...saved };
-  const compute = merged.compute || fallbackCompute;
+  const compute = fallbackCompute;
   const params: ModelLoadParams = {};
   const nctx = saved.nctx ?? nativeContext ?? undefined;
 
