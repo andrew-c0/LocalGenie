@@ -27,6 +27,7 @@ import type {
   BenchmarkSuiteMode,
 } from "../../../types";
 import { errorMessage } from "../../../utils/errorMessage";
+import { spinNumber } from "../../../utils/spinValue";
 import { toast } from "../../../utils/toast";
 import { ConfirmDialog } from "../../ui/ConfirmDialog/ConfirmDialog";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
@@ -251,7 +252,7 @@ export function SuiteEditor({
             min={0}
             max={MAX_WARMUP_RUNS}
             value={warmupRuns}
-            onChange={(_, d) => setWarmupRuns(d.value ?? 0)}
+            onChange={(_, d) => setWarmupRuns(spinNumber(d, 0, MAX_WARMUP_RUNS) ?? 0)}
           />
         </Field>
         <Field label="Repetitions" hint="Timed passes. Compare shows the mean of these.">
@@ -259,7 +260,7 @@ export function SuiteEditor({
             min={1}
             max={MAX_REPETITIONS}
             value={repetitions}
-            onChange={(_, d) => setRepetitions(d.value ?? 1)}
+            onChange={(_, d) => setRepetitions(spinNumber(d, 1, MAX_REPETITIONS) ?? 1)}
           />
         </Field>
       </div>

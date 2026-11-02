@@ -11,6 +11,7 @@ import {
 } from "@fluentui/react-components";
 import type { SettingWarnings } from "../../../utils/modelCapabilities";
 import { DEFAULT_LOAD_SETTINGS, SPEC_TYPES } from "../../../utils/modelSettings";
+import { spinNumber } from "../../../utils/spinValue";
 import SettingField from "../SettingField/SettingField";
 import type { ModelSettingsForm } from "../useModelSettingsForm";
 import type { SettingReasons } from "./types";
@@ -45,7 +46,8 @@ export default function AdvancedSection({ form, reasons, warnings }: Props) {
                 min={-1}
                 max={999}
                 onChange={(_, data) => {
-                  if (data.value != null) update("ngl", data.value);
+                  const value = spinNumber(data, -1, 999);
+                  if (value != null) update("ngl", value);
                 }}
               />
             </SettingField>
@@ -99,7 +101,7 @@ export default function AdvancedSection({ form, reasons, warnings }: Props) {
                 placeholder="Default (3)"
                 min={1}
                 max={32}
-                onChange={(_, data) => update("specNMax", data.value ?? undefined)}
+                onChange={(_, data) => update("specNMax", spinNumber(data, 1, 32) ?? undefined)}
               />
             </SettingField>
 
@@ -114,7 +116,7 @@ export default function AdvancedSection({ form, reasons, warnings }: Props) {
                 placeholder="Default (0)"
                 min={0}
                 max={32}
-                onChange={(_, data) => update("specNMin", data.value ?? undefined)}
+                onChange={(_, data) => update("specNMin", spinNumber(data, 0, 32) ?? undefined)}
               />
             </SettingField>
 
@@ -130,7 +132,7 @@ export default function AdvancedSection({ form, reasons, warnings }: Props) {
                 min={0}
                 max={1}
                 step={0.05}
-                onChange={(_, data) => update("specPMin", data.value ?? undefined)}
+                onChange={(_, data) => update("specPMin", spinNumber(data, 0, 1) ?? undefined)}
               />
             </SettingField>
           </div>

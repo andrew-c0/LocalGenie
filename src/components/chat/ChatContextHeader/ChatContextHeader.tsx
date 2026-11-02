@@ -53,13 +53,12 @@ export function ChatContextHeader() {
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   if (!activeSession) return null;
 
-  // The server's exact count of the last reply, plus an estimate for what came after it. Text files
-  // are drawn in their own colour.
-  const { total: usedTokens, fileTokens, exact } = contextUsageOf(activeSession.messages);
+  // An estimate of what the next request carries. Text files are drawn in their own colour.
+  const { total: usedTokens, fileTokens } = contextUsageOf(activeSession.messages);
   const textTokens = usedTokens - fileTokens;
   const fileLine = fileTokens > 0 ? `${formatCount(fileTokens)} from attached files` : undefined;
   const hasWindow = contextWindow !== null && contextWindow > 0;
-  const shown = `${exact ? "" : "~"}${formatCount(usedTokens)}`;
+  const shown = `~${formatCount(usedTokens)}`;
   const customCount = overrideCount(activeSession.settingsOverrides);
 
   return (

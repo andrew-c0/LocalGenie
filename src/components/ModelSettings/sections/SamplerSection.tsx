@@ -1,5 +1,6 @@
 import { Slider, SpinButton, Subtitle1 } from "@fluentui/react-components";
 import { isRejected, rejectedReason } from "../../../utils/capabilityStatus";
+import { spinNumber } from "../../../utils/spinValue";
 import { Body } from "../../ui/Typography/Typography";
 import SettingField from "../SettingField/SettingField";
 import type { ModelSettingsForm } from "../useModelSettingsForm";
@@ -70,7 +71,8 @@ export default function SamplerSection({ form, caps }: Props) {
           min={1}
           max={100}
           onChange={(_, data) => {
-            if (data.value != null) update("topK", data.value);
+            const value = spinNumber(data, 1, 100);
+            if (value != null) update("topK", value);
           }}
         />
       </SettingField>
@@ -106,7 +108,8 @@ export default function SamplerSection({ form, caps }: Props) {
           max={2}
           step={0.1}
           onChange={(_, data) => {
-            if (data.value != null) update("repetitionPenalty", data.value);
+            const value = spinNumber(data, 1, 2);
+            if (value != null) update("repetitionPenalty", value);
           }}
         />
       </SettingField>
@@ -123,7 +126,7 @@ export default function SamplerSection({ form, caps }: Props) {
           min={-2}
           max={2}
           step={0.1}
-          onChange={(_, data) => update("presencePenalty", data.value ?? undefined)}
+          onChange={(_, data) => update("presencePenalty", spinNumber(data, -2, 2) ?? undefined)}
         />
       </SettingField>
 
@@ -139,7 +142,7 @@ export default function SamplerSection({ form, caps }: Props) {
           min={-2}
           max={2}
           step={0.1}
-          onChange={(_, data) => update("frequencyPenalty", data.value ?? undefined)}
+          onChange={(_, data) => update("frequencyPenalty", spinNumber(data, -2, 2) ?? undefined)}
         />
       </SettingField>
     </section>

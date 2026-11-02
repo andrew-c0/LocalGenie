@@ -8,6 +8,7 @@ import {
   SEED_HELP,
   STEPS_HELP,
 } from "../../../../utils/playgroundText";
+import { spinNumber } from "../../../../utils/spinValue";
 import { Flex } from "../../../ui/Flex/Flex";
 import { HelpLabel } from "../../../ui/HelpLabel/HelpLabel";
 import { PromptField } from "../PromptField/PromptField";
@@ -73,7 +74,9 @@ export function ImageSettingsFields({
             max={MAX_STEPS}
             step={1}
             value={form.steps}
-            onChange={(_, data) => onChange({ steps: data.value ?? form.steps })}
+            onChange={(_, data) =>
+              onChange({ steps: spinNumber(data, 1, MAX_STEPS) ?? form.steps })
+            }
           />
         </Field>
         <Field
@@ -87,7 +90,9 @@ export function ImageSettingsFields({
             step={CFG_STEP}
             precision={1}
             value={form.cfgScale}
-            onChange={(_, data) => onChange({ cfgScale: data.value ?? form.cfgScale })}
+            onChange={(_, data) =>
+              onChange({ cfgScale: spinNumber(data, CFG_MIN, CFG_MAX) ?? form.cfgScale })
+            }
           />
         </Field>
       </Flex>
@@ -103,7 +108,7 @@ export function ImageSettingsFields({
             disabled={form.randomSeed}
             step={1}
             value={form.seed}
-            onChange={(_, data) => onChange({ seed: data.value ?? form.seed })}
+            onChange={(_, data) => onChange({ seed: spinNumber(data) ?? form.seed })}
           />
         </Field>
       </Flex>

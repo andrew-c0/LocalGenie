@@ -1,6 +1,7 @@
 import { Dropdown, Option, SpinButton, Subtitle1 } from "@fluentui/react-components";
 import type { SettingWarnings } from "../../../utils/modelCapabilities";
 import { DEFAULT_CONTEXT_WINDOW, POWER_MODES } from "../../../utils/modelSettings";
+import { spinNumber } from "../../../utils/spinValue";
 import { Body } from "../../ui/Typography/Typography";
 import SettingField from "../SettingField/SettingField";
 import type { ModelSettingsForm } from "../useModelSettingsForm";
@@ -8,6 +9,7 @@ import type { SettingReasons } from "./types";
 
 /** Upper bound for the context window when the model's own length is not known. */
 const MAX_CONTEXT_WINDOW = 131072;
+const MIN_CONTEXT_WINDOW = 512;
 
 interface Props {
   form: ModelSettingsForm;
@@ -20,6 +22,7 @@ interface Props {
 /** Settings sent with every message. A change reloads the model on the next message. */
 export default function LoadSection({ form, compute, reasons, warnings }: Props) {
   const { settings, update, nativeContext } = form;
+  const maxContext = nativeContext ?? MAX_CONTEXT_WINDOW;
 
   return (
     <section className="model-settings__section">
@@ -58,11 +61,12 @@ export default function LoadSection({ form, compute, reasons, warnings }: Props)
         <SpinButton
           disabled={!!reasons.nctx}
           value={settings.nctx ?? nativeContext ?? DEFAULT_CONTEXT_WINDOW}
-          min={512}
-          max={nativeContext ?? MAX_CONTEXT_WINDOW}
+          min={MIN_CONTEXT_WINDOW}
+          max={maxContext}
           step={512}
           onChange={(_, data) => {
-            if (data.value != null) update("nctx", data.value);
+            const value = spinNumber(data, MIN_CONTEXT_WINDOW, maxContext);
+            if (value != null) update("nctx", value);
           }}
         />
       </SettingField>

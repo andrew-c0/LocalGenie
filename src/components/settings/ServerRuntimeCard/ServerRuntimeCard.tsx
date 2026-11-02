@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import * as db from "../../../services/database";
 import type { ServerSettings } from "../../../types";
 import { DEFAULT_SERVER_SETTINGS } from "../../../utils/modelSettings";
+import { spinNumber } from "../../../utils/spinValue";
 import "./ServerRuntimeCard.css";
 
 /** Edits the settings the GenieX server starts with: allowed CORS origins and the keepalive timeout. */
@@ -92,7 +93,8 @@ export default function ServerRuntimeCard() {
             max={86400}
             step={30}
             onChange={(_, data) => {
-              if (data.value != null) setDraft({ ...draft, keepalive: data.value });
+              const keepalive = spinNumber(data, 0, 86400);
+              if (keepalive != null) setDraft({ ...draft, keepalive });
             }}
           />
         </Field>

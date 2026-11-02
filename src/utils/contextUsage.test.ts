@@ -34,28 +34,35 @@ describe("contextUsageOf", () => {
     timestamp: 2,
     usage,
   });
+  const user = (id: string, chars: number): Message => ({
+    id,
+    role: "user",
+    content: "x".repeat(chars),
+    timestamp: 1,
+  });
 
   it("estimates everything when no reply reported its counts", () => {
-    const usage = contextUsageOf([message(undefined)]);
-    expect(usage).toEqual({ total: 1, fileTokens: 0, exact: false });
+    expect(contextUsageOf([message(undefined)])).toEqual({ total: 1, fileTokens: 0 });
   });
 
-  it("starts from the last reply's exact counts and estimates what came after", () => {
-    const messages = [
-      message(undefined),
-      reply("r1", { promptTokens: 1000, completionTokens: 50 }),
-      { id: "u2", role: "user" as const, content: "x".repeat(400), timestamp: 3 },
-    ];
-    // 1000 prompt + 50 reply exact, then 400 characters at four per token.
-    expect(contextUsageOf(messages)).toEqual({ total: 1150, fileTokens: 0, exact: true });
+  it("counts a reply by its completion tokens and a prompt by its text", () => {
+    const messages = [user("u1", 400), reply("r1", { promptTokens: 100, completionTokens: 50 })];
+    // 400 characters at four per token, plus the reply's 50. The prompt count is not added.
+    expect(contextUsageOf(messages).total).toBe(150);
   });
 
-  it("uses the latest reply that has counts, not an earlier one", () => {
+  it("adds every message, not just the last reply (the server prompt count covers new tokens only)", () => {
     const messages = [
-      reply("r1", { promptTokens: 100, completionTokens: 10 }),
-      reply("r2", { promptTokens: 300, completionTokens: 20 }),
+      user("u1", 400),
+      reply("r1", { promptTokens: 100, completionTokens: 300 }),
+      user("u2", 40),
+      reply("r2", { promptTokens: 20, completionTokens: 300 }),
     ];
-    expect(contextUsageOf(messages).total).toBe(320);
+    expect(contextUsageOf(messages).total).toBe(100 + 300 + 10 + 300);
+  });
+
+  it("estimates a reply that has no counts from its text", () => {
+    expect(contextUsageOf([reply("r1", undefined, "y".repeat(80))]).total).toBe(20);
   });
 
   describe("with a summary", () => {
@@ -69,26 +76,25 @@ describe("contextUsageOf", () => {
       coversThroughId: "r1",
     });
 
-    it("ignores counts from replies before the summary and estimates the summary text", () => {
+    it("leaves out the messages before the summary and counts the summary text", () => {
       const messages = [
         message(undefined),
         reply("r1", { promptTokens: 9000, completionTokens: 500 }),
         summary("x".repeat(400)),
-        { id: "u2", role: "user" as const, content: "y".repeat(40), timestamp: 3 },
+        user("u2", 40),
       ];
-      // 400 + 40 characters at four per token, with no exact count after the summary.
-      expect(contextUsageOf(messages)).toEqual({ total: 110, fileTokens: 0, exact: false });
+      // 400 + 40 characters at four per token.
+      expect(contextUsageOf(messages)).toEqual({ total: 110, fileTokens: 0 });
     });
 
-    it("starts from a reply after the summary when it reported its counts", () => {
+    it("adds replies after the summary by their completion tokens", () => {
       const messages = [
         reply("r1", { promptTokens: 9000, completionTokens: 500 }),
         summary("x".repeat(400)),
+        user("u2", 40),
         reply("r2", { promptTokens: 300, completionTokens: 20 }),
-        { id: "u3", role: "user" as const, content: "y".repeat(80), timestamp: 4 },
       ];
-      // The summary is inside the exact count of r2; only the new message is estimated.
-      expect(contextUsageOf(messages)).toEqual({ total: 340, fileTokens: 0, exact: true });
+      expect(contextUsageOf(messages).total).toBe(100 + 10 + 20);
     });
 
     it("does not count files sent before the summary", () => {
@@ -101,9 +107,9 @@ describe("contextUsageOf", () => {
           attachments: [{ id: "a", kind: "text" as const, name: "a.md", size: 4000, chars: 4000 }],
         },
         summary("x".repeat(40)),
-        { id: "u2", role: "user" as const, content: "y".repeat(40), timestamp: 3 },
+        user("u2", 40),
       ];
-      expect(contextUsageOf(messages)).toEqual({ total: 20, fileTokens: 0, exact: false });
+      expect(contextUsageOf(messages)).toEqual({ total: 20, fileTokens: 0 });
     });
   });
 
