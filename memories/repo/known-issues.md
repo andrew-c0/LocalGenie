@@ -54,12 +54,18 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - A message saved before paths were kept (a ref with no `path`) has no Retry button, and every send in its session warns "Files not sent" and leaves that file out, because the history is rebuilt from all messages. The warning repeats on each send until that message is deleted (Delete on the bubble, with every later message; `MessageBubble.tsx` `removeFrom`). The model does not see the file in the meantime (code-read; not run).
 - A stored file that was moved or deleted is left out of every later send and Retry in its session the same way: the send goes ahead, a "Files not sent" toast names it, and the toast repeats until its message is deleted. Its tile shows "no longer at its path" when opened.
 - Text files are re-read from disk on every later turn. The first send uses the copy read at attach time, so an edit made after that changes what the model gets from the next turn on.
-- Context total: text files are an estimate (characters / 4) until a reply reports counts; after that, the server's exact total covers them and only later files are estimated. Images and audio have no token estimate, so they count only in the exact total after a reply.
-- The usage stream is unverified in a live run. GenieX sends the usage chunk when `include_usage` is set (code-read). Without counts (a stopped reply, or no usage chunk), the total falls back to the estimate from the last counted reply.
+- Context total (uncommitted rewrite, `utils/contextUsage.ts`, 2026-11-02): an estimate only. A reply counts its `completionTokens` when it has them; every other message counts its text at characters / 4; text files are added at characters / 4. Images and audio are not counted. The server's `prompt_tokens` is not used, because it covers only the tokens processed for that request (KV reuse), so the total can sit far below the real context. Not measured against the server's real context size.
+- The usage stream is unverified in a live run. GenieX sends the usage chunk when `include_usage` is set (code-read). A stopped reply has no counts and is estimated from its text.
 - Images above 1536 px on the long edge are re-encoded as JPEG (quality 85) before sending. The effect of that on answers is not tested.
 - Vision and audio are gated by a `works` scan result for the active model. A file of a kind the active model cannot take, anywhere in the session, blocks the send (`modelTakesFiles`), so switching to a model without the scan result blocks the old files too.
 - Limits (code-verified in `commands/attachments.rs`, `utils/attachments.ts`): 4 files per message, 10 MB for image and audio, 512 KB UTF-8 for text. The "Open location" action is Windows only.
 - Earlier cache overwrite (a second quant of the same repo replaced the first in the cache) was not reproduced in isolation. The observed loss was explained by a manual removal (reported). Treat as unconfirmed.
+
+## Conversation compaction (committed 1116bf1)
+- The main flow was tested by the user on 2026-11-02 (per the header of `manual-checklist.md`, section "Conversation compaction"); the remaining checklist items are not ticked.
+- The trigger and the summary budget use the same character estimate as the context total, so a summary can come earlier or later than the real window would need. An unknown window disables the trigger and the splitting (code-read).
+- The summary is the model's own text. The code checks only that it is not empty; nothing checks it against the conversation. A weak summary stays in effect until a later summary folds it in; summaries also stay in effect when the setting is off.
+- Covered messages cannot be deleted or retried. This is enforced in the store and the UI; the summary row itself also cannot be removed.
 
 ## Benchmarks (committed in 63f1fbc; runtime-unverified)
 - The runner's compute and power recording (`benchmark_runner.rs` `Sampler` and `sample_usage`; `power.rs` power plan and battery) has not been verified against a live model in the app. Power is Windows only (`powercfg`, battery status); elsewhere the fields are null.

@@ -1,3 +1,3 @@
-last_synced_commit=705bef1aca3b30a74ed502cb0461c914bf78ce89
-last_synced_date=2026-11-01
-note=Synced to HEAD 705bef1. Multi-model work scrapped and reverted; RAM estimate and headroom kept; test status labels updated. Tests, biome and the app not run.
+last_synced_commit=1116bf138d6dbdccd39399b21eb349b537329d44
+last_synced_date=2026-11-02
+note=Synced to HEAD 1116bf1 (conversation compaction, read from code). Uncommitted changes reflected: utils/spinValue.ts and the contextUsage rewrite (context is an estimate; server prompt counts not used). Tests, biome, tsc, cargo and the app not run. Not synced: uncommitted user edits to memories/repo/geniex-server-behaviour.md (its usage line matches the contextUsage rewrite, nothing else checked) and memories/repo/manual-checklist.md (compaction section, user-owned).

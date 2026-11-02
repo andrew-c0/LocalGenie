@@ -116,14 +116,14 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] Voice cloning: in Text to speech pick Pocket TTS (voice cloning) and download it (98 MB). The voice and speed controls are hidden and a Voice to copy input appears. Generate stays disabled until a clip is chosen; the output plays and sounds like the clip. Kokoro still shows its voices and speed.
 - [ ] Audio to audio (not yet checked in the app by the user beyond the first pass): clean up and split both play, Show in folder works, Cancel stops the process.
 
-## Conversation compaction (not yet run)
+## Conversation compaction (tested by the user on 2026-11-02: the main flow with a 2048 window, the summary row and a second summary; the items below were not ticked one by one)
 - [ ] Settings > Compact long conversations: off by default; the threshold slider (50 to 90, default 70) appears only when the switch is on; Save persists after a restart.
 - [ ] With it off, a prompt over the context shows the usual error. No summary, no button.
 - [ ] With it on, a small context (for example nctx 2048) and a chat that passes the threshold: "Summarising the conversation…" shows, input is disabled, then a "Conversation summarised automatically" line appears just before the prompt and the reply arrives.
 - [ ] Clicking that line (mouse and keyboard) opens and closes the summary text. The summary has no thinking text and reads as bullet points.
 - [ ] Delete and Retry are gone on the summarised messages and on the summary line; messages after it keep Delete; Retry is only on the last user message.
 - [ ] Deleting or retrying the prompt that triggered the summary keeps the summary.
-- [ ] The summary survives a restart and keeps its place. The context ring drops after the summary and counts exact numbers again after the next reply.
+- [ ] The summary survives a restart and keeps its place. The context ring drops after the summary and keeps counting from it (always an estimate, shown with a ~).
 - [ ] Stop during the summary: the history is unchanged, the input is enabled, nothing is sent.
 - [ ] Overflow with the setting on: a prompt over the window summarises and retries once; when it still does not fit, the error shows.
 - [ ] Turning the setting off keeps existing summaries in effect and stops new ones.
