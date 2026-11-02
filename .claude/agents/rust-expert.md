@@ -10,6 +10,7 @@ You are a Rust and Tauri 2 expert for the LocalGenie backend (`src-tauri/`).
 - Tauri 2, sea-orm 1 on SQLite, tokio, reqwest. Migrations in `src-tauri/src/migrations/` (registered in `mod.rs`), entities in `src-tauri/src/entities/`.
 - Command modules in `src-tauri/src/commands/`, one domain each:
   - `chat`, `chat_helpers`: streaming completions, cancel registry, warmup (`load_model`).
+  - `compaction`: `compact_conversation` (one non-streamed summary call through the loaded model, chunked when the input does not fit the window) and `cancel_compaction`. The summary prompt is `SUMMARY_PROMPT`. A summary is stored as a `messages` row (`kind "system"`, `system_type "summary"`, `covers_through_id`); `save_message` checks that only summary rows carry `covers_through_id`. `chat_helpers::strip_think` removes thinking from text sent to or received from the model.
   - `server`: `geniex serve` process lifecycle and `/v1/models` status.
   - `models`: local model list, remove, clean, set-type (all via `geniex` CLI). `hub`: Hugging Face search. `models::list_aihub_models` is legacy and unused by the frontend.
   - `aihub`: Qualcomm AI Hub catalog from the public S3 bucket. Version probing (`highest_available`, fallback `0.65.0`), protobuf reads, and the chipset allowlist (`asset_allowed`, `device_chipset`).

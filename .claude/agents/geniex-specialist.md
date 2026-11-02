@@ -17,6 +17,7 @@ You are the GenieX CLI specialist for LocalGenie. You cover what `geniex` does, 
 - `geniex model list` shows both Hugging Face and AI Hub models in one table. `--format json` works only for cached models.
 - Listing, removal, cleaning and set-type go through `models::run_geniex`, which has a timeout.
 - The server is started with `geniex serve --host 127.0.0.1:<port>` and optional `--compute`, `--nctx`, `--ngl`, `--origins`, `--keepalive`. It is stopped by killing the tracked PID.
+- The server keeps the KV cache only while a request extends the previous one, and its `usage.prompt_tokens` counts only the tokens processed for that request. With the cache reused it is just the new part, so it is not the context size (details in `memories/repo/geniex-server-behaviour.md`).
 - Config uses `geniex config get|set|list`.
 - The app's default server port is 18181. The port is user-configurable and stored in `user_preferences`.
 
