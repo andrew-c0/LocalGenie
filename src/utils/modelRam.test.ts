@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ModelInfo } from "../types";
-import { modelRamLine, type RamSnapshot, type StoredRam } from "./modelRam";
+import { estimatedRamLabel, modelRamLine, type RamSnapshot, type StoredRam } from "./modelRam";
 
 const GB = 1_073_741_824;
 
@@ -64,5 +64,25 @@ describe("modelRamLine", () => {
     const line = modelRamLine(snapshot(5 * GB), model, true);
     expect(line?.label).toBe("RAM ~4.00 GB");
     expect(line?.warning).toBeNull();
+  });
+});
+
+describe("estimatedRamLabel", () => {
+  it("is null when the model has no stored figure", () => {
+    expect(estimatedRamLabel(undefined, 1 * GB)).toBeNull();
+  });
+
+  it("adds the live KV bytes for the window to the stored base", () => {
+    expect(estimatedRamLabel(stored(), 2 * GB)).toBe("Estimated RAM: ~5.00 GB");
+  });
+
+  it("falls back to the stored context share while the live figure is unknown", () => {
+    expect(estimatedRamLabel(stored(), null)).toBe("Estimated RAM: ~4.00 GB");
+  });
+
+  it("says about when the stored figure is approximate", () => {
+    expect(estimatedRamLabel(stored({ approximate: true }), 1 * GB)).toBe(
+      "Estimated RAM: about 4.00 GB",
+    );
   });
 });

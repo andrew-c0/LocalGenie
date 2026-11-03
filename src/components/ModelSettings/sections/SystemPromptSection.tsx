@@ -1,5 +1,5 @@
 import { Subtitle1 } from "@fluentui/react-components";
-import { DEFAULT_CONTEXT_WINDOW } from "../../../utils/modelSettings";
+import { contextWindowFor, DEFAULT_CONTEXT_WINDOW } from "../../../utils/modelSettings";
 import SettingField from "../SettingField/SettingField";
 import SystemPromptEditor from "../SystemPromptEditor/SystemPromptEditor";
 import type { ModelSettingsForm } from "../useModelSettingsForm";
@@ -22,7 +22,7 @@ export default function SystemPromptSection({ form }: Props) {
         <SystemPromptEditor
           blocks={settings.systemBlocks ?? []}
           onChange={(blocks) => update("systemBlocks", blocks)}
-          contextWindow={settings.nctx ?? nativeContext ?? DEFAULT_CONTEXT_WINDOW}
+          contextWindow={contextWindowFor(settings, nativeContext) ?? DEFAULT_CONTEXT_WINDOW}
         />
       </SettingField>
     </section>

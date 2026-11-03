@@ -10,14 +10,28 @@ import type {
 /** Engine a model runs on: GGUF models use llama.cpp, Qualcomm AI Hub bundles use QAIRT. */
 export type ModelEngine = "llama_cpp" | "qairt";
 
+/**
+ * The context window a model gets when none is saved: its own length, up to DEFAULT_CONTEXT_CAP.
+ * Null when the model's own length is not known.
+ */
+export function defaultContextFor(nativeContext: number | null): number | null {
+  return nativeContext != null ? Math.min(nativeContext, DEFAULT_CONTEXT_CAP) : null;
+}
+
 /** Defaults matching the GenieX CLI. */
 export const DEFAULT_LOAD_SETTINGS: ModelLoadSettings = {
   ngl: -1,
 };
 
 /**
- * Context window shown when neither the settings nor the model's GGUF metadata has one. This is
- * the GenieX CLI default. A model's own length is used before it, so it is never overwritten.
+ * The largest default context window. A model with a longer native context uses this when no window
+ * is saved, so its KV cache stays small. The stored RAM estimate assumes the same cap.
+ */
+export const DEFAULT_CONTEXT_CAP = 8192;
+
+/**
+ * Context window used by the UI when neither the settings nor the model's GGUF metadata has one. This
+ * is the GenieX CLI default. The load sends no window in that case, so the server applies its own.
  */
 export const DEFAULT_CONTEXT_WINDOW = 4096;
 
@@ -143,8 +157,9 @@ export function draftModelDisabledReason(
 /**
  * Load parameters for a model's chat requests. Disabled settings are left out so the server
  * default applies instead of a value the engine would ignore. The compute target is always the
- * header choice (`fallbackCompute`); a model has no compute setting of its own. The context window is the saved
- * one, else the model's own (`nativeContext`), else left to the server.
+ * header choice (`fallbackCompute`); a model has no compute setting of its own. The context window is
+ * the saved one, else the model's default (`defaultContextFor`: its own length, up to 8K), else left to
+ * the server.
  */
 export function resolveLoadParams(
   saved: ModelLoadSettings,
@@ -155,7 +170,7 @@ export function resolveLoadParams(
   const merged = { ...DEFAULT_LOAD_SETTINGS, ...saved };
   const compute = fallbackCompute;
   const params: ModelLoadParams = {};
-  const nctx = saved.nctx ?? nativeContext ?? undefined;
+  const nctx = saved.nctx ?? defaultContextFor(nativeContext) ?? undefined;
 
   if (!loadSettingDisabledReason("compute", engine, compute)) params.compute = compute;
   if (!loadSettingDisabledReason("nctx", engine, compute) && nctx != null) params.nctx = nctx;
@@ -175,14 +190,14 @@ export function resolveLoadParams(
 }
 
 /**
- * The context window the chat shows for a model: the saved `nctx`, else the model's native context.
- * Null when neither is known. The header and the send path both read it from here.
+ * The context window the chat shows for a model: the saved `nctx`, else the model's default (its native
+ * context, up to 8K). Null when neither is known. The header and the send path both read it from here.
  */
 export function contextWindowFor(
   saved: Partial<ModelLoadSettings>,
   nativeContext: number | null,
 ): number | null {
-  return saved.nctx ?? nativeContext;
+  return saved.nctx ?? defaultContextFor(nativeContext);
 }
 
 /**

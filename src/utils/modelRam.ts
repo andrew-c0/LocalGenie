@@ -29,6 +29,21 @@ export interface ModelRamLine {
 }
 
 /**
+ * The estimated RAM line in the model settings, for the context window in the field: the stored base
+ * plus the KV bytes for that window. `kvBytes` is null while it is read, and the stored context share
+ * stands in then. Null when the model has no stored figure.
+ */
+export function estimatedRamLabel(
+  stored: StoredRam | undefined,
+  kvBytes: number | null,
+): string | null {
+  if (!stored) return null;
+  const contextBytes = kvBytes ?? stored.contextBytes;
+  const size = formatBytes(stored.baseBytes + contextBytes);
+  return `Estimated RAM: ${stored.approximate ? "about " : "~"}${size}`;
+}
+
+/**
  * The RAM line for one model row, or null when there is no stored figure. The need is the stored base
  * plus the stored context share. A model that is already loaded is not checked: its RAM is already
  * out of the free figure, so a second check would count it twice.

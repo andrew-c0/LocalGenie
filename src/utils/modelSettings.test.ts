@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   chatSettingsFor,
   contextWindowFor,
+  DEFAULT_CONTEXT_CAP,
+  defaultContextFor,
   draftModelDisabledReason,
   engineOf,
   loadSettingDisabledReason,
@@ -19,23 +21,42 @@ describe("SCAN_RECIPE", () => {
   });
 });
 
+describe("defaultContextFor", () => {
+  it("is the model's own length up to the 8K cap", () => {
+    expect(DEFAULT_CONTEXT_CAP).toBe(8192);
+    expect(defaultContextFor(40960)).toBe(8192);
+    expect(defaultContextFor(8192)).toBe(8192);
+    expect(defaultContextFor(2048)).toBe(2048);
+  });
+
+  it("is null when the model's own length is not known", () => {
+    expect(defaultContextFor(null)).toBeNull();
+  });
+});
+
 describe("contextWindowFor", () => {
-  it("is the saved window, else the native one, else null", () => {
-    expect(contextWindowFor({ nctx: 8192 }, 40960)).toBe(8192);
-    expect(contextWindowFor({}, 40960)).toBe(40960);
+  it("is the saved window, else the default for the model, else null", () => {
+    expect(contextWindowFor({ nctx: 16384 }, 40960)).toBe(16384);
+    expect(contextWindowFor({}, 40960)).toBe(8192);
+    expect(contextWindowFor({}, 2048)).toBe(2048);
     expect(contextWindowFor({}, null)).toBeNull();
   });
 });
 
 describe("context window fallback", () => {
-  it("uses the model's own context window when none is saved", () => {
+  it("defaults to the model's own window, capped at 8K, when none is saved", () => {
     const params = resolveLoadParams({}, "llama_cpp", "npu", 40960);
-    expect(params.nctx).toBe(40960);
+    expect(params.nctx).toBe(8192);
   });
 
-  it("prefers the saved context window over the model's own", () => {
-    const params = resolveLoadParams({ nctx: 8192 }, "llama_cpp", "npu", 40960);
-    expect(params.nctx).toBe(8192);
+  it("uses the model's own window when it is shorter than the cap", () => {
+    const params = resolveLoadParams({}, "llama_cpp", "npu", 2048);
+    expect(params.nctx).toBe(2048);
+  });
+
+  it("prefers the saved context window over the default", () => {
+    const params = resolveLoadParams({ nctx: 32768 }, "llama_cpp", "npu", 40960);
+    expect(params.nctx).toBe(32768);
   });
 
   it("leaves the context window to the server when neither is known", () => {

@@ -139,7 +139,13 @@ export default function ModelSettings() {
 
       <Divider />
 
-      <LoadSection form={form} reasons={reasons} warnings={warnings} />
+      <LoadSection
+        form={form}
+        modelName={displayModel}
+        settingsKey={settingsKey}
+        reasons={reasons}
+        warnings={warnings}
+      />
 
       <Divider />
 
