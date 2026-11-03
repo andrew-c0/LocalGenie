@@ -17,15 +17,22 @@ export function useOcr() {
   const jobId = useOcrStore((s) => s.job?.jobId ?? null);
 
   const run = (model: OcrModel, imagePath: string, inputName: string, mode: OcrMode) => {
+    const settings = useOcrStore.getState().settings;
     const request = buildOcrRequest(
       newOcrJobId(),
       model,
       imagePath,
       mode,
-      useOcrStore.getState().settings,
+      settings,
       useModelStore.getState().serverPort,
     );
-    startJob({ jobId: request.jobId, modelId: model.id, startedAt: Date.now() });
+    startJob({
+      jobId: request.jobId,
+      modelId: model.id,
+      startedAt: Date.now(),
+      compute: settings.compute,
+      visionCompute: settings.visionCompute,
+    });
     playground.runOcr(request).catch((err: unknown) => {
       finishJob({
         jobId: request.jobId,

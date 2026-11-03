@@ -76,6 +76,11 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - The summary is the model's own text. The code checks only that it is not empty; nothing checks it against the conversation. A weak summary stays in effect until a later summary folds it in; summaries also stay in effect when the setting is off.
 - Covered messages cannot be deleted or retried. This is enforced in the store and the UI; the summary row itself also cannot be removed.
 
+## Sidebar usage chart with Playground jobs (uncommitted; code-read, partly run)
+- Only the text to image and OCR lines were confirmed in the app by the user (2026-11-03). Upscaling, speech, image to image on a GPU or NPU device, and Auto on a device with no NPU counter are not checked.
+- Text to image with Auto plots all three targets: the runtime's device choice is not reported to the frontend (code-read), so the chart cannot show which one it used.
+- A GPU or NPU line depends on the engine counters in `get_system_usage`; on a device without them the line is left out (code-read, not run on that hardware).
+
 ## Benchmarks (committed in 63f1fbc; runtime-unverified)
 - The runner's compute and power recording (`benchmark_runner.rs` `Sampler` and `sample_usage`; `power.rs` power plan and battery) has not been verified against a live model in the app. Power is Windows only (`powercfg`, battery status); elsewhere the fields are null.
 - Bottom-left usage graph (`SystemUsage`, `get_system_usage(port)`): it follows only the server on the configured port. A server started on another port is not measured (code-verified; runtime-unverified).

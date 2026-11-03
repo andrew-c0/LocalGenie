@@ -22,6 +22,12 @@ export function formatBytes(n?: number): string {
   return `${n} B`;
 }
 
+/** Gigabytes with one decimal, for example `16.3 GB`. `—` when unknown. */
+export function formatGigabytes(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return `${(n / 1_073_741_824).toFixed(1)} GB`;
+}
+
 /** Duration as `850ms` or `1.4s`. */
 export function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;

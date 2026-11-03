@@ -1,7 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { OcrModel, OcrResult } from "../types";
+import type { OcrJob, OcrModel, OcrResult } from "../types";
 import { DEFAULT_OCR_COMPUTE } from "../utils/ocr";
 import { useOcrStore } from "./ocrStore";
+
+const job = (jobId: string): OcrJob => ({
+  jobId,
+  modelId: "m",
+  startedAt: 0,
+  compute: "cpu",
+  visionCompute: "npu",
+});
 
 const model = (id: string, downloaded = false): OcrModel => ({
   id,
@@ -74,15 +82,20 @@ describe("ocrStore", () => {
     expect(useOcrStore.getState().input?.sourceSize).toEqual({ width: 1, height: 2 });
   });
 
+  it("keeps the compute choices a job started with", () => {
+    useOcrStore.getState().startJob(job("j"));
+    expect(useOcrStore.getState().job).toMatchObject({ compute: "cpu", visionCompute: "npu" });
+  });
+
   it("starting a job clears the previous result", () => {
     useOcrStore.setState({ result: result("old") });
-    useOcrStore.getState().startJob({ jobId: "j", modelId: "m", startedAt: 0 });
+    useOcrStore.getState().startJob(job("j"));
     expect(useOcrStore.getState().result).toBeNull();
     expect(useOcrStore.getState().job?.jobId).toBe("j");
   });
 
   it("ignores a result for another job", () => {
-    useOcrStore.getState().startJob({ jobId: "j", modelId: "m", startedAt: 0 });
+    useOcrStore.getState().startJob(job("j"));
     useOcrStore.getState().finishJob(result("other"));
     expect(useOcrStore.getState().job?.jobId).toBe("j");
     useOcrStore.getState().finishJob(result("j"));

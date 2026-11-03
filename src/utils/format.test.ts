@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { formatBytes } from "./format";
+import { formatBytes, formatGigabytes } from "./format";
+
+describe("formatGigabytes", () => {
+  it("shows gigabytes with one decimal", () => {
+    expect(formatGigabytes(16.3 * 1_073_741_824)).toBe("16.3 GB");
+  });
+
+  it("shows a dash when the size is unknown", () => {
+    expect(formatGigabytes(null)).toBe("—");
+    expect(formatGigabytes(undefined)).toBe("—");
+  });
+});
 
 describe("formatBytes", () => {
   it("shows gigabytes with two decimals", () => {

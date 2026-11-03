@@ -18,6 +18,17 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] Settings > Runtimes shows a warning icon on its tab when GenieX is missing or any runtime has a newer release.
 - [ ] Start with GenieX missing: Models, Chat and Benchmarks show locked once the runtime list has been read (nothing is locked before that).
 
+## Sidebar usage chart with Playground jobs (uncommitted; text to image and OCR lines confirmed by the user)
+
+- [ ] No model loaded and no job: no usage card in the sidebar.
+- [ ] Text to image with device Auto: the card appears with CPU, GPU and NPU lines; with a GPU device chosen, only the GPU line.
+- [ ] Same job with no model loaded: the RAM section shows System only, with no "Model / context" row.
+- [ ] Image to image and upscaling: CPU line only. Speech: CPU line only.
+- [ ] OCR with compute Auto and vision encoder NPU: CPU, GPU and NPU lines. With compute CPU and vision GPU: CPU and GPU lines only, even if a model is loaded on another target.
+- [ ] Legend latest % matches the last point of its line. A target this device gives no counter for is not listed.
+- [ ] Leave the Playground tab during a job and come back: the lines are still plotted.
+- [ ] The card disappears after a job ends when no model is loaded, and stays while a model is loaded.
+
 ## General build sanity
 
 - [ ] `npm run check` passes (TypeScript, no errors).

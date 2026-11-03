@@ -580,8 +580,8 @@ export interface PlaygroundOcrDone {
   seconds: number | null;
 }
 
-/** An OCR job running now. There is no progress, only the start time for the elapsed clock. */
-export interface OcrJob {
+/** An OCR job running now. There is no progress, only the start time for the elapsed clock. The compute choices are the ones the request was sent with. */
+export interface OcrJob extends OcrComputeSettings {
   jobId: string;
   modelId: string;
   startedAt: number;

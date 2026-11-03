@@ -1,0 +1,7 @@
+/* Colour key for a plotted target; the colour itself is set inline from the target. */
+.usage-legend__swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
