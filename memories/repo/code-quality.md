@@ -31,6 +31,6 @@ Claude Code hooks that would enforce the rules above. Install only after the use
 2. `invoke()` outside services: file path matches `src/**/*.{ts,tsx}` and does not match `src/services/**`, and the new content matches `\binvoke\(` or `from "@tauri-apps/` -> flag. (Rule: `invoke()` and `@tauri-apps/*` only in `services/`.)
 3. Inline styles: file path matches `src/**/*.tsx` and the new content matches `style=\{\{` -> flag for review. Data-driven values are allowed. Current occurrences (2026-10-26): `components/models/GGUFVariantList.tsx` (static layout styles, lines 72 and 75), `components/shell/SystemUsage/SystemUsage.tsx` (data-driven series colour, allowed).
 
-## Review checklists and refactor targets (2026-10-28, uncommitted)
+## Review checklists and refactor targets (2026-10-28)
 - The review checklists live in the skills, not here: `.claude/skills/rust-quality/SKILL.md` (Rust, `src-tauri/`) and `.claude/skills/typescript-react-quality/SKILL.md` (`src/`).
 - Next large files to split (non-test source line counts on 2026-10-28): `src-tauri/src/commands/benchmark_runner.rs` (1417 lines, the largest Rust file) and `src/components/ChatInput/ChatInput.tsx` (538 lines, the largest frontend file).

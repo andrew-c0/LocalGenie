@@ -1,6 +1,6 @@
 # Known issues
 
-Status labels: **code-verified** = read in the source (committed up to 694a036, or in the uncommitted working tree, as noted); **runtime-unverified** = not run. Nothing was launched in the 2026-10-26 to 2026-10-30 syncs (the benchmark suite and the chat settings were read, not run). Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
+Status labels: **code-verified** = read in the source (committed up to 694a036, or in a later commit named in the section); **runtime-unverified** = not run. Nothing was launched in the 2026-10-26 to 2026-10-30 syncs (the benchmark suite and the chat settings were read, not run). Items marked "reported" come from live runs noted by the user (2026-10-23) and were not re-run here.
 
 ## Active
 - Model load/chat hangs: the GenieX warmup request in `load_model` may never get a response. The warmup carries the model's load params (committed in 6068a81), so it matches chat. Not re-validated (runtime-unverified).
@@ -20,7 +20,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 ## RAM estimate (committed ae6e31a to 0cc9a85; tested in the app by the user, 2026-10-31)
 - The RAM figures are stored per downloaded model (migration `m20261036`, `commands/ram_store.rs`; bbe159f; tested by the user 2026-11-03). A figure is written at import and when the saved `nctx` changes; a row without one is filled at startup by `backfill_model_ram`, and a row that fails stays null until the next start.
 - RAM estimate constants are not validated: the 10% compute buffer with a 256 MiB floor, the 120% and 110% flat factors, the 8192 context cap and the 4096 fallback (`ram_estimate.rs`, `model_ram.rs`) are not checked against the measured memory of a loaded model.
-- Default context window (uncommitted; code-read, not run in the app): with no saved `nctx`, a model with a longer native context now loads with 8192 (`defaultContextFor`), not its full length. The stored RAM figure assumes the same cap. Whether 8192 is the right default is a product choice, not measured.
+- Default context window (78dae29; code-read, not run in the app): with no saved `nctx`, a model with a longer native context now loads with 8192 (`defaultContextFor`), not its full length. The stored RAM figure assumes the same cap. Whether 8192 is the right default is a product choice, not measured.
 
 ## Playground and optional runtimes (committed 42dea0c..b9617e6; tested in the app by the user 2026-10-31, except voice cloning)
 - **GPU (Adreno, OpenCL): blank white image with CFG above 1.** sd.cpp's batched CFG forward breaks on the OpenCL backend (CFG 1.0 works). The app passes `--batched-cfg off` for every non-CPU device and for every init-image (Image to image re-draw) job on CPU too: batched CFG gave blank images there as well (maintainer-verified; `playground/args.rs`). The cause inside ggml-opencl is not confirmed. Re-test both cases after each fork sync; drop the flag when fixed. Reported by the maintainer (research notes, section 11, 2026-10-29), not re-run here.
@@ -41,7 +41,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - **Duplicated server-start sequence.** `components/playground/OcrPanel/useOcrServer.ts` repeats the start sequence of `shell/Header/useModelLoader.ts` (read server settings, `startServer` on the configured port, `setServerStatus`, `setServerOptions`). Chat has no shared function for it, so a change to one must be mirrored by hand. Code-read; not unified.
 - **Runtime status of the Playground**: text to image, image to image, speech, audio to audio, image upscaling and OCR have been run in the app by the user. Voice cloning is still unverified there; the Runtimes update and uninstall flows have no recorded result.
 
-## GenieX CLI as a runtime (uncommitted; code-read, not run)
+## GenieX CLI as a runtime (986b5dc; code-read, not run)
 - Install, update and uninstall of the GenieX CLI have not been run in the app. Steps: `manual-checklist.md`. The silent flags, the `unins000.exe` name (Inno Setup's default, assumed by `runtimes/geniex.rs`) and the version poll are not checked against a real install.
 - Cancel during `installing` only stops the wait. The drawer shows the entry cancelled, but the silent setup keeps running. The operation lock is released then, so Resume can start a second setup while the first may still run, and Uninstall can run beside it (code-read).
 - A retry downloads the setup again: a failed or cancelled install's setup file is not reused (only a `.part` is resumed). The comment in `runtimes/geniex.rs` says otherwise.
@@ -112,8 +112,8 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - The tracked PID is cleared when the `geniex serve` child exits, so a crashed server can be started again (code-verified in the `server.rs` exit watcher; runtime-unverified).
 
 ## Resolved (code-verified; runtime-unverified)
-- The GenieX installer is checked against GitHub's SHA-256 digest before it runs (`runtimes/geniex.rs`, `verify_download`). The old `update_geniex` ran the downloaded installer unchecked, and that command is removed (uncommitted; code-read, not run). A check is skipped when GitHub gives no digest.
-- The release fetch duplicated between the CLI check and update is gone with `cli_update.rs` (both now use `runtimes/release.rs`). The comment calling `UpdateInfo` a re-export is gone too: no such comment exists at c051c2a, and the type is removed (uncommitted).
+- The GenieX installer is checked against GitHub's SHA-256 digest before it runs (`runtimes/geniex.rs`, `verify_download`). The old `update_geniex` ran the downloaded installer unchecked, and that command is removed (986b5dc; code-read, not run). A check is skipped when GitHub gives no digest.
+- The release fetch duplicated between the CLI check and update is gone with `cli_update.rs` (both now use `runtimes/release.rs`). The comment calling `UpdateInfo` a re-export is gone too: no such comment exists at c051c2a, and the type is removed (986b5dc).
 - Typed numbers in Fluent SpinButton fields were lost: a typed value arrives only as `displayValue`. `utils/spinValue.ts` (`spinNumber`) reads both; used by the model settings, image settings, suite editor and server runtime card (71d05a4; tested by the user 2026-11-02).
 - Context usage showed the server's `prompt_tokens`, which counts only the tokens processed for the request. It is now the per-message estimate described under Chat attachments (71d05a4; compaction and the ring tested by the user 2026-11-02).
 - `HubModelDetail` and the AI Hub asset picker loaded the downloaded precisions once per repo, so "Load & Chat" and the Download button did not update until the page was reopened after an import. `useDownloadedPrecisions` re-reads when the local model list changes, and `AihubAssetPicker` disables Download with a `Downloaded` badge for an asset already imported (bbe159f; tested by the user 2026-11-03).

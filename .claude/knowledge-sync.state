@@ -1,3 +1,3 @@
-last_synced_commit=ccb3d710ac04e49968d5bdbb59675898b5206542
+last_synced_commit=78dae299f648a6aa63525f7ec813059c27f082ff
 last_synced_date=2026-11-03
-note=Synced to ccb3d71 (covers 986b5dc GenieX CLI as a runtime, bbe159f, 199a9c9, 5b9aca1, c051c2a, ccb3d71). Uncommitted work reflected: default context window capped at 8K (defaultContextFor/contextWindowFor), Model Settings > Load Estimated RAM line (estimatedRamLabel; user confirmed the RAM line works in the app); the rest was code-read and not run. tasks.md and tasks-ordered.md are user-owned and not synced.
+note=Synced to 78dae29 (covers 78dae29: default context window capped at 8K, Model Settings > Load Estimated RAM line; user confirmed the RAM line works in the app; the context default was code-read and not run). Labels only: removed "uncommitted" from work committed in 986b5dc, bbe159f and 78dae29 (verified against git). tasks.md and tasks-ordered.md are user-owned and not synced.

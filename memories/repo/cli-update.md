@@ -9,7 +9,7 @@ The GenieX CLI is a runtime in the registry at `src-tauri/src/commands/runtimes/
 - `runtime_uninstall("geniex")`: stops the server this app started, runs `unins000.exe` with the same silent flags (next to the binary or in its parent), then waits up to 60 s for `geniex version` to stop answering. No progress events.
 - Cancel: `cancel_download("runtime:geniex")`. The operation holds the registry key `runtime:geniex` for the whole run, so install and uninstall cannot overlap.
 
-## Removed (uncommitted)
+## Removed (986b5dc)
 `check_for_cli_update`, `update_geniex`, `check_geniex_installed`, the `geniex-update-progress` event, the `UpdateInfo` type, `cli_update.rs`, and `RuntimeInfo.installPath`.
 
 ## Notes
