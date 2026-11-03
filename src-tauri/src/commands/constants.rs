@@ -38,9 +38,6 @@ pub(super) const GITHUB_TIMEOUT_SECS: u64 = 10;
 /// rate limit (60 requests an hour) out of reach of the Settings page.
 pub(super) const RUNTIME_RELEASE_CACHE_SECS: u64 = 3600;
 
-/// Timeout for downloading the CLI installer, in seconds.
-pub(super) const INSTALLER_DOWNLOAD_TIMEOUT_SECS: u64 = 300;
-
 /// Seconds between version checks while waiting for the installer to finish.
 pub(super) const UPDATE_POLL_INTERVAL_SECS: u64 = 3;
 

@@ -23,6 +23,14 @@ impl Scratch {
     pub(crate) fn path(&self) -> &Path {
         &self.0
     }
+
+    /// Create a file, and its folders, at `relative` under the scratch folder.
+    pub(crate) fn touch(&self, relative: &str) -> PathBuf {
+        let path = self.0.join(relative);
+        fs::create_dir_all(path.parent().expect("has a parent folder")).expect("create folders");
+        fs::write(&path, b"").expect("write file");
+        path
+    }
 }
 
 impl Drop for Scratch {

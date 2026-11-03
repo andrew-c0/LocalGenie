@@ -10,7 +10,6 @@ import type {
   ServerLogLine,
   ServerStartOptions,
   ServerStatus,
-  UpdateInfo,
 } from "../types";
 
 /** Shape sent to the OpenAI-compatible chat completions endpoint. */
@@ -107,13 +106,6 @@ export async function getRuntimeVersions(): Promise<RuntimeVersions> {
   return invoke("get_runtime_versions");
 }
 
-export async function checkGeniexInstalled(): Promise<boolean> {
-  return invoke("check_geniex_installed");
-}
-export async function checkForCliUpdate(): Promise<UpdateInfo> {
-  return invoke("check_for_cli_update");
-}
-
 export async function configGet(key: string): Promise<string | null> {
   return invoke("config_get", { key });
 }
@@ -129,10 +121,6 @@ export async function configList(): Promise<ConfigEntry[]> {
 /** Request the in-flight chat completion to stop at the next chunk boundary. */
 export async function cancelChatCompletion(): Promise<void> {
   return invoke("cancel_chat_completion");
-}
-
-export async function updateGeniex(): Promise<string> {
-  return invoke("update_geniex");
 }
 
 // ─── Server Logs ─────────────────────────────────────────────────

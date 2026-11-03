@@ -5,7 +5,6 @@ import type {
   SearchModel,
   ServerSettings,
   ServerStatus,
-  UpdateInfo,
 } from "../types/index.js";
 
 const DEFAULT_PORT = 18181;
@@ -18,7 +17,8 @@ export const COMPUTE_TARGETS = ["npu", "gpu", "cpu"] as const;
 export type ComputeChoice = (typeof COMPUTE_TARGETS)[number];
 
 interface ModelState {
-  cliInstalled: boolean;
+  /** Whether the GenieX CLI is installed. Follows the runtime list (`runtimeStore`). Null until first read. */
+  cliInstalled: boolean | null;
   models: ModelInfo[];
   serverStatus: ServerStatus;
   serverPort: number;
@@ -26,8 +26,6 @@ interface ModelState {
   isSearching: boolean;
   /** The model currently loaded on the server — single source of truth. */
   activeModelId: string | null;
-  /** Result of the latest CLI update check. */
-  updateInfo: UpdateInfo | null;
   /** Compute target used when starting the GenieX server. */
   compute: ComputeChoice;
   /** Server-start settings the running server was started with; null when unknown (external) or stopped. */
@@ -49,7 +47,6 @@ interface ModelState {
   setActiveModel: (modelId: string | null) => void;
   setSearchResults: (results: SearchModel[]) => void;
   setIsSearching: (v: boolean) => void;
-  setUpdateInfo: (info: UpdateInfo | null) => void;
   setCompute: (c: ComputeChoice) => void;
   setServerOptions: (o: ServerSettings | null) => void;
   setLoadedCompute: (c: ComputeChoice | null) => void;
@@ -58,14 +55,13 @@ interface ModelState {
 }
 
 export const useModelStore = create<ModelState>((set) => ({
-  cliInstalled: false,
+  cliInstalled: null,
   models: [],
   serverStatus: { running: false, port: DEFAULT_PORT, models: [] },
   serverPort: DEFAULT_PORT,
   searchResults: [],
   isSearching: false,
   activeModelId: null,
-  updateInfo: null,
   compute: DEFAULT_COMPUTE,
   serverOptions: null,
   selectorOpen: false,
@@ -106,7 +102,6 @@ export const useModelStore = create<ModelState>((set) => ({
   setActiveModel: (modelId) => set({ activeModelId: modelId }),
   setSearchResults: (results) => set({ searchResults: results }),
   setIsSearching: (v) => set({ isSearching: v }),
-  setUpdateInfo: (info) => set({ updateInfo: info }),
   setCompute: (compute) => set({ compute }),
   setServerOptions: (o) => set({ serverOptions: o }),
   setLoadedCompute: (c) => set({ loadedCompute: c }),

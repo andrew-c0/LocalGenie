@@ -40,6 +40,14 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - **Duplicated server-start sequence.** `components/playground/OcrPanel/useOcrServer.ts` repeats the start sequence of `shell/Header/useModelLoader.ts` (read server settings, `startServer` on the configured port, `setServerStatus`, `setServerOptions`). Chat has no shared function for it, so a change to one must be mirrored by hand. Code-read; not unified.
 - **Runtime status of the Playground**: text to image, image to image, speech, audio to audio, image upscaling and OCR have been run in the app by the user. Voice cloning is still unverified there; the Runtimes update and uninstall flows have no recorded result.
 
+## GenieX CLI as a runtime (uncommitted; code-read, not run)
+- Install, update and uninstall of the GenieX CLI have not been run in the app. Steps: `manual-checklist.md`. The silent flags, the `unins000.exe` name (Inno Setup's default, assumed by `runtimes/geniex.rs`) and the version poll are not checked against a real install.
+- Cancel during `installing` only stops the wait. The drawer shows the entry cancelled, but the silent setup keeps running. The operation lock is released then, so Resume can start a second setup while the first may still run, and Uninstall can run beside it (code-read).
+- A retry downloads the setup again: a failed or cancelled install's setup file is not reused (only a `.part` is resumed). The comment in `runtimes/geniex.rs` says otherwise.
+- Uninstall stops only the server this app started (its tracked PID). A GenieX server started outside the app keeps running (code-read, `stop_tracked_server`).
+- "Check again" on a runtime that is not installed re-reads the list only. GitHub is checked again only at startup or when the list changes, so a stale "Latest" version can stay (code-read, `runtimeStore.ts`).
+- Feature locks: the CLI state is unknown (null) until the first read, so nothing is locked before it; a failed read keeps the last known state (`runtimeStore.ts`, `runtimeGuards.ts`).
+
 ## Qualcomm AI Hub tab (committed 7664d01..55219bc; code-read 2026-10-28, runtime-unverified)
 - Reported on 2026-10-28 (not re-run here): runtime 11 (QAIRT Genie bundles: `genie_config.json` plus `ctx-bins`) and runtime 12 (llama.cpp GGUF) load in GenieX. Runtime 6 (Genie bundle) failed to load because it had no `metadata.json`; runtimes 2 (QNN DLC) and 3 (QNN context binary) failed on import or load. Runtimes 2, 3 and 6 are not listed in the tab now (see `codebase-map.md`). The `metadata.json` requirement matches GenieX's `localfs` zip reader (`sdk/model-manager/crates/core/src/source/localfs.rs`, read-only checkout `C:\Work\GenieX`).
 - The catalog, detail, model card, download and import were not run in the app or against the live bucket. The version probe (`resolve_version`) relies on the bucket answering 403 for a missing object, which is stated in a code comment and not checked.
@@ -89,13 +97,11 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - SSE buffer: `chat.rs` copies the whole buffer on every line. Use `drain`.
 - HTTP clients: `download.rs` and `models.rs` build a `reqwest::Client` per call. Use the shared client.
 - `run_geniex` in `models.rs` has no timeout, so a hung `geniex list` blocks startup. `cli.rs` already has one; reuse it.
-- `cli.rs`: the release fetch is duplicated between check and update; timeouts and retry counts are magic numbers (move to `constants.rs`).
+- `cli.rs`: timeouts and retry counts are magic numbers (move to `constants.rs`).
 - `search_models` in `models.rs` parses the body before checking the HTTP status, so an HF error page reads as "Failed to parse".
 - `load_sessions` (`database.rs`) matches messages with a nested `find` and loads every session at startup. `list_downloaded_models` returns the full `model_card` text the grid does not need.
 - Migration `m20261020_000001` (`add_repo_columns`) ignores every `ALTER TABLE` error. `delete_session` runs two statements without a transaction.
-- Security: `update_geniex` runs the downloaded installer without checking the release asset digest.
-- Tauri calls outside `services/`: `CliMissingBanner` and `HubModelDetail` import `open` from `@tauri-apps/plugin-shell` directly.
-- Stale comments: `UpdateInfo` in `cli.rs` is called a re-export.
+- Tauri calls outside `services/`: `HubModelDetail` import `open` from `@tauri-apps/plugin-shell` directly.
 - Chat streaming cost: `updateLastAssistantMessage` still rebuilds the message and `contextChars` on each flush. Chunks are written once per animation frame (`useChatStream.ts`, committed in 1b5d554), so the rate is lower; the rebuild itself is unchanged (code-verified).
 - `DEFAULT_BASE_URL` duplicates `DEFAULT_PORT` in `constants.rs`. `package.json` has an `allowScripts` field, which is not a standard npm field.
 
@@ -105,6 +111,8 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - The tracked PID is cleared when the `geniex serve` child exits, so a crashed server can be started again (code-verified in the `server.rs` exit watcher; runtime-unverified).
 
 ## Resolved (code-verified; runtime-unverified)
+- The GenieX installer is checked against GitHub's SHA-256 digest before it runs (`runtimes/geniex.rs`, `verify_download`). The old `update_geniex` ran the downloaded installer unchecked, and that command is removed (uncommitted; code-read, not run). A check is skipped when GitHub gives no digest.
+- The release fetch duplicated between the CLI check and update is gone with `cli_update.rs` (both now use `runtimes/release.rs`). The comment calling `UpdateInfo` a re-export is gone too: no such comment exists at c051c2a, and the type is removed (uncommitted).
 - Typed numbers in Fluent SpinButton fields were lost: a typed value arrives only as `displayValue`. `utils/spinValue.ts` (`spinNumber`) reads both; used by the model settings, image settings, suite editor and server runtime card (71d05a4; tested by the user 2026-11-02).
 - Context usage showed the server's `prompt_tokens`, which counts only the tokens processed for the request. It is now the per-message estimate described under Chat attachments (71d05a4; compaction and the ring tested by the user 2026-11-02).
 - `HubModelDetail` and the AI Hub asset picker loaded the downloaded precisions once per repo, so "Load & Chat" and the Download button did not update until the page was reopened after an import. `useDownloadedPrecisions` re-reads when the local model list changes, and `AihubAssetPicker` disables Download with a `Downloaded` badge for an asset already imported (bbe159f; tested by the user 2026-11-03).
@@ -124,6 +132,6 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - README fetch failure no longer fails an import (`import.rs`, `match` instead of `?`).
 - Session persistence saves every changed session (`ChatRuntime/useSessionPersistence.ts`).
 - `useTauriEvent` subscribes once per event name (`hooks/index.ts`).
-- The `install_geniex` stub is removed; the banner opens the releases page (`CliMissingBanner/CliMissingBanner.tsx`).
+- The `install_geniex` stub is removed.
 - Header model selector is wired to `ModelSelectorPopover` (`Header/Header.tsx`), with loading and errors in `Header/useModelLoader.ts`.
 - Earlier, from git history: session persistence upsert fix, installer-based CLI update flow and update UI rework (see `cli-update.md`).

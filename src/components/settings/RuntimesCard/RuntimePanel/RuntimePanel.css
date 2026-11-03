@@ -1,0 +1,28 @@
+/* A fixed square on the brand colour keeps the name and summary aligned across rows, and lets the
+   white GenieX logo and the white icons read in both themes. */
+.runtime-panel__icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  box-sizing: border-box;
+  padding: var(--spacingVerticalXS);
+  border-radius: var(--borderRadiusMedium);
+  background-color: var(--colorBrandBackground);
+  color: var(--colorNeutralForegroundOnBrand);
+  font-size: 20px;
+}
+
+.runtime-panel__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* The browser's default h3 margin pushes the title down and the bottom margin sets the gap to the summary line; scoped here because the title is a shared Typography h3. */
+.runtime-panel__text h3 {
+  margin-block-start: 0;
+  margin-block-end: 0.5em;
+}

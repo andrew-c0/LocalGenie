@@ -1,16 +1,18 @@
 import { importAihubZip } from "../../../services/aihub";
 import * as db from "../../../services/database";
 import { downloadFile, importGGUF } from "../../../services/download";
-import * as geniex from "../../../services/geniex";
 import { fetchContextLength } from "../../../services/hubApi";
+import { installRuntime } from "../../../services/runtimes";
 import {
   type AihubDownload,
   type GGUFVariant,
+  type RuntimeDownload,
+  runtimeDownloadId,
   useDownloadStore,
 } from "../../../stores/downloadStore";
-import { useModelStore } from "../../../stores/modelStore";
 import type { DownloadedModelMeta } from "../../../types";
 import { serializeFacets } from "../../../utils/hubModelInfo";
+import { refreshAfterRuntimeChange, refreshModelList } from "../../../utils/runtimeUsage";
 import { toast } from "../../../utils/toast";
 
 const hfFileUrl = (repoId: string, filename: string) =>
@@ -88,25 +90,42 @@ export async function runAihubDownload(download: AihubDownload): Promise<void> {
   }
 }
 
+/**
+ * Run a queued runtime install or update through `runtime_install`, the GenieX CLI included. The entry
+ * finishes or fails here; the drawer's events only report progress. Afterwards the runtime list and that
+ * runtime's usage state are re-read. Uninstalls do not run here (see `utils/runtimeUninstall.ts`).
+ */
+export async function runRuntimeInstall(runtime: RuntimeDownload): Promise<void> {
+  const id = runtimeDownloadId(runtime.runtimeId);
+  const store = useDownloadStore.getState();
+  if (store.downloads.find((d) => d.id === id)?.status !== "queued") return;
+  store.setStatus(id, "downloading");
+  toast.info("Install started", runtime.displayName);
+
+  try {
+    // `runtime_install` resolves to the installed version.
+    const version = await installRuntime(runtime.runtimeId, runtime.version);
+    toast.success(`${runtime.displayName} installed`, `Version ${version}`);
+    store.setStatus(id, "finished");
+  } catch (err) {
+    recordFailure(id, err, "Install", runtime.displayName);
+  } finally {
+    // The operation may have changed the list, or failed partway: the Settings cards, the feature locks
+    // and the model library read it.
+    await refreshAfterRuntimeChange(runtime.runtimeId);
+  }
+}
+
 /** Mark a pipeline entry cancelled or failed, and tell the user. */
-function recordFailure(id: string, err: unknown): void {
+function recordFailure(id: string, err: unknown, title = "Download", name = id): void {
   const store = useDownloadStore.getState();
   const message = String(err);
   if (message.includes("cancelled")) {
     store.setStatus(id, "cancelled");
-    toast.info("Download cancelled", id);
+    toast.info(`${title} cancelled`, name);
   } else {
     store.setStatus(id, "error", message);
-    toast.error("Download failed", `${id}: ${message}`);
-  }
-}
-
-/** Refresh the local library from the CLI model list. Best-effort. */
-export async function refreshModelList(): Promise<void> {
-  try {
-    useModelStore.getState().setModels(await geniex.listModels());
-  } catch {
-    // CLI list refresh is best-effort
+    toast.error(`${title} failed`, `${name}: ${message}`);
   }
 }
 

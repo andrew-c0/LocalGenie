@@ -1,4 +1,5 @@
-//! Download, verify and extract a runtime release into `<runtimes>/<id>/<version>/`.
+//! Download, verify and extract a runtime release into `<runtimes>/<id>/<version>/`. The download
+//! and checksum steps are shared with the GenieX installer (`geniex.rs`).
 
 use std::fs;
 use std::io::Read;
@@ -22,6 +23,7 @@ pub(super) enum InstallStage {
     Downloading,
     Verifying,
     Extracting,
+    Installing,
     Done,
     Error,
 }
@@ -59,38 +61,25 @@ pub(super) async fn install_release(
     report: Reporter<'_>,
 ) -> Result<InstalledVersion, String> {
     validate_version(&release.tag)?;
-    let asset = spec.pick_asset(release).ok_or_else(|| {
+    let layout = spec.archive_layout()?;
+    let asset = layout.pick_asset(release).ok_or_else(|| {
         format!(
             "Release {} has no {} archive",
             release.tag, spec.display_name
         )
     })?;
-    if !is_runtime_download_url(&asset.download_url, spec.repo) {
-        return Err(format!(
-            "Refusing to download from {}: not a release of {}",
-            asset.download_url, spec.repo
-        ));
-    }
 
     let runtime_dir = runtimes_root.join(spec.id);
-    let archive = download_archive(client, cancel, &runtime_dir, spec, asset, report).await?;
-
-    stage_report(
-        report,
+    let archive = download_asset(
+        client,
+        cancel,
+        &runtime_dir.join("downloads"),
         spec,
-        InstallStage::Verifying,
-        "Checking the download",
-    );
-    let actual = hash_file(&archive).await;
-    let verified =
-        actual.and_then(|hash| verify_sha256(&hash, asset.sha256.as_deref()).map(|()| hash));
-    let sha256 = match verified {
-        Ok(hash) => hash,
-        Err(e) => {
-            let _ = fs::remove_file(&archive);
-            return Err(e);
-        }
-    };
+        asset,
+        report,
+    )
+    .await?;
+    let sha256 = verify_download(report, spec, &archive, asset.sha256.as_deref()).await?;
 
     stage_report(
         report,
@@ -115,30 +104,28 @@ pub(super) async fn install_release(
     })
 }
 
-/// Stream the asset into `<runtime_dir>/downloads/<asset name>`, resuming a partial file if one exists.
-async fn download_archive(
+/// Stream `asset` into `dir` as `<name>.part`, resuming a partial file if one exists, then rename
+/// it to its own name. A URL outside the repo's release downloads is refused. Reports byte
+/// progress while it streams.
+pub(super) async fn download_asset(
     client: &reqwest::Client,
     cancel: &AtomicBool,
-    runtime_dir: &Path,
+    dir: &Path,
     spec: &RuntimeSpec,
     asset: &ReleaseAsset,
     report: Reporter<'_>,
 ) -> Result<PathBuf, String> {
-    validate_file_name(&asset.name)?;
-    let downloads = runtime_dir.join("downloads");
-    fs::create_dir_all(&downloads)
-        .map_err(|e| format!("Failed to create {}: {e}", downloads.display()))?;
-    let archive = downloads.join(&asset.name);
-    let partial = downloads.join(format!("{}.part", asset.name));
+    if !is_runtime_download_url(&asset.download_url, spec.repo) {
+        return Err(format!(
+            "Refusing to download from {}: not a release of {}",
+            asset.download_url, spec.repo
+        ));
+    }
+    let (partial, file) = asset_paths(dir, &asset.name)?;
+    fs::create_dir_all(dir).map_err(|e| format!("Failed to create {}: {e}", dir.display()))?;
 
     let on_progress = |progress: TransferProgress| {
-        report(InstallProgress {
-            id: spec.id.to_string(),
-            stage: InstallStage::Downloading,
-            received: progress.received,
-            total: progress.total.unwrap_or(0),
-            message: format!("Downloading {}", asset.name),
-        })
+        report(download_progress(spec, &asset.name, progress));
     };
     match stream_to_partial(
         client,
@@ -150,12 +137,35 @@ async fn download_archive(
     .await?
     {
         Transfer::Finished(_) => {
-            fs::rename(&partial, &archive)
+            fs::rename(&partial, &file)
                 .map_err(|e| format!("Failed to finalise the download: {e}"))?;
-            Ok(archive)
+            Ok(file)
         }
         Transfer::Cancelled => Err("The runtime download was cancelled".to_string()),
     }
+}
+
+/// Report the `verifying` stage, then compare the SHA-256 of `file` with the digest GitHub gives
+/// for it. A file that fails the check is deleted. Returns the file's hash.
+pub(super) async fn verify_download(
+    report: Reporter<'_>,
+    spec: &RuntimeSpec,
+    file: &Path,
+    expected: Option<&str>,
+) -> Result<String, String> {
+    stage_report(
+        report,
+        spec,
+        InstallStage::Verifying,
+        "Checking the download",
+    );
+    let checked = hash_file(file)
+        .await
+        .and_then(|hash| verify_sha256(&hash, expected).map(|()| hash));
+    if checked.is_err() {
+        let _ = fs::remove_file(file);
+    }
+    checked
 }
 
 /// Unpack `archive` into `staging`, check the program is there, then move it to `install_dir`.
@@ -165,8 +175,9 @@ async fn unpack_into_place(
     install_dir: &Path,
     spec: &RuntimeSpec,
 ) -> Result<(), String> {
+    let layout = spec.archive_layout()?;
     let (download_owned, staging_owned) = (download.to_path_buf(), staging.to_path_buf());
-    let (format, strip) = (spec.archive, spec.strip_top_level);
+    let (format, strip) = (layout.archive, layout.strip_top_level);
     tokio::task::spawn_blocking(move || {
         let _ = fs::remove_dir_all(&staging_owned);
         archive::extract(format, &download_owned, &staging_owned, strip)
@@ -174,10 +185,10 @@ async fn unpack_into_place(
     .await
     .map_err(|e| format!("Unpacking stopped unexpectedly: {e}"))??;
 
-    if !spec.exe_path(staging).is_file() {
+    if !layout.exe_path(staging).is_file() {
         return Err(format!(
             "The archive does not contain {}",
-            spec.exe_relative_path
+            layout.exe_relative_path
         ));
     }
     if install_dir.exists() {
@@ -197,7 +208,13 @@ pub(super) fn remove_runtime_files(runtimes_root: &Path, spec: &RuntimeSpec) -> 
         .map_err(|e| format!("Failed to remove {}: {e}", runtime_dir.display()))
 }
 
-fn stage_report(report: Reporter<'_>, spec: &RuntimeSpec, stage: InstallStage, message: &str) {
+/// Send a progress event with no byte count.
+pub(super) fn stage_report(
+    report: Reporter<'_>,
+    spec: &RuntimeSpec,
+    stage: InstallStage,
+    message: &str,
+) {
     report(InstallProgress {
         id: spec.id.to_string(),
         stage,
@@ -205,6 +222,28 @@ fn stage_report(report: Reporter<'_>, spec: &RuntimeSpec, stage: InstallStage, m
         total: 0,
         message: message.to_string(),
     });
+}
+
+/// The `downloading` event for one byte-count step of the file `file_name`.
+fn download_progress(
+    spec: &RuntimeSpec,
+    file_name: &str,
+    progress: TransferProgress,
+) -> InstallProgress {
+    InstallProgress {
+        id: spec.id.to_string(),
+        stage: InstallStage::Downloading,
+        received: progress.received,
+        total: progress.total.unwrap_or(0),
+        message: format!("Downloading {file_name}"),
+    }
+}
+
+/// The partial and final paths of the download `file_name` inside `dir`. The name is validated
+/// first, so both paths stay inside `dir`.
+fn asset_paths(dir: &Path, file_name: &str) -> Result<(PathBuf, PathBuf), String> {
+    validate_file_name(file_name)?;
+    Ok((dir.join(format!("{file_name}.part")), dir.join(file_name)))
 }
 
 /// A version tag as a folder name: letters, digits, `.`, `-` and `_`, no leading dot.
@@ -266,6 +305,7 @@ fn sha256_of_file(path: &Path) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::spec::GENIEX;
     use super::super::test_support::Scratch;
     use super::*;
 
@@ -318,5 +358,55 @@ mod tests {
             sha256_of_file(&file).expect("hash"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+    }
+
+    #[test]
+    fn asset_paths_sit_beside_each_other_inside_the_folder() {
+        let dir = Path::new("app-data");
+        let (partial, file) =
+            asset_paths(dir, "geniex-cli-setup-windows-arm64-v0.5.0.exe").expect("valid name");
+        assert_eq!(file, dir.join("geniex-cli-setup-windows-arm64-v0.5.0.exe"));
+        assert_eq!(
+            partial,
+            dir.join("geniex-cli-setup-windows-arm64-v0.5.0.exe.part")
+        );
+    }
+
+    #[test]
+    fn asset_name_must_be_a_bare_file_name() {
+        let dir = Path::new("app-data");
+        for bad in ["", "..", "../setup.exe", "sub/setup.exe", "/setup.exe"] {
+            assert!(asset_paths(dir, bad).is_err(), "{bad:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn download_progress_reports_the_known_total_and_zero_when_unknown() {
+        let progress = |total| TransferProgress {
+            received: 512,
+            total,
+            speed_bps: 0,
+        };
+        let known = download_progress(&GENIEX, "setup.exe", progress(Some(2048)));
+        assert_eq!(known.id, "geniex");
+        assert_eq!(known.stage, InstallStage::Downloading);
+        assert_eq!((known.received, known.total), (512, 2048));
+        assert_eq!(known.message, "Downloading setup.exe");
+        assert_eq!(
+            download_progress(&GENIEX, "setup.exe", progress(None)).total,
+            0
+        );
+    }
+
+    #[test]
+    fn stages_serialise_as_lowercase_words_including_installing() {
+        let word = |stage: InstallStage| serde_json::to_string(&stage).expect("serialises");
+        assert_eq!(word(InstallStage::Checking), "\"checking\"");
+        assert_eq!(word(InstallStage::Downloading), "\"downloading\"");
+        assert_eq!(word(InstallStage::Verifying), "\"verifying\"");
+        assert_eq!(word(InstallStage::Extracting), "\"extracting\"");
+        assert_eq!(word(InstallStage::Installing), "\"installing\"");
+        assert_eq!(word(InstallStage::Done), "\"done\"");
+        assert_eq!(word(InstallStage::Error), "\"error\"");
     }
 }

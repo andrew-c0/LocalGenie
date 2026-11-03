@@ -2,7 +2,6 @@ import { Outlet } from "react-router-dom";
 import { useModelStore } from "../../../stores/modelStore";
 import { ChatRuntime } from "../../chat/ChatRuntime/ChatRuntime";
 import { PlaygroundRuntime } from "../../playground/PlaygroundRuntime/PlaygroundRuntime";
-import CliMissingBanner from "../CliMissingBanner/CliMissingBanner";
 import CloseGuard from "../CloseGuard";
 import Header from "../Header/Header";
 import Sidebar from "../Sidebar/Sidebar";
@@ -10,7 +9,7 @@ import TitleBar from "../TitleBar/TitleBar";
 import "./Layouts.css";
 
 /**
- * Main application layout: custom title bar, sidebar navigation, CLI banner, header
+ * Main application layout: custom title bar, sidebar navigation, header
  * and the routed page content. Rendered inside the router so pages appear via <Outlet />.
  * `CloseGuard` sits here too, so the close confirmation works on every page. `ChatRuntime`
  * sits here too, so a reply keeps streaming and saving while the user is on another page.
@@ -25,7 +24,6 @@ export function MainLayout() {
       <div className="layout__shell">
         <Sidebar />
         <div className="layout__main">
-          <CliMissingBanner />
           <Header />
           <Outlet />
           {/* Dims the header and page while the model selector is open. The sidebar stays clear. */}

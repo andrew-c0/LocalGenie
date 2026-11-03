@@ -8,7 +8,7 @@ LocalGenie is a Tauri 2 desktop client for Qualcomm GenieX local inference. It w
 - Backend: Rust + Tauri 2
 - Persistence: SQLite via sea-orm
 - Runtime: local GenieX CLI process with an OpenAI-compatible HTTP API
-- Optional runtimes for the Playground, installed from Settings > Runtimes: stable-diffusion.cpp (`sd-cli`, images and upscaling) and sherpa-onnx (speech to text, text to speech, audio to audio). The OCR tab needs no runtime: it uses the GenieX server
+- Optional runtimes for the Playground, installed from Settings > Runtimes: stable-diffusion.cpp (`sd-cli`, images and upscaling) and sherpa-onnx (speech to text, text to speech, audio to audio). The OCR tab needs no optional runtime: it uses the GenieX server
 
 ## Core flow
 1. User downloads a GGUF model from Hugging Face in the app (resumable; drawer shows progress, cancel, resume).
@@ -16,11 +16,12 @@ LocalGenie is a Tauri 2 desktop client for Qualcomm GenieX local inference. It w
 3. User starts the local GenieX server and loads a model.
 4. User chats with streaming responses, and can attach images, audio clips and text files to a message (media needs a confirmed scan result for the model).
 5. Sessions and settings are persisted locally.
-6. CLI updates: a badge on the sidebar settings button; the update runs from the App Settings drawer (installer download, launch, version polling).
+6. GenieX CLI updates: the CLI is a runtime in Settings > Runtimes; the update runs from the Downloads drawer (silent installer, version polling). Removal runs from the card.
 
 ## Current state (2026-11-03)
 - One GenieX server at a time (main port). Multi-model work (one server per compute) was built and reverted on 2026-10-31; the RAM estimate and headroom setting were kept. See `codebase-map.md` header and `memories/research/multi-model-plan.md`.
 - Committed 42dea0c to 0e0dcb5 (2026-10-29, not run): the optional runtimes framework (install, update check, uninstall from GitHub releases) and Settings > Runtimes. The stable-diffusion.cpp runtime points at the fork's ARM64 releases. See `codebase-map.md`.
+- Uncommitted (2026-11-03, not run): the GenieX CLI is a runtime in Settings > Runtimes (silent installer for install and update, uninstaller for removal), with shared runtime cards and feature locks (Models, Chat, Benchmarks, OCR and the Playground tabs). See `codebase-map.md`.
 - Committed in 2122ed2: Hugging Face facets in the model browser and on model pages (task, size, library, licence, base model, quantisation), stored with each download; and a think-token path for chat templates that read `<|think|>`.
 - Committed 7664d01 to 55219bc (2026-10-28, not run): the Qualcomm AI Hub tab (read-only catalog, model detail with a per-asset picker, zip import for runtime 11, GGUF download for runtime 12), the Hugging Face browser without its Qualcomm area, the `capability_scan/` folder and the `ModelSettings/sections/` split. See `codebase-map.md`.
 - Committed up to 961d167: per-conversation settings (`ChatSettingsDrawer`, `chat_sessions.settings_overrides`), model and compute change lines in the chat, a per-repo download folder (projector and model are downloaded into it, then imported; `delete_directory` removed), and run step replies in the Runs tab. Earlier, at 63f1fbc (benchmark suite: Benchmarks area with prompt library, suites, a Rust-run benchmark over the loaded model, saved runs and compare charts; earlier: model capability scan and selector badges, sidecar downloads before import, loaded-model list from `/status`, system usage card, chat attachments (image, audio, text), exact per-reply token counts, deleting a message with the ones after it, chat welcome view, conversation pinning). The working tree was clean at the last sync. See `codebase-map.md` for the exact state.

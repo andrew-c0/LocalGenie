@@ -1,14 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTauriEvent } from "../../../hooks";
 import { cancelDownload } from "../../../services/download";
-import { useDownloadStore } from "../../../stores/downloadStore";
+import { RUNTIME_PROGRESS_EVENT } from "../../../services/runtimes";
+import { runtimeDownloadId, useDownloadStore } from "../../../stores/downloadStore";
+import type { RuntimeInstallProgress } from "../../../types";
+import { installStepOf, type SpeedSample, sampleSpeed } from "../../../utils/runtimeInstall";
+import { runtimeStageLabel } from "../../../utils/runtimeProgress";
+import { refreshModelList } from "../../../utils/runtimeUsage";
 import { toast } from "../../../utils/toast";
 import {
   refreshAfterImport,
-  refreshModelList,
   runAihubDownload,
   runGGUFDownload,
+  runRuntimeInstall,
 } from "./downloadPipeline";
+
+/** Last speed sample per runtime entry, so each progress event gives a bytes-per-second figure. */
+const runtimeSpeeds = new Map<string, SpeedSample>();
 
 /**
  * Owns the download pipeline while the drawer is mounted (the header keeps it mounted for the
@@ -34,8 +42,17 @@ export function useDownloadManager() {
       if (d.status !== "queued") continue;
       if (d.aihub) void runAihubDownload(d.aihub);
       else if (d.variant) void runGGUFDownload(d.variant);
+      else if (d.runtime) void runRuntimeInstall(d.runtime);
     }
   }, [downloads]);
+
+  /** Moves a running entry into its import (or install) step with a message. Other entries are left alone. */
+  const enterImport = (id: string, message: string) => {
+    if (useDownloadStore.getState().downloads.find((d) => d.id === id)?.status === "downloading") {
+      setStatus(id, "importing");
+    }
+    setImportingProgress(id, message);
+  };
 
   // Model import (GenieX cache registration) progress.
   useTauriEvent<{ model: string }>("model-pull-start", (payload) => {
@@ -85,6 +102,22 @@ export function useDownloadManager() {
       upsert({ id: payload.id, label: payload.id, status: "downloading" });
     }
     patchProgress(payload.id, payload.received ?? 0, payload.total ?? null, payload.speed ?? 0);
+  });
+
+  // Runtime install or update progress, keyed by runtime id. Every runtime reports it the same way.
+  useTauriEvent<RuntimeInstallProgress>(RUNTIME_PROGRESS_EVENT, (payload) => {
+    const id = runtimeDownloadId(payload.id);
+    const step = installStepOf(payload.stage);
+    if (step === "download") {
+      const sample = sampleSpeed(runtimeSpeeds.get(id), payload.received, Date.now());
+      runtimeSpeeds.set(id, sample);
+      patchProgress(id, payload.received, payload.total > 0 ? payload.total : null, sample.speed);
+    } else if (step === "import") {
+      enterImport(id, runtimeStageLabel(payload.stage));
+    } else {
+      // Done or error: the invoke result sets the entry's status, so only the speed state ends here.
+      runtimeSpeeds.delete(id);
+    }
   });
 
   const cancel = useCallback(async (id: string) => {

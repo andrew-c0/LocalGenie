@@ -5,19 +5,18 @@ import { backfillModelRam } from "../services/modelRam";
 import { useChatStore } from "../stores/chatStore";
 import { useModelStore } from "../stores/modelStore";
 import { useRamEstimateStore } from "../stores/ramEstimateStore";
+import { useRuntimeStore } from "../stores/runtimeStore";
 
 /**
- * Startup only: loads the CLI state, saved sessions, installed models, server status and the
- * CLI update check once. Everything that runs afterwards is owned by the component that uses it
- * (model loading in the header, downloads in the drawer, streaming in `ChatRuntime`).
+ * Startup only: loads the runtime list (which also sets the CLI state), saved sessions, installed
+ * models, server status and the runtime update checks once. Everything that runs afterwards is owned by
+ * the component that uses it (model loading in the header, downloads in the drawer, streaming in `ChatRuntime`).
  */
 export default function AppBootstrap({ children }: { children: ReactNode }) {
   const loadSessions = useChatStore((s) => s.loadSessions);
   const setModels = useModelStore((s) => s.setModels);
   const setServerStatus = useModelStore((s) => s.setServerStatus);
   const setServerPort = useModelStore((s) => s.setServerPort);
-  const setCliInstalled = useModelStore((s) => s.setCliInstalled);
-  const setUpdateInfo = useModelStore((s) => s.setUpdateInfo);
   const setChipset = useModelStore((s) => s.setChipset);
   const models = useModelStore((s) => s.models);
 
@@ -30,9 +29,16 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
+      // The release checks call GitHub and can be slow, so they start once the list is read and do not
+      // hold up the rest of startup. They run without the CLI too, so Settings > Runtimes can show the
+      // latest version before an install.
+      void useRuntimeStore
+        .getState()
+        .refresh()
+        .then(() => useRuntimeStore.getState().checkUpdates());
+
       // Independent reads run in parallel.
-      const [installed, saved, models, port, chipset] = await Promise.all([
-        geniex.checkGeniexInstalled().catch(() => false),
+      const [saved, models, port, chipset] = await Promise.all([
         db.loadSessions().catch((err) => {
           console.error("[init] Failed to load sessions:", err);
           return null;
@@ -43,7 +49,6 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
         geniex.configGet("chipset").catch(() => null),
       ]);
 
-      setCliInstalled(installed);
       if (saved) loadSessions(saved);
       if (models) setModels(models);
       // Models downloaded before the RAM figures were kept get them now, then the selector shows them.
@@ -57,24 +62,8 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
         .getServerStatus(useModelStore.getState().serverPort)
         .catch(() => null);
       if (status) setServerStatus(status);
-
-      // The update check calls GitHub and can be slow: don't hold up the rest of startup.
-      if (installed) {
-        geniex
-          .checkForCliUpdate()
-          .then(setUpdateInfo)
-          .catch(() => undefined);
-      }
     })();
-  }, [
-    loadSessions,
-    setModels,
-    setUpdateInfo,
-    setServerStatus,
-    setCliInstalled,
-    setServerPort,
-    setChipset,
-  ]);
+  }, [loadSessions, setModels, setServerStatus, setServerPort, setChipset]);
 
   return <>{children}</>;
 }

@@ -2,8 +2,8 @@ mod aihub_proto;
 mod commands;
 mod gguf;
 pub mod model_capabilities;
-mod ram_estimate;
 pub mod model_settings;
+mod ram_estimate;
 mod tray;
 
 pub mod entities;
@@ -20,7 +20,6 @@ use commands::capabilities;
 use commands::capability_scan;
 use commands::chat;
 use commands::cli;
-use commands::cli_update;
 use commands::compaction;
 use commands::database;
 use commands::files;
@@ -93,7 +92,6 @@ pub fn run() {
             compaction::compact_conversation,
             compaction::cancel_compaction,
             // CLI utilities
-            cli::check_geniex_installed,
             cli::get_runtime_versions,
             commands::download::download_file,
             commands::download::cancel_download,
@@ -102,8 +100,6 @@ pub fn run() {
             cli::config_get,
             cli::config_set,
             cli::config_list,
-            cli_update::check_for_cli_update,
-            cli_update::update_geniex,
             logs::get_server_logs,
             logs::clear_server_logs,
             // System

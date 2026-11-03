@@ -1,5 +1,5 @@
 import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
-import { Button, CounterBadge, Tab, TabList } from "@fluentui/react-components";
+import { Button, CounterBadge, Tab, TabList, Tooltip } from "@fluentui/react-components";
 import {
   BeakerRegular,
   ChatRegular,
@@ -11,16 +11,19 @@ import {
 } from "@fluentui/react-icons";
 import type { ReactElement } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useRuntimeLocks } from "../../../hooks/useRuntimeLocks";
 import { useModelStore } from "../../../stores/modelStore";
+import type { RuntimeNeed } from "../../../utils/runtimeGuards";
 import { SystemUsage } from "../SystemUsage/SystemUsage";
 import "./Sidebar.css";
 
-const NAV_ITEMS: { to: string; label: string; icon: ReactElement }[] = [
+/** `needs` is the runtime an area cannot work without; the item is locked while it is missing. */
+const NAV_ITEMS: { to: string; label: string; icon: ReactElement; needs?: RuntimeNeed }[] = [
   { to: "/", label: "Overview", icon: <GridRegular /> },
-  { to: "/models", label: "Models", icon: <CubeRegular /> },
-  { to: "/chat", label: "Chat", icon: <ChatRegular /> },
+  { to: "/models", label: "Models", icon: <CubeRegular />, needs: "cli" },
+  { to: "/chat", label: "Chat", icon: <ChatRegular />, needs: "cli" },
   { to: "/playground", label: "Playground", icon: <BeakerRegular /> },
-  { to: "/benchmarks", label: "Benchmarks", icon: <PlayCircleRegular /> },
+  { to: "/benchmarks", label: "Benchmarks", icon: <PlayCircleRegular />, needs: "cli" },
   { to: "/settings", label: "Settings", icon: <SettingsRegular /> },
 ];
 
@@ -37,6 +40,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const models = useModelStore((s) => s.models);
+  const lockedReason = useRuntimeLocks();
 
   const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
     navigate(String(data.value));
@@ -54,14 +58,30 @@ export default function Sidebar() {
         selectedValue={activeNavValue(pathname)}
         onTabSelect={handleTabSelect}
       >
-        {NAV_ITEMS.map((item) => (
-          <Tab key={item.to} value={item.to} icon={item.icon}>
-            {item.label}{" "}
-            {item.to === "/models" && models.length > 0 && (
-              <CounterBadge count={models.length} size="small" appearance="filled" color="brand" />
-            )}
-          </Tab>
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const reason = item.needs ? lockedReason(item.needs) : null;
+          const tab = (
+            <Tab key={item.to} value={item.to} icon={item.icon} disabled={reason !== null}>
+              {item.label}{" "}
+              {item.to === "/models" && models.length > 0 && (
+                <CounterBadge
+                  count={models.length}
+                  size="small"
+                  appearance="filled"
+                  color="brand"
+                />
+              )}
+            </Tab>
+          );
+          // A disabled button gets no hover events, so the tooltip sits on a wrapper around it.
+          return reason ? (
+            <Tooltip key={item.to} content={reason} relationship="description" positioning="after">
+              <span>{tab}</span>
+            </Tooltip>
+          ) : (
+            tab
+          );
+        })}
       </TabList>
 
       <div className="sidebar__footer">

@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import * as runtimes from "../../../services/runtimes";
+import { useEffect } from "react";
+import { useRuntimeStore } from "../../../stores/runtimeStore";
 import type { RuntimeInfo, RuntimeUpdateInfo } from "../../../types";
-import { errorMessage } from "../../../utils/errorMessage";
 
 export interface RuntimeCatalog {
   /** Null until the list has loaded. */
@@ -9,45 +8,29 @@ export interface RuntimeCatalog {
   /** Update status by runtime id. A runtime whose check failed has no entry. */
   updatesById: Record<string, RuntimeUpdateInfo>;
   loadError: string | null;
-  reload: () => Promise<void>;
-}
-
-/** Update checks that succeeded, keyed by runtime id. */
-function successfulUpdates(
-  checks: PromiseSettledResult<RuntimeUpdateInfo>[],
-): Record<string, RuntimeUpdateInfo> {
-  const entries = checks.flatMap((check): [string, RuntimeUpdateInfo][] =>
-    check.status === "fulfilled" ? [[check.value.id, check.value]] : [],
-  );
-  return Object.fromEntries(entries);
 }
 
 /**
- * The runtime list and each runtime's latest release. Loads once when the component mounts (the
- * Runtimes section opens); `reload` re-reads both after an install or uninstall.
+ * The runtime list and each runtime's latest release, both from the shared runtime store, so an install
+ * finished in the Downloads drawer shows here. The list is re-read when the section opens. The update
+ * checks call GitHub, so they run when the section opens and whenever the list changes.
  */
 export function useRuntimeCatalog(): RuntimeCatalog {
-  const [runtimeList, setRuntimeList] = useState<RuntimeInfo[] | null>(null);
-  const [updatesById, setUpdatesById] = useState<Record<string, RuntimeUpdateInfo>>({});
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const runtimeList = useRuntimeStore((s) => s.runtimes);
+  const readError = useRuntimeStore((s) => s.readError);
+  const updatesById = useRuntimeStore((s) => s.updatesById);
 
-  const reload = useCallback(async () => {
-    try {
-      const list = await runtimes.listRuntimes();
-      setRuntimeList(list);
-      setLoadError(null);
-      const checks = await Promise.allSettled(
-        list.map((runtime) => runtimes.checkRuntimeUpdate(runtime.id)),
-      );
-      setUpdatesById(successfulUpdates(checks));
-    } catch (err) {
-      setLoadError(errorMessage(err, "Could not read the runtimes."));
-    }
+  useEffect(() => {
+    void useRuntimeStore.getState().refresh();
   }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (runtimeList) void useRuntimeStore.getState().checkUpdates();
+  }, [runtimeList]);
 
-  return { runtimes: runtimeList, updatesById, loadError, reload };
+  return {
+    runtimes: runtimeList,
+    updatesById,
+    loadError: runtimeList ? null : readError,
+  };
 }

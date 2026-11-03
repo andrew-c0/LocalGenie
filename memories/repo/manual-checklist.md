@@ -2,28 +2,21 @@
 
 Run through these checks manually after building or deploying the app. Automated checks cannot fully verify installer behavior, filesystem permissions, or OS-level interactions.
 
-## CLI update download — folder & permissions
+## GenieX CLI as a runtime: install, update, uninstall (not yet run in the app)
 
-- [ ] **Installer downloads into the correct folder**
-  - Trigger an update from App Settings → GenieX CLI → "Update Now".
-  - Verify the file `geniex-cli-setup-windows-arm64-v<version>.exe` appears in the app data directory:
-    `%APPDATA%\com.localgenie.app\` (resolve via `app.path().app_data_dir()` in Rust).
-  - Confirm the file size roughly matches the asset size shown on the GitHub release page (a truncated download indicates a failed stream that was still written to disk).
-
-- [ ] **App is allowed to download (network/CSP)**
-  - Confirm no CSP violation errors appear in the dev console when the download starts (`connect-src` must permit `https://api.github.com` and the release download host `https://github.com` / `objects.githubusercontent.com`).
-  - If the download fails instantly with a network error, check whether the Tauri CSP in `src-tauri/tauri.conf.json` blocks outbound HTTPS to GitHub.
-  - Verify corporate proxy / firewall scenarios: the app uses `reqwest` with a `LocalGenie/0.1` User-Agent; some proxies block unknown agents.
-  - Note: the installer download runs in Rust (`reqwest`), so the webview CSP does not apply to it. The CSP check above only matters for webview `fetch` calls.
-
-- [ ] **Downloaded installer is executable**
-  - Windows may mark downloaded files with a Mark-of-the-Web (MOTW) zone identifier. Confirm double-clicking or spawning the installer does not trigger a SmartScreen block that silently prevents launch.
-  - If SmartScreen blocks it, verify `launch_installer()` surfaces the failure instead of hanging the version poll.
-
-- [ ] **Version polling behaves correctly**
-  - After completing the installer, the app should detect the new version within ~3s and show "Updated to v<latest>".
-  - Cancel the installer mid-way and confirm the app keeps polling, then times out after 5 minutes with the manual-download error message.
-  - Confirm the sidebar settings badge disappears once `update_available` becomes false.
+- [ ] Settings > Runtimes lists GenieX CLI first, with its logo, installed version or "Not installed", latest version and repo. The "…" menu has Release notes, Uninstall (disabled when not installed) and, when not installed, Check again.
+- [ ] Install GenieX (not installed): Install queues an entry in the Downloads drawer. Stages: Checking release, Downloading (with bytes), Verifying, Installing…, Done. No installer window appears (the setup runs silently). Toast "GenieX CLI installed"; the card shows the version; Models, Chat and Benchmarks unlock without a restart.
+- [ ] After success the setup `geniex-cli-setup-windows-arm64-v<version>.exe` is gone from the app data folder (`%APPDATA%\com.localgenie.app\`). After a failed or cancelled install it stays there.
+- [ ] Update: with an older GenieX installed, the card offers Update; the drawer runs it and the card shows the new version.
+- [ ] While an install or update of a runtime is queued or running, its card's "…" menu is disabled.
+- [ ] Cancel during Downloading: the entry shows cancelled; Resume downloads again. Cancel during Installing: the drawer stops waiting. If the setup was running, it finishes with no window (check Task Manager and the version afterwards).
+- [ ] Uninstall: "…" > Uninstall, then confirm. The confirm text names what stays locked. The card shows a spinner; no uninstaller window appears; the server started by the app stops; toast "GenieX CLI removed"; the card shows Not installed; Models, Chat and Benchmarks lock with tooltips.
+- [ ] Lock tooltips: with GenieX removed, the sidebar's Models, Chat and Benchmarks are disabled and their tooltip reads "Needs the GenieX CLI. Install it in Settings > Runtimes."; the Playground's OCR tab is disabled with the same tooltip.
+- [ ] Route guard: with GenieX removed, a navigation to /models, /chat or /benchmarks (for example from the dev console) lands on Settings > Runtimes with the toast "This area is unavailable".
+- [ ] Overview: with GenieX removed, Browse Models and Start Local Chat are disabled with the tooltip; "Models Installed" shows "—"; the "Open Runtimes" block opens Settings > Runtimes.
+- [ ] Playground tabs: with stable-diffusion.cpp missing, Text to image, Image to image and Image upscaling are disabled; with sherpa-onnx missing, Speech to text, Text to speech and Audio to audio are disabled. Each tooltip names the runtime and points to Settings > Runtimes.
+- [ ] Settings > Runtimes shows a warning icon on its tab when GenieX is missing or any runtime has a newer release.
+- [ ] Start with GenieX missing: Models, Chat and Benchmarks show locked once the runtime list has been read (nothing is locked before that).
 
 ## General build sanity
 
@@ -52,7 +45,7 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] Chat welcome: `/chat` with no open conversation shows the status (Running/Stopped) and up to 3 recent conversations; New conversation twice opens the same empty draft; leaving an empty draft leaves nothing in the list after a reload; the first send stores it.
 - [ ] Pin: a pinned conversation lists first and keeps its place after a reload; unpin returns it to recency order.
 - [ ] Models: search → download → import → progress → completion refresh; cancel and resume from the drawer; duplicate click is ignored; Load & Chat sets active model; remove confirmation works; repo filter chips behave.
-- [ ] Settings: port save/probe persists; CLI update card reflects `updateInfo` (badge on sidebar settings entry is currently gone — settings moved to a page, verify update badge UX still acceptable).
+- [ ] Settings: port save/probe persists.
 - [ ] Benchmarks, Run: with a model loaded, start a suite; each step appears as it finishes; the run appears in Runs; Cancel keeps the finished steps; chat and model load are refused until the run ends. Compute and the Windows power plan/battery are recorded for the run (not yet verified against a live model).
 - [ ] Benchmarks, Prompt Library: a prompt used by a suite cannot be deleted; a file removed from a saved prompt leaves the disk when no other prompt or step uses it.
 - [ ] Overview "Recent Generation Speeds" shows chat-based figures only; Compare charts use the selected runs; CSV and PNG exports open the save dialog and "open" works on the saved file.
@@ -70,13 +63,13 @@ Run through these checks manually after building or deploying the app. Automated
 
 ## Optional runtimes: Settings > Runtimes (not yet run)
 
-- [ ] The section lists stable-diffusion.cpp and sherpa-onnx as not installed. Opening it reads GitHub once; offline, the card shows an error and the page still works.
+- [ ] The section lists GenieX CLI, stable-diffusion.cpp and sherpa-onnx. Latest versions come from GitHub at startup and when the list changes; offline, the cards show no latest version and the page still works.
 - [ ] Install: the stages show in order (checking, downloading with byte counts, verifying, extracting, done). The card shows the version. `%APPDATA%\com.localgenie.app\runtimes\sd-cpp\<tag>\sd-cli.exe` exists.
 - [ ] The archive installed is the ARM64 one (`windows-arm64` in the zip name), even when GitHub's latest release is an x64-only build.
 - [ ] After a restart the card still shows the installed version.
 - [ ] Update: when a newer ARM64 release exists the card offers Update; the older folder stays on disk.
 - [ ] Interrupt a download (disconnect), then retry: the `.part` file is reused and the install completes. A bad archive or a missing `sd-cli.exe` shows an error and leaves nothing in `runtimes\sd-cpp\`.
-- [ ] Uninstall (after the confirm): the runtime folder and the card's version are gone. The Playground then shows the "not installed" notice.
+- [ ] Uninstall (from the card's "…" menu, after the confirm): the card shows a spinner and a toast reports the result; the runtime folder and the card's version are gone. The Playground then shows the "not installed" notice.
 
 ## Playground: text to image (not yet run)
 

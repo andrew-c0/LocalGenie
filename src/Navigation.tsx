@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { MainLayout } from "./components/shell/Layouts/Layouts";
+import RuntimeGuard from "./components/shell/RuntimeGuard/RuntimeGuard";
 import BenchmarkPage from "./pages/BenchmarkPage/BenchmarkPage";
 import BenchmarkCompare from "./pages/benchmark/BenchmarkCompare/BenchmarkCompare";
 import BenchmarkPrompts from "./pages/benchmark/BenchmarkPrompts/BenchmarkPrompts";
@@ -31,22 +32,25 @@ export default function Navigation() {
     <Routes>
       <Route element={<MainLayout />}>
         <Route path="/" element={<OverviewPage />} />
-        <Route path="/models" element={<LocalModelsBrowserPage tab="local" />} />
-        <Route path="/models/browse" element={<LocalModelsBrowserPage tab="all" />} />
-        <Route path="/models/aihub" element={<LocalModelsBrowserPage tab="aihub" />} />
-        <Route path="/models/aihub/:id" element={<AihubModelDetail />} />
-        <Route path="/models/:repoId" element={<HubModelDetailRoute />} />
-        <Route path="/chat" element={<ChatPage />} />
-        <Route path="/chat/:sessionId" element={<ChatPage />} />
-        <Route path="/playground" element={<PlaygroundPage />} />
-        <Route path="/benchmarks" element={<BenchmarkPage />}>
-          <Route index element={<Navigate to="prompts" replace />} />
-          <Route path="prompts" element={<BenchmarkPrompts />} />
-          <Route path="suites" element={<BenchmarkSuites />} />
-          <Route path="run" element={<BenchmarkRun />} />
-          <Route path="runs" element={<BenchmarkRuns />} />
-          <Route path="compare" element={<BenchmarkCompare />} />
+        {/* Models, Chat and Benchmarks need the GenieX CLI; RuntimeGuard redirects to Settings > Runtimes without it. */}
+        <Route element={<RuntimeGuard needs="cli" />}>
+          <Route path="/models" element={<LocalModelsBrowserPage tab="local" />} />
+          <Route path="/models/browse" element={<LocalModelsBrowserPage tab="all" />} />
+          <Route path="/models/aihub" element={<LocalModelsBrowserPage tab="aihub" />} />
+          <Route path="/models/aihub/:id" element={<AihubModelDetail />} />
+          <Route path="/models/:repoId" element={<HubModelDetailRoute />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/chat/:sessionId" element={<ChatPage />} />
+          <Route path="/benchmarks" element={<BenchmarkPage />}>
+            <Route index element={<Navigate to="prompts" replace />} />
+            <Route path="prompts" element={<BenchmarkPrompts />} />
+            <Route path="suites" element={<BenchmarkSuites />} />
+            <Route path="run" element={<BenchmarkRun />} />
+            <Route path="runs" element={<BenchmarkRuns />} />
+            <Route path="compare" element={<BenchmarkCompare />} />
+          </Route>
         </Route>
+        <Route path="/playground" element={<PlaygroundPage />} />
         <Route path="/benchmark" element={<Navigate to="/benchmarks" replace />} />
         <Route path="/prompt-benchmark/*" element={<Navigate to="/benchmarks" replace />} />
         <Route path="/settings" element={<Navigate to="/settings/app" replace />} />

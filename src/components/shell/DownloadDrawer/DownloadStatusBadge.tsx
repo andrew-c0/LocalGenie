@@ -23,18 +23,30 @@ const CONFIG: Record<
   cancelled: { icon: <PauseRegular />, color: "subtle", label: "Cancelled" },
 };
 
+/** The pill's text. A runtime's import step reads as installing; a step message wins over that. */
+function labelFor(status: DownloadStatus, isRuntime: boolean, importingProgress?: string): string {
+  if (status !== "importing") return CONFIG[status].label;
+  if (importingProgress) return importingProgress;
+  return isRuntime ? "Installing" : CONFIG.importing.label;
+}
+
 interface DownloadStatusBadgeProps {
   status: DownloadStatus;
+  /** True for a runtime entry, which changes the import wording. False for model downloads. */
+  isRuntime?: boolean;
   importingProgress?: string;
 }
 
 /** Colored status pill for a download entry. */
-export function DownloadStatusBadge({ status, importingProgress }: DownloadStatusBadgeProps) {
+export function DownloadStatusBadge({
+  status,
+  isRuntime = false,
+  importingProgress,
+}: DownloadStatusBadgeProps) {
   const config = CONFIG[status];
-  const label = status === "importing" && importingProgress ? importingProgress : config.label;
   return (
     <Badge appearance="tint" color={config.color} icon={config.icon}>
-      {label}
+      {labelFor(status, isRuntime, importingProgress)}
     </Badge>
   );
 }

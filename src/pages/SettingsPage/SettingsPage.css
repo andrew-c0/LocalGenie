@@ -20,6 +20,17 @@
   align-items: flex-start;
 }
 
+/* The warning sits inline, right after the section name. */
+.settings-page__tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacingHorizontalXS);
+}
+
+.settings-page__tab-warning {
+  color: var(--colorPaletteRedForeground1);
+}
+
 .settings-page__panel {
   flex: 1;
   min-width: 0;

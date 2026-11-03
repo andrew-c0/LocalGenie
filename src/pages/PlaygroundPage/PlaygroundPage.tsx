@@ -1,5 +1,5 @@
 import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
-import { Tab, TabList } from "@fluentui/react-components";
+import { Tab, TabList, Tooltip } from "@fluentui/react-components";
 import { useState } from "react";
 import AudioToAudioPanel from "../../components/playground/AudioToAudioPanel/AudioToAudioPanel";
 import ImageToImagePanel from "../../components/playground/ImageToImagePanel/ImageToImagePanel";
@@ -9,7 +9,11 @@ import SpeechToTextPanel from "../../components/playground/SpeechToTextPanel/Spe
 import TextToImagePanel from "../../components/playground/TextToImagePanel/TextToImagePanel";
 import TextToSpeechPanel from "../../components/playground/TextToSpeechPanel/TextToSpeechPanel";
 import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
+import { useRuntimeLocks } from "../../hooks/useRuntimeLocks";
 import { OCR_TAB_LABEL } from "../../utils/ocrText";
+import { SD_CPP_RUNTIME_ID } from "../../utils/playground";
+import type { RuntimeNeed } from "../../utils/runtimeGuards";
+import { SHERPA_RUNTIME_ID } from "../../utils/speech";
 import { UPSCALE_TAB_LABEL } from "../../utils/upscaleText";
 import "./PlaygroundPage.css";
 
@@ -21,15 +25,15 @@ const SPEECH_TO_TEXT = "speech-to-text";
 const TEXT_TO_SPEECH = "text-to-speech";
 const AUDIO_TO_AUDIO = "audio-to-audio";
 
-/** Functions of the Playground, in tab order. */
-const FUNCTIONS: { value: string; label: string }[] = [
-  { value: TEXT_TO_IMAGE, label: "Text to image" },
-  { value: IMAGE_TO_IMAGE, label: "Image to image" },
-  { value: IMAGE_UPSCALING, label: UPSCALE_TAB_LABEL },
-  { value: OCR, label: OCR_TAB_LABEL },
-  { value: SPEECH_TO_TEXT, label: "Speech to text" },
-  { value: TEXT_TO_SPEECH, label: "Text to speech" },
-  { value: AUDIO_TO_AUDIO, label: "Audio to audio" },
+/** Functions of the Playground, in tab order. `needs` is the runtime the tab cannot work without. */
+const FUNCTIONS: { value: string; label: string; needs: RuntimeNeed }[] = [
+  { value: TEXT_TO_IMAGE, label: "Text to image", needs: SD_CPP_RUNTIME_ID },
+  { value: IMAGE_TO_IMAGE, label: "Image to image", needs: SD_CPP_RUNTIME_ID },
+  { value: IMAGE_UPSCALING, label: UPSCALE_TAB_LABEL, needs: SD_CPP_RUNTIME_ID },
+  { value: OCR, label: OCR_TAB_LABEL, needs: "cli" },
+  { value: SPEECH_TO_TEXT, label: "Speech to text", needs: SHERPA_RUNTIME_ID },
+  { value: TEXT_TO_SPEECH, label: "Text to speech", needs: SHERPA_RUNTIME_ID },
+  { value: AUDIO_TO_AUDIO, label: "Audio to audio", needs: SHERPA_RUNTIME_ID },
 ];
 
 /**
@@ -38,7 +42,16 @@ const FUNCTIONS: { value: string; label: string }[] = [
  * to another page.
  */
 export default function PlaygroundPage() {
-  const [functionId, setFunctionId] = useState(TEXT_TO_IMAGE);
+  const [chosenId, setFunctionId] = useState(TEXT_TO_IMAGE);
+  const lockedReason = useRuntimeLocks();
+  // A tab whose runtime goes missing (or is missing from the start) is not shown; the first open tab is.
+  const isOpen = (id: string) => {
+    const fn = FUNCTIONS.find((f) => f.value === id);
+    return fn !== undefined && lockedReason(fn.needs) === null;
+  };
+  const functionId = isOpen(chosenId)
+    ? chosenId
+    : (FUNCTIONS.find((f) => isOpen(f.value))?.value ?? chosenId);
 
   const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
     setFunctionId(String(data.value));
@@ -57,11 +70,22 @@ export default function PlaygroundPage() {
           selectedValue={functionId}
           onTabSelect={handleTabSelect}
         >
-          {FUNCTIONS.map((fn) => (
-            <Tab key={fn.value} value={fn.value}>
-              {fn.label}
-            </Tab>
-          ))}
+          {FUNCTIONS.map((fn) => {
+            const reason = lockedReason(fn.needs);
+            const tab = (
+              <Tab key={fn.value} value={fn.value} disabled={reason !== null}>
+                {fn.label}
+              </Tab>
+            );
+            // A disabled button gets no hover events, so the tooltip sits on a wrapper around it.
+            return reason ? (
+              <Tooltip key={fn.value} content={reason} relationship="description">
+                <span>{tab}</span>
+              </Tooltip>
+            ) : (
+              tab
+            );
+          })}
         </TabList>
         {functionId === TEXT_TO_IMAGE && (
           <TextToImagePanel onOpenImageToImage={() => setFunctionId(IMAGE_TO_IMAGE)} />

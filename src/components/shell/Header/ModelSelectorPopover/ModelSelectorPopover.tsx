@@ -19,6 +19,7 @@ import {
 import { PlugDisconnectedRegular, SearchRegular } from "@fluentui/react-icons";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useRuntimeLocks } from "../../../../hooks/useRuntimeLocks";
 import { COMPUTE_TARGETS, type ComputeChoice, useModelStore } from "../../../../stores/modelStore";
 import type { ModelInfo } from "../../../../types";
 import { FAMILY_ALL, familyFilterOptions, matchesFamily } from "../../../../utils/modelFamily";
@@ -61,6 +62,8 @@ export default function ModelSelectorPopover({
 }: ModelSelectorPopoverProps) {
   const navigate = useNavigate();
   const models = useModelStore((s) => s.models);
+  // Without the GenieX CLI the list is empty because it cannot be read; the models are still on disk.
+  const cliLock = useRuntimeLocks()("cli");
   const serverStatus = useModelStore((s) => s.serverStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
   const selectorOpen = useModelStore((s) => s.selectorOpen);
@@ -218,7 +221,9 @@ export default function ModelSelectorPopover({
       </Flex>
 
       {!hasRows && (
-        <Caption1>{query ? `No models match "${query}".` : "No models installed yet."}</Caption1>
+        <Caption1>
+          {query ? `No models match "${query}".` : (cliLock ?? "No models installed yet.")}
+        </Caption1>
       )}
 
       <Divider />

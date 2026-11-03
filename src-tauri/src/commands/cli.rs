@@ -15,12 +15,12 @@ pub struct ConfigEntry {
 }
 
 // GenieX is supported only on Windows on ARM64 for this project.
-fn platform_supported() -> bool {
+pub(super) fn platform_supported() -> bool {
     cfg!(all(target_os = "windows", target_arch = "aarch64"))
 }
 
 /// Standard error for unsupported platforms.
-fn platform_unsupported_err() -> String {
+pub(super) fn platform_unsupported_err() -> String {
     "GenieX CLI is only supported on Windows on ARM64 (aarch64).".to_string()
 }
 
@@ -139,16 +139,6 @@ async fn run_config(args: &[&str], secs: u64, what: &str) -> Result<String, Stri
         Ok(Err(e)) => Err(format!("Failed to run `{what}`: {e}")),
         Err(_) => Err(format!("`{what}` timed out")),
     }
-}
-
-#[tauri::command]
-pub async fn check_geniex_installed() -> Result<bool, String> {
-    if !platform_supported() {
-        return Ok(false);
-    }
-    Ok(get_installed_version_timeout(CLI_PROBE_TIMEOUT_SECS)
-        .await
-        .is_some())
 }
 
 #[tauri::command]

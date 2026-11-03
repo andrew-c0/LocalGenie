@@ -19,7 +19,7 @@ You are a Rust and Tauri 2 expert for the LocalGenie backend (`src-tauri/`).
   - `database`: `SOURCE_HF` and `SOURCE_AIHUB`, `facets_with_source`. Every downloaded-model row carries its source.
   - `capability_scan/`: folder module. `mod.rs` holds the Tauri commands and scan state; `probes.rs`, `transport.rs`, `thinking.rs`, `outcomes.rs` and `entries.rs` hold the phases; `tests.rs` holds the unit tests.
   - `benchmark_runner`, `benchmark_prompts`, `benchmark_suites`, `benchmark_runs`, `benchmark_files`: benchmark runs, prompt library, suites, stored runs and imported files.
-  - `cli`: install detection, version, `config get/set/list`. `cli_update`: GitHub release check and installer update.
+  - `cli`: install detection, version, `config get/set/list`. The GenieX CLI install, update and removal is the `geniex` runtime in `runtimes/` (installer kind; see `memories/repo/cli-update.md`).
   - `system`, `constants`.
 - AI Hub protobuf schemas are in `src-tauri/proto/`. `build.rs` compiles them with `protox` and `prost-build` into `OUT_DIR`. Change the `.proto` files, not the generated code.
 - Registration is in `src-tauri/src/lib.rs`. Shared state is `AppState` (server PID, HTTP client) and `DownloadRegistry`.

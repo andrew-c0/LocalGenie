@@ -1,10 +1,11 @@
 import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
-import { Tab, TabList } from "@fluentui/react-components";
+import { Tab, TabList, Tooltip } from "@fluentui/react-components";
 import {
   BrainCircuitRegular,
   CubeRegular,
   DesktopRegular,
   DocumentBulletListRegular,
+  WarningRegular,
 } from "@fluentui/react-icons";
 import type { ReactElement } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -13,8 +14,8 @@ import ModelSettings from "../../components/ModelSettings/ModelSettings";
 import RuntimesCard from "../../components/settings/RuntimesCard/RuntimesCard";
 import ServerLogsCard from "../../components/settings/ServerLogsCard/ServerLogsCard";
 import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
-import { StatusBadge } from "../../components/ui/StatusBadge/StatusBadge";
 import { useModelStore } from "../../stores/modelStore";
+import { useRuntimeStore } from "../../stores/runtimeStore";
 import "./SettingsPage.css";
 import { BodyStrong, Meta, SectionTitle } from "../../components/ui/Typography/Typography";
 
@@ -30,15 +31,15 @@ const SECTIONS: {
   {
     id: "app",
     label: "Application & Runtime",
-    desc: "Server port, CLI updates",
-    subtitle: "Configure the local GenieX server port and keep the GenieX CLI up to date.",
+    desc: "Server port, RAM, summaries",
+    subtitle: "Configure the local GenieX server port, RAM headroom and conversation summaries.",
     icon: <DesktopRegular />,
   },
   {
     id: "runtimes",
     label: "Runtimes",
-    desc: "Optional local engines",
-    subtitle: "Install, update and remove the optional runtimes used by the Playground.",
+    desc: "GenieX CLI and optional engines",
+    subtitle: "Install, update and remove the GenieX CLI and the optional Playground runtimes.",
     icon: <CubeRegular />,
   },
   {
@@ -64,9 +65,17 @@ export default function SettingsPage() {
   const { section: sectionParam } = useParams<{ section: string }>();
   // Unknown sections fall back to the first one.
   const section: SectionId = SECTIONS.find((s) => s.id === sectionParam)?.id ?? "app";
-  const updateInfo = useModelStore((s) => s.updateInfo);
-
-  const updateBadge = updateInfo?.update_available ?? false;
+  const cliInstalled = useModelStore((s) => s.cliInstalled);
+  const updatesById = useRuntimeStore((s) => s.updatesById);
+  // The Runtimes tab is flagged when the CLI is missing or any runtime has an update.
+  const anyUpdate = Object.values(updatesById).some((update) => update.updateAvailable);
+  // What the warning beside the Runtimes label says; null when there is nothing to flag.
+  const runtimesWarning =
+    cliInstalled === false
+      ? "The GenieX CLI is not installed."
+      : anyUpdate
+        ? "A runtime update is available."
+        : null;
   const current = SECTIONS.find((s) => s.id === section);
 
   const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
@@ -88,10 +97,16 @@ export default function SettingsPage() {
           {SECTIONS.map((s) => (
             <Tab key={s.id} value={s.id} icon={s.icon}>
               <span className="settings-page__tab-content">
-                <BodyStrong>{s.label}</BodyStrong>
+                <span className="settings-page__tab-label">
+                  <BodyStrong>{s.label}</BodyStrong>
+                  {s.id === "runtimes" && runtimesWarning && (
+                    <Tooltip content={runtimesWarning} relationship="label">
+                      <WarningRegular className="settings-page__tab-warning" />
+                    </Tooltip>
+                  )}
+                </span>
                 <Meta>{s.desc}</Meta>
               </span>
-              {s.id === "app" && updateBadge && <StatusBadge tone="red">!</StatusBadge>}
             </Tab>
           ))}
         </TabList>
@@ -105,14 +120,11 @@ export default function SettingsPage() {
           actions={
             <div className="settings-page__panel-actions">
               {section === "inference" && <Meta>changes persist per model</Meta>}
-              {updateBadge && section === "app" && (
-                <StatusBadge tone="blue">v{updateInfo?.latest_version} available</StatusBadge>
-              )}
             </div>
           }
         />
 
-        {section === "app" && <AppSettings updateInfo={updateInfo} />}
+        {section === "app" && <AppSettings />}
         {section === "runtimes" && <RuntimesCard />}
         {section === "inference" && <ModelSettings />}
         {section === "logs" && <ServerLogsCard />}

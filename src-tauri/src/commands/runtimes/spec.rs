@@ -1,4 +1,4 @@
-//! Static descriptions of the optional runtimes: where their releases live and what the archive holds.
+//! Static descriptions of the runtimes: where their releases live and how each one is installed.
 
 use std::path::{Path, PathBuf};
 
@@ -13,14 +13,34 @@ const SD_CPP_REPO: &str = "andrew-c0/stable-diffusion.cpp";
 /// Upstream sherpa-onnx, which publishes Windows ARM64 builds in its own releases.
 const SHERPA_ONNX_REPO: &str = "k2-fsa/sherpa-onnx";
 
-/// One optional runtime the app can install.
+/// Upstream GenieX, whose releases ship the Windows ARM64 CLI setup program.
+const GENIEX_REPO: &str = "qualcomm/GenieX";
+
+/// One runtime the app can install.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct RuntimeSpec {
     /// Stable id used in commands, the database and the folder name.
     pub id: &'static str,
     pub display_name: &'static str,
-    /// GitHub `owner/name` that publishes the archives.
+    /// GitHub `owner/name` that publishes the release.
     pub repo: &'static str,
+    /// How the release is installed.
+    pub install: InstallKind,
+}
+
+/// How a runtime's release reaches the disk.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum InstallKind {
+    /// The release's archive is unpacked into `runtimes/<id>/<version>/`.
+    Archive(ArchiveLayout),
+    /// The release's Windows ARM64 setup program is run silently by the app, and the installed version is
+    /// read from the CLI. The steps live in `geniex.rs`.
+    Installer,
+}
+
+/// Which archive a release ships, and where its program sits once unpacked.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct ArchiveLayout {
     /// Every part must appear in the asset name.
     pub asset_contains: &'static [&'static str],
     /// No part may appear in the asset name (for example a debug or library-only build).
@@ -42,13 +62,15 @@ pub const SD_CPP: RuntimeSpec = RuntimeSpec {
     id: "sd-cpp",
     display_name: "stable-diffusion.cpp",
     repo: SD_CPP_REPO,
-    asset_contains: &["sd", "windows-arm64"],
-    asset_excludes: &[],
-    asset_suffix: ".zip",
-    archive: ArchiveFormat::Zip,
-    strip_top_level: false,
-    tag_prefix: "",
-    exe_relative_path: "sd-cli.exe",
+    install: InstallKind::Archive(ArchiveLayout {
+        asset_contains: &["sd", "windows-arm64"],
+        asset_excludes: &[],
+        asset_suffix: ".zip",
+        archive: ArchiveFormat::Zip,
+        strip_top_level: false,
+        tag_prefix: "",
+        exe_relative_path: "sd-cli.exe",
+    }),
 };
 
 /// sherpa-onnx (speech recognition and synthesis), the shared Windows ARM64 build with the
@@ -58,25 +80,35 @@ pub(super) const SHERPA_ONNX: RuntimeSpec = RuntimeSpec {
     id: "sherpa-onnx",
     display_name: "sherpa-onnx",
     repo: SHERPA_ONNX_REPO,
-    asset_contains: &["sherpa-onnx-v", "win-arm64"],
-    asset_excludes: &[
-        "-lib",
-        "-no-tts",
-        "-jni",
-        "static-",
-        "Debug",
-        "Release",
-        "RelWithDebInfo",
-    ],
-    asset_suffix: "-shared-MT-MinSizeRel.tar.bz2",
-    archive: ArchiveFormat::TarBz2,
-    strip_top_level: true,
-    tag_prefix: "v",
-    exe_relative_path: "bin/sherpa-onnx-offline.exe",
+    install: InstallKind::Archive(ArchiveLayout {
+        asset_contains: &["sherpa-onnx-v", "win-arm64"],
+        asset_excludes: &[
+            "-lib",
+            "-no-tts",
+            "-jni",
+            "static-",
+            "Debug",
+            "Release",
+            "RelWithDebInfo",
+        ],
+        asset_suffix: "-shared-MT-MinSizeRel.tar.bz2",
+        archive: ArchiveFormat::TarBz2,
+        strip_top_level: true,
+        tag_prefix: "v",
+        exe_relative_path: "bin/sherpa-onnx-offline.exe",
+    }),
+};
+
+/// The GenieX CLI. Its setup program is installed by the user; `geniex.rs` holds the steps.
+pub(super) const GENIEX: RuntimeSpec = RuntimeSpec {
+    id: "geniex",
+    display_name: "GenieX CLI",
+    repo: GENIEX_REPO,
+    install: InstallKind::Installer,
 };
 
 /// Every runtime the app knows about, in display order.
-pub(super) const RUNTIME_SPECS: &[RuntimeSpec] = &[SD_CPP, SHERPA_ONNX];
+pub(super) const RUNTIME_SPECS: &[RuntimeSpec] = &[GENIEX, SD_CPP, SHERPA_ONNX];
 
 /// The spec with this id, or an error naming the unknown id.
 pub(super) fn find_spec(id: &str) -> Result<&'static RuntimeSpec, String> {
@@ -87,6 +119,29 @@ pub(super) fn find_spec(id: &str) -> Result<&'static RuntimeSpec, String> {
 }
 
 impl RuntimeSpec {
+    /// The archive layout of an archive runtime. An installer runtime has none.
+    pub(super) fn archive_layout(&self) -> Result<&ArchiveLayout, String> {
+        match &self.install {
+            InstallKind::Archive(layout) => Ok(layout),
+            InstallKind::Installer => {
+                Err(format!("{} is not an archive runtime", self.display_name))
+            }
+        }
+    }
+
+    /// The newest release in a GitHub release list (see `parse_release_list`) that has this
+    /// runtime's archive. Upstream may publish builds for other platforms as the latest release,
+    /// so the first release without an archive is passed over.
+    pub(super) fn newest_release(&self, list_json: &serde_json::Value) -> Result<Release, String> {
+        let layout = self.archive_layout()?;
+        parse_release_list(list_json, self.repo)?
+            .into_iter()
+            .find(|release| layout.pick_asset(release).is_some())
+            .ok_or_else(|| format!("No release of {} has a Windows ARM64 build yet.", self.repo))
+    }
+}
+
+impl ArchiveLayout {
     /// True when an asset name is this runtime's archive.
     fn matches_asset(&self, name: &str) -> bool {
         self.asset_contains.iter().all(|part| name.contains(part))
@@ -107,16 +162,6 @@ impl RuntimeSpec {
             .find(|asset| self.matches_asset(&asset.name))
     }
 
-    /// The newest release in a GitHub release list (see `parse_release_list`) that has this
-    /// runtime's archive. Upstream may publish builds for other platforms as the latest release,
-    /// so the first release without an archive is passed over.
-    pub(super) fn newest_release(&self, list_json: &serde_json::Value) -> Result<Release, String> {
-        parse_release_list(list_json, self.repo)?
-            .into_iter()
-            .find(|release| self.pick_asset(release).is_some())
-            .ok_or_else(|| format!("No release of {} has a Windows ARM64 build yet.", self.repo))
-    }
-
     /// Where the program sits inside a version folder.
     pub(super) fn exe_path(&self, version_dir: &Path) -> PathBuf {
         version_dir.join(self.exe_relative_path)
@@ -127,6 +172,11 @@ impl RuntimeSpec {
 mod tests {
     use super::super::release::parse_release;
     use super::*;
+
+    /// The archive layout of an archive runtime under test.
+    fn layout(spec: &RuntimeSpec) -> &ArchiveLayout {
+        spec.archive_layout().expect("an archive runtime")
+    }
 
     fn release_with(names: &[&str]) -> Release {
         let assets: Vec<serde_json::Value> = names
@@ -152,14 +202,14 @@ mod tests {
             "sd-master-1024-77b72a2-windows-arm64.exe",
             "sd-master-1024-77b72a2-windows-arm64.zip",
         ]);
-        let picked = SD_CPP.pick_asset(&release).expect("asset found");
+        let picked = layout(&SD_CPP).pick_asset(&release).expect("asset found");
         assert_eq!(picked.name, "sd-master-1024-77b72a2-windows-arm64.zip");
     }
 
     #[test]
     fn no_asset_when_only_other_platforms_are_listed() {
         let release = release_with(&["sd-master-win-cpu-x64.zip", "notes.txt"]);
-        assert!(SD_CPP.pick_asset(&release).is_none());
+        assert!(layout(&SD_CPP).pick_asset(&release).is_none());
     }
 
     /// One entry of a release list, shaped like GitHub's `GET /repos/{repo}/releases` response.
@@ -215,7 +265,10 @@ mod tests {
         ]);
         let release = SD_CPP.newest_release(&list).expect("an ARM64 release");
         assert_eq!(release.tag, "master-1024-77b72a2");
-        assert_eq!(SD_CPP.pick_asset(&release).expect("asset").name, ARM64);
+        assert_eq!(
+            layout(&SD_CPP).pick_asset(&release).expect("asset").name,
+            ARM64
+        );
     }
 
     #[test]
@@ -317,9 +370,21 @@ mod tests {
     }
 
     #[test]
+    fn finds_geniex_as_an_installer_runtime() {
+        let spec = find_spec("geniex").expect("geniex is registered");
+        assert_eq!(spec.repo, "qualcomm/GenieX");
+        assert_eq!(spec.display_name, "GenieX CLI");
+        assert_eq!(spec.install, InstallKind::Installer);
+        assert!(
+            spec.archive_layout().is_err(),
+            "an installer has no archive layout"
+        );
+    }
+
+    #[test]
     fn exe_is_resolved_inside_the_version_folder() {
         let dir = Path::new("base").join("sd-cpp").join("1.0");
-        assert_eq!(SD_CPP.exe_path(&dir), dir.join("sd-cli.exe"));
+        assert_eq!(layout(&SD_CPP).exe_path(&dir), dir.join("sd-cli.exe"));
     }
 
     const SHERPA_ARM64: &str = "sherpa-onnx-v2.0.1-win-arm64-shared-MT-MinSizeRel.tar.bz2";
@@ -332,7 +397,9 @@ mod tests {
             "sherpa-onnx-v2.0.1-win-arm64-shared-MT-MinSizeRel-no-tts.tar.bz2",
             SHERPA_ARM64,
         ]);
-        let picked = SHERPA_ONNX.pick_asset(&release).expect("asset found");
+        let picked = layout(&SHERPA_ONNX)
+            .pick_asset(&release)
+            .expect("asset found");
         assert_eq!(picked.name, SHERPA_ARM64);
     }
 
@@ -353,11 +420,11 @@ mod tests {
             "sherpa-onnx-v2.0.1-win-arm64-shared-MT-MinSizeRel.tar.bz2.sha256",
         ] {
             assert!(
-                !SHERPA_ONNX.matches_asset(name),
+                !layout(&SHERPA_ONNX).matches_asset(name),
                 "{name} should be rejected"
             );
         }
-        assert!(SHERPA_ONNX.matches_asset(SHERPA_ARM64));
+        assert!(layout(&SHERPA_ONNX).matches_asset(SHERPA_ARM64));
     }
 
     #[test]
@@ -366,7 +433,7 @@ mod tests {
             "sherpa-onnx-v2.0.1-win-x64-shared-MT-MinSizeRel.tar.bz2",
             "sherpa-onnx-v2.0.1-linux-x64-shared.tar.bz2",
         ]);
-        assert!(SHERPA_ONNX.pick_asset(&release).is_none());
+        assert!(layout(&SHERPA_ONNX).pick_asset(&release).is_none());
     }
 
     #[test]
@@ -407,17 +474,20 @@ mod tests {
             newest.tag, "2.0.1",
             "the `v` prefix is dropped from the tag"
         );
-        assert_eq!(SHERPA_ONNX.git_tag(&newest.tag), "v2.0.1");
+        assert_eq!(layout(&SHERPA_ONNX).git_tag(&newest.tag), "v2.0.1");
     }
 
     #[test]
     fn sherpa_program_is_in_bin_and_sd_cpp_tags_have_no_prefix() {
         let dir = Path::new("base").join("sherpa-onnx").join("2.0.1");
         assert_eq!(
-            SHERPA_ONNX.exe_path(&dir),
+            layout(&SHERPA_ONNX).exe_path(&dir),
             dir.join("bin").join("sherpa-onnx-offline.exe")
         );
-        assert_eq!(SD_CPP.git_tag("master-1024-77b72a2"), "master-1024-77b72a2");
+        assert_eq!(
+            layout(&SD_CPP).git_tag("master-1024-77b72a2"),
+            "master-1024-77b72a2"
+        );
     }
 
     #[test]

@@ -317,23 +317,15 @@ export interface ServerStartOptions {
   keepalive?: number;
 }
 
-export interface UpdateInfo {
-  current_version: string;
-  latest_version: string;
-  update_available: boolean;
-  release_url: string;
-}
-
 // Playground runtimes (optional local engines installed from Settings > Runtimes). Camel case, as
 // the Rust side serialises them. `services/runtimes.ts` wraps the commands.
 
-/** One runtime the app knows about. `installedVersion` and `installPath` are null when not installed. */
+/** One runtime the app knows about. `installedVersion` is null when not installed. */
 export interface RuntimeInfo {
   id: string;
   displayName: string;
   repo: string;
   installedVersion: string | null;
-  installPath: string | null;
 }
 
 /** Installed and latest release of one runtime, from its GitHub `releases/latest`. */
@@ -345,11 +337,16 @@ export interface RuntimeUpdateInfo {
   releaseUrl: string;
 }
 
+/**
+ * Stages of a runtime install. `installing` is the wait for the install itself to finish, such as the
+ * silent GenieX setup running; it has no byte count.
+ */
 export type RuntimeInstallStage =
   | "checking"
   | "downloading"
   | "verifying"
   | "extracting"
+  | "installing"
   | "done"
   | "error";
 

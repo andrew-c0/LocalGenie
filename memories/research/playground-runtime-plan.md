@@ -2,6 +2,8 @@
 
 Status: plan only, nothing built. Written 2026-10-28. Builds on `playground-runtimes.md` (research, decisions in section 10). Target: Snapdragon X, Windows ARM64. Runtimes are optional, installed from Settings. GenieX stays the text engine.
 
+Note (2026-11-03, uncommitted): the GenieX CLI is now a runtime of the registry (`commands/runtimes/geniex.rs`, shown in Settings > Runtimes). The "CLI install and update" and "Settings" rows of section 1 describe the replaced flow.
+
 ## 1. What the app has today (code-read, not run)
 
 | Area | Existing piece | Reuse for runtimes |

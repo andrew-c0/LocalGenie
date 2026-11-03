@@ -1,4 +1,4 @@
-//! GitHub release lookup shared by the GenieX CLI update and the runtime installer.
+//! GitHub release lookup for the runtimes (archive runtimes and the GenieX installer).
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -21,7 +21,7 @@ pub(crate) fn github_client(timeout_secs: u64) -> Result<reqwest::Client, String
 }
 
 /// API URL of a repo's latest release, or of one tag when `tag` is given.
-pub fn release_api_url(repo: &str, tag: Option<&str>) -> String {
+pub(super) fn release_api_url(repo: &str, tag: Option<&str>) -> String {
     match tag {
         Some(tag) => format!("https://api.github.com/repos/{repo}/releases/tags/{tag}"),
         None => format!("https://api.github.com/repos/{repo}/releases/latest"),
@@ -34,7 +34,7 @@ pub(super) fn release_list_api_url(repo: &str) -> String {
 }
 
 /// GET a release's JSON (or a list of releases) from the GitHub API.
-pub(crate) async fn fetch_release_json(api_url: &str) -> Result<serde_json::Value, String> {
+pub(super) async fn fetch_release_json(api_url: &str) -> Result<serde_json::Value, String> {
     let client = github_client(GITHUB_TIMEOUT_SECS)?;
     let resp = client
         .get(api_url)
@@ -67,7 +67,7 @@ pub struct Release {
 }
 
 /// Read a release from GitHub's JSON. `repo` is only used for the fallback page URL.
-pub fn parse_release(json: &serde_json::Value, repo: &str) -> Result<Release, String> {
+pub(super) fn parse_release(json: &serde_json::Value, repo: &str) -> Result<Release, String> {
     let tag = json
         .get("tag_name")
         .and_then(|t| t.as_str())
@@ -194,7 +194,7 @@ impl ReleaseCache {
 }
 
 /// Compare two dotted version strings. Returns `true` if `a < b`.
-pub fn version_less_than(a: &str, b: &str) -> bool {
+fn version_less_than(a: &str, b: &str) -> bool {
     let parse =
         |s: &str| -> Vec<u64> { s.split('.').filter_map(|p| p.parse::<u64>().ok()).collect() };
     let (pa, pb) = (parse(a), parse(b));

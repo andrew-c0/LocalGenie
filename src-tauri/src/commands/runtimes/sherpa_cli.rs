@@ -39,9 +39,10 @@ pub(crate) async fn sherpa_programs(db: &DatabaseConnection) -> Result<SherpaPro
 
 /// The programs in a version folder. Each must be a file.
 fn programs_in(install: &Path) -> Result<SherpaPrograms, String> {
+    let layout = SHERPA_ONNX.archive_layout()?;
     let programs = SherpaPrograms {
         bin_dir: install.join("bin"),
-        offline: SHERPA_ONNX.exe_path(install),
+        offline: layout.exe_path(install),
         tts: install.join(TTS_RELATIVE),
         denoiser: install.join(DENOISER_RELATIVE),
         separation: install.join(SEPARATION_RELATIVE),

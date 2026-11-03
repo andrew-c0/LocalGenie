@@ -1,26 +1,21 @@
-# CLI update feature
+# GenieX CLI install, update and removal
 
-## Status
-- CLI update checks exist in the Rust backend and frontend service layer.
-- Update flow is installer-based: `geniex update` CLI command was found unreliable and was replaced.
+The GenieX CLI is a runtime in the registry at `src-tauri/src/commands/runtimes/` (`spec.rs`, `RUNTIME_SPECS`): id `geniex`, repo `qualcomm/GenieX`, `InstallKind::Installer`. Archive runtimes (stable-diffusion.cpp, sherpa-onnx) use `InstallKind::Archive`. The four runtime commands serve every runtime; `runtimes/geniex.rs` holds the installer steps.
 
-## Backend — `src-tauri/src/commands/cli_update.rs`
-- `check_for_cli_update()` → queries GitHub API (`/repos/qualcomm/GenieX/releases/latest`), compares installed version via `version_less_than()`, returns `UpdateInfo { current_version, latest_version, update_available, release_url }`.
-- `update_geniex(app)` → full installer flow:
-  1. Fetch latest release JSON from GitHub API.
-  2. `find_arm64_installer()` matches asset containing `cli-setup` + `windows-arm64` + `.exe` (e.g. `geniex-cli-setup-windows-arm64-v0.5.0.exe`).
-  3. `download_installer()` saves it to `app.path().app_data_dir()` (requires `use tauri::Manager` for `.path()` on AppHandle).
-  4. `launch_installer()` spawns the downloaded `.exe` directly so the user completes setup.
-  5. Polls installed version every 3s for up to 5 minutes (100 attempts); success when version matches latest, timeout error otherwise.
-- Progress emitted as `geniex-update-progress` events with `{ message }` payload; `emit` closure takes `String` (pass `.to_string()` for literals).
-- Version parsing: `get_installed_version_timeout()` runs `geniex version`, parses first dotted token.
+## Commands for `geniex`
+- `runtime_list`: `installedVersion` from `geniex version` (`cli::get_installed_version_timeout`), `null` when missing or not Windows ARM64. No database row.
+- `runtime_check_update("geniex")`: latest stable release (`releases/latest`, cached for an hour). Works without the CLI: `installedVersion` null, `updateAvailable` false.
+- `runtime_install("geniex", _)`: the version argument is ignored. Stages on `runtime-install-progress`: `checking`, `downloading` (`<app data>/<name>.part`, resumed, byte counts), `verifying` (GitHub digest, when GitHub gives one), `installing` (launches the setup `.exe` with `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`; no UI), then `done` or `error`. The `installing` stage polls `geniex version` every 3 s for up to 5 minutes until it matches the release, then waits up to 60 s for the setup to exit, then deletes the setup `.exe` and any `.part` (best effort: a setup still running keeps its file).
+- `runtime_uninstall("geniex")`: stops the server this app started, runs `unins000.exe` with the same silent flags (next to the binary or in its parent), then waits up to 60 s for `geniex version` to stop answering. No progress events.
+- Cancel: `cancel_download("runtime:geniex")`. The operation holds the registry key `runtime:geniex` for the whole run, so install and uninstall cannot overlap.
 
-## Frontend
-- `AppBootstrap.tsx` calls `checkForCliUpdate()` on init → stores in modelStore as `updateInfo`.
-- `pages/SettingsPage/SettingsPage.tsx`: shows a red `!` badge on the "app" section and on the section content when `updateInfo.update_available` (code-verified; the Sidebar no longer shows this badge).
-- `components/AppSettings/AppSettings.tsx` (app settings section): CLI update card (`settings/CliUpdateCard/`); `handleUpdate()` calls `updateGeniex()`, listens for progress events, then re-checks and calls `setUpdateInfo(info)` to refresh the store (NOT `setUpdateInfo(null)` — that caused a stuck "Checking for updates…" state).
+## Removed (uncommitted)
+`check_for_cli_update`, `update_geniex`, `check_geniex_installed`, the `geniex-update-progress` event, the `UpdateInfo` type, `cli_update.rs`, and `RuntimeInfo.installPath`.
 
 ## Notes
-- Platform-gated to Windows ARM64 (`platform_supported()`).
-- `resolve_geniex_executable()` (in `cli.rs`) prefers local install root (APPDATA\geniex-cli), then PATH.
-- Installer downloads into the app data dir — see `manual-checklist.md` for post-build verification.
+- Install and uninstall are gated to Windows ARM64 (`cli::platform_supported`). Listing and update checks are not.
+- A failed or cancelled install keeps the setup `.exe`, but a retry downloads it again: only a `.part` file is resumed.
+- Cancel during `installing` only stops the wait. The setup keeps running with no window. A resume then starts a second setup while the first may still run (code-read, not tested).
+- The digest check passes when GitHub gives no digest for the asset.
+- The silent flags, the `unins000.exe` name (Inno Setup's default, assumed) and the uninstaller path are not tested against a real install.
+- `get_runtime_versions` in `cli.rs` are usage probes, not part of the runtime flow.
