@@ -1,0 +1,64 @@
+/* A list row: a card. The open button fills it; the trailing slot (a menu or a chevron) sits at the right. */
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+  padding: var(--spacingVerticalXS) var(--spacingHorizontalS) var(--spacingVerticalXS)
+    var(--spacingHorizontalL);
+  border: 1px solid var(--colorNeutralStroke2);
+  border-radius: var(--borderRadiusXLarge);
+  background: var(--colorNeutralBackground1);
+}
+
+.item-row:hover {
+  background: var(--colorNeutralBackground1Hover);
+}
+
+/* The open part is a plain button: the row carries the card look, so the button has no surface of its own. */
+.item-row__open {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: var(--spacingVerticalS) 0;
+  border: none;
+  background: none;
+  color: var(--colorNeutralForeground1);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.item-row__open:focus-visible {
+  outline: 2px solid var(--colorStrokeFocus2);
+  outline-offset: 2px;
+  border-radius: var(--borderRadiusMedium);
+}
+
+/* Min-width 0 lets the one-line title and detail truncate (Fluent `truncate`). */
+.item-row__text {
+  min-width: 0;
+}
+
+.item-row__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--colorNeutralForeground2);
+}
+
+.item-row__detail,
+.item-row__fact {
+  color: var(--colorNeutralForeground2);
+}
+
+.item-row__fact {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.item-row__trailing {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  color: var(--colorNeutralForeground3);
+}

@@ -1,0 +1,10 @@
+/* The list is a <ul>: drop its bullets, margin and padding so the rows sit flush with the page. */
+.benchmark-list__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.benchmark-list__loading {
+  padding: var(--spacingVerticalL) 0;
+}

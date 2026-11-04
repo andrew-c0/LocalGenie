@@ -1,103 +1,31 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 import { cancelBenchmarkRun, startBenchmarkRun } from "../../../services/benchmark";
-import { listenEvent } from "../../../services/events";
-import type {
-  BenchmarkFinishedEvent,
-  BenchmarkProgressEvent,
-  BenchmarkRunRequest,
-} from "../../../types";
+import { type BenchmarkRunPhase, useBenchmarkRunStore } from "../../../stores/benchmarkRunStore";
+import type { BenchmarkRunRequest } from "../../../types";
 import { errorMessage } from "../../../utils/errorMessage";
 import { toast } from "../../../utils/toast";
 
-export type RunPhase = "idle" | "running" | "finished";
-
-/** Replace the event for the same pass and step, or add it at the end. */
-function withStep(list: BenchmarkProgressEvent[], event: BenchmarkProgressEvent) {
-  const index = list.findIndex((s) => s.pass === event.pass && s.stepIndex === event.stepIndex);
-  if (index < 0) return [...list, event];
-  return list.map((s, i) => (i === index ? event : s));
-}
-
 /**
- * The run started from the Run panel: its live steps and how it ended. Events for other runs are
- * ignored. `onFinished` runs once the run ends, so the counters can be read again.
+ * The run as one suite's page sees it, and the start and cancel actions. The run and its events live in
+ * `benchmarkRunStore`, so leaving the page does not stop or lose the run. This page sees a run only when
+ * it is this suite's; one run executes at a time, so `busyElsewhere` blocks a start while another suite runs.
  */
-export function useSuiteRun(onFinished: () => void) {
-  const [phase, setPhase] = useState<RunPhase>("idle");
-  const [steps, setSteps] = useState<BenchmarkProgressEvent[]>([]);
-  const [finished, setFinished] = useState<BenchmarkFinishedEvent | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
-  const runIdRef = useRef<string | null>(null);
-  const onFinishedRef = useRef(onFinished);
-
-  useEffect(() => {
-    onFinishedRef.current = onFinished;
-  }, [onFinished]);
-
-  useEffect(() => {
-    const unlisteners: Array<() => void> = [];
-    let disposed = false;
-
-    const subscribe = async () => {
-      const stopProgress = await listenEvent<BenchmarkProgressEvent>(
-        "benchmark-progress",
-        (event) => {
-          if (event.runId !== runIdRef.current) return;
-          setSteps((list) => withStep(list, event));
-        },
-      );
-      const stopFinished = await listenEvent<BenchmarkFinishedEvent>(
-        "benchmark-finished",
-        (event) => {
-          if (event.runId !== runIdRef.current) return;
-          runIdRef.current = null;
-          setFinished(event);
-          setPhase("finished");
-          if (event.status === "completed") {
-            toast.success("Run finished");
-          } else if (event.status === "cancelled") {
-            toast.info("Run cancelled", "Finished steps are saved.");
-          } else {
-            toast.error("Run failed", event.error ?? undefined);
-          }
-          onFinishedRef.current();
-        },
-      );
-      if (disposed) {
-        stopProgress();
-        stopFinished();
-      } else {
-        unlisteners.push(stopProgress, stopFinished);
-      }
-    };
-
-    void subscribe();
-    return () => {
-      disposed = true;
-      for (const stop of unlisteners) stop();
-    };
-  }, []);
+export function useSuiteRun(suiteId: string) {
+  const store = useBenchmarkRunStore((s) => s);
+  const ownRun = store.suiteId === suiteId;
 
   const start = useCallback(async (params: Omit<BenchmarkRunRequest, "runId">) => {
     const runId = crypto.randomUUID();
-    runIdRef.current = runId;
-    setSteps([]);
-    setFinished(null);
-    setError(null);
-    setStartedAt(Date.now());
-    setPhase("running");
+    useBenchmarkRunStore.getState().begin(runId, params.suiteId);
     try {
       await startBenchmarkRun({ runId, ...params });
     } catch (e) {
-      runIdRef.current = null;
-      setPhase("idle");
-      setError(errorMessage(e, "Could not start the run."));
+      useBenchmarkRunStore.getState().failStart(errorMessage(e, "Could not start the run."));
     }
   }, []);
 
   const cancel = useCallback(async () => {
-    const runId = runIdRef.current;
+    const runId = useBenchmarkRunStore.getState().runId;
     if (!runId) return;
     try {
       await cancelBenchmarkRun(runId);
@@ -106,5 +34,15 @@ export function useSuiteRun(onFinished: () => void) {
     }
   }, []);
 
-  return { phase, steps, finished, error, startedAt, start, cancel };
+  const phase: BenchmarkRunPhase = ownRun ? store.phase : "idle";
+  return {
+    phase,
+    steps: ownRun ? store.steps : [],
+    finished: ownRun ? store.finished : null,
+    error: ownRun ? store.error : null,
+    startedAt: ownRun ? store.startedAt : null,
+    busyElsewhere: store.phase === "running" && !ownRun,
+    start,
+    cancel,
+  };
 }

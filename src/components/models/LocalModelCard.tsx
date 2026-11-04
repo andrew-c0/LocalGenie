@@ -12,7 +12,7 @@ interface LocalModelCardProps {
   isDownloading: boolean;
   onOpenSelector: () => void;
   onRemove: (name: string) => void;
-  onDetails: (name: string, isLocal: boolean) => void;
+  onDetails: (name: string) => void;
 }
 
 /**
@@ -34,7 +34,6 @@ export function LocalModelCard({
       model={localCardData(model, stored, capabilityBadges)}
       isLoaded={isLoaded}
       isDownloading={isDownloading}
-      isLocal
       onOpenSelector={onOpenSelector}
       onRemove={onRemove}
       onDetails={onDetails}

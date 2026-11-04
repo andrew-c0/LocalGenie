@@ -7,11 +7,10 @@ import {
 } from "@fluentui/react-components";
 import { useEffect, useState } from "react";
 import { getBenchmarkRunSteps } from "../../../services/benchmark";
-import type { BenchmarkRunStep, BenchmarkRunSummary } from "../../../types";
+import type { BenchmarkRunStep } from "../../../types";
 import { errorMessage } from "../../../utils/errorMessage";
 import { parseThinking } from "../../../utils/thinking";
 import { ThinkingBlock } from "../../chat/ThinkingBlock/ThinkingBlock";
-import { EditorDialog } from "../../ui/EditorDialog/EditorDialog";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { MarkdownContent } from "../../ui/MarkdownContent/MarkdownContent";
 import { StateBlock } from "../../ui/StateBlock/StateBlock";
@@ -67,9 +66,10 @@ function StepReply({ step }: { step: BenchmarkRunStep }) {
 
 /**
  * The passes of one run, each an accordion item holding its steps. A step shows its prompt, outcome
- * and reply, drawn as a chat message. Loads the steps when it mounts; read-only.
+ * and reply, drawn as a chat message. Loads the steps when it mounts; read-only. The run page gives
+ * it the run's title and facts.
  */
-function RunPasses({ runId }: { runId: string }) {
+export function RunResponses({ runId }: { runId: string }) {
   const [steps, setSteps] = useState<BenchmarkRunStep[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Passes that are open. The first pass starts open; the others start collapsed.
@@ -134,30 +134,5 @@ function RunPasses({ runId }: { runId: string }) {
         );
       })}
     </Accordion>
-  );
-}
-
-interface RunResponsesProps {
-  run: BenchmarkRunSummary;
-  onClose: () => void;
-}
-
-/**
- * Details of one run in a modal: its model, compute target, start time and outcome, then the passes
- * and replies from `RunPasses`. Read-only; closing it changes nothing.
- */
-export function RunResponses({ run, onClose }: RunResponsesProps) {
-  return (
-    <EditorDialog title={`Run details · ${run.suiteName}`} dirty={false} onClose={onClose}>
-      <Meta>
-        {[
-          run.modelName,
-          run.compute.toUpperCase(),
-          new Date(run.startedAt).toLocaleString(),
-          run.status,
-        ].join(" · ")}
-      </Meta>
-      <RunPasses runId={run.id} />
-    </EditorDialog>
   );
 }

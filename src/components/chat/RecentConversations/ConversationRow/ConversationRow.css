@@ -1,0 +1,6 @@
+/* The pin in front of a pinned title. The row's shared look is in ItemRow. */
+.conversation-row__pin {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--colorBrandForeground1);
+}

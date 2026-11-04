@@ -1,0 +1,56 @@
+/*
+ * One row: the trail on the left, the page's actions (BreadcrumbActionsSlot) at the end. The trail takes the
+ * free space and its last crumb truncates first. Only when it reaches its basis width does the row wrap, so
+ * the actions move to a line of their own on a narrow window.
+ */
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacingVerticalS) var(--spacingHorizontalS);
+  min-width: 0;
+  padding: var(--spacingVerticalS) var(--spacingHorizontalL);
+  /* A line under the row separates it from the page below. */
+  border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+}
+
+.breadcrumbs__trail {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/*
+ * Fluent's crumb items and dividers do not shrink below their text, so the trail could not truncate. These
+ * scoped rules keep the earlier crumbs whole and let only the last crumb shrink. The class names are Fluent's
+ * own (fui-BreadcrumbItem, fui-BreadcrumbDivider), which are stable in v9.
+ */
+.breadcrumbs__trail .fui-BreadcrumbItem,
+.breadcrumbs__trail .fui-BreadcrumbDivider {
+  flex-shrink: 0;
+}
+
+.breadcrumbs__trail .fui-BreadcrumbItem:last-child {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.breadcrumbs__crumb-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The page's actions at the end of the row. Pushed right; they wrap within themselves only when very narrow. */
+.breadcrumbs__actions {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacingHorizontalS);
+  min-width: 0;
+  margin-inline-start: auto;
+}

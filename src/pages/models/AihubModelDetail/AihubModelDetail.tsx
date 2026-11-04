@@ -1,7 +1,7 @@
 import { Button, Card, Spinner } from "@fluentui/react-components";
-import { ArrowLeftRegular, OpenRegular } from "@fluentui/react-icons";
+import { OpenRegular } from "@fluentui/react-icons";
 import { open } from "@tauri-apps/plugin-shell";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { CapabilitiesSection } from "../../../components/models/CapabilitiesSection";
 import { ModelCardPanel, ModelDetailLayout } from "../../../components/models/ModelDetailLayout";
 import { ModelFacts } from "../../../components/models/ModelFacts";
@@ -12,6 +12,7 @@ import { MarkdownContent } from "../../../components/ui/MarkdownContent/Markdown
 import { StateBlock } from "../../../components/ui/StateBlock/StateBlock";
 import { StatusBadge } from "../../../components/ui/StatusBadge/StatusBadge";
 import { Meta } from "../../../components/ui/Typography/Typography";
+import { useBreadcrumbLabel } from "../../../navigation/useBreadcrumbLabel";
 import type { AihubAsset } from "../../../services/aihub";
 import { aihubDetailCapabilityBadges, hfFileOf } from "../../../utils/aihub";
 import { aihubCompatibilityCells, aihubSpecCells } from "../../../utils/modelSpecs";
@@ -40,29 +41,20 @@ function openLink(url: string) {
 }
 
 function AihubModelDetailView({ id }: { id: string }) {
-  const navigate = useNavigate();
   const { detail, readme, error } = useAihubModelDetail(id);
-  const eyebrow = "● QUALCOMM AI HUB MODEL";
-  const backButton = (
-    <Button
-      appearance="secondary"
-      icon={<ArrowLeftRegular />}
-      onClick={() => navigate("/models/aihub")}
-    >
-      Back to Qualcomm AI Hub
-    </Button>
-  );
+  // The trail's last crumb shows the model's name; until it loads, the id from the URL.
+  useBreadcrumbLabel(detail?.name || null);
 
   if (error) {
     return (
-      <ModelDetailLayout eyebrow={eyebrow} title={id} actions={backButton}>
+      <ModelDetailLayout title={id}>
         <ErrorBanner message={error} />
       </ModelDetailLayout>
     );
   }
   if (!detail) {
     return (
-      <ModelDetailLayout eyebrow={eyebrow} title={id} actions={backButton}>
+      <ModelDetailLayout title={id}>
         <StateBlock icon={<Spinner size="small" />} message="Loading model…" />
       </ModelDetailLayout>
     );
@@ -73,12 +65,10 @@ function AihubModelDetailView({ id }: { id: string }) {
 
   return (
     <ModelDetailLayout
-      eyebrow={eyebrow}
       title={detail.name || detail.id}
       subtitle={detail.headline || undefined}
       actions={
         <div className="model-detail__actions">
-          {backButton}
           {detail.licenseUrl && (
             <Button
               appearance="secondary"

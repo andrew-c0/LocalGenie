@@ -2,7 +2,6 @@ import {
   Body1,
   Body1Strong,
   Caption1,
-  Caption1Strong,
   Subtitle1,
   Subtitle2,
   Title2,
@@ -13,8 +12,7 @@ import "./Typography.css";
 /**
  * The app's text scale. Use these instead of picking Fluent text components and weights per screen.
  *
- *   Eyebrow       Caption1Strong  small uppercase label above a page title
- *   PageTitle     Title2          one per page, the h1
+ *   PageTitle    Title2          one per page, the h1
  *   SectionTitle  Subtitle1       a group of content inside a page (h2)
  *   CardTitle     Subtitle2       a card or list item title (h3)
  *   Body          Body1           default running text
@@ -22,10 +20,6 @@ import "./Typography.css";
  *   Secondary     Body1           supporting text under a title, muted colour
  *   Meta          Caption1        labels, hints, sizes, timestamps
  */
-export function Eyebrow(props: ComponentProps<typeof Caption1Strong>) {
-  return <Caption1Strong block {...props} />;
-}
-
 export function PageTitle(props: ComponentProps<typeof Title2>) {
   return <Title2 as="h1" block {...props} />;
 }

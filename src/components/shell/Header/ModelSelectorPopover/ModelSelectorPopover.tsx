@@ -234,7 +234,7 @@ export default function ModelSelectorPopover({
             appearance="secondary"
             onClick={() => {
               close();
-              navigate("/settings");
+              navigate("/models/local");
             }}
           >
             Manage Weights & Storage

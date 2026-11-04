@@ -56,9 +56,9 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Chipset matching normalises names (AI Hub `qualcomm-snapdragon-x-elite` against GenieX's `Snapdragon X Elite CRD`). Not run against a live device report.
 - The download gate is in memory: a zip can be downloaded only after its model page was opened in the same session (`AihubCache.asset_urls`). After a restart, open the page first.
 - `geniex pull qualcomm/<Name>:<precision> --model-hub localfs --local-path <zip>` is the import path for runtime 11; the precision label is taken from the app (`validate_precision`), and whether GenieX accepts the label for a zip was not verified.
-- The AI Hub card's fallback line `QAIRT · N chipsets` (`aihubCardData`, uncommitted) shows only when the model's info file cannot be read, so a GGUF-only model in that case is still labelled QAIRT (code-read). With the info file, the card shows the model's own facts instead.
+- The AI Hub card's fallback line `QAIRT · N chipsets` (`aihubCardData`) shows only when the model's info file cannot be read, so a GGUF-only model in that case is still labelled QAIRT (code-read). With the info file, the card shows the model's own facts instead.
 
-## Model cards and detail pages (uncommitted; code-read; the user looked at the layout on 2026-11-04, "okay for now")
+## Model cards and detail pages (c6f6bea; code-read; the user looked at the layout on 2026-11-04, "okay for now")
 - Hugging Face capability icons are guesses from the Hub's tags and the GGUF chat template (`utils/hubCapabilities.ts`). The `tools` and `reasoning` words can match text that is not a tool or thinking mode. The icon and the detail line say "inferred". Not checked against real models.
 - Card RAM verdicts rest on fixed numbers: 8.5 bits per weight for 8-bit, 4.85 for 4-bit, and 1.15 times the file size for AI Hub's Model Size (`utils/cardRam.ts`). Not checked against measured memory. A GGUF repo's parameter count is approximate and the card says "estimate".
 - The AI Hub list waits for every kept model's info file on first load (`aihub_list_models`, 8 at a time). The first-load time is not measured. A model whose info file cannot be read is listed without card facts.
@@ -87,6 +87,10 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Only the text to image and OCR lines were confirmed in the app by the user (2026-11-03). Upscaling, speech, image to image on a GPU or NPU device, and Auto on a device with no NPU counter are not checked.
 - Text to image with Auto plots all three targets: the runtime's device choice is not reported to the frontend (code-read), so the chart cannot show which one it used.
 - A GPU or NPU line depends on the engine counters in `get_system_usage`; on a device without them the line is left out (code-read, not run on that hardware).
+
+## Navigation redesign (uncommitted; the user approved it in the app on 2026-11-04/05; items not run are in `manual-checklist.md`)
+- The app uses a `MemoryRouter`, so a breadcrumb or sidebar click leaves a page without a "save first" check. Unsaved edits on a benchmark prompt or suite item page are lost when the user leaves that way. Known limit, not a blocker (user decision).
+- The sidebar is expanded until the saved `sidebar_collapsed` preference is read at startup (`AppBootstrap`); a failed read keeps it expanded (code-read).
 
 ## Benchmarks (committed in 63f1fbc; runtime-unverified)
 - The runner's compute and power recording (`benchmark_runner.rs` `Sampler` and `sample_usage`; `power.rs` power plan and battery) has not been verified against a live model in the app. Power is Windows only (`powercfg`, battery status); elsewhere the fields are null.

@@ -9,13 +9,10 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: stretch;
   gap: var(--spacingHorizontalS);
-  max-width: 840px;
-  margin: 0 auto;
 }
 
 .chat-input__attachments {
-  max-width: 840px;
-  margin: 0 auto var(--spacingVerticalS);
+  margin-bottom: var(--spacingVerticalS);
 }
 
 .chat-input__field {
@@ -32,4 +29,16 @@
   max-width: none;
   aspect-ratio: 1 / 1;
   padding: 0;
+}
+
+/* On a very wide window the content stops at 80% of the width and is centred. */
+@media (min-width: 1600px) {
+  .chat-input__wrapper {
+    max-width: 80%;
+    margin-inline: auto;
+  }
+  .chat-input__attachments {
+    max-width: 80%;
+    margin-inline: auto;
+  }
 }

@@ -5,7 +5,6 @@ import { Body, CardTitle } from "../ui/Typography/Typography";
 import "./ModelDetailLayout.css";
 
 interface ModelDetailLayoutProps {
-  eyebrow: string;
   title: string;
   subtitle?: string;
   actions?: ReactNode;
@@ -14,17 +13,11 @@ interface ModelDetailLayoutProps {
 }
 
 /** Page shell shared by every model detail page: the header, then the source's sections. */
-export function ModelDetailLayout({
-  eyebrow,
-  title,
-  subtitle,
-  actions,
-  children,
-}: ModelDetailLayoutProps) {
+export function ModelDetailLayout({ title, subtitle, actions, children }: ModelDetailLayoutProps) {
   return (
     <div className="model-detail__page">
       <div className="model-detail__inner">
-        <PageHeader eyebrow={eyebrow} title={title} subtitle={subtitle} actions={actions} />
+        <PageHeader title={title} subtitle={subtitle} actions={actions} />
         {children}
       </div>
     </div>

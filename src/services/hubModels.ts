@@ -1,5 +1,5 @@
 import { parseGGUFFilename } from "../utils/gguf";
-import { type HubFileEntry, listHubModelFiles, precisionInfo } from "./hubApi";
+import { type HubFileEntry, precisionInfo } from "./hubApi";
 
 /** One parsed GGUF file from a Hugging Face repo. */
 export interface GGUFFile {
@@ -95,17 +95,4 @@ function pickSidecars(main: GGUFFile, own: GGUFFile[], generic: GGUFFile[]): GGU
 export function variantLabel(group: GGUFGroup): string {
   const info = precisionInfo(group.main.precision);
   return group.main.sizeLabel ? `${info.label} — ${group.main.sizeLabel}` : info.label;
-}
-
-/**
- * List the `.gguf` files in a Hugging Face model repo.
- * Falls back to an empty array when the repo has no GGUF files or the
- * tree request fails.
- */
-export async function listGGUFFiles(repoId: string): Promise<GGUFFile[]> {
-  try {
-    return convertToGGUFFiles(await listHubModelFiles(repoId));
-  } catch {
-    return [];
-  }
 }

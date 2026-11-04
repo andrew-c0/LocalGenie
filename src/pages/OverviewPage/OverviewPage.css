@@ -9,8 +9,14 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacingVerticalL);
-  max-width: 1200px;
-  margin: 0 auto;
+}
+
+/* On a very wide window the content stops at 80% of the width and is centred. */
+@media (min-width: 1600px) {
+  .overview-page__inner {
+    max-width: 80%;
+    margin: 0 auto;
+  }
 }
 
 .overview-page__hero-actions {

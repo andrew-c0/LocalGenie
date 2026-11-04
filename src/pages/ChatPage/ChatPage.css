@@ -1,9 +1,4 @@
-.chat-page__page {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-}
-
+/* The chat canvas takes the whole page: the context bar on top, the thread or the welcome content below. */
 .chat-page__canvas {
   display: flex;
   flex-direction: column;
@@ -14,8 +9,4 @@
 
 .chat-page__empty {
   flex: 1;
-}
-
-.chat-page__hint {
-  color: var(--colorNeutralForeground3);
 }

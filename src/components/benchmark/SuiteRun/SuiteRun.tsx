@@ -90,7 +90,7 @@ function RunProgress({
  * Runs a saved suite on the model active in the top bar. If that model is loaded for another
  * compute target, the panel offers to reload it first. A run asks for consent first.
  */
-export function SuiteRun({ suiteId, onFinished }: { suiteId: string; onFinished: () => void }) {
+export function SuiteRun({ suiteId }: { suiteId: string }) {
   const installed = useModelStore((s) => s.models);
   // The id the server reports, which is what the server accepts in a chat or run request.
   const activeModel = useModelStore((s) => s.activeModelId);
@@ -105,7 +105,7 @@ export function SuiteRun({ suiteId, onFinished }: { suiteId: string; onFinished:
   const [askingConsent, setAskingConsent] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
   const [reloading, setReloading] = useState(false);
-  const run = useSuiteRun(onFinished);
+  const run = useSuiteRun(suiteId);
 
   // The store learns about loaded models only at startup and after some actions, so ask the server
   // again when the panel opens. Otherwise a model loaded since then looks unloaded here.
@@ -132,7 +132,7 @@ export function SuiteRun({ suiteId, onFinished }: { suiteId: string; onFinished:
 
   const busy = run.phase === "running" || reloading;
   const needsReload = loadedCompute !== compute;
-  const canStart = activeModel !== null && !busy;
+  const canStart = activeModel !== null && !busy && !run.busyElsewhere;
 
   // The same load settings chat sends: the model's saved settings with the selected compute target.
   const startNow = async (model: string) => {
@@ -198,6 +198,9 @@ export function SuiteRun({ suiteId, onFinished }: { suiteId: string; onFinished:
         <Meta>No model is loaded. Choose and load a model in the top bar first.</Meta>
       ) : (
         <Meta>Runs the active model on {COMPUTE_LABELS[compute]} with its saved settings.</Meta>
+      )}
+      {run.busyElsewhere && (
+        <Meta>Another suite is running. Wait for it to finish, or cancel it on its own page.</Meta>
       )}
 
       <div className="suite-run__actions">

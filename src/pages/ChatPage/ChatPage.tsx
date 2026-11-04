@@ -1,19 +1,21 @@
-import { Button } from "@fluentui/react-components";
 import { type ReactNode, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ChatArea from "../../components/ChatArea/ChatArea";
 import ChatInput from "../../components/ChatInput/ChatInput";
-import { ChatContextHeader } from "../../components/chat/ChatContextHeader/ChatContextHeader";
+import { ChatHeaderActions } from "../../components/chat/ChatHeaderActions/ChatHeaderActions";
 import { ChatWelcome } from "../../components/chat/ChatWelcome/ChatWelcome";
 import MissingFileBanner from "../../components/chat/MissingFileBanner/MissingFileBanner";
-import { SessionList } from "../../components/chat/SessionList/SessionList";
 import { StateBlock } from "../../components/ui/StateBlock/StateBlock";
+import { useBreadcrumbLabel } from "../../navigation/useBreadcrumbLabel";
 import { useChatStore } from "../../stores/chatStore";
 import { useModelStore } from "../../stores/modelStore";
 import "./ChatPage.css";
 
+/** The breadcrumb text while the conversation's title is not known: it is missing, or still loading. */
+const UNKNOWN_CONVERSATION_LABEL = "Conversation";
+
 /**
- * Chat workspace. `/chat` shows the default content; `/chat/:sessionId` opens that conversation.
+ * Chat workspace. `/chat` shows the welcome content; `/chat/:sessionId` opens that conversation.
  * The URL is the source of truth: the store's active session follows it.
  */
 export default function ChatPage() {
@@ -27,6 +29,11 @@ export default function ChatPage() {
 
   // Sessions may still be loading when the page opens, so a missing id is shown, not redirected.
   const activeSession = sessions.find((s) => s.id === sessionId);
+
+  // The last breadcrumb is the conversation's title, so a renamed chat updates the trail.
+  useBreadcrumbLabel(
+    sessionId === undefined ? null : (activeSession?.title ?? UNKNOWN_CONVERSATION_LABEL),
+  );
 
   // An empty conversation is a draft: it goes once the user moves on without sending anything.
   useEffect(() => {
@@ -46,36 +53,26 @@ export default function ChatPage() {
       </>
     );
   } else if (sessionId) {
+    // The breadcrumb's "Chat" crumb leads back to the landing, so no button is needed here.
     content = (
       <div className="chat-page__empty">
-        <StateBlock icon="🔎" message="This conversation no longer exists.">
-          <Button appearance="secondary" onClick={() => navigate("/chat")}>
-            Back to chats
-          </Button>
-        </StateBlock>
+        <StateBlock icon="🔎" message="This conversation no longer exists." />
       </div>
     );
   } else {
-    const recentSessions = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3);
     content = (
       <ChatWelcome
         serverRunning={serverStatus.running}
         modelCount={serverStatus.models.length}
-        recentSessions={recentSessions}
         onNewConversation={() => navigate(`/chat/${createSession()}`)}
-        onOpenSession={(id) => navigate(`/chat/${id}`)}
       />
     );
   }
 
   return (
-    <div className="chat-page__page">
-      <SessionList />
-
-      <div className="chat-page__canvas">
-        <ChatContextHeader />
-        {content}
-      </div>
+    <div className="chat-page__canvas">
+      {activeSession && <ChatHeaderActions session={activeSession} />}
+      {content}
     </div>
   );
 }

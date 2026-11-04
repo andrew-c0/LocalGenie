@@ -124,15 +124,9 @@ export default function HubModelBrowser({ downloading }: Props) {
             <ModelCard
               key={m._id}
               model={hubCardData(m, systemMemory)}
-              isLocal={false}
               isLoaded={false}
               isDownloading={downloading.has(m.id)}
-              onOpenSelector={() =>
-                navigate(`/models/${encodeURIComponent(m.id)}`, { state: { isLocal: false } })
-              }
-              onDetails={(name, isLocal) =>
-                navigate(`/models/${encodeURIComponent(name)}`, { state: { isLocal } })
-              }
+              onDetails={(name) => navigate(`/models/huggingface/${encodeURIComponent(name)}`)}
             />
           ))}
         </Flex>

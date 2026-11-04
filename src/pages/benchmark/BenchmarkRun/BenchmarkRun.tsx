@@ -1,45 +1,35 @@
-import { useState } from "react";
-import { LibraryPanel } from "../../../components/benchmark/LibraryPanel/LibraryPanel";
-import { SuiteRun } from "../../../components/benchmark/SuiteRun/SuiteRun";
-import { SurfaceCard } from "../../../components/ui/SurfaceCard/SurfaceCard";
+import { useNavigate } from "react-router-dom";
+import { BenchmarkList } from "../../../components/benchmark/BenchmarkList/BenchmarkList";
+import { Flex } from "../../../components/ui/Flex/Flex";
+import { PageHeader } from "../../../components/ui/PageHeader/PageHeader";
+import { routeById } from "../../../navigation/routeUtils";
+import type { BenchmarkSuite } from "../../../types";
+import { suiteDetail } from "../../../utils/benchmarkDetails";
 import { useBenchmarkSuites } from "../BenchmarkSuites/useBenchmarkSuites";
 
 /**
- * Run: pick a saved suite and run it on the loaded model. Results are saved per step; the run
- * counter on each suite is updated when a run completes.
+ * Run: the saved suites as full-width rows. A row opens the suite's run page (`/benchmarks/run/:suiteId`),
+ * where it runs on the loaded model. The run counter on each suite is read again each time this list opens.
  */
 export default function BenchmarkRun() {
-  const suites = useBenchmarkSuites();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = suites.suites?.find((s) => s.id === selectedId) ?? null;
+  const navigate = useNavigate();
+  const { suites, error, reload } = useBenchmarkSuites();
+  const route = routeById("benchmarks-run");
+
+  const openRun = (suite: BenchmarkSuite) =>
+    navigate(`/benchmarks/run/${encodeURIComponent(suite.id)}`);
 
   return (
-    <LibraryPanel
-      title="Suites"
-      items={
-        suites.suites?.map((s) => ({
-          id: s.id,
-          name: s.name,
-          detail: `${s.steps.length} step${s.steps.length === 1 ? "" : "s"} · ${s.mode} · ${s.repetitions} rep${s.repetitions === 1 ? "" : "s"} · run ${s.runCount}×`,
-        })) ?? null
-      }
-      error={suites.error}
-      selectedId={selectedId}
-      editor={
-        selected ? (
-          <SurfaceCard title={selected.name}>
-            <SuiteRun
-              key={selected.id}
-              suiteId={selected.id}
-              onFinished={() => void suites.reload()}
-            />
-          </SurfaceCard>
-        ) : null
-      }
-      emptyMessage="No suites yet. Create one in Test Runs first."
-      idleMessage="Select a suite to run it on the loaded model."
-      onSelect={setSelectedId}
-      onRetry={() => void suites.reload()}
-    />
+    <Flex direction="column" gap="m">
+      <PageHeader title={route?.title} subtitle={route?.description} />
+      <BenchmarkList
+        items={suites}
+        error={error}
+        emptyMessage="No suites yet. Create one in Test Runs first."
+        detailOf={suiteDetail}
+        onOpen={openRun}
+        onRetry={() => void reload()}
+      />
+    </Flex>
   );
 }

@@ -23,8 +23,3 @@
   padding: var(--spacingVerticalXS) var(--spacingHorizontalS);
   border-bottom: 1px solid var(--colorNeutralStroke2);
 }
-
-.benchmark-compare__actions {
-  display: flex;
-  gap: var(--spacingHorizontalS);
-}

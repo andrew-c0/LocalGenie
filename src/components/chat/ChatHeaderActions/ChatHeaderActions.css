@@ -1,0 +1,20 @@
+/* The context ring and the action group, as one row at the end of the breadcrumbs. */
+.chat-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacingHorizontalS);
+}
+
+/* The settings icon with the count of custom settings pinned to its corner. */
+.chat-header-actions__settings-icon {
+  position: relative;
+  display: inline-flex;
+}
+
+.chat-header-actions__count {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+}

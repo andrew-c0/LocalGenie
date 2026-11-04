@@ -1,78 +1,73 @@
+import { Button } from "@fluentui/react-components";
+import { AddRegular, DeleteRegular, EditRegular } from "@fluentui/react-icons";
 import { useState } from "react";
-import { LibraryPanel } from "../../../components/benchmark/LibraryPanel/LibraryPanel";
-import { PromptEditor } from "../../../components/benchmark/PromptEditor/PromptEditor";
-import { EditorDialog } from "../../../components/ui/EditorDialog/EditorDialog";
+import { useNavigate } from "react-router-dom";
+import { BenchmarkList } from "../../../components/benchmark/BenchmarkList/BenchmarkList";
+import { DeleteBenchmarkDialog } from "../../../components/benchmark/DeleteBenchmarkDialog/DeleteBenchmarkDialog";
+import { Flex } from "../../../components/ui/Flex/Flex";
+import { PageHeader } from "../../../components/ui/PageHeader/PageHeader";
+import { routeById } from "../../../navigation/routeUtils";
+import type { BenchmarkPrompt } from "../../../types";
+import { promptDetail } from "../../../utils/benchmarkDetails";
 import { useBenchmarkPrompts } from "./useBenchmarkPrompts";
 
-/** What the editor dialog is open on: `id` null for a new prompt, else the saved prompt's id. */
-interface EditTarget {
-  id: string | null;
-}
-
 /**
- * Prompt library: saved prompts with their keywords and files. Shown as a subpage of the
- * Benchmark Suite. The list is full width; a prompt is edited in a dialog.
+ * Prompt Library: saved prompts as full-width rows with their keywords and files. A row opens the prompt
+ * (`/benchmarks/prompts/:promptId`); its menu edits or deletes it. New prompt opens an empty one.
  */
 export default function BenchmarkPrompts() {
-  const { prompts, error, reload, upsert, remove } = useBenchmarkPrompts();
-  const [editing, setEditing] = useState<EditTarget | null>(null);
-  const [dirty, setDirty] = useState(false);
+  const navigate = useNavigate();
+  const { prompts, error, reload, remove } = useBenchmarkPrompts();
+  const [deleting, setDeleting] = useState<BenchmarkPrompt | null>(null);
+  const route = routeById("benchmarks-prompts");
 
-  const selected = editing?.id ? (prompts?.find((p) => p.id === editing.id) ?? null) : null;
-
-  const closeEditor = () => {
-    setEditing(null);
-    setDirty(false);
-  };
+  const openPrompt = (prompt: BenchmarkPrompt) =>
+    navigate(`/benchmarks/prompts/${encodeURIComponent(prompt.id)}`);
 
   return (
-    <>
-      <LibraryPanel
-        title="Prompts"
-        newLabel="New prompt"
-        items={
-          prompts?.map((p) => ({
-            id: p.id,
-            name: p.name,
-            detail: `${p.keywords.length} keyword${p.keywords.length === 1 ? "" : "s"} · ${p.files.length} file${p.files.length === 1 ? "" : "s"} · run ${p.runCount}×`,
-          })) ?? null
+    <Flex direction="column" gap="m">
+      <PageHeader
+        title={route?.title}
+        subtitle={route?.description}
+        actions={
+          <Button
+            appearance="primary"
+            icon={<AddRegular />}
+            onClick={() => navigate("/benchmarks/prompts/new")}
+          >
+            New prompt
+          </Button>
         }
+      />
+      <BenchmarkList
+        items={prompts}
         error={error}
-        selectedId={editing?.id ?? null}
         emptyMessage="No prompts yet. Create one to use it in a test run."
-        onNew={() => {
-          setDirty(false);
-          setEditing({ id: null });
-        }}
-        onSelect={(id) => {
-          setDirty(false);
-          setEditing({ id });
-        }}
+        detailOf={promptDetail}
+        onOpen={openPrompt}
+        actionsOf={(prompt) => [
+          { label: "Edit", icon: <EditRegular />, onClick: () => openPrompt(prompt) },
+          {
+            label: "Delete",
+            icon: <DeleteRegular />,
+            danger: true,
+            onClick: () => setDeleting(prompt),
+          },
+        ]}
         onRetry={() => void reload()}
       />
 
-      {editing && (
-        <EditorDialog
-          title={selected ? selected.name : "New prompt"}
-          dirty={dirty}
-          onClose={closeEditor}
-        >
-          {/* One editor per prompt: each opening starts from a clean form. */}
-          <PromptEditor
-            key={editing.id ?? "new"}
-            initial={selected}
-            onDirtyChange={setDirty}
-            onSaved={(saved) => {
-              upsert(saved);
-              closeEditor();
-            }}
-            onDeleted={(id) => {
-              remove(id);
-              closeEditor();
-            }}
-          />
-        </EditorDialog>
+      {deleting && (
+        <DeleteBenchmarkDialog
+          kind="prompt"
+          name={deleting.name}
+          onConfirm={() => {
+            void remove(deleting);
+            setDeleting(null);
+          }}
+          onCancel={() => setDeleting(null)}
+        />
       )}
-    </>
+    </Flex>
   );
 }

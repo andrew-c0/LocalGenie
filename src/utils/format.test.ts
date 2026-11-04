@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  countLabel,
   formatBytes,
   formatContextLength,
   formatDay,
@@ -8,6 +9,22 @@ import {
   formatRelativeDate,
   formatWhole,
 } from "./format";
+
+describe("countLabel", () => {
+  it("uses the singular for exactly one", () => {
+    expect(countLabel(1, "run", "runs")).toBe("1 run");
+  });
+
+  it("uses the plural for zero and for more than one", () => {
+    expect(countLabel(0, "run", "runs")).toBe("0 runs");
+    expect(countLabel(7, "run", "runs")).toBe("7 runs");
+  });
+
+  it("works with a multi-word noun", () => {
+    expect(countLabel(1, "model installed", "models installed")).toBe("1 model installed");
+    expect(countLabel(3, "model installed", "models installed")).toBe("3 models installed");
+  });
+});
 
 describe("formatWhole", () => {
   it("groups the thousands", () => {
@@ -70,6 +87,11 @@ describe("formatRelativeDate", () => {
     expect(formatRelativeDate(daysAgo(0), NOW)).toBe("today");
     expect(formatRelativeDate(new Date(NOW - 3_600_000).toISOString(), NOW)).toBe("today");
     expect(formatRelativeDate(new Date(NOW + 86_400_000).toISOString(), NOW)).toBe("today");
+  });
+
+  it("takes epoch milliseconds as well as an ISO string", () => {
+    expect(formatRelativeDate(NOW - 3 * 86_400_000, NOW)).toBe("3 days ago");
+    expect(formatRelativeDate(NOW, NOW)).toBe("today");
   });
 
   it("counts days below a week", () => {

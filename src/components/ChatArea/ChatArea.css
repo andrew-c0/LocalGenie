@@ -9,8 +9,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacingVerticalM);
-  max-width: 840px;
-  margin: 0 auto;
 }
 
 .chat-area__typing {
@@ -18,4 +16,12 @@
   align-items: center;
   gap: var(--spacingHorizontalS);
   color: var(--colorNeutralForeground3);
+}
+
+/* On a very wide window the content stops at 80% of the width and is centred. */
+@media (min-width: 1600px) {
+  .chat-area__messages {
+    max-width: 80%;
+    margin-inline: auto;
+  }
 }

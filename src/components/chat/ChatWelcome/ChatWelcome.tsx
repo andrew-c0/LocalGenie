@@ -2,15 +2,14 @@ import { Button, Caption1 } from "@fluentui/react-components";
 import {
   AttachRegular,
   ChatRegular,
-  ChevronRightRegular,
   CubeRegular,
   GaugeRegular,
   LockClosedRegular,
 } from "@fluentui/react-icons";
 import type { ReactNode } from "react";
-import type { ChatSession } from "../../../types";
 import { StatusBadge } from "../../ui/StatusBadge/StatusBadge";
-import { Body, CardTitle, Meta, Secondary, SectionTitle } from "../../ui/Typography/Typography";
+import { CardTitle, Secondary, SectionTitle } from "../../ui/Typography/Typography";
+import { RecentConversations } from "../RecentConversations/RecentConversations";
 import "./ChatWelcome.css";
 
 const FEATURES: { icon: ReactNode; title: string; text: string }[] = [
@@ -36,19 +35,15 @@ const FEATURES: { icon: ReactNode; title: string; text: string }[] = [
   },
 ];
 
-/** Empty-state landing for /chat: what the app does, server status and recent conversations. */
+/** Empty-state landing for /chat: what the app does, server status, a new chat and every conversation. */
 export function ChatWelcome({
   serverRunning,
   modelCount,
-  recentSessions,
   onNewConversation,
-  onOpenSession,
 }: {
   serverRunning: boolean;
   modelCount: number;
-  recentSessions: ChatSession[];
   onNewConversation: () => void;
-  onOpenSession: (id: string) => void;
 }) {
   return (
     <div className="chat-welcome">
@@ -86,32 +81,7 @@ export function ChatWelcome({
           ))}
         </div>
 
-        {recentSessions.length > 0 && (
-          <section className="chat-welcome__recent">
-            <SectionTitle>Recent conversations</SectionTitle>
-            <div className="chat-welcome__recent-list">
-              {recentSessions.map((session) => (
-                <Button
-                  key={session.id}
-                  appearance="subtle"
-                  className="chat-welcome__recent-item"
-                  onClick={() => onOpenSession(session.id)}
-                >
-                  <span className="chat-welcome__recent-text">
-                    <Body className="chat-welcome__recent-title">{session.title}</Body>
-                    <Meta>
-                      {new Date(session.updatedAt).toLocaleString(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
-                    </Meta>
-                  </span>
-                  <ChevronRightRegular className="chat-welcome__recent-chevron" />
-                </Button>
-              ))}
-            </div>
-          </section>
-        )}
+        <RecentConversations />
       </div>
     </div>
   );

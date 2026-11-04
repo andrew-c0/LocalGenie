@@ -2,6 +2,18 @@
 
 Run through these checks manually after building or deploying the app. Automated checks cannot fully verify installer behavior, filesystem permissions, or OS-level interactions.
 
+## Navigation redesign (uncommitted, 2026-11-04/05)
+
+The user looked at the landings, the breadcrumbs, Recent conversations, the item rows and the chat header actions in the app on 2026-11-04/05 and approved them. The items below were not run; none is ticked.
+
+- [ ] Sidebar rail: the toggle collapses to the icon rail and expands again; each rail icon has a tooltip with its name; Models shows its installed count on the icon; the usage chart is hidden in the rail; the state is kept after a restart.
+- [ ] Locked sidebar items (no GenieX CLI) are disabled, with the reason in a tooltip, in both the expanded and the rail view.
+- [ ] Benchmarks, Prompt Library and Test Runs: a row opens its item page; the row's "…" menu deletes after a confirm; a prompt used by a suite is refused with the reason; an empty list shows its empty state.
+- [ ] Benchmarks, Run: start a suite, go to Chat or Overview, come back: the progress and the end of the run are shown.
+- [ ] Playground landing: each row's "N models installed" count appears once its catalogue is read; the OCR count needs the GenieX CLI, and a row with no count shows none.
+- [ ] Runs table: 10 rows a page; sorting covers all pages; ticked runs stay ticked across pages; Compare and Export use the ticked runs.
+- [ ] Breadcrumbs on a narrow window: the trail and the actions (chat's context ring and menus) wrap without overlapping.
+
 ## GenieX CLI as a runtime: install, update, uninstall (not yet run in the app)
 
 - [ ] Settings > Runtimes lists GenieX CLI first, with its logo, installed version or "Not installed", latest version and repo. The "…" menu has Release notes, Uninstall (disabled when not installed) and, when not installed, Check again.
@@ -11,14 +23,14 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] While an install or update of a runtime is queued or running, its card's "…" menu is disabled.
 - [ ] Cancel during Downloading: the entry shows cancelled; Resume downloads again. Cancel during Installing: the drawer stops waiting. If the setup was running, it finishes with no window (check Task Manager and the version afterwards).
 - [ ] Uninstall: "…" > Uninstall, then confirm. The confirm text names what stays locked. The card shows a spinner; no uninstaller window appears; the server started by the app stops; toast "GenieX CLI removed"; the card shows Not installed; Models, Chat and Benchmarks lock with tooltips.
-- [ ] Lock tooltips: with GenieX removed, the sidebar's Models, Chat and Benchmarks are disabled and their tooltip reads "Needs the GenieX CLI. Install it in Settings > Runtimes."; the Playground's OCR tab is disabled with the same tooltip.
+- [ ] Lock tooltips: with GenieX removed, the sidebar's Models, Chat and Benchmarks are disabled and their tooltip reads "Needs the GenieX CLI. Install it in Settings > Runtimes."; the Playground landing's OCR row is disabled with the same reason.
 - [ ] Route guard: with GenieX removed, a navigation to /models, /chat or /benchmarks (for example from the dev console) lands on Settings > Runtimes with the toast "This area is unavailable".
 - [ ] Overview: with GenieX removed, Browse Models and Start Local Chat are disabled with the tooltip; "Models Installed" shows "—"; the "Open Runtimes" block opens Settings > Runtimes.
-- [ ] Playground tabs: with stable-diffusion.cpp missing, Text to image, Image to image and Image upscaling are disabled; with sherpa-onnx missing, Speech to text, Text to speech and Audio to audio are disabled. Each tooltip names the runtime and points to Settings > Runtimes.
-- [ ] Settings > Runtimes shows a warning icon on its tab when GenieX is missing or any runtime has a newer release.
+- [ ] Playground landing: with stable-diffusion.cpp missing, Text to image, Image to image and Image upscaling are disabled; with sherpa-onnx missing, Speech to text, Text to speech and Audio to audio are disabled. Each row names the runtime and points to Settings > Runtimes.
+- [ ] Settings landing: the Runtimes row shows "No runtime installed" when none is installed, or "A runtime update is available" when one has a newer release, with a warning icon.
 - [ ] Start with GenieX missing: Models, Chat and Benchmarks show locked once the runtime list has been read (nothing is locked before that).
 
-## Model cards and detail pages (uncommitted, 2026-11-04)
+## Model cards and detail pages (c6f6bea, 2026-11-04)
 
 The user looked at the cards and the detail pages in the app on 2026-11-04 and said they look okay for now. The items below were not run in the app and not ticked.
 
@@ -68,14 +80,14 @@ The user looked at the cards and the detail pages in the app on 2026-11-04 and s
 
 - [ ] All views render and switch via the sidebar: Overview, Models, Chat, Benchmarks, Settings — without losing active session or server status.
 - [ ] Chat: streaming updates in place, `chat-done` records generation stats, retry removes later messages in both Zustand and SQLite.
-- [ ] Chat welcome: `/chat` with no open conversation shows the status (Running/Stopped) and up to 3 recent conversations; New conversation twice opens the same empty draft; leaving an empty draft leaves nothing in the list after a reload; the first send stores it.
+- [ ] Chat welcome: `/chat` with no open conversation shows the status (Running/Stopped) and Recent conversations (10 a page); New conversation twice opens the same empty draft; leaving an empty draft leaves nothing in the list after a reload; the first send stores it.
 - [ ] Pin: a pinned conversation lists first and keeps its place after a reload; unpin returns it to recency order.
 - [ ] Models: search → download → import → progress → completion refresh; cancel and resume from the drawer; duplicate click is ignored; Load & Chat sets active model; remove confirmation works; repo filter chips behave.
 - [ ] Settings: port save/probe persists.
 - [ ] Benchmarks, Run: with a model loaded, start a suite; each step appears as it finishes; the run appears in Runs; Cancel keeps the finished steps; chat and model load are refused until the run ends. Compute and the Windows power plan/battery are recorded for the run (not yet verified against a live model).
 - [ ] Benchmarks, Prompt Library: a prompt used by a suite cannot be deleted; a file removed from a saved prompt leaves the disk when no other prompt or step uses it.
 - [ ] Overview "Recent Generation Speeds" shows chat-based figures only; Compare charts use the selected runs; CSV and PNG exports open the save dialog and "open" works on the saved file.
-- [ ] Responsive: sidebar collapses to icon rail ≤860px; model grid 3→2→1 columns; settings rows stack; chat session list hides on narrow widths.
+- [ ] Responsive: model grid 3→2→1 columns; settings rows stack. (The sidebar collapses only from its toggle; see the navigation section.)
 - [ ] Keyboard: Escape closes model-remove dialog; nav items are real buttons (focusable); sliders are labelled via `aria-labelledby`.
 
 ## Qualcomm AI Hub tab (not yet run)

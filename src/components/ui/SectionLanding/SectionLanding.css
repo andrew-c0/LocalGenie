@@ -1,0 +1,42 @@
+.section-landing__page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--spacingHorizontalL);
+}
+
+.section-landing__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalL);
+}
+
+/* On a very wide window the content stops at 80% of the width and is centred. */
+@media (min-width: 1600px) {
+  .section-landing__inner {
+    max-width: 80%;
+    margin: 0 auto;
+  }
+}
+
+/* Sub-page rows: the primary content, one full-width row each, stacked in a single column. */
+.section-landing__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalS);
+}
+
+/* Info cards are a compact row above the rows: small text, as many columns as fit. */
+.section-landing__info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--spacingHorizontalS);
+}
+
+/* The icon takes the brand colour so it reads as the card's mark, not as text. */
+.section-landing__info-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 24px;
+  color: var(--colorBrandForeground1);
+}

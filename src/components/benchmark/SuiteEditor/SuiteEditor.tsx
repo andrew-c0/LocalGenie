@@ -13,12 +13,11 @@ import {
   AddRegular,
   ArrowDownRegular,
   ArrowUpRegular,
-  DeleteRegular,
   DismissRegular,
   SaveRegular,
 } from "@fluentui/react-icons";
-import { useEffect, useState } from "react";
-import { deleteBenchmarkSuite, saveBenchmarkSuite } from "../../../services/benchmark";
+import { useState } from "react";
+import { saveBenchmarkSuite } from "../../../services/benchmark";
 import type {
   AttachmentKind,
   BenchmarkFile,
@@ -29,7 +28,6 @@ import type {
 import { errorMessage } from "../../../utils/errorMessage";
 import { spinNumber } from "../../../utils/spinValue";
 import { toast } from "../../../utils/toast";
-import { ConfirmDialog } from "../../ui/ConfirmDialog/ConfirmDialog";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { BodyStrong, Meta } from "../../ui/Typography/Typography";
 import { LibraryFileButtons, LibraryFileList } from "../LibraryFiles/LibraryFiles";
@@ -54,9 +52,6 @@ interface SuiteEditorProps {
   /** The prompt library, for the step pickers. */
   prompts: BenchmarkPrompt[];
   onSaved: (suite: BenchmarkSuite) => void;
-  onDeleted: (id: string) => void;
-  /** Reports whether the form differs from the saved suite. */
-  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function stepsOf(suite: BenchmarkSuite | null): EditorStep[] {
@@ -66,15 +61,10 @@ function stepsOf(suite: BenchmarkSuite | null): EditorStep[] {
 /**
  * Editor for one suite (a test run definition): name, mode, warmup and repetitions, and the
  * ordered steps. Each step is a prompt plus optional extra files.
- * Rendered in a dialog per suite, so each opening starts from a clean form.
+ * Rendered by the suite's item page, keyed by the suite, so each suite starts from a clean form.
+ * Deleting a suite is not here: it is in the item page's menu.
  */
-export function SuiteEditor({
-  initial,
-  prompts,
-  onSaved,
-  onDeleted,
-  onDirtyChange,
-}: SuiteEditorProps) {
+export function SuiteEditor({ initial, prompts, onSaved }: SuiteEditorProps) {
   const [id] = useState(() => initial?.id ?? crypto.randomUUID());
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -83,34 +73,8 @@ export function SuiteEditor({
   const [repetitions, setRepetitions] = useState(initial?.repetitions ?? 3);
   const [steps, setSteps] = useState<EditorStep[]>(() => stepsOf(initial));
   const [saving, setSaving] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const imports = useFileImports();
-
-  const stepIds = (list: EditorStep[]) =>
-    list.map((step) => ({
-      id: step.id,
-      promptId: step.promptId,
-      files: step.files.map((f) => f.id),
-    }));
-  const savedState = JSON.stringify({
-    name: initial?.name ?? "",
-    description: initial?.description ?? "",
-    mode: initial?.mode ?? "conversation",
-    warmupRuns: initial?.warmupRuns ?? 1,
-    repetitions: initial?.repetitions ?? 3,
-    steps: stepIds(stepsOf(initial)),
-  });
-  const draftState = JSON.stringify({
-    name,
-    description,
-    mode,
-    warmupRuns,
-    repetitions,
-    steps: stepIds(steps),
-  });
-  const dirty = draftState !== savedState;
-  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
   const promptById = (promptId: string) => prompts.find((p) => p.id === promptId);
 
@@ -199,17 +163,6 @@ export function SuiteEditor({
     setRepetitions(initial?.repetitions ?? 3);
     setSteps(stepsOf(initial));
     setFormError(null);
-  };
-
-  const handleDelete = async () => {
-    setConfirmDelete(false);
-    try {
-      await deleteBenchmarkSuite(id);
-      toast.success("Suite deleted", initial?.name);
-      onDeleted(id);
-    } catch (e) {
-      setFormError(errorMessage(e, "Could not delete the suite."));
-    }
   };
 
   return (
@@ -377,15 +330,6 @@ export function SuiteEditor({
       )}
 
       <div className="suite-editor__actions">
-        {initial && (
-          <Button
-            appearance="subtle"
-            icon={<DeleteRegular />}
-            onClick={() => setConfirmDelete(true)}
-          >
-            Delete
-          </Button>
-        )}
         <Button appearance="secondary" onClick={handleDiscard} disabled={saving}>
           Discard changes
         </Button>
@@ -398,16 +342,6 @@ export function SuiteEditor({
           Save suite
         </Button>
       </div>
-
-      {confirmDelete && (
-        <ConfirmDialog
-          title="Delete this suite?"
-          message="The suite and its steps are removed, and so are the extra files only its steps used. Its past runs keep their records."
-          confirmLabel="Delete suite"
-          onConfirm={() => void handleDelete()}
-          onCancel={() => setConfirmDelete(false)}
-        />
-      )}
     </div>
   );
 }

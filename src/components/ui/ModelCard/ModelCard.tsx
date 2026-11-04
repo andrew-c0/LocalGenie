@@ -27,12 +27,6 @@ import { ModelCardInfoIcon } from "./ModelCardInfoIcon";
 import { factTooltipText } from "./modelCardData";
 import "./ModelCard.css";
 
-export interface GGUFFileOption {
-  filename: string;
-  precision: string;
-  sizeLabel: string | null;
-}
-
 /** The kinds of fact on the second row. Each kind has its own icon and tooltip label. */
 export type FactKind = "task" | "params" | "quant" | "ctx" | "licence" | "disk";
 
@@ -100,13 +94,11 @@ interface ModelCardProps {
   /** Model is loaded on the server. */
   isLoaded: boolean;
   isDownloading: boolean;
-  /** Whether this card represents a locally installed model (vs. a remote result). */
-  isLocal: boolean;
   /** Open the header model selector (which loads + binds to the active chat). */
   onOpenSelector?: () => void;
   onRemove?: (name: string) => void;
-  /** Navigate to model detail page. Passes `isLocal` so the route can pick the right view. */
-  onDetails?: (name: string, isLocal: boolean) => void;
+  /** Open the model's detail page. The caller picks the route for its source. */
+  onDetails?: (name: string) => void;
 }
 
 /** One model as a row: the content on the left, the actions on the right. */
@@ -114,12 +106,11 @@ export function ModelCard({
   model,
   isLoaded,
   isDownloading,
-  isLocal = false,
   onOpenSelector,
   onRemove,
   onDetails,
 }: ModelCardProps) {
-  const openDetails = () => onDetails?.(model.name, isLocal);
+  const openDetails = () => onDetails?.(model.name);
   const { updated, stats, details, ramVerdict } = model;
 
   const status = model.badge ? (

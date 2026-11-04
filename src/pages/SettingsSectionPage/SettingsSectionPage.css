@@ -1,0 +1,21 @@
+/* Same page frame as the other pages (Playground, Models): padding on all sides, scrolls, takes the free height. */
+.settings-section__page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--spacingHorizontalL);
+}
+
+.settings-section__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalM);
+}
+
+/* On a very wide window the content stops at 80% of the width and is centred. */
+@media (min-width: 1600px) {
+  .settings-section__inner {
+    max-width: 80%;
+    margin: 0 auto;
+  }
+}

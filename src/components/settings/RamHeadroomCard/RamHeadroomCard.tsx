@@ -15,7 +15,7 @@ import { Flex } from "../../ui/Flex/Flex";
 import { BodyStrong, Meta, SectionTitle } from "../../ui/Typography/Typography";
 import RamMemoryBar from "./RamMemoryBar/RamMemoryBar";
 import "./RamHeadroomCard.css";
-import { useSystemMemory } from "./useSystemMemory";
+import { useLiveSystemMemory } from "./useLiveSystemMemory";
 
 /**
  * Edits the share of total RAM kept free when a model loads. The model selector warns about a model
@@ -26,7 +26,7 @@ export default function RamHeadroomCard() {
   const [saved, setSaved] = useState<number | null>(null);
   const [draft, setDraft] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const memory = useSystemMemory();
+  const memory = useLiveSystemMemory();
 
   useEffect(() => {
     getRamHeadroomPercent()

@@ -33,7 +33,6 @@ export default function OverviewPage() {
     <div className="overview-page__page">
       <div className="overview-page__inner">
         <PageHeader
-          eyebrow="● OVERVIEW"
           title="Overview"
           subtitle="Run open-weights models locally on Qualcomm NPU, GPU or CPU. Zero cloud, zero API latency."
           actions={

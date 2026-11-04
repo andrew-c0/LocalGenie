@@ -1,6 +1,5 @@
 import { Button, Card } from "@fluentui/react-components";
 import {
-  ArrowLeftRegular,
   ChatRegular,
   ChevronDownRegular,
   ChevronRightRegular,
@@ -43,22 +42,20 @@ import { useDownloadedPrecisions, useHubModelData, useStoredModelRow } from "../
 import "./HubModelDetail.css";
 
 interface Props {
-  /** Viewing a locally installed model (DB-backed). */
-  isLocal?: boolean;
+  /** Viewing a locally installed model (DB-backed). The route decides: `/models/local/:repoId` is true. */
+  isLocal: boolean;
 }
 
 export default function HubModelDetail({ isLocal }: Props) {
   const { repoId = "" } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
-  /** Back returns to the tab the model was opened from: Local for installed models, Hugging Face otherwise. */
-  const backPath = isLocal ? "/models" : "/models/browse";
   const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
   const { model, files, readme, localCard, ggufGroups, loading, error, setError } = useHubModelData(
     repoId,
     isLocal,
   );
   const downloadedPrecisions = useDownloadedPrecisions(repoId);
-  const storedRow = useStoredModelRow(repoId, !!isLocal);
+  const storedRow = useStoredModelRow(repoId, isLocal);
   // Confirmed capabilities come from the stored scan, which only an installed model has.
   const confirmedBadges = useModelCapabilityBadges(isLocal ? repoId : null);
   const systemMemory = useSystemMemory();
@@ -84,26 +81,19 @@ export default function HubModelDetail({ isLocal }: Props) {
       } catch {
         // ignore
       }
-      navigate("/models");
+      navigate("/models/local");
     } catch (err) {
       setError(String(err));
     } finally {
       setConfirmDelete(null);
     }
   };
-  const backButton = (
-    <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={() => navigate(backPath)}>
-      Back to Models
-    </Button>
-  );
 
   if (loading) {
     return (
       <ModelDetailLayout
-        eyebrow="● MODEL DETAILS"
         title={repoId}
         subtitle="Fetching model metadata and files from Hugging Face."
-        actions={backButton}
       >
         <StateBlock icon="⏳" message={`Loading ${repoId} from Hugging Face…`} />
       </ModelDetailLayout>
@@ -112,12 +102,7 @@ export default function HubModelDetail({ isLocal }: Props) {
 
   if (error || !model) {
     return (
-      <ModelDetailLayout
-        eyebrow="● MODEL DETAILS"
-        title={repoId}
-        subtitle="This model could not be displayed."
-        actions={backButton}
-      >
+      <ModelDetailLayout title={repoId} subtitle="This model could not be displayed.">
         <StateBlock icon="⚠️" message={error ?? "Model not found."} />
       </ModelDetailLayout>
     );
@@ -173,12 +158,10 @@ export default function HubModelDetail({ isLocal }: Props) {
 
   return (
     <ModelDetailLayout
-      eyebrow={isLocal ? "● INSTALLED MODEL" : "● HUGGING FACE MODEL"}
       title={model.id}
       subtitle={model.author}
       actions={
         <div className="model-detail__actions">
-          {backButton}
           {isLocal && (
             <Button
               appearance="primary"

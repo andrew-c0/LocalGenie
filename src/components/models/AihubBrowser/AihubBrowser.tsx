@@ -14,7 +14,10 @@ import "./AihubBrowser.css";
 
 const ALL_DOMAINS = "all";
 
-/** Qualcomm AI Hub tab (phase 1, read-only): QAIRT catalog with search and domain filter. */
+/**
+ * Qualcomm AI Hub tab: the catalog as a column of model cards, with a name search and a domain filter.
+ * Each card opens the model's detail page, where the assets are downloaded; nothing is downloaded here.
+ */
 export function AihubBrowser() {
   const { entries, error } = useAihubCatalog();
   const navigate = useNavigate();
@@ -74,7 +77,6 @@ export function AihubBrowser() {
               model={aihubCardData(entry, systemMemory)}
               isLoaded={false}
               isDownloading={false}
-              isLocal={false}
               onDetails={() => navigate(`/models/aihub/${encodeURIComponent(entry.id)}`)}
             />
           ))}

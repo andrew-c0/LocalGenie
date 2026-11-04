@@ -5,9 +5,12 @@ import { CompareChart } from "../../../components/benchmark/CompareChart/Compare
 import { ExportToastBody } from "../../../components/benchmark/ExportToastBody/ExportToastBody";
 import { ChipRow } from "../../../components/ui/ChipRow/ChipRow";
 import { ErrorBanner } from "../../../components/ui/ErrorBanner/ErrorBanner";
+import { Flex } from "../../../components/ui/Flex/Flex";
+import { PageHeader } from "../../../components/ui/PageHeader/PageHeader";
 import { StateBlock } from "../../../components/ui/StateBlock/StateBlock";
 import { SurfaceCard } from "../../../components/ui/SurfaceCard/SurfaceCard";
 import { Meta } from "../../../components/ui/Typography/Typography";
+import { routeById } from "../../../navigation/routeUtils";
 import { saveBenchmarkImage } from "../../../services/benchmark";
 import { type CompareGroupBy, useBenchmarkUiStore } from "../../../stores/benchmarkUiStore";
 import { svgToPngBase64 } from "../../../utils/chartImage";
@@ -33,7 +36,7 @@ const GROUPS: [CompareGroupBy, string][] = [
 ];
 
 /**
- * Compare the runs ticked on the Runs tab. Bars show each model or compute target's mean, with the
+ * Compare the runs ticked on the Runs page. Bars show each model or compute target's mean, with the
  * spread across its runs in the table. "By run" puts runs in order, one after another; "Over time"
  * places them at their start times.
  */
@@ -101,111 +104,117 @@ export default function BenchmarkCompare() {
     }
   };
 
+  const route = routeById("benchmarks-compare");
+
   return (
-    <SurfaceCard
-      title="Compare"
-      action={
-        <div className="benchmark-compare__actions">
-          {usingSelection && (
+    <Flex direction="column" gap="m">
+      <PageHeader
+        title={route?.title}
+        subtitle={route?.description}
+        actions={
+          <>
+            {usingSelection && (
+              <Button
+                appearance="secondary"
+                icon={<DismissRegular />}
+                iconPosition="after"
+                aria-label="Clear the selected runs"
+                onClick={() => setSelectedRunIds([])}
+              >
+                {selectedIds.length} selected
+              </Button>
+            )}
             <Button
               appearance="secondary"
-              icon={<DismissRegular />}
-              iconPosition="after"
-              aria-label="Clear the selected runs"
-              onClick={() => setSelectedRunIds([])}
+              icon={<ArrowDownloadRegular />}
+              disabled={!hasData || exporting}
+              onClick={() => void handleExport()}
             >
-              {selectedIds.length} selected
+              Export PNG
             </Button>
-          )}
-          <Button
-            appearance="secondary"
-            icon={<ArrowDownloadRegular />}
-            disabled={!hasData || exporting}
-            onClick={() => void handleExport()}
-          >
-            Export PNG
-          </Button>
-        </div>
-      }
-    >
-      {error && <ErrorBanner message={error} />}
-      {!error && runs === null && <Spinner size="tiny" label="Loading runs" />}
+          </>
+        }
+      />
+      <SurfaceCard>
+        {error && <ErrorBanner message={error} />}
+        {!error && runs === null && <Spinner size="tiny" label="Loading runs" />}
 
-      {runs !== null && (
-        <div className="benchmark-compare">
-          <Meta>
-            {usingSelection
-              ? `${chosen.length} selected run${chosen.length === 1 ? "" : "s"}`
-              : "No runs selected: showing every completed run. Tick runs on the Runs tab to compare them."}
-          </Meta>
+        {runs !== null && (
+          <div className="benchmark-compare">
+            <Meta>
+              {usingSelection
+                ? `${chosen.length} selected run${chosen.length === 1 ? "" : "s"}`
+                : "No runs selected: showing every completed run. Tick runs on the Runs page to compare them."}
+            </Meta>
 
-          <div className="benchmark-compare__controls">
-            <Field label="Figure">
-              <Dropdown
-                aria-label="Figure to compare"
-                value={info.label}
-                selectedOptions={[metric]}
-                onOptionSelect={(_, d) => {
-                  if (d.optionValue) setMetric(d.optionValue as CompareMetric);
-                }}
-              >
-                {(Object.keys(METRICS) as CompareMetric[]).map((key) => (
-                  <Option key={key} value={key} text={METRICS[key].label}>
-                    {METRICS[key].label}
-                  </Option>
-                ))}
-              </Dropdown>
-            </Field>
-            <ChipRow<CompareGroupBy>
-              ariaLabel="Group by"
-              options={GROUPS}
-              value={groupBy}
-              onChange={setGroupBy}
-            />
-          </div>
-
-          {hasData ? (
-            <div ref={chartBox}>
-              <CompareChart
-                mode={chartMode}
-                colorByCompute={groupBy === "compute"}
-                groups={groups}
-                runSeries={lines}
-                timeSeries={dated}
-                metric={metric}
-                metricLabel={label}
+            <div className="benchmark-compare__controls">
+              <Field label="Figure">
+                <Dropdown
+                  aria-label="Figure to compare"
+                  value={info.label}
+                  selectedOptions={[metric]}
+                  onOptionSelect={(_, d) => {
+                    if (d.optionValue) setMetric(d.optionValue as CompareMetric);
+                  }}
+                >
+                  {(Object.keys(METRICS) as CompareMetric[]).map((key) => (
+                    <Option key={key} value={key} text={METRICS[key].label}>
+                      {METRICS[key].label}
+                    </Option>
+                  ))}
+                </Dropdown>
+              </Field>
+              <ChipRow<CompareGroupBy>
+                ariaLabel="Group by"
+                options={GROUPS}
+                value={groupBy}
+                onChange={setGroupBy}
               />
             </div>
-          ) : (
-            <StateBlock message="No runs have a figure for this measure yet." />
-          )}
 
-          {isBars && groups.length > 0 && (
-            <table className="benchmark-compare__table">
-              <thead>
-                <tr>
-                  <th>{groupBy === "model" ? "Model" : "Compute"}</th>
-                  <th>Runs</th>
-                  <th>Mean</th>
-                  <th>Min</th>
-                  <th>Max</th>
-                </tr>
-              </thead>
-              <tbody>
-                {groups.map((g) => (
-                  <tr key={g.key}>
-                    <td>{g.key}</td>
-                    <td>{g.runs}</td>
-                    <td>{formatChartValue(metric, g.mean)}</td>
-                    <td>{formatChartValue(metric, g.min)}</td>
-                    <td>{formatChartValue(metric, g.max)}</td>
+            {hasData ? (
+              <div ref={chartBox}>
+                <CompareChart
+                  mode={chartMode}
+                  colorByCompute={groupBy === "compute"}
+                  groups={groups}
+                  runSeries={lines}
+                  timeSeries={dated}
+                  metric={metric}
+                  metricLabel={label}
+                />
+              </div>
+            ) : (
+              <StateBlock message="No runs have a figure for this measure yet." />
+            )}
+
+            {isBars && groups.length > 0 && (
+              <table className="benchmark-compare__table">
+                <thead>
+                  <tr>
+                    <th>{groupBy === "model" ? "Model" : "Compute"}</th>
+                    <th>Runs</th>
+                    <th>Mean</th>
+                    <th>Min</th>
+                    <th>Max</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-    </SurfaceCard>
+                </thead>
+                <tbody>
+                  {groups.map((g) => (
+                    <tr key={g.key}>
+                      <td>{g.key}</td>
+                      <td>{g.runs}</td>
+                      <td>{formatChartValue(metric, g.mean)}</td>
+                      <td>{formatChartValue(metric, g.min)}</td>
+                      <td>{formatChartValue(metric, g.max)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </SurfaceCard>
+    </Flex>
   );
 }

@@ -1,31 +1,48 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { MainLayout } from "./components/shell/Layouts/Layouts";
 import RuntimeGuard from "./components/shell/RuntimeGuard/RuntimeGuard";
+import AihubModelsPage from "./pages/AihubModelsPage/AihubModelsPage";
 import BenchmarkPage from "./pages/BenchmarkPage/BenchmarkPage";
+import BenchmarksLandingPage from "./pages/BenchmarksLandingPage/BenchmarksLandingPage";
 import BenchmarkCompare from "./pages/benchmark/BenchmarkCompare/BenchmarkCompare";
+import BenchmarkPromptItem from "./pages/benchmark/BenchmarkPromptItem/BenchmarkPromptItem";
 import BenchmarkPrompts from "./pages/benchmark/BenchmarkPrompts/BenchmarkPrompts";
 import BenchmarkRun from "./pages/benchmark/BenchmarkRun/BenchmarkRun";
+import BenchmarkRunDetail from "./pages/benchmark/BenchmarkRunDetail/BenchmarkRunDetail";
+import BenchmarkRunItem from "./pages/benchmark/BenchmarkRunItem/BenchmarkRunItem";
 import BenchmarkRuns from "./pages/benchmark/BenchmarkRuns/BenchmarkRuns";
+import BenchmarkSuiteItem from "./pages/benchmark/BenchmarkSuiteItem/BenchmarkSuiteItem";
 import BenchmarkSuites from "./pages/benchmark/BenchmarkSuites/BenchmarkSuites";
 import ChatPage from "./pages/ChatPage/ChatPage";
+import HubModelsPage from "./pages/HubModelsPage/HubModelsPage";
 import LocalModelsBrowserPage from "./pages/LocalModelsBrowserPage/LocalModelsBrowserPage";
+import ModelsLandingPage from "./pages/ModelsLandingPage/ModelsLandingPage";
 import AihubModelDetail from "./pages/models/AihubModelDetail/AihubModelDetail";
-import HubModelDetailRoute from "./pages/models/HubModelDetailRoute";
+import HubModelDetail from "./pages/models/HubModelDetail/HubModelDetail";
 import OverviewPage from "./pages/OverviewPage/OverviewPage";
-import PlaygroundPage from "./pages/PlaygroundPage/PlaygroundPage";
-import SettingsPage from "./pages/SettingsPage/SettingsPage";
+import PlaygroundLandingPage from "./pages/PlaygroundLandingPage/PlaygroundLandingPage";
+import PlaygroundSectionPage from "./pages/PlaygroundSectionPage/PlaygroundSectionPage";
+import SettingsLandingPage from "./pages/SettingsLandingPage/SettingsLandingPage";
+import SettingsSectionPage from "./pages/SettingsSectionPage/SettingsSectionPage";
 
 /**
- * Single source of truth for the route tree. All route definitions live here;
- * `App.tsx` only mounts providers, global listeners and this component.
+ * Single source of truth for the route tree. All route definitions live here; `App.tsx` only mounts
+ * providers, global listeners and this component. The route metadata (titles, icons, landing cards)
+ * is in `navigation/routes.ts` and must match these paths.
  *
- * Submenus are sub-routes, so each view has its own URL:
- * - `/models` local library, `/models/browse` Hugging Face browser, `/models/aihub` Qualcomm AI Hub
- *   catalog, `/models/aihub/:id` its detail, `/models/:repoId` Hugging Face detail
+ * Each main section has a landing page at its own path; sub-pages sit below it and show breadcrumbs.
+ * - `/` Overview
+ * - `/models` landing, `/models/local` installed models, `/models/local/:repoId` one installed model
+ * - `/models/huggingface` Hugging Face browser, `/models/huggingface/:repoId` its detail
+ * - `/models/aihub` Qualcomm AI Hub catalog, `/models/aihub/:id` its detail
  * - `/chat` default content, `/chat/:sessionId` one conversation
- * - `/playground` special models that need their own tools (text to image first)
- * - `/settings/:section`
- * - `/benchmarks/prompts|suites|run|runs|compare` (benchmark area)
+ * - `/playground` landing, `/playground/text-to-image|image-to-image|image-upscaling|ocr|speech-to-text|text-to-speech|audio-to-audio` one tool each
+ * - `/settings` landing, `/settings/app|runtimes|inference|logs` one page each
+ * - `/benchmarks` landing, `/benchmarks/prompts|suites|run|runs|compare` (benchmark sub-pages share one frame),
+ *   `/benchmarks/prompts/new|:promptId`, `/benchmarks/suites/new|:suiteId`, `/benchmarks/run/:suiteId`,
+ *   `/benchmarks/runs/:runId` (one item each)
+ * Route paths are absolute, even under a parent path: `navigation/routePaths.test.ts` compares them with
+ * the route table as written.
  */
 export default function Navigation() {
   return (
@@ -34,27 +51,76 @@ export default function Navigation() {
         <Route path="/" element={<OverviewPage />} />
         {/* Models, Chat and Benchmarks need the GenieX CLI; RuntimeGuard redirects to Settings > Runtimes without it. */}
         <Route element={<RuntimeGuard needs="cli" />}>
-          <Route path="/models" element={<LocalModelsBrowserPage tab="local" />} />
-          <Route path="/models/browse" element={<LocalModelsBrowserPage tab="all" />} />
-          <Route path="/models/aihub" element={<LocalModelsBrowserPage tab="aihub" />} />
+          <Route path="/models" element={<ModelsLandingPage />} />
+          <Route path="/models/local" element={<LocalModelsBrowserPage />} />
+          <Route path="/models/local/:repoId" element={<HubModelDetail isLocal />} />
+          <Route path="/models/huggingface" element={<HubModelsPage />} />
+          <Route path="/models/huggingface/:repoId" element={<HubModelDetail isLocal={false} />} />
+          <Route path="/models/aihub" element={<AihubModelsPage />} />
           <Route path="/models/aihub/:id" element={<AihubModelDetail />} />
-          <Route path="/models/:repoId" element={<HubModelDetailRoute />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/chat/:sessionId" element={<ChatPage />} />
-          <Route path="/benchmarks" element={<BenchmarkPage />}>
-            <Route index element={<Navigate to="prompts" replace />} />
-            <Route path="prompts" element={<BenchmarkPrompts />} />
-            <Route path="suites" element={<BenchmarkSuites />} />
-            <Route path="run" element={<BenchmarkRun />} />
-            <Route path="runs" element={<BenchmarkRuns />} />
-            <Route path="compare" element={<BenchmarkCompare />} />
+          <Route path="/benchmarks">
+            <Route index element={<BenchmarksLandingPage />} />
+            {/* The sub-pages share one frame (padding, scrolling); the landing sits outside it. */}
+            <Route element={<BenchmarkPage />}>
+              <Route path="/benchmarks/prompts" element={<BenchmarkPrompts />} />
+              {/* One item page for both: `new` has no id, so its params are empty. */}
+              <Route path="/benchmarks/prompts/new" element={<BenchmarkPromptItem />} />
+              <Route path="/benchmarks/prompts/:promptId" element={<BenchmarkPromptItem />} />
+              <Route path="/benchmarks/suites" element={<BenchmarkSuites />} />
+              <Route path="/benchmarks/suites/new" element={<BenchmarkSuiteItem />} />
+              <Route path="/benchmarks/suites/:suiteId" element={<BenchmarkSuiteItem />} />
+              <Route path="/benchmarks/run" element={<BenchmarkRun />} />
+              <Route path="/benchmarks/run/:suiteId" element={<BenchmarkRunItem />} />
+              <Route path="/benchmarks/runs" element={<BenchmarkRuns />} />
+              <Route path="/benchmarks/runs/:runId" element={<BenchmarkRunDetail />} />
+              <Route path="/benchmarks/compare" element={<BenchmarkCompare />} />
+            </Route>
           </Route>
         </Route>
-        <Route path="/playground" element={<PlaygroundPage />} />
+        <Route path="/playground" element={<PlaygroundLandingPage />} />
+        <Route
+          path="/playground/text-to-image"
+          element={<PlaygroundSectionPage routeId="playground-text-to-image" />}
+        />
+        <Route
+          path="/playground/image-to-image"
+          element={<PlaygroundSectionPage routeId="playground-image-to-image" />}
+        />
+        <Route
+          path="/playground/image-upscaling"
+          element={<PlaygroundSectionPage routeId="playground-image-upscaling" />}
+        />
+        <Route
+          path="/playground/ocr"
+          element={<PlaygroundSectionPage routeId="playground-ocr" />}
+        />
+        <Route
+          path="/playground/speech-to-text"
+          element={<PlaygroundSectionPage routeId="playground-speech-to-text" />}
+        />
+        <Route
+          path="/playground/text-to-speech"
+          element={<PlaygroundSectionPage routeId="playground-text-to-speech" />}
+        />
+        <Route
+          path="/playground/audio-to-audio"
+          element={<PlaygroundSectionPage routeId="playground-audio-to-audio" />}
+        />
         <Route path="/benchmark" element={<Navigate to="/benchmarks" replace />} />
         <Route path="/prompt-benchmark/*" element={<Navigate to="/benchmarks" replace />} />
-        <Route path="/settings" element={<Navigate to="/settings/app" replace />} />
-        <Route path="/settings/:section" element={<SettingsPage />} />
+        <Route path="/settings" element={<SettingsLandingPage />} />
+        <Route path="/settings/app" element={<SettingsSectionPage routeId="settings-app" />} />
+        <Route
+          path="/settings/runtimes"
+          element={<SettingsSectionPage routeId="settings-runtimes" />}
+        />
+        <Route
+          path="/settings/inference"
+          element={<SettingsSectionPage routeId="settings-inference" />}
+        />
+        <Route path="/settings/logs" element={<SettingsSectionPage routeId="settings-logs" />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

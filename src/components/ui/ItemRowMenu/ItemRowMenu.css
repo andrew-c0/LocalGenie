@@ -1,0 +1,7 @@
+/*
+ * Danger items. Fluent's own MenuItem colour is one class, so the two-class selector wins over it;
+ * the menu is in a portal, so the rule cannot be scoped to a parent.
+ */
+.item-row-menu__item.item-row-menu__item--danger {
+  color: var(--colorPaletteRedForeground1);
+}

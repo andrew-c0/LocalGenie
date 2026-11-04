@@ -13,6 +13,11 @@ export function formatCount(n?: number): string {
   return String(n);
 }
 
+/** A count with its noun, for example "1 run" or "3 runs". Plural for zero and for more than one. */
+export function countLabel(n: number, singular: string, plural: string): string {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
 /** A whole number with thousands separators, for example `40,960`. `—` when unknown. */
 export function formatWhole(n?: number | null): string {
   if (n == null) return "—";
@@ -48,15 +53,15 @@ function plural(n: number, unit: string): string {
 }
 
 /**
- * How long ago an ISO date was, as short text: `today`, `3 days ago`, `2 weeks ago`,
- * `5 months ago`, `2 years ago`. A future date counts as today. Null when the date is missing or invalid.
+ * How long ago a date was, as short text: `today`, `3 days ago`, `2 weeks ago`,
+ * `5 months ago`, `2 years ago`. Takes an ISO string or epoch milliseconds. A future date counts as
+ * today. Null when the date is missing or invalid.
  */
 export function formatRelativeDate(
-  iso: string | null | undefined,
+  value: string | number | null | undefined,
   now: number = Date.now(),
 ): string | null {
-  if (!iso) return null;
-  const then = Date.parse(iso);
+  const then = typeof value === "number" ? value : Date.parse(value ?? "");
   if (Number.isNaN(then)) return null;
   const days = Math.floor(Math.max(0, now - then) / DAY_MS);
   if (days < 1) return "today";

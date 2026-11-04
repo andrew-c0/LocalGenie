@@ -7,6 +7,21 @@
   padding: var(--spacingVerticalM);
   background-color: var(--colorNeutralBackground1);
   border-right: 1px solid var(--colorNeutralStroke2);
+  /* Labels and the footer chart are clipped while the width eases between the two sizes. */
+  overflow: hidden;
+  transition: width var(--durationNormal) var(--curveDecelerateMid);
+}
+
+/* The icon rail. The width eases from the expanded size; the tabs and footer swap at once. */
+.sidebar--collapsed {
+  width: 56px;
+  padding-inline: var(--spacingHorizontalS);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
 }
 
 .sidebar__footer {
@@ -15,4 +30,40 @@
   flex-direction: column;
   gap: var(--spacingVerticalXXS);
   padding: 0 var(--spacingHorizontalXS);
+}
+
+/* The usage chart is 176 px wide and does not fit the rail. It stays mounted so its history is kept. */
+.sidebar--collapsed .sidebar__footer {
+  display: none;
+}
+
+/* A tab's label wraps while the width is still changing; keep each label on one line. */
+.sidebar .fui-Tab {
+  white-space: nowrap;
+}
+
+/* The rail's tabs hold only an icon. Fluent lays a tab out for text, so the icon sits to the left;
+   centring it needs a rule scoped to the rail, which beats Fluent's own tab styles. */
+.sidebar--collapsed .fui-Tab {
+  justify-content: center;
+  padding-inline: 0;
+  min-width: 0;
+}
+
+/* Wraps each tab so a tooltip can sit on it, and lets the tab fill the rail's width. */
+.sidebar__nav-item {
+  display: flex;
+}
+
+/* The installed-model count on the Models icon in the rail. */
+.sidebar__rail-icon {
+  position: relative;
+  display: inline-flex;
+}
+
+.sidebar__rail-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  pointer-events: none;
 }

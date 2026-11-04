@@ -1,4 +1,3 @@
-import type { SelectTabData, SelectTabEvent } from "@fluentui/react-components";
 import {
   Button,
   Card,
@@ -6,13 +5,9 @@ import {
   ProgressBar,
   SearchBox,
   Spinner,
-  Tab,
-  TabList,
 } from "@fluentui/react-components";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AihubBrowser } from "../../components/models/AihubBrowser/AihubBrowser";
-import HubModelBrowser from "../../components/models/HubModelBrowser/HubModelBrowser";
 import { LocalModelCard } from "../../components/models/LocalModelCard";
 import { ChipRow } from "../../components/ui/ChipRow/ChipRow";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog/ConfirmDialog";
@@ -32,23 +27,13 @@ import { toast } from "../../utils/toast";
 import "./LocalModelsBrowserPage.css";
 import { Body, Meta } from "../../components/ui/Typography/Typography";
 
-/** Browser page for locally installed models, plus Hugging Face search. */
-/** Library tabs; each is its own route (`/models`, `/models/browse`, `/models/aihub`). */
-type LibraryTab = "local" | "all" | "aihub";
+const SUBTITLE = "Models installed on this device, ready to load into the GenieX server.";
 
-const TAB_PATHS: Record<LibraryTab, string> = {
-  local: "/models",
-  all: "/models/browse",
-  aihub: "/models/aihub",
-};
-
-const SUBTITLES: Record<LibraryTab, string> = {
-  local: "Models installed on this device, ready to load into the GenieX server.",
-  all: "Search Hugging Face for GGUF models and download them to this device.",
-  aihub: "Qualcomm AI Hub models with QAIRT assets, read from the public catalog.",
-};
-
-export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
+/**
+ * Installed models (`/models/local`): the local library with a name filter, family chips and
+ * Hugging Face search results. Each card opens its own detail page.
+ */
+export default function LocalModelsBrowserPage() {
   const models = useModelStore((s) => s.models);
   const searchResults = useModelStore((s) => s.searchResults);
   const isSearching = useModelStore((s) => s.isSearching);
@@ -129,9 +114,13 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
     setSelectorOpen(true);
   }, [setSelectorOpen]);
 
-  const openDetails = useCallback(
-    (name: string, isLocal: boolean) =>
-      navigate(`/models/${encodeURIComponent(name)}`, { state: { isLocal } }),
+  const openInstalledDetails = useCallback(
+    (name: string) => navigate(`/models/local/${encodeURIComponent(name)}`),
+    [navigate],
+  );
+
+  const openHubDetails = useCallback(
+    (name: string) => navigate(`/models/huggingface/${encodeURIComponent(name)}`),
     [navigate],
   );
 
@@ -159,133 +148,110 @@ export default function LocalModelsBrowserPage({ tab }: { tab: LibraryTab }) {
     };
   }, [models, remoteResults, query, activeFamily]);
 
-  const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
-    const next = data.value as LibraryTab;
-    if (TAB_PATHS[next]) navigate(TAB_PATHS[next]);
-  };
-
   return (
     <div className="local-models-browser-page__page">
       <div className="local-models-browser-page__inner">
         <PageHeader
-          eyebrow="● MODEL LIBRARY"
-          title="Models"
-          subtitle={SUBTITLES[tab]}
+          title="Installed models"
+          subtitle={SUBTITLE}
           actions={
-            tab === "aihub" ? undefined : (
-              <Button
-                appearance="secondary"
-                onClick={() => geniex.cleanModels().catch((err: Error) => setError(String(err)))}
-              >
-                Clean Cache
-              </Button>
-            )
+            <Button
+              appearance="secondary"
+              onClick={() => geniex.cleanModels().catch((err: Error) => setError(String(err)))}
+            >
+              Clean Cache
+            </Button>
           }
         />
 
         {error && <ErrorBanner message={error} />}
 
-        <TabList selectedValue={tab} onTabSelect={handleTabSelect}>
-          <Tab value="local">Local</Tab>
-          <Tab value="all">Hugging Face</Tab>
-          <Tab value="aihub">Qualcomm AI Hub</Tab>
-        </TabList>
+        <div className="local-models-browser-page__toolbar">
+          <SearchBox
+            className="local-models-browser-page__search"
+            placeholder="Filter by model name, or press Search to find on Hugging Face"
+            aria-label="Filter models by name"
+            value={query}
+            onChange={(_, data) => setQuery(data.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSearch();
+            }}
+          />
+          <Button
+            appearance="primary"
+            onClick={handleSearch}
+            disabled={isSearching || !query.trim()}
+            icon={isSearching ? <Spinner size="tiny" /> : undefined}
+          >
+            Search
+          </Button>
+        </div>
 
-        {tab === "aihub" ? (
-          <AihubBrowser />
-        ) : tab === "local" ? (
-          <>
-            <div className="local-models-browser-page__toolbar">
-              <SearchBox
-                className="local-models-browser-page__search"
-                placeholder="Filter by model name, or press Search to find on Hugging Face"
-                aria-label="Filter models by name"
-                value={query}
-                onChange={(_, data) => setQuery(data.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSearch();
-                }}
-              />
-              <Button
-                appearance="primary"
-                onClick={handleSearch}
-                disabled={isSearching || !query.trim()}
-                icon={isSearching ? <Spinner size="tiny" /> : undefined}
-              >
-                Search
-              </Button>
-            </div>
+        {familyOptions.length > 2 && (
+          <ChipRow
+            options={familyOptions}
+            value={activeFamily}
+            onChange={setFamily}
+            ariaLabel="Model family"
+          />
+        )}
 
-            {familyOptions.length > 2 && (
-              <ChipRow
-                options={familyOptions}
-                value={activeFamily}
-                onChange={setFamily}
-                ariaLabel="Model family"
-              />
-            )}
+        {searchResults.length > 0 && (
+          <ChipRow
+            options={[["clear", "Clear search results"] as const]}
+            value=""
+            onChange={() => setSearchResults([])}
+            ariaLabel="Search results"
+          />
+        )}
 
-            {searchResults.length > 0 && (
-              <ChipRow
-                options={[["clear", "Clear search results"] as const]}
-                value=""
-                onChange={() => setSearchResults([])}
-                ariaLabel="Search results"
-              />
-            )}
+        {activeDownloads.length > 0 && (
+          <div className="local-models-browser-page__downloads">
+            {activeDownloads.map((d) => (
+              <Card key={d.id} size="small">
+                <CardHeader
+                  header={<Body>{d.label}</Body>}
+                  description={<Meta>{d.importingProgress ?? d.status}</Meta>}
+                />
+                <ProgressBar
+                  aria-label={`Downloading ${d.label}`}
+                  value={d.total ? d.received / d.total : undefined}
+                />
+              </Card>
+            ))}
+          </div>
+        )}
 
-            {activeDownloads.length > 0 && (
-              <div className="local-models-browser-page__downloads">
-                {activeDownloads.map((d) => (
-                  <Card key={d.id} size="small">
-                    <CardHeader
-                      header={<Body>{d.label}</Body>}
-                      description={<Meta>{d.importingProgress ?? d.status}</Meta>}
-                    />
-                    <ProgressBar
-                      aria-label={`Downloading ${d.label}`}
-                      value={d.total ? d.received / d.total : undefined}
-                    />
-                  </Card>
-                ))}
-              </div>
-            )}
-
-            {models.length + remoteResults.length === 0 ? (
-              <StateBlock icon="📦" message="No models found. Search Hugging Face to pull one." />
-            ) : visible.installed.length + visible.remote.length === 0 ? (
-              <StateBlock icon="🔍" message={`No models match "${query.trim()}".`} />
-            ) : (
-              <Flex direction="column" gap="s">
-                {visible.installed.map((m) => (
-                  <LocalModelCard
-                    key={m.name}
-                    model={m}
-                    stored={downloadedMeta.get(m.name)}
-                    isLoaded={serverStatus.models.some(
-                      (lm) => lm === m.name || lm.startsWith(`${m.name}:`),
-                    )}
-                    isDownloading={activeIds.has(m.name)}
-                    onOpenSelector={openSelector}
-                    onRemove={setConfirmRemove}
-                    onDetails={openDetails}
-                  />
-                ))}
-                {visible.remote.map((r) => (
-                  <ModelCard
-                    key={r.id}
-                    model={hubCardData(r, systemMemory, downloadedMeta.has(r.id))}
-                    isLoaded={false}
-                    isDownloading={activeIds.has(r.id)}
-                    isLocal={false}
-                    onDetails={openDetails}
-                  />
-                ))}
-              </Flex>
-            )}
-          </>
+        {models.length + remoteResults.length === 0 ? (
+          <StateBlock icon="📦" message="No models found. Search Hugging Face to pull one." />
+        ) : visible.installed.length + visible.remote.length === 0 ? (
+          <StateBlock icon="🔍" message={`No models match "${query.trim()}".`} />
         ) : (
-          <HubModelBrowser downloading={activeIds} />
+          <Flex direction="column" gap="s">
+            {visible.installed.map((m) => (
+              <LocalModelCard
+                key={m.name}
+                model={m}
+                stored={downloadedMeta.get(m.name)}
+                isLoaded={serverStatus.models.some(
+                  (lm) => lm === m.name || lm.startsWith(`${m.name}:`),
+                )}
+                isDownloading={activeIds.has(m.name)}
+                onOpenSelector={openSelector}
+                onRemove={setConfirmRemove}
+                onDetails={openInstalledDetails}
+              />
+            ))}
+            {visible.remote.map((r) => (
+              <ModelCard
+                key={r.id}
+                model={hubCardData(r, systemMemory, downloadedMeta.has(r.id))}
+                isLoaded={false}
+                isDownloading={activeIds.has(r.id)}
+                onDetails={openHubDetails}
+              />
+            ))}
+          </Flex>
         )}
 
         {confirmRemove && (

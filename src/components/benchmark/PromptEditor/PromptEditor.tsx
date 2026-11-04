@@ -1,7 +1,7 @@
 import { Button, Field, Input, Radio, RadioGroup, Textarea } from "@fluentui/react-components";
-import { DeleteRegular, DismissRegular, SaveRegular } from "@fluentui/react-icons";
-import { useEffect, useState } from "react";
-import { deleteBenchmarkPrompt, saveBenchmarkPrompt } from "../../../services/benchmark";
+import { DismissRegular, SaveRegular } from "@fluentui/react-icons";
+import { useState } from "react";
+import { saveBenchmarkPrompt } from "../../../services/benchmark";
 import type {
   AttachmentKind,
   BenchmarkFile,
@@ -10,7 +10,6 @@ import type {
 } from "../../../types";
 import { errorMessage } from "../../../utils/errorMessage";
 import { toast } from "../../../utils/toast";
-import { ConfirmDialog } from "../../ui/ConfirmDialog/ConfirmDialog";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Meta } from "../../ui/Typography/Typography";
 import { LibraryFileButtons, LibraryFileList } from "../LibraryFiles/LibraryFiles";
@@ -24,17 +23,15 @@ interface PromptEditorProps {
   /** The saved prompt, or null for a new one. */
   initial: BenchmarkPrompt | null;
   onSaved: (prompt: BenchmarkPrompt) => void;
-  onDeleted: (id: string) => void;
-  /** Reports whether the form differs from the saved prompt. */
-  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
  * Editor for one prompt: name, description, keywords with their rule, and files. Files are copied
- * into the library as soon as they are picked; ones not saved are discarded when the editor closes.
- * Rendered in a dialog per prompt, so each opening starts from a clean form.
+ * into the library as soon as they are picked; ones not saved are discarded when the editor unmounts.
+ * Rendered by the prompt's item page, keyed by the prompt, so each prompt starts from a clean form.
+ * Deleting a prompt is not here: it is in the item page's menu.
  */
-export function PromptEditor({ initial, onSaved, onDeleted, onDirtyChange }: PromptEditorProps) {
+export function PromptEditor({ initial, onSaved }: PromptEditorProps) {
   const [id] = useState(() => initial?.id ?? crypto.randomUUID());
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -44,28 +41,8 @@ export function PromptEditor({ initial, onSaved, onDeleted, onDirtyChange }: Pro
   const [keywordDraft, setKeywordDraft] = useState("");
   const [files, setFiles] = useState<BenchmarkFile[]>(initial?.files ?? []);
   const [saving, setSaving] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const imports = useFileImports();
-
-  const savedState = JSON.stringify({
-    name: initial?.name ?? "",
-    description: initial?.description ?? "",
-    text: initial?.text ?? "",
-    matchRule: initial?.matchRule ?? "any",
-    keywords: initial?.keywords ?? [],
-    files: (initial?.files ?? []).map((f) => f.id),
-  });
-  const draftState = JSON.stringify({
-    name,
-    description,
-    text,
-    matchRule,
-    keywords,
-    files: files.map((f) => f.id),
-  });
-  const dirty = draftState !== savedState;
-  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
   const addKeyword = () => {
     const keyword = keywordDraft.trim();
@@ -127,17 +104,6 @@ export function PromptEditor({ initial, onSaved, onDeleted, onDirtyChange }: Pro
     setKeywords(initial?.keywords ?? []);
     setFiles(initial?.files ?? []);
     setFormError(null);
-  };
-
-  const handleDelete = async () => {
-    setConfirmDelete(false);
-    try {
-      await deleteBenchmarkPrompt(id);
-      toast.success("Prompt deleted", initial?.name);
-      onDeleted(id);
-    } catch (e) {
-      setFormError(errorMessage(e, "Could not delete the prompt."));
-    }
   };
 
   return (
@@ -234,15 +200,6 @@ export function PromptEditor({ initial, onSaved, onDeleted, onDirtyChange }: Pro
       )}
 
       <div className="prompt-editor__actions">
-        {initial && (
-          <Button
-            appearance="subtle"
-            icon={<DeleteRegular />}
-            onClick={() => setConfirmDelete(true)}
-          >
-            Delete
-          </Button>
-        )}
         <Button appearance="secondary" onClick={handleDiscard} disabled={saving}>
           Discard changes
         </Button>
@@ -255,16 +212,6 @@ export function PromptEditor({ initial, onSaved, onDeleted, onDirtyChange }: Pro
           Save prompt
         </Button>
       </div>
-
-      {confirmDelete && (
-        <ConfirmDialog
-          title="Delete this prompt?"
-          message="The prompt and its files are removed from the library. Past runs keep their records. A prompt used by a suite cannot be deleted."
-          confirmLabel="Delete prompt"
-          onConfirm={() => void handleDelete()}
-          onCancel={() => setConfirmDelete(false)}
-        />
-      )}
     </div>
   );
 }

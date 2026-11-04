@@ -3,6 +3,7 @@ import {
   baseModelOf,
   facetSummaryFromModel,
   formatParamCount,
+  libraryOf,
   licenseOf,
   paramCountOf,
   parseFacets,
@@ -10,9 +11,8 @@ import {
   serializeFacets,
   sizeLabelOf,
   taskGroupOf,
-  taskOf,
-  libraryOf,
   taskLabel,
+  taskOf,
 } from "./hubModelInfo";
 
 describe("taskGroupOf", () => {

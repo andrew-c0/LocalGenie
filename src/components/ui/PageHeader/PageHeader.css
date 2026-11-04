@@ -4,8 +4,6 @@
   justify-content: space-between;
   align-items: center;
   gap: var(--spacingHorizontalM);
-  padding: var(--spacingVerticalL) var(--spacingHorizontalL) 0;
-  padding-left: 0;
 }
 
 .page-header__title-block {

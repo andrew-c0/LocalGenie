@@ -1,0 +1,83 @@
+/* A sub-page row: the whole row is the click target, on a card surface like Fluent Card. */
+.section-route-card {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: var(--spacingVerticalM) var(--spacingHorizontalL);
+  border: 1px solid var(--colorNeutralStroke2);
+  border-radius: var(--borderRadiusXLarge);
+  background: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground1);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.section-route-card:hover:not(:disabled) {
+  background: var(--colorNeutralBackground1Hover);
+}
+
+.section-route-card:active:not(:disabled) {
+  background: var(--colorNeutralBackground1Pressed);
+}
+
+.section-route-card:focus-visible {
+  outline: 2px solid var(--colorStrokeFocus2);
+  outline-offset: 2px;
+}
+
+/* A locked row keeps its surface but dims its content and does not react to hover or clicks. */
+.section-route-card:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.section-route-card__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  font-size: 24px;
+  color: var(--colorNeutralForeground2);
+}
+
+/* Fluent icons size themselves in em, so the 24px wrapper sets the glyph size. */
+.section-route-card__icon svg {
+  width: 1em;
+  height: 1em;
+}
+
+/* Text column: min-width 0 lets the one-line title and description truncate (Fluent `truncate`). */
+.section-route-card__text {
+  min-width: 0;
+}
+
+/* Muted colour for the description; Meta has no colour prop. */
+.section-route-card__description {
+  color: var(--colorNeutralForeground2);
+}
+
+/* The fact keeps its width so the title column is the one that gives way. */
+.section-route-card__fact {
+  flex-shrink: 0;
+  color: var(--colorNeutralForeground3);
+  white-space: nowrap;
+}
+
+/* A warning fact: the same tint as the other warnings in the app, with its icon beside the text. */
+.section-route-card__fact--warning {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacingHorizontalXS);
+  color: var(--colorPaletteDarkOrangeForeground1);
+}
+
+.section-route-card__warning-icon {
+  flex-shrink: 0;
+}
+
+.section-route-card__chevron {
+  flex-shrink: 0;
+  color: var(--colorNeutralForeground3);
+}

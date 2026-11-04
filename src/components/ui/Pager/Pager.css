@@ -1,0 +1,6 @@
+/* The range keeps its width as it changes from "1-10 of 34" to "31-34 of 34", so the buttons do not move. */
+.pager__range {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  margin-right: var(--spacingHorizontalXS);
+}

@@ -6,10 +6,11 @@ import { useChatStore } from "../stores/chatStore";
 import { useModelStore } from "../stores/modelStore";
 import { useRamEstimateStore } from "../stores/ramEstimateStore";
 import { useRuntimeStore } from "../stores/runtimeStore";
+import { useSidebarStore } from "../stores/sidebarStore";
 
 /**
  * Startup only: loads the runtime list (which also sets the CLI state), saved sessions, installed
- * models, server status and the runtime update checks once. Everything that runs afterwards is owned by
+ * models, server status, the sidebar's saved state and the runtime update checks once. Everything that runs afterwards is owned by
  * the component that uses it (model loading in the header, downloads in the drawer, streaming in `ChatRuntime`).
  */
 export default function AppBootstrap({ children }: { children: ReactNode }) {
@@ -28,6 +29,9 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
   }, [models]);
 
   useEffect(() => {
+    // The sidebar's saved collapsed state, so it opens as the user left it.
+    void useSidebarStore.getState().loadCollapsed();
+
     (async () => {
       // The release checks call GitHub and can be slow, so they start once the list is read and do not
       // hold up the rest of startup. They run without the CLI too, so Settings > Runtimes can show the
