@@ -20,7 +20,8 @@ const CONFIG: Record<
   importing: { icon: <ArrowImportRegular />, color: "informative", label: "Importing" },
   finished: { icon: <CheckmarkRegular />, color: "success", label: "Finished" },
   error: { icon: <WarningRegular />, color: "danger", label: "Error" },
-  cancelled: { icon: <PauseRegular />, color: "subtle", label: "Cancelled" },
+  // A cancel keeps the partial files, so the entry resumes from them: it reads as paused, with Resume.
+  cancelled: { icon: <PauseRegular />, color: "subtle", label: "Paused" },
 };
 
 /** The pill's text. A runtime's import step reads as installing; a step message wins over that. */

@@ -2,7 +2,35 @@
 
 Run through these checks manually after building or deploying the app. Automated checks cannot fully verify installer behavior, filesystem permissions, or OS-level interactions.
 
-## Runtime update notifications (uncommitted, 2026-11-04)
+## Playground selector, Playground downloads and installed Playground models (working tree, 2026-11-05; not run, none ticked)
+
+Limits are in `known-issues.md` ("Playground selector and downloads").
+
+Selector (header, on the Playground pages):
+- [ ] On a Playground page the header shows the Playground selector (beaker icon, "Switch Playground model"); on Overview, Models, Chat and Benchmarks the chat selector shows.
+- [ ] No preselection: with installed Playground models and no pick yet, no row reads Selected and the tool page shows "Pick a model in the selector above". Nothing runs until a model is picked.
+- [ ] Select an installed model: its row reads Selected and the page's hint goes away. Click Selected again: it clears and the hint returns.
+- [ ] Select an OCR model: the header's server badge turns Running. Picking a second OCR model while it runs does not start a second server; clearing the OCR model leaves the server running.
+- [ ] Recommended hides when every model of the listed tools is downloaded; the Installed section then lists them all.
+- [ ] Recommended Download: the row reads Downloading; the other Download buttons are disabled; the drawer shows the entry; when it finishes the model moves to Installed and reads Ready on the tool page.
+- [ ] A failed catalog read shows a compact Try again above the sections; the models that did load stay listed.
+- [ ] "Run on" rows: text to image and image to image list Auto, NPU, GPU and CPU for the devices this build lists (GPU shows the experimental hint); upscaling and both speech tools show CPU only; OCR shows two rows (language model: Auto, NPU, GPU, CPU; vision encoder: NPU or CPU). A choice changes the next generation's device.
+- [ ] "Find more on Hugging Face" is disabled and marked Coming soon.
+
+Playground downloads (drawer):
+- [ ] A model download (image, then speech) shows a drawer entry with its file (file n of m), bytes, speed and time left once known; it also appears under the active downloads on Models > Local.
+- [ ] Cancel in the drawer: the entry reads "Paused" with Resume. Resume continues from the partial file (the byte count does not restart at zero) and finishes; the model shows Ready.
+- [ ] Offline start of a Playground download (image or speech): the entry shows the offline text; the toast reads "Model download failed"; a speech or upscaling model names GitHub, an image or OCR model names Hugging Face. Hovering shows the raw error. Retry after reconnecting finishes the download.
+- [ ] Leave the Playground during a download and come back: the entry is still updating.
+- [ ] Delete of a model while it downloads is refused.
+
+Installed models (Models > Local):
+- [ ] The Playground chip is last in the chip row and shows only while a Playground model is installed. It lists the models grouped by tool (Image generation, Image to image, Upscaling, Speech to text, Text to speech, Audio to audio, OCR).
+- [ ] The name filter applies to the Playground list; the Search button and Enter do not search Hugging Face there.
+- [ ] Delete from that list: the dialog shows the size; the model leaves the list and the tool's selector; a file shared with another downloaded model (the Qwen3-4B encoder) is kept while the other model is installed.
+- [ ] An OCR model listed here also appears under the GenieX models list after the import.
+
+## Runtime update notifications (f1e5543, 2026-11-04)
 
 The user saw a test notification in the app on 2026-11-04 (the test button is removed). The items below were not run; none is ticked. Limits are in `known-issues.md`.
 
@@ -155,11 +183,11 @@ The user looked at the cards and the detail pages in the app on 2026-11-04 and s
 
 ## Playground: text to image (not yet run)
 
-- [ ] Playground lists three models (SD 1.5 Q4, FLUX.2 klein 4B Q4, Z-Image Turbo Q4) with sizes, licence links and Download.
-- [ ] Download SD 1.5 Q4 (about 1.7 GB): per-file progress, "Model downloaded" toast, the card shows Ready. Cancel part-way: the status says cancelled; Download again resumes.
+- [ ] The header selector's Recommended section lists the three models (SD 1.5 Q4, FLUX.2 klein 4B Q4, Z-Image Turbo Q4) with sizes and a Download button (see the selector items above).
+- [ ] Download SD 1.5 Q4 (about 1.7 GB): per-file progress in the drawer, "Model downloaded" toast, the model is Installed in the selector. Cancel part-way: the drawer shows Paused; Resume continues.
 - [ ] FLUX.2 klein and Z-Image Turbo share the Qwen3-4B text encoder. Downloading the second one fetches only its own files. Deleting one keeps the encoder while the other is downloaded; deleting both removes it. Deleting shows the bytes freed.
 - [ ] Delete and Download are refused while the model is generating or downloading.
-- [ ] Generate SD 1.5 Q4 at 512 x 512, 20 steps, Compute Auto: the phases show in order (loading, encoding, sampling with a step count, decoding, saving). The image shows, and a `.png` named from the prompt, time and seed is in `Pictures\LocalGenie`. Reveal in Explorer selects it.
+- [ ] Generate SD 1.5 Q4 at 512 x 512, 20 steps, Run on Auto (header selector): the phases show in order (loading, encoding, sampling with a step count, decoding, saving). The image shows, and a `.png` named from the prompt, time and seed is in `Pictures\LocalGenie`. Reveal in Explorer selects it.
 - [ ] Same prompt and a fixed seed twice on CPU: the two images match.
 - [ ] Random seed: the seed used is shown with the result, and the same seed reproduces it.
 - [ ] Generate before the model is downloaded, or with the runtime removed: refused with a message.
@@ -171,7 +199,7 @@ The user looked at the cards and the detail pages in the app on 2026-11-04 and s
 
 ## Playground: image to image (not yet run)
 
-- [ ] The tab lists SD 1.5 Q4 (re-draw, strength slider) and FLUX.2 klein 4B Q4 (edit); Z-Image Turbo is not listed. Generate stays disabled until an image is chosen.
+- [ ] The selector lists SD 1.5 Q4 (re-draw, strength slider) and FLUX.2 klein 4B Q4 (edit) for this tool; Z-Image Turbo is not listed. Generate stays disabled until an image is chosen.
 - [ ] Choose image offers only png/jpg/jpeg; the preview shows and the size fields follow the picture.
 - [ ] SD 1.5 re-draw at 256 px, 10 steps, strength 0.6 on CPU: a picture is made (not blank; quality is rough). A strength outside 0.05..1.0 is refused.
 - [ ] FLUX.2 klein edit at 256 px, 4 steps: the result applies the instruction ("What to change").

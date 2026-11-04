@@ -1,0 +1,13 @@
+/* A catalog model not yet downloaded is a card with its status and action at the right. */
+.recommended-model-row {
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--spacingVerticalS) var(--spacingHorizontalL);
+  border: 1px solid var(--colorNeutralStroke2);
+  border-radius: var(--borderRadiusXLarge);
+  background: var(--colorNeutralBackground1);
+}
+
+.recommended-model-row__text {
+  min-width: 0;
+}

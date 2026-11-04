@@ -9,6 +9,8 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LocalModelCard } from "../../components/models/LocalModelCard";
+import { PlaygroundLocalModels } from "../../components/models/PlaygroundLocalModels";
+import { usePlaygroundLocalModels } from "../../components/models/usePlaygroundLocalModels";
 import { ChipRow } from "../../components/ui/ChipRow/ChipRow";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog/ConfirmDialog";
 import { ErrorBanner } from "../../components/ui/ErrorBanner/ErrorBanner";
@@ -22,7 +24,7 @@ import { StateBlock } from "../../components/ui/StateBlock/StateBlock";
 import { useSystemMemory } from "../../hooks/useSystemMemory";
 import * as db from "../../services/database";
 import * as geniex from "../../services/geniex";
-import { isDownloadActive, useDownloadStore } from "../../stores/downloadStore";
+import { isDownloadActive, progressFractionOf, useDownloadStore } from "../../stores/downloadStore";
 import { useModelStore } from "../../stores/modelStore";
 import { FAMILY_ALL, familyFilterOptions, matchesFamily } from "../../utils/modelFamily";
 import { toast } from "../../utils/toast";
@@ -31,9 +33,13 @@ import { Body, Meta } from "../../components/ui/Typography/Typography";
 
 const SUBTITLE = "Models installed on this device, ready to load into the GenieX server.";
 
+/** The chip of the Playground models. It is the tab id too, so it never equals a family id. */
+const PLAYGROUND_TAB = "playground";
+
 /**
  * Installed models (`/models/local`): the local library with a name filter, family chips and
- * Hugging Face search results. Each card opens its own detail page.
+ * Hugging Face search results. Each card opens its own detail page. The Playground chip, last in the
+ * chip row, lists the installed Playground models instead.
  */
 export default function LocalModelsBrowserPage() {
   const models = useModelStore((s) => s.models);
@@ -50,10 +56,13 @@ export default function LocalModelsBrowserPage() {
   const serverStatus = useModelStore((s) => s.serverStatus);
   // Read once for every result card on this page; each card's RAM verdict is derived from it.
   const systemMemory = useSystemMemory();
+  const playgroundLocal = usePlaygroundLocalModels();
+  const hasPlayground = playgroundLocal.models.length > 0;
 
   const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
   const [query, setQuery] = useState("");
-  const [family, setFamily] = useState(FAMILY_ALL);
+  /** The chip picked: a family id, or PLAYGROUND_TAB. */
+  const [tab, setTab] = useState<string>(FAMILY_ALL);
   const [error, setError] = useState<string | null>(null);
   /** Why the Hugging Face search failed. Shown as a retry under the list, not as the banner. */
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -61,6 +70,9 @@ export default function LocalModelsBrowserPage() {
   const [downloadedMeta, setDownloadedMeta] = useState<Map<string, db.DbDownloadedModel>>(
     new Map(),
   );
+
+  /** The Playground chip exists only while a Playground model is installed; then its list replaces the cards. */
+  const inPlayground = tab === PLAYGROUND_TAB && hasPlayground;
 
   // Refresh local model list + DB meta on mount so deleted models disappear.
   useEffect(() => {
@@ -139,7 +151,7 @@ export default function LocalModelsBrowserPage() {
     () => familyFilterOptions([...models.map((m) => m.name), ...remoteResults.map((r) => r.id)]),
     [models, remoteResults],
   );
-  const activeFamily = familyOptions.some(([id]) => id === family) ? family : FAMILY_ALL;
+  const activeFamily = familyOptions.some(([id]) => id === tab) ? tab : FAMILY_ALL;
 
   /** Cards whose model name contains the search text (case-insensitive) and that match the family. */
   const visible = useMemo(() => {
@@ -177,38 +189,58 @@ export default function LocalModelsBrowserPage() {
         />
 
         {error && <ErrorBanner message={error} />}
+        {playgroundLocal.loadError && <ErrorBanner message={playgroundLocal.loadError} />}
 
         <div className="local-models-browser-page__toolbar">
           <SearchBox
             className="local-models-browser-page__search"
-            placeholder="Filter by model name, or press Search to find on Hugging Face"
+            placeholder={
+              inPlayground
+                ? "Filter by model name"
+                : "Filter by model name, or press Search to find on Hugging Face"
+            }
             aria-label="Filter models by name"
             value={query}
             onChange={(_, data) => setQuery(data.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleSearch();
+              if (e.key === "Enter" && !inPlayground) handleSearch();
             }}
           />
-          <Button
-            appearance="primary"
-            onClick={handleSearch}
-            disabled={isSearching || !query.trim()}
-            icon={isSearching ? <Spinner size="tiny" /> : undefined}
-          >
-            Search
-          </Button>
+          {!inPlayground && (
+            <Button
+              appearance="primary"
+              onClick={handleSearch}
+              disabled={isSearching || !query.trim()}
+              icon={isSearching ? <Spinner size="tiny" /> : undefined}
+            >
+              Search
+            </Button>
+          )}
         </div>
 
-        {familyOptions.length > 2 && (
-          <ChipRow
-            options={familyOptions}
-            value={activeFamily}
-            onChange={setFamily}
-            ariaLabel="Model family"
-          />
+        {(familyOptions.length > 2 || hasPlayground) && (
+          <Flex align="center" gap="s" wrap>
+            <ChipRow
+              options={familyOptions}
+              value={inPlayground ? "" : activeFamily}
+              onChange={setTab}
+              ariaLabel="Model family"
+            />
+            {hasPlayground && (
+              <>
+                <span className="local-models-browser-page__chip-divider" aria-hidden="true" />
+                <ChipRow
+                  options={[[PLAYGROUND_TAB, "Playground"] as const]}
+                  value={inPlayground ? PLAYGROUND_TAB : ""}
+                  onChange={setTab}
+                  ariaLabel="Playground models"
+                />
+              </>
+            )}
+          </Flex>
         )}
 
-        {searchResults.length > 0 && (
+        {searchResults.length > 0 && !inPlayground && (
           <ChipRow
             options={[["clear", "Clear search results"] as const]}
             value=""
@@ -227,51 +259,54 @@ export default function LocalModelsBrowserPage() {
                 />
                 <ProgressBar
                   aria-label={`Downloading ${d.label}`}
-                  value={d.total ? d.received / d.total : undefined}
+                  value={progressFractionOf(d) ?? undefined}
                 />
               </Card>
             ))}
           </div>
         )}
 
-        {hasRows || isSearching || searchError ? (
-          <Flex direction="column" gap="s">
-            {visible.installed.map((m) => (
-              <LocalModelCard
-                key={m.name}
-                model={m}
-                stored={downloadedMeta.get(m.name)}
-                isLoaded={serverStatus.models.some(
-                  (lm) => lm === m.name || lm.startsWith(`${m.name}:`),
-                )}
-                isDownloading={activeIds.has(m.name)}
-                onOpenSelector={openSelector}
-                onRemove={setConfirmRemove}
-                onDetails={openInstalledDetails}
-              />
-            ))}
-            {visible.remote.map((r) => (
-              <ModelCard
-                key={r.id}
-                model={hubCardData(r, systemMemory, downloadedMeta.has(r.id))}
-                isLoaded={false}
-                isDownloading={activeIds.has(r.id)}
-                onDetails={openHubDetails}
-              />
-            ))}
-            {searchError && (
-              <RetryBlock
-                compact
-                error={searchError}
-                subject="Hugging Face"
-                onRetry={() => void handleSearch()}
-              />
-            )}
-            {isSearching && <SkeletonRows count={3} variant="card" />}
-          </Flex>
-        ) : (
-          noRowsState
-        )}
+        {inPlayground && <PlaygroundLocalModels models={playgroundLocal.models} query={query} />}
+
+        {!inPlayground &&
+          (hasRows || isSearching || searchError ? (
+            <Flex direction="column" gap="s">
+              {visible.installed.map((m) => (
+                <LocalModelCard
+                  key={m.name}
+                  model={m}
+                  stored={downloadedMeta.get(m.name)}
+                  isLoaded={serverStatus.models.some(
+                    (lm) => lm === m.name || lm.startsWith(`${m.name}:`),
+                  )}
+                  isDownloading={activeIds.has(m.name)}
+                  onOpenSelector={openSelector}
+                  onRemove={setConfirmRemove}
+                  onDetails={openInstalledDetails}
+                />
+              ))}
+              {visible.remote.map((r) => (
+                <ModelCard
+                  key={r.id}
+                  model={hubCardData(r, systemMemory, downloadedMeta.has(r.id))}
+                  isLoaded={false}
+                  isDownloading={activeIds.has(r.id)}
+                  onDetails={openHubDetails}
+                />
+              ))}
+              {searchError && (
+                <RetryBlock
+                  compact
+                  error={searchError}
+                  subject="Hugging Face"
+                  onRetry={() => void handleSearch()}
+                />
+              )}
+              {isSearching && <SkeletonRows count={3} variant="card" />}
+            </Flex>
+          ) : (
+            noRowsState
+          ))}
 
         {confirmRemove && (
           <ConfirmDialog

@@ -9,8 +9,10 @@ import type {
   PlaygroundDevice,
   PlaygroundDeviceKind,
   PlaygroundDownloadProgress,
+  PlaygroundModelKind,
 } from "../types";
 import { formatBytes } from "./format";
+import { SERVICE_NAMES } from "./networkError";
 import {
   AUTO_COMPUTE_LABEL,
   AUTO_COMPUTE_LABEL_ON_CPU,
@@ -67,9 +69,16 @@ export const DEFAULT_IMAGE_FORM: ImageForm = {
   device: DEVICE_AUTO,
 };
 
-/** The model a selection falls back to: the first downloaded one, else the first listed. */
-export function defaultImageModel(models: ImageModel[]): ImageModel | null {
-  return models.find((model) => model.downloaded) ?? models[0] ?? null;
+/**
+ * The selection after a catalog change. It stays while its model is still listed and installed. Otherwise
+ * it is cleared: nothing is chosen until the user picks a model. Used by every Playground catalog.
+ */
+export function keepInstalledSelection(
+  selectedId: string | null,
+  models: Array<{ id: string; downloaded: boolean }>,
+): string | null {
+  if (selectedId === null) return null;
+  return models.some((model) => model.id === selectedId && model.downloaded) ? selectedId : null;
 }
 
 /** The form with a model's size, steps and CFG scale. The prompt and seed are kept. */
@@ -211,11 +220,6 @@ export function deviceOptionLabel(device: PlaygroundDevice): string {
   return device.description.trim() ? `${kindLabel} – ${device.description}` : kindLabel;
 }
 
-export interface ComputeOption {
-  value: string;
-  label: string;
-}
-
 /** True when the build lists a CPU. Auto runs on the CPU in that case, so the label says so. */
 function hasCpuDevice(devices: PlaygroundDevice[]): boolean {
   return devices.some((device) => device.kind === "cpu");
@@ -224,15 +228,6 @@ function hasCpuDevice(devices: PlaygroundDevice[]): boolean {
 /** The Auto label: "Auto (CPU)" when the build lists a CPU, else plain "Auto". */
 export function autoComputeLabel(devices: PlaygroundDevice[]): string {
   return hasCpuDevice(devices) ? AUTO_COMPUTE_LABEL_ON_CPU : AUTO_COMPUTE_LABEL;
-}
-
-/** The Compute dropdown: Auto, then one entry per device the build lists. */
-export function computeOptions(devices: PlaygroundDevice[]): ComputeOption[] {
-  const deviceOptions = devices.map((device) => ({
-    value: device.name,
-    label: deviceOptionLabel(device),
-  }));
-  return [{ value: DEVICE_AUTO, label: autoComputeLabel(devices) }, ...deviceOptions];
 }
 
 /** The `device` for a generate request, or undefined for auto, which the request leaves out. */
@@ -269,21 +264,6 @@ export function deviceSummaryLabel(selected: string, devices: PlaygroundDevice[]
 }
 
 /**
- * Disk space that deleting `model` frees: its files that no other downloaded model also uses. Files
- * are matched by name, so a file two models share is kept while either of them is downloaded.
- */
-export function freedBytesOnDelete(model: ImageModel, models: ImageModel[]): number {
-  const keptFileNames = new Set(
-    models
-      .filter((other) => other.downloaded && other.id !== model.id)
-      .flatMap((other) => other.files.map((file) => file.fileName)),
-  );
-  return model.files
-    .filter((file) => !keptFileNames.has(file.fileName))
-    .reduce((total, file) => total + file.sizeBytes, 0);
-}
-
-/**
  * Share of the whole model download that is done: the files finished before the current one, plus
  * the current file's share. Null while the current file's size is unknown, so the bar is indeterminate.
  */
@@ -294,6 +274,19 @@ export function overallDownloadPercent(
   const currentShare = Math.min(1, progress.received / progress.total);
   const share = (progress.fileIndex + currentShare) / progress.fileCount;
   return Math.min(100, Math.round(share * 100));
+}
+
+/** The whole download's percentage from its latest progress event, or null before the first one. */
+export function playgroundPercent(progress: PlaygroundDownloadProgress | null): number | null {
+  return progress ? overallDownloadPercent(progress) : null;
+}
+
+/**
+ * The service a Playground model's files come from, named in a failure. Speech and upscaling models
+ * come from GitHub releases; image and OCR models come from Hugging Face.
+ */
+export function playgroundSourceOf(kind: PlaygroundModelKind): string {
+  return kind === "speech" || kind === "upscale" ? SERVICE_NAMES.github : SERVICE_NAMES.huggingFace;
 }
 
 /** "12.0 MB of 63.0 MB", or just "12.0 MB" when the total is not known. */

@@ -16,6 +16,8 @@ export interface ItemRowMenuItem {
   onClick: () => void;
   /** Shown in the danger colour. Used for Delete. */
   danger?: boolean;
+  /** Shown but not clickable, e.g. Delete while a job uses the model. */
+  disabled?: boolean;
 }
 
 interface ItemRowMenuProps {
@@ -45,6 +47,7 @@ export function ItemRowMenu({ name, items, trigger }: ItemRowMenuProps) {
             <MenuItem
               key={item.label}
               icon={item.icon}
+              disabled={item.disabled}
               onClick={item.onClick}
               className={
                 item.danger ? "item-row-menu__item item-row-menu__item--danger" : undefined

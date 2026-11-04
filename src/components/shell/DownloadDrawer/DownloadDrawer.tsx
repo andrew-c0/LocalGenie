@@ -10,6 +10,7 @@ import {
 import { DismissRegular } from "@fluentui/react-icons";
 import { isDownloadActive } from "../../../stores/downloadStore";
 import { DownloadItemCard } from "./DownloadItemCard/DownloadItemCard";
+import { retryPlaygroundDownload } from "./playgroundDownloads";
 import { useDownloadManager } from "./useDownloadManager";
 import "./DownloadDrawer.css";
 
@@ -32,8 +33,16 @@ export default function DownloadDrawer({ open, onClose }: Props) {
     else void cancel(id);
   };
 
-  /** Resume a cancelled download: queue it again and the backend continues from the partial file. */
-  const handleResume = (id: string) => requeue(id);
+  /**
+   * Resume or retry a cancelled or failed download. A queued entry's pipeline picks it up again, and the
+   * backend continues from the partial file. A Playground download starts again directly, since it is
+   * never queued.
+   */
+  const handleResume = (id: string) => {
+    const entry = downloads.find((d) => d.id === id);
+    if (entry?.playground) retryPlaygroundDownload(entry.playground);
+    else requeue(id);
+  };
 
   const active = downloads.filter((d) => isDownloadActive(d.status));
   const past = downloads.filter(

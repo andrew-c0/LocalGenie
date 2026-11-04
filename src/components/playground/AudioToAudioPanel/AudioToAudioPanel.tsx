@@ -15,17 +15,17 @@ import { Flex } from "../../ui/Flex/Flex";
 import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
 import { Meta } from "../../ui/Typography/Typography";
 import { AudioInput } from "../AudioInput/AudioInput";
+import { PickModelHint } from "../PickModelHint/PickModelHint";
 import { RuntimeNotice } from "../RuntimeNotice/RuntimeNotice";
 import { SpeechJobProgress } from "../SpeechJobProgress/SpeechJobProgress";
 import { useSpeechJobCancel } from "../SpeechJobProgress/useSpeechJobCancel";
-import { SpeechModelColumn } from "../SpeechModels/SpeechModelColumn";
 import { useRuntimeCheck } from "../useRuntimeCheck";
 import { EnhanceResult } from "./EnhanceResult/EnhanceResult";
 import { useEnhancement } from "./useEnhancement";
 
 /**
- * Audio to audio: the model list on the left; the task, the audio input, the running job and the saved
- * files on the right. The task picks which kind of model the list shows.
+ * Audio to audio: the task at the top, then the audio input, the running job and the saved files. The
+ * task picks which kind of model the header's selector lists for this tool.
  */
 export default function AudioToAudioPanel() {
   const runtime = useRuntimeCheck(SHERPA_RUNTIME_ID);
@@ -49,44 +49,42 @@ export default function AudioToAudioPanel() {
   });
 
   return (
-    <Flex gap="l" align="start">
-      <SpeechModelColumn kind={enhanceKind} />
+    <Flex direction="column" gap="l">
+      <ChipRow
+        ariaLabel="Audio to audio task"
+        options={ENHANCE_TASK_OPTIONS}
+        value={enhanceKind}
+        onChange={setEnhanceKind}
+      />
+      {runtime.status === "missing" && (
+        <RuntimeNotice message={runtimeMissingMessage("Audio to audio", SHERPA_NAME)} />
+      )}
+      {runtime.error && <ErrorBanner message={runtime.error} />}
 
-      <Flex direction="column" gap="l" className="flex-grow">
-        <ChipRow
-          ariaLabel="Audio to audio task"
-          options={ENHANCE_TASK_OPTIONS}
-          value={enhanceKind}
-          onChange={setEnhanceKind}
-        />
-        {runtime.status === "missing" && (
-          <RuntimeNotice message={runtimeMissingMessage("Audio to audio", SHERPA_NAME)} />
-        )}
-        {runtime.error && <ErrorBanner message={runtime.error} />}
+      {models && selected === null && <PickModelHint />}
 
-        <SurfaceCard title="Run">
-          <Flex direction="column" gap="m">
-            <AudioInput audio={audio} disabled={job !== null} hint={ENHANCE_INPUT_HINT} />
-            <Flex gap="m" align="center" wrap>
-              <Button
-                appearance="primary"
-                disabled={blockedReason !== null}
-                onClick={() => {
-                  if (selected && audio) enhance(selected, audio);
-                }}
-              >
-                Run
-              </Button>
-              {blockedReason && <Meta>{blockedReason}</Meta>}
-            </Flex>
-            <Meta>{SPEECH_CPU_NOTE}</Meta>
-            <Meta>{enhanceOutputHelp(enhanceKind)}</Meta>
+      <SurfaceCard title="Run">
+        <Flex direction="column" gap="m">
+          <AudioInput audio={audio} disabled={job !== null} hint={ENHANCE_INPUT_HINT} />
+          <Flex gap="m" align="center" wrap>
+            <Button
+              appearance="primary"
+              disabled={blockedReason !== null}
+              onClick={() => {
+                if (selected && audio) enhance(selected, audio);
+              }}
+            >
+              Run
+            </Button>
+            {blockedReason && <Meta>{blockedReason}</Meta>}
           </Flex>
-        </SurfaceCard>
+          <Meta>{SPEECH_CPU_NOTE}</Meta>
+          <Meta>{enhanceOutputHelp(enhanceKind)}</Meta>
+        </Flex>
+      </SurfaceCard>
 
-        {runningJob && <SpeechJobProgress job={runningJob} onCancel={cancel} />}
-        {result && <EnhanceResult result={result} />}
-      </Flex>
+      {runningJob && <SpeechJobProgress job={runningJob} onCancel={cancel} />}
+      {result && <EnhanceResult result={result} />}
     </Flex>
   );
 }

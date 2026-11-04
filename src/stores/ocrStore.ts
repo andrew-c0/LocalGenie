@@ -10,28 +10,33 @@ import type {
   OcrResult,
   OcrVisionCompute,
 } from "../types";
-import { DEFAULT_OCR_COMPUTE, defaultOcrModel } from "../utils/ocr";
+import { DEFAULT_OCR_COMPUTE } from "../utils/ocr";
+import { keepInstalledSelection } from "../utils/playground";
 
 /**
  * OCR state, kept across page visits: the catalog, the selected model and mode, the input picture,
- * the compute choices, the running job and the last result. Downloads stay in the Playground store,
- * since their events carry only a model id. The listeners and service calls live outside the store.
+ * the compute choices, the running job and the last result. Downloads live in the download store (the
+ * drawer). The listeners and service calls live outside the store.
  */
 interface OcrState {
   /** Null until the catalog has been read. */
   models: OcrModel[] | null;
   selectedModelId: string | null;
+  /** The GenieX server is being started for the selected model. */
+  serverStarting: boolean;
   mode: OcrMode;
   input: InputImage | null;
   settings: OcrComputeSettings;
   job: OcrJob | null;
   result: OcrResult | null;
 
-  /** Replace the catalog. The selection stays when its model is still listed, else a default is chosen. */
+  /** Replace the catalog. The selection stays while its model is still installed, else it is cleared. */
   setModels: (models: OcrModel[]) => void;
   /** Replace the catalog after a delete. The deleted model is not selected again. */
   replaceModelsAfterDelete: (models: OcrModel[], deletedModelId: string) => void;
   selectModel: (modelId: string) => void;
+  clearModelSelection: () => void;
+  setServerStarting: (starting: boolean) => void;
   setMode: (mode: OcrMode) => void;
   setInput: (input: InputImage) => void;
   setInputSize: (size: ImageSize) => void;
@@ -47,6 +52,7 @@ interface OcrState {
 export const useOcrStore = create<OcrState>((set) => ({
   models: null,
   selectedModelId: null,
+  serverStarting: false,
   mode: "text",
   input: null,
   settings: DEFAULT_OCR_COMPUTE,
@@ -54,12 +60,10 @@ export const useOcrStore = create<OcrState>((set) => ({
   result: null,
 
   setModels: (models) =>
-    set((state) => {
-      if (state.selectedModelId && models.some((m) => m.id === state.selectedModelId)) {
-        return { models };
-      }
-      return { models, selectedModelId: defaultOcrModel(models)?.id ?? null };
-    }),
+    set((state) => ({
+      models,
+      selectedModelId: keepInstalledSelection(state.selectedModelId, models),
+    })),
 
   replaceModelsAfterDelete: (models, deletedModelId) =>
     set((state) => ({
@@ -68,6 +72,10 @@ export const useOcrStore = create<OcrState>((set) => ({
     })),
 
   selectModel: (modelId) => set({ selectedModelId: modelId }),
+
+  clearModelSelection: () => set({ selectedModelId: null }),
+
+  setServerStarting: (serverStarting) => set({ serverStarting }),
 
   setMode: (mode) => set({ mode }),
 

@@ -33,6 +33,24 @@ export function formatBytes(n?: number): string {
   return `${n} B`;
 }
 
+/** Time left for `remaining` bytes at `speed` bytes per second: `45s`, `3m 4s`, `1h 2m`. Dash when unknown. */
+export function formatEta(remaining: number, speed: number): string {
+  if (speed <= 0 || remaining <= 0) return "—";
+  const s = Math.round(remaining / speed);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+}
+
+/**
+ * A transfer's rate line: `1.2 MB/s · ETA 3m 4s`. With no known size (`remaining` null) only the speed
+ * shows, since a time left cannot be worked out.
+ */
+export function rateLabel(speed: number, remaining: number | null): string {
+  const rate = `${formatBytes(speed)}/s`;
+  return remaining === null ? rate : `${rate} · ETA ${formatEta(remaining, speed)}`;
+}
+
 /** Context length for a card: `8K`, `128K`, or the raw count below 1K. Null when unknown. */
 export function formatContextLength(tokens: number | null | undefined): string | null {
   if (!tokens) return null;

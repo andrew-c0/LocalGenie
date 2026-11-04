@@ -8,20 +8,16 @@ import {
   Text,
 } from "@fluentui/react-components";
 import { DeleteRegular, PauseRegular, PlayRegular } from "@fluentui/react-icons";
-import { type DownloadItem, downloadSourceName } from "../../../../stores/downloadStore";
-import { formatBytes } from "../../../../utils/format";
+import {
+  type DownloadItem,
+  downloadSourceName,
+  progressFractionOf,
+} from "../../../../stores/downloadStore";
+import { formatBytes, rateLabel } from "../../../../utils/format";
 import { networkErrorMessage } from "../../../../utils/networkError";
+import { downloadProgressLabel } from "../../../../utils/playground";
 import { DownloadStatusBadge } from "../DownloadStatusBadge";
 import "./DownloadItemCard.css";
-
-/** Human-readable ETA from remaining bytes and speed. */
-function eta(remaining: number, speed: number): string {
-  if (speed <= 0 || remaining <= 0) return "—";
-  const s = Math.round(remaining / speed);
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
-  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
-}
 
 /** Human-readable duration in seconds, minutes or hours. */
 function elapsed(ms: number): string {
@@ -33,16 +29,22 @@ function elapsed(ms: number): string {
 
 /**
  * The line under the bar. A runtime with no known size shows its speed, or "Downloading…" before the
- * first sample; GenieX reports no speed when it has no size.
+ * first sample; GenieX reports no speed when it has no size. A Playground download's line names the file
+ * and its bytes, then its speed and time left once they are known.
  */
 function detailText(d: DownloadItem, total: number | null, isImporting: boolean): string {
   if (isImporting) {
     if (d.importingProgress) return d.importingProgress;
     return d.runtime ? "Installing…" : "Importing into GenieX…";
   }
+  const remaining = total ? total - d.received : null;
+  if (d.playground) {
+    const file = downloadProgressLabel(d.playground.progress);
+    return d.speed > 0 ? `${file} · ${rateLabel(d.speed, remaining)}` : file;
+  }
   if (total === null && d.runtime)
     return d.speed > 0 ? `${formatBytes(d.speed)}/s` : "Downloading…";
-  return `${formatBytes(d.speed)}/s · ETA ${eta(total ? total - d.received : 0, d.speed)}`;
+  return rateLabel(d.speed, remaining);
 }
 
 /** The spinner's label for a step that has no cancel. */
@@ -70,17 +72,28 @@ export function DownloadItemCard({
   onRemove,
 }: DownloadItemCardProps) {
   const isRuntime = d.runtime !== undefined;
+  const isPlayground = d.playground !== undefined;
   const total = d.total && d.total > 0 ? d.total : null;
-  const pct = total ? d.received / total : 0;
+  const fraction = progressFractionOf(d);
+  const pct = fraction ?? 0;
   const isImporting = d.status === "importing";
   // A runtime's size is known only while it downloads with a total; its import step has no byte count.
-  const reportsBytes = !isRuntime || (total !== null && !isImporting);
+  // A Playground download reports its bytes in the detail line instead, per file.
+  const reportsBytes = !isPlayground && (!isRuntime || (total !== null && !isImporting));
   // A model's import step has no cancel; a runtime install can be cancelled at any step (the backend
   // honours it during the download and while it waits for the GenieX setup).
   const showsCancel = !isImporting || isRuntime;
-  // A runtime with no size, and its import step, show an indeterminate bar.
-  const indeterminate = isRuntime && (total === null || isImporting);
-  const canResume = d.status === "cancelled" && (!!d.variant || !!d.aihub || isRuntime);
+  // A runtime with no size, a Playground download before its first event, and any import step show an
+  // indeterminate bar.
+  const indeterminate =
+    (isRuntime && (total === null || isImporting)) ||
+    (isPlayground && (isImporting || fraction === null));
+  // A failed or cancelled download can be run again. The queue resumes the others; a Playground
+  // download starts again from the drawer.
+  const canRetry =
+    (d.status === "cancelled" || d.status === "error") &&
+    (!!d.variant || !!d.aihub || isRuntime || isPlayground);
+  const retryVerb = d.status === "error" ? "Retry" : "Resume";
 
   if (!active) {
     return (
@@ -90,13 +103,13 @@ export function DownloadItemCard({
             {d.label}
           </Text>
           <div className="download-card__actions">
-            {canResume && (
+            {canRetry && (
               <Button
                 appearance="secondary"
                 size="small"
                 icon={busy ? <Spinner size="tiny" /> : <PlayRegular />}
-                title="Resume download"
-                aria-label={`Resume ${d.label}`}
+                title={`${retryVerb} download`}
+                aria-label={`${retryVerb} ${d.label}`}
                 disabled={busy}
                 onClick={() => onResume(d.id)}
               />

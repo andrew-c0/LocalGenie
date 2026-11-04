@@ -4,7 +4,6 @@ import {
   buildOcrRequest,
   DEFAULT_OCR_COMPUTE,
   defaultOcrMode,
-  defaultOcrModel,
   effectiveOcrMode,
   ocrBlockedReason,
   ocrOversizedWarning,
@@ -28,17 +27,15 @@ const model = (overrides: Partial<OcrModel> = {}): OcrModel => ({
   ...overrides,
 });
 
-const ready = { model: model(), inputPath: "a.png", serverRunning: true, jobRunning: false };
+const ready = {
+  model: model(),
+  inputPath: "a.png",
+  serverRunning: true,
+  serverStarting: false,
+  jobRunning: false,
+};
 
 describe("ocr helpers", () => {
-  it("picks the first downloaded model, else the first", () => {
-    expect(defaultOcrModel([model({ id: "a", downloaded: false }), model({ id: "b" })])?.id).toBe(
-      "b",
-    );
-    expect(defaultOcrModel([model({ id: "a", downloaded: false })])?.id).toBe("a");
-    expect(defaultOcrModel([])).toBeNull();
-  });
-
   it("falls back to the first mode when the chosen one is not offered", () => {
     const textOnly = model({ modes: [{ id: "text", label: "Text" }] });
     expect(defaultOcrMode(textOnly)).toBe("text");
@@ -70,7 +67,12 @@ describe("ocr helpers", () => {
     expect(ocrBlockedReason({ ...ready, model: null })).toMatch(/Choose an OCR model/);
     expect(ocrBlockedReason({ ...ready, model: model({ downloaded: false }) })).toMatch(/Download/);
     expect(ocrBlockedReason({ ...ready, inputPath: null })).toMatch(/image/);
-    expect(ocrBlockedReason({ ...ready, serverRunning: false })).toMatch(/server/);
+    expect(ocrBlockedReason({ ...ready, serverRunning: false })).toMatch(/not running/);
+  });
+
+  it("says the server is starting while it starts", () => {
+    const starting = { ...ready, serverRunning: false, serverStarting: true };
+    expect(ocrBlockedReason(starting)).toMatch(/Starting/);
   });
 
   it("builds the stored result from the event", () => {

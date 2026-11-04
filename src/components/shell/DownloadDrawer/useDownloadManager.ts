@@ -2,7 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useTauriEvent } from "../../../hooks";
 import { cancelDownload } from "../../../services/download";
 import { RUNTIME_PROGRESS_EVENT } from "../../../services/runtimes";
-import { runtimeDownloadId, useDownloadStore } from "../../../stores/downloadStore";
+import {
+  importTargetOf,
+  pipelineQueueOf,
+  runtimeDownloadId,
+  useDownloadStore,
+} from "../../../stores/downloadStore";
 import type { RuntimeInstallProgress } from "../../../types";
 import { installStepOf, type SpeedSample, sampleSpeed } from "../../../utils/runtimeInstall";
 import { runtimeStageLabel } from "../../../utils/runtimeProgress";
@@ -38,8 +43,7 @@ export function useDownloadManager() {
   // Start every entry the app has queued. Runs on each store change; the pipeline's own status
   // check makes a repeat call for the same entry a no-op.
   useEffect(() => {
-    for (const d of downloads) {
-      if (d.status !== "queued") continue;
+    for (const d of pipelineQueueOf(downloads)) {
       if (d.aihub) void runAihubDownload(d.aihub);
       else if (d.variant) void runGGUFDownload(d.variant);
       else if (d.runtime) void runRuntimeInstall(d.runtime);
@@ -54,21 +58,29 @@ export function useDownloadManager() {
     setImportingProgress(id, message);
   };
 
-  // Model import (GenieX cache registration) progress.
+  // Model import (GenieX cache registration) progress. The import is keyed by the model's repo id; an
+  // OCR model imported by the Playground is shown on its own entry (see `importTargetOf`).
+
   useTauriEvent<{ model: string }>("model-pull-start", (payload) => {
+    const target = importTargetOf(useDownloadStore.getState().downloads, payload.model);
+    if (target) {
+      setStatus(target, "importing");
+      return;
+    }
     upsert({ id: payload.model, label: payload.model });
     setStatus(payload.model, "importing");
   });
 
   useTauriEvent<{ model: string; message: string }>("model-pull-progress", (payload) => {
-    setImportingProgress(payload.model, payload.message);
+    const target = importTargetOf(useDownloadStore.getState().downloads, payload.model);
+    setImportingProgress(target ?? payload.model, payload.message);
   });
 
   useTauriEvent<{ model: string }>("model-pull-complete", (payload) => {
-    const isAihub = useDownloadStore
-      .getState()
-      .downloads.some((d) => d.id === payload.model && d.aihub);
-    setStatus(payload.model, "finished");
+    const downloads = useDownloadStore.getState().downloads;
+    const target = importTargetOf(downloads, payload.model) ?? payload.model;
+    const isAihub = downloads.some((d) => d.id === target && d.aihub);
+    setStatus(target, "finished");
     toast.success("Model ready", `${payload.model} is imported and available to load.`);
     // The Rust import writes the AI Hub model's row itself, so only the library list refreshes.
     if (isAihub) void refreshModelList();

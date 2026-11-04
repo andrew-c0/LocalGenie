@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { ImageJob, ImageResult, UpscaleModel } from "../types";
 import {
   buildUpscaleRequest,
-  defaultUpscaleModel,
   isOversizedInput,
   jobOfKind,
   oversizedInputWarning,
@@ -48,16 +47,6 @@ const result: ImageResult = {
   device: "auto",
   inputPath: null,
 };
-
-describe("defaultUpscaleModel", () => {
-  it("prefers a downloaded model, else the first", () => {
-    const a = model({ id: "a", downloaded: false });
-    const b = model({ id: "b", downloaded: true });
-    expect(defaultUpscaleModel([a, b])?.id).toBe("b");
-    expect(defaultUpscaleModel([a])?.id).toBe("a");
-    expect(defaultUpscaleModel([])).toBeNull();
-  });
-});
 
 describe("input size limit", () => {
   it("flags only a longest side above the limit", () => {

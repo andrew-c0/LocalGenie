@@ -1,11 +1,8 @@
-import type { ReactNode } from "react";
 import { usePlaygroundStore } from "../../../stores/playgroundStore";
-import type { ImageModel } from "../../../types";
 import {
   buildEditRequest,
   editBlockedReason,
   imageToImageModels,
-  inputBadgeLabel,
 } from "../../../utils/imageToImage";
 import { EDIT_SECTION_TITLE } from "../../../utils/imageToImageText";
 import { SD_CPP_NAME, SD_CPP_RUNTIME_ID } from "../../../utils/playground";
@@ -13,41 +10,30 @@ import { runtimeMissingMessage } from "../../../utils/playgroundText";
 import { jobOfKind, resultOfKind } from "../../../utils/upscale";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../ui/Flex/Flex";
-import { StateBlock } from "../../ui/StateBlock/StateBlock";
-import { StatusBadge } from "../../ui/StatusBadge/StatusBadge";
 import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
 import GeneratedImage from "../ImageGeneration/GeneratedImage/GeneratedImage";
 import GenerationProgress from "../ImageGeneration/GenerationProgress/GenerationProgress";
-import { useComputeDevices } from "../ImageGeneration/useComputeDevices";
 import { newImageJobId, useImageGeneration } from "../ImageGeneration/useImageGeneration";
-import { ImageModelColumn } from "../ImageModels/ImageModelColumn/ImageModelColumn";
-import { useImageModels } from "../ImageModels/useImageModels";
+import { PickModelHint } from "../PickModelHint/PickModelHint";
 import { RuntimeNotice } from "../RuntimeNotice/RuntimeNotice";
 import { useRuntimeCheck } from "../useRuntimeCheck";
 import EditForm from "./EditForm/EditForm";
 import { InputImagePicker } from "./InputImagePicker/InputImagePicker";
 import { useInputImagePicker } from "./InputImagePicker/useInputImagePicker";
 
-/** The badge on a model card that takes a picture: "Re-draw" or "Edit with instructions". */
-function inputBadge(model: ImageModel): ReactNode {
-  const label = inputBadgeLabel(model.imageInput);
-  return label ? <StatusBadge tone="blue">{label}</StatusBadge> : null;
-}
-
 /**
- * Image to image: the models that take a picture on the left; the input picture, the form, the
- * running edit and the result beside its input on the right.
+ * Image to image: the input picture, the form, the running edit and the result. The models that take a
+ * picture are picked in the header's selector. The result shows only the edits, not the text to image ones.
  */
 export default function ImageToImagePanel() {
-  const { models, loadError } = useImageModels();
   const runtime = useRuntimeCheck(SD_CPP_RUNTIME_ID);
   const { generate, cancel: cancelJob } = useImageGeneration();
-  const compute = useComputeDevices(runtime.status);
   const setInputImage = usePlaygroundStore((s) => s.setInputImage);
   const inputPicker = useInputImagePicker(setInputImage);
 
+  const models = usePlaygroundStore((s) => s.models);
+  const devices = usePlaygroundStore((s) => s.devices);
   const selectedModelId = usePlaygroundStore((s) => s.selectedModelId);
-  const selectEditModel = usePlaygroundStore((s) => s.selectEditModel);
   const form = usePlaygroundStore((s) => s.form);
   const setForm = usePlaygroundStore((s) => s.setForm);
   const applySeed = usePlaygroundStore((s) => s.applySeed);
@@ -64,8 +50,8 @@ export default function ImageToImagePanel() {
     "generate",
   );
 
-  const editModels = models ? imageToImageModels(models) : [];
-  const selected = editModels.find((m) => m.id === selectedModelId) ?? null;
+  const editModels = models ? imageToImageModels(models) : null;
+  const selected = editModels?.find((m) => m.id === selectedModelId) ?? null;
   const blockedReason = editBlockedReason({
     runtime: runtime.status,
     model: selected,
@@ -88,47 +74,36 @@ export default function ImageToImagePanel() {
         <RuntimeNotice message={runtimeMissingMessage("Image editing", SD_CPP_NAME)} />
       )}
       {runtime.error && <ErrorBanner message={runtime.error} />}
-      {loadError && <ErrorBanner message={loadError} />}
-      {!models && !loadError && <StateBlock message="Reading image models…" />}
+
+      {editModels && selected === null && <PickModelHint />}
 
       {models && (
-        <Flex gap="l" align="start">
-          <ImageModelColumn
-            models={editModels}
-            catalog={models}
-            selectedModelId={selectedModelId}
-            onSelect={selectEditModel}
-            tagFor={inputBadge}
-          />
-
-          <Flex direction="column" gap="l" className="flex-grow">
-            <SurfaceCard title={EDIT_SECTION_TITLE}>
-              <Flex direction="column" gap="m">
-                <InputImagePicker
-                  input={inputImage}
-                  error={inputPicker.error}
-                  disabled={job !== null}
-                  onChoose={inputPicker.chooseFile}
-                  onSourceSize={setInputSourceSize}
-                />
-                <EditForm
-                  form={form}
-                  model={selected}
-                  strength={strength}
-                  onChange={setForm}
-                  onStrengthChange={setStrength}
-                  onGenerate={startEdit}
-                  blockedReason={blockedReason}
-                  compute={compute}
-                />
-              </Flex>
-            </SurfaceCard>
-            {job && <GenerationProgress job={job} onCancel={cancelJob} />}
-            {editResult && (
-              <GeneratedImage result={editResult} devices={compute.devices} onUseSeed={applySeed} />
-            )}
-          </Flex>
-        </Flex>
+        <>
+          <SurfaceCard title={EDIT_SECTION_TITLE}>
+            <Flex direction="column" gap="m">
+              <InputImagePicker
+                input={inputImage}
+                error={inputPicker.error}
+                disabled={job !== null}
+                onChoose={inputPicker.chooseFile}
+                onSourceSize={setInputSourceSize}
+              />
+              <EditForm
+                form={form}
+                model={selected}
+                strength={strength}
+                onChange={setForm}
+                onStrengthChange={setStrength}
+                onGenerate={startEdit}
+                blockedReason={blockedReason}
+              />
+            </Flex>
+          </SurfaceCard>
+          {job && <GenerationProgress job={job} onCancel={cancelJob} />}
+          {editResult && (
+            <GeneratedImage result={editResult} devices={devices} onUseSeed={applySeed} />
+          )}
+        </>
       )}
     </Flex>
   );

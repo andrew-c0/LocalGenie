@@ -5,17 +5,14 @@ import {
   autoComputeLabel,
   buildImageRequest,
   byteProgressLabel,
-  computeOptions,
   DEFAULT_IMAGE_FORM,
   DEVICE_AUTO,
-  defaultImageModel,
   deviceForRequest,
   deviceKindLabel,
   deviceOptionLabel,
   deviceSummaryLabel,
   downloadProgressLabel,
   formatElapsed,
-  freedBytesOnDelete,
   generateBlockedReason,
   generationEtaLabel,
   generationPhaseRows,
@@ -26,7 +23,10 @@ import {
   isGpuSelection,
   jobProgressPercent,
   keepDeviceSelection,
+  keepInstalledSelection,
   overallDownloadPercent,
+  playgroundPercent,
+  playgroundSourceOf,
   sizeHintText,
   sizePresetOptions,
   snapImageSize,
@@ -76,6 +76,30 @@ const job = (overrides: Partial<Parameters<typeof generationEtaLabel>[0]>) => ({
   steps: 4,
   secondsPerStep: null,
   ...overrides,
+});
+
+describe("playgroundPercent", () => {
+  it("is null before the first progress event", () => {
+    expect(playgroundPercent(null)).toBeNull();
+  });
+
+  it("is the whole download's percentage from the latest event", () => {
+    expect(
+      playgroundPercent(progress({ fileIndex: 1, fileCount: 4, received: 50, total: 100 })),
+    ).toBe(38);
+  });
+});
+
+describe("playgroundSourceOf", () => {
+  it("names GitHub for speech and upscaling models, which come from GitHub releases", () => {
+    expect(playgroundSourceOf("speech")).toBe("GitHub");
+    expect(playgroundSourceOf("upscale")).toBe("GitHub");
+  });
+
+  it("names Hugging Face for image and OCR models", () => {
+    expect(playgroundSourceOf("image")).toBe("Hugging Face");
+    expect(playgroundSourceOf("ocr")).toBe("Hugging Face");
+  });
 });
 
 describe("overallDownloadPercent", () => {
@@ -393,15 +417,26 @@ describe("form helpers", () => {
   });
 });
 
-describe("defaultImageModel", () => {
-  it("prefers the first downloaded model", () => {
-    const models = [model({ id: "a" }), model({ id: "b", downloaded: true })];
-    expect(defaultImageModel(models)?.id).toBe("b");
+describe("keepInstalledSelection", () => {
+  const catalog = [
+    { id: "a", downloaded: true },
+    { id: "b", downloaded: false },
+  ];
+
+  it("keeps a selection whose model is still installed", () => {
+    expect(keepInstalledSelection("a", catalog)).toBe("a");
   });
 
-  it("falls back to the first model, and null when there are none", () => {
-    expect(defaultImageModel([model({ id: "a" })])?.id).toBe("a");
-    expect(defaultImageModel([])).toBeNull();
+  it("clears a selection whose model is listed but not installed", () => {
+    expect(keepInstalledSelection("b", catalog)).toBeNull();
+  });
+
+  it("clears a selection whose model is gone", () => {
+    expect(keepInstalledSelection("gone", catalog)).toBeNull();
+  });
+
+  it("never chooses a model when nothing is selected", () => {
+    expect(keepInstalledSelection(null, catalog)).toBeNull();
   });
 });
 
@@ -452,18 +487,6 @@ describe("device labels", () => {
     expect(deviceKindLabel("other")).toBe("Other");
   });
 
-  it("lists Auto first, then one entry per device", () => {
-    expect(computeOptions([CPU, NPU])).toEqual([
-      { value: DEVICE_AUTO, label: "Auto (CPU)" },
-      { value: "CPU0", label: "CPU – Snapdragon X Elite" },
-      { value: "NPU0", label: "NPU – Hexagon" },
-    ]);
-  });
-
-  it("lists only Auto when no device is reported", () => {
-    expect(computeOptions([])).toEqual([{ value: DEVICE_AUTO, label: "Auto" }]);
-  });
-
   it("labels Auto as the CPU only when the build lists a CPU", () => {
     expect(autoComputeLabel([CPU])).toBe("Auto (CPU)");
     expect(autoComputeLabel([CPU, device()])).toBe("Auto (CPU)");
@@ -474,10 +497,6 @@ describe("device labels", () => {
 
   it("does not treat an other-kind device as a CPU", () => {
     expect(autoComputeLabel([device({ kind: "other" })])).toBe("Auto");
-  });
-
-  it("keeps Auto as the label of its own option when there is no CPU", () => {
-    expect(computeOptions([device()])[0]).toEqual({ value: DEVICE_AUTO, label: "Auto" });
   });
 
   it("names the auto choice and the listed device in the result summary", () => {
@@ -545,48 +564,5 @@ describe("CPU-only builds", () => {
 
   it("is false for an empty list, which says nothing about the build", () => {
     expect(isCpuOnlyBuild([])).toBe(false);
-  });
-});
-
-describe("freed size on delete", () => {
-  const file = (fileName: string, sizeBytes: number) => ({ fileName, sizeBytes, present: true });
-
-  const qwen = (overrides: Partial<ImageModel> = {}) =>
-    model({
-      id: "qwen-image",
-      name: "Qwen Image",
-      downloaded: true,
-      files: [file("qwen.safetensors", 4 * MB), file("vae.safetensors", 1 * MB)],
-      ...overrides,
-    });
-
-  const zImage = (overrides: Partial<ImageModel> = {}) =>
-    model({
-      id: "z-image",
-      name: "Z-Image",
-      downloaded: true,
-      files: [file("z.safetensors", 3 * MB), file("vae.safetensors", 1 * MB)],
-      ...overrides,
-    });
-
-  it("counts every file when no other downloaded model shares one", () => {
-    const models = [qwen(), model({ id: "other", downloaded: false, files: [] })];
-    expect(freedBytesOnDelete(qwen(), models)).toBe(5 * MB);
-  });
-
-  it("leaves out a file that another downloaded model also uses", () => {
-    const models = [qwen(), zImage()];
-    expect(freedBytesOnDelete(qwen(), models)).toBe(4 * MB);
-    expect(freedBytesOnDelete(zImage(), models)).toBe(3 * MB);
-  });
-
-  it("counts a shared file again once the other model is not downloaded", () => {
-    const models = [qwen(), zImage({ downloaded: false })];
-    expect(freedBytesOnDelete(qwen(), models)).toBe(5 * MB);
-  });
-
-  it("matches files by name only", () => {
-    const models = [qwen(), zImage({ files: [file("qwen.safetensors", 9 * MB)] })];
-    expect(freedBytesOnDelete(qwen(), models)).toBe(1 * MB);
   });
 });

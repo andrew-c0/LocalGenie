@@ -1,61 +1,48 @@
-import { Badge, Button, Popover, PopoverTrigger } from "@fluentui/react-components";
+import { Badge, Button } from "@fluentui/react-components";
 import {
   ArrowDownloadRegular,
-  ChevronDownRegular,
   PlugConnectedRegular,
   PlugDisconnectedRegular,
 } from "@fluentui/react-icons";
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
+import { isPlaygroundPath } from "../../../navigation/routeUtils";
 import { isDownloadActive, useDownloadStore } from "../../../stores/downloadStore";
 import { useModelStore } from "../../../stores/modelStore";
 import { Flex } from "../../ui/Flex/Flex";
 import DownloadDrawer from "../DownloadDrawer/DownloadDrawer";
-import ModelSelectorPopover from "./ModelSelectorPopover/ModelSelectorPopover";
+import { ChatModelSelector } from "./ChatModelSelector/ChatModelSelector";
+import { PlaygroundModelSelector } from "./PlaygroundModelSelector/PlaygroundModelSelector";
 import { useModelLoader } from "./useModelLoader";
 import "./Header.css";
 
-/** Top bar: active model selector (which owns model loading), server status and the downloads button. */
+/**
+ * Top bar: the model selector (the chat selector, or the Playground's on the Playground pages), server
+ * status and the downloads button. The loader runs here on every page, so a load or the server's stop
+ * event is handled wherever the user is.
+ */
 export default function Header() {
+  const { pathname } = useLocation();
   const serverStatus = useModelStore((s) => s.serverStatus);
-  const activeModelId = useModelStore((s) => s.activeModelId);
-  const selectorOpen = useModelStore((s) => s.selectorOpen);
-  const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
   const activeDownloads = useDownloadStore(
     (s) => s.downloads.filter((d) => isDownloadActive(d.status)).length,
   );
   const { loading, error, selectModel, changeCompute, unloadAll } = useModelLoader();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const activeName = activeModelId ?? serverStatus.models[0] ?? null;
-  const activeLabel = activeName ? activeName.split("/").pop() : null;
-
   return (
     <Flex align="center" gap="s" className="header">
-      <Popover
-        open={selectorOpen}
-        onOpenChange={(_, data) => setSelectorOpen(data.open)}
-        positioning={{ position: "below", align: "start", matchTargetSize: "width" }}
-      >
-        <PopoverTrigger disableButtonEnhancement>
-          <Button
-            appearance="secondary"
-            icon={<ChevronDownRegular />}
-            iconPosition="after"
-            aria-label="Switch active model"
-            title="Switch active model"
-            className="flex-grow header__model"
-          >
-            {activeLabel ? `Active Model: ${activeLabel}` : "Model selector: no model loaded"}
-          </Button>
-        </PopoverTrigger>
-        <ModelSelectorPopover
+      {isPlaygroundPath(pathname) ? (
+        <PlaygroundModelSelector />
+      ) : (
+        <ChatModelSelector
           loading={loading}
           error={error}
           onSelect={selectModel}
           onComputeChange={changeCompute}
           onUnload={unloadAll}
         />
-      </Popover>
+      )}
 
       <Badge
         className="header__status"

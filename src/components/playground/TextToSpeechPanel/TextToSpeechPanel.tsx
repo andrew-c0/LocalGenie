@@ -24,15 +24,15 @@ import { OptionDropdown } from "../../ui/OptionDropdown/OptionDropdown";
 import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
 import { Body, Meta } from "../../ui/Typography/Typography";
 import { AudioInput } from "../AudioInput/AudioInput";
+import { PickModelHint } from "../PickModelHint/PickModelHint";
 import { RuntimeNotice } from "../RuntimeNotice/RuntimeNotice";
 import { SpeechJobProgress } from "../SpeechJobProgress/SpeechJobProgress";
 import { useSpeechJobCancel } from "../SpeechJobProgress/useSpeechJobCancel";
-import { SpeechModelColumn } from "../SpeechModels/SpeechModelColumn";
 import { useRuntimeCheck } from "../useRuntimeCheck";
 import { SpeechOutput } from "./SpeechOutput/SpeechOutput";
 import { useSynthesis } from "./useSynthesis";
 
-/** Text to speech: the model list on the left; the text, voice and speed, the running job and the speech on the right. */
+/** Text to speech: the text, voice and speed, the running job and the speech. The model is picked in the header's selector. */
 export default function TextToSpeechPanel() {
   const runtime = useRuntimeCheck(SHERPA_RUNTIME_ID);
   const models = useSpeechStore((s) => s.models);
@@ -61,80 +61,78 @@ export default function TextToSpeechPanel() {
   });
 
   return (
-    <Flex gap="l" align="start">
-      <SpeechModelColumn kind="tts" />
+    <Flex direction="column" gap="l">
+      {runtime.status === "missing" && (
+        <RuntimeNotice message={runtimeMissingMessage("Text to speech", SHERPA_NAME)} />
+      )}
+      {runtime.error && <ErrorBanner message={runtime.error} />}
 
-      <Flex direction="column" gap="l" className="flex-grow">
-        {runtime.status === "missing" && (
-          <RuntimeNotice message={runtimeMissingMessage("Text to speech", SHERPA_NAME)} />
-        )}
-        {runtime.error && <ErrorBanner message={runtime.error} />}
+      {models && selected === null && <PickModelHint />}
 
-        <SurfaceCard title="Speak">
-          <Flex direction="column" gap="m">
-            <Field label="Text">
-              <Textarea
-                value={form.text}
-                onChange={(_, data) => setForm({ text: data.value })}
-                resize="vertical"
-                rows={4}
-                placeholder="Type what the voice should say"
-              />
+      <SurfaceCard title="Speak">
+        <Flex direction="column" gap="m">
+          <Field label="Text">
+            <Textarea
+              value={form.text}
+              onChange={(_, data) => setForm({ text: data.value })}
+              resize="vertical"
+              rows={4}
+              placeholder="Type what the voice should say"
+            />
+          </Field>
+
+          {needsReference ? (
+            <Field label={REFERENCE_SECTION_TITLE}>
+              <AudioInput audio={audio} disabled={job !== null} hint={REFERENCE_HINT} />
             </Field>
+          ) : (
+            <>
+              <OptionDropdown
+                label="Voice"
+                fullWidth
+                options={voiceOptions(voices)}
+                value={voiceId === null ? null : String(voiceId)}
+                onChange={(value) => setForm({ voiceId: Number(value) })}
+                disabled={voiceId === null}
+              />
 
-            {needsReference ? (
-              <Field label={REFERENCE_SECTION_TITLE}>
-                <AudioInput audio={audio} disabled={job !== null} hint={REFERENCE_HINT} />
+              <Field label={<HelpLabel label="Speed" help={SPEED_HELP} />}>
+                <Flex gap="m" align="center">
+                  <div className="flex-grow">
+                    <Slider
+                      min={SPEED_MIN}
+                      max={SPEED_MAX}
+                      step={SPEED_STEP}
+                      value={form.speed}
+                      onChange={(_, data) => setForm({ speed: data.value })}
+                    />
+                  </div>
+                  <Body>{form.speed.toFixed(1)}x</Body>
+                </Flex>
               </Field>
-            ) : (
-              <>
-                <OptionDropdown
-                  label="Voice"
-                  fullWidth
-                  options={voiceOptions(voices)}
-                  value={voiceId === null ? null : String(voiceId)}
-                  onChange={(value) => setForm({ voiceId: Number(value) })}
-                  disabled={voiceId === null}
-                />
+            </>
+          )}
 
-                <Field label={<HelpLabel label="Speed" help={SPEED_HELP} />}>
-                  <Flex gap="m" align="center">
-                    <div className="flex-grow">
-                      <Slider
-                        min={SPEED_MIN}
-                        max={SPEED_MAX}
-                        step={SPEED_STEP}
-                        value={form.speed}
-                        onChange={(_, data) => setForm({ speed: data.value })}
-                      />
-                    </div>
-                    <Body>{form.speed.toFixed(1)}x</Body>
-                  </Flex>
-                </Field>
-              </>
-            )}
-
-            <Flex gap="m" align="center" wrap>
-              <Button
-                appearance="primary"
-                disabled={blockedReason !== null}
-                onClick={() => {
-                  if (!selected) return;
-                  if (needsReference) synthesize(selected, form, 0, referencePath);
-                  else if (voiceId !== null) synthesize(selected, form, voiceId);
-                }}
-              >
-                Generate
-              </Button>
-              {blockedReason && <Meta>{blockedReason}</Meta>}
-            </Flex>
-            <Meta>{SPEECH_CPU_NOTE}</Meta>
+          <Flex gap="m" align="center" wrap>
+            <Button
+              appearance="primary"
+              disabled={blockedReason !== null}
+              onClick={() => {
+                if (!selected) return;
+                if (needsReference) synthesize(selected, form, 0, referencePath);
+                else if (voiceId !== null) synthesize(selected, form, voiceId);
+              }}
+            >
+              Generate
+            </Button>
+            {blockedReason && <Meta>{blockedReason}</Meta>}
           </Flex>
-        </SurfaceCard>
+          <Meta>{SPEECH_CPU_NOTE}</Meta>
+        </Flex>
+      </SurfaceCard>
 
-        {ttsJob && <SpeechJobProgress job={ttsJob} onCancel={cancel} />}
-        {result && <SpeechOutput result={result} />}
-      </Flex>
+      {ttsJob && <SpeechJobProgress job={ttsJob} onCancel={cancel} />}
+      {result && <SpeechOutput result={result} />}
     </Flex>
   );
 }

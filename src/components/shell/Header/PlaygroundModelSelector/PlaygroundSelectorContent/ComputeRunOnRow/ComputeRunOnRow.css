@@ -1,0 +1,5 @@
+/* Scoped override: RadioGroup takes its own flex sizing, so the options keep their natural width at the right end. */
+.compute-run-on .compute-run-on__options {
+  flex: 0 0 auto;
+  column-gap: var(--spacingHorizontalM);
+}

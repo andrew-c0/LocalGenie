@@ -12,8 +12,6 @@ import { spinNumber } from "../../../../utils/spinValue";
 import { Flex } from "../../../ui/Flex/Flex";
 import { HelpLabel } from "../../../ui/HelpLabel/HelpLabel";
 import { PromptField } from "../PromptField/PromptField";
-import type { ComputeControls } from "../useComputeDevices";
-import { ComputeField } from "./ComputeField";
 import { ImageSizeSection } from "./ImageSizeSection";
 
 const MAX_STEPS = 150;
@@ -26,7 +24,6 @@ interface ImageSettingsFieldsProps {
   /** The selected model. Its capabilities decide which fields can be changed. */
   model: ImageModel | null;
   onChange: (patch: Partial<ImageForm>) => void;
-  compute: ComputeControls;
   /** Width and height must be multiples of this. Left out for text to image's 8. */
   sizeStep?: number;
   /** Replaces the size hint, e.g. when the size follows the input picture. */
@@ -35,13 +32,13 @@ interface ImageSettingsFieldsProps {
 
 /**
  * The settings both image tabs share, below their prompts: the negative prompt, size, steps and CFG
- * scale, seed and compute. Editing is allowed while an image runs; Generate waits for it.
+ * scale and seed. Editing is allowed while an image runs; Generate waits for it. The compute choice is
+ * in the Playground selector.
  */
 export function ImageSettingsFields({
   form,
   model,
   onChange,
-  compute,
   sizeStep,
   sizeHint,
 }: ImageSettingsFieldsProps) {
@@ -112,12 +109,6 @@ export function ImageSettingsFields({
           />
         </Field>
       </Flex>
-
-      <ComputeField
-        selected={form.device}
-        onSelect={(device) => onChange({ device })}
-        controls={compute}
-      />
     </Flex>
   );
 }

@@ -4,7 +4,6 @@ import { Flex } from "../../../ui/Flex/Flex";
 import { GenerateFooter } from "../../ImageGeneration/GenerateFooter/GenerateFooter";
 import { ImageSettingsFields } from "../../ImageGeneration/ImageSettingsFields/ImageSettingsFields";
 import { PromptField } from "../../ImageGeneration/PromptField/PromptField";
-import type { ComputeControls } from "../../ImageGeneration/useComputeDevices";
 
 interface GenerateFormProps {
   form: ImageForm;
@@ -14,7 +13,6 @@ interface GenerateFormProps {
   onGenerate: () => void;
   /** Why Generate is off. Null when it can run. */
   blockedReason: string | null;
-  compute: ComputeControls;
 }
 
 /** The text-to-image inputs and the Generate button. */
@@ -24,7 +22,6 @@ export default function GenerateForm({
   onChange,
   onGenerate,
   blockedReason,
-  compute,
 }: GenerateFormProps) {
   return (
     <Flex direction="column" gap="m">
@@ -35,7 +32,7 @@ export default function GenerateForm({
         rows={3}
         placeholder="Describe the image"
       />
-      <ImageSettingsFields form={form} model={model} onChange={onChange} compute={compute} />
+      <ImageSettingsFields form={form} model={model} onChange={onChange} />
       <GenerateFooter
         onGenerate={onGenerate}
         blockedReason={blockedReason}

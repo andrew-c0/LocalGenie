@@ -116,3 +116,16 @@ export function sectionOf(pathname: string): RouteMeta {
   );
   return section ?? OVERVIEW_ROUTE;
 }
+
+/** True on the Playground landing and on every Playground tool page. */
+export function isPlaygroundPath(pathname: string): boolean {
+  return sectionOf(pathname).id === "playground";
+}
+
+/** The Playground tool whose page the pathname is, or null on the landing and anywhere else. */
+export function playgroundToolOf(pathname: string): RouteMeta | null {
+  return (
+    childrenOf("playground").find((tool) => matchPath({ path: tool.path, end: true }, pathname)) ??
+    null
+  );
+}

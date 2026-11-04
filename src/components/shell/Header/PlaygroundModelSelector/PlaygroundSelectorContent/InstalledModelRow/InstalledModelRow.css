@@ -1,0 +1,19 @@
+/* A downloaded model is a card. Its button on the right picks the model, or clears it when it is selected. */
+.installed-model-row {
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--spacingVerticalS) var(--spacingHorizontalL);
+  border: 1px solid var(--colorNeutralStroke2);
+  border-radius: var(--borderRadiusXLarge);
+  background: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground1);
+}
+
+/* The model the tool uses is marked by a brand outline. */
+.installed-model-row--selected {
+  border-color: var(--colorBrandStroke1);
+}
+
+.installed-model-row__text {
+  min-width: 0;
+}

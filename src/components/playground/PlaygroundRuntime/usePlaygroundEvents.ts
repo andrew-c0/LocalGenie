@@ -1,5 +1,10 @@
 import { useTauriEvent } from "../../../hooks";
 import * as playground from "../../../services/playground";
+import {
+  downloadSourceName,
+  playgroundDownloadId,
+  useDownloadStore,
+} from "../../../stores/downloadStore";
 import { useOcrStore } from "../../../stores/ocrStore";
 import { usePlaygroundStore } from "../../../stores/playgroundStore";
 import { useSpeechStore } from "../../../stores/speechStore";
@@ -34,10 +39,15 @@ function modelName(modelId: string): string {
   return imageName ?? ocrName ?? speechName ?? modelId;
 }
 
-/** The service a model downloads from: speech models come from GitHub releases, the rest from Hugging Face. */
+/**
+ * The service a model downloads from, named in a failure. The drawer item carries it (it is set when the
+ * download starts). Hugging Face is only the fallback for an event with no item.
+ */
 function downloadSourceOf(modelId: string): string {
-  const isSpeech = useSpeechStore.getState().models?.some((m) => m.id === modelId) ?? false;
-  return isSpeech ? SERVICE_NAMES.github : SERVICE_NAMES.huggingFace;
+  const item = useDownloadStore
+    .getState()
+    .downloads.find((d) => d.id === playgroundDownloadId(modelId));
+  return item ? downloadSourceName(item) : SERVICE_NAMES.huggingFace;
 }
 
 /** Re-read the catalog that lists the model, so its card shows Ready. Image and speech models have separate catalogs. */
@@ -61,18 +71,22 @@ function refreshCatalogFor(modelId: string): Promise<void> {
   return Promise.resolve();
 }
 
-/** A finished model download: refresh the catalog so the card shows Ready, then drop the download entry. */
+/**
+ * A finished model download. The drawer item is the one state the model rows read: a cancel marks it
+ * cancelled (not failed), a failure keeps the raw error, and a success stays running until the catalog
+ * is read again, so the card shows Ready (not Not downloaded) once the row stops showing the download.
+ */
 function handleDownloadDone(payload: PlaygroundDownloadDone) {
-  const store = usePlaygroundStore.getState();
+  const drawer = useDownloadStore.getState();
   const { modelId } = payload;
 
   if (payload.status === "cancelled") {
-    store.markDownloadCancelled(modelId);
+    drawer.cancelPlayground(modelId);
     return;
   }
   if (payload.status === "error") {
     const message = errorMessage(payload.error, "The download failed.");
-    store.failDownload(modelId, message);
+    drawer.failPlayground(modelId, message);
     toast.error("Model download failed", networkErrorMessage(message, downloadSourceOf(modelId)));
     return;
   }
@@ -82,9 +96,14 @@ function handleDownloadDone(payload: PlaygroundDownloadDone) {
       toast.error("Could not refresh the models", errorMessage(err));
     })
     .finally(() => {
-      usePlaygroundStore.getState().clearDownload(modelId);
+      useDownloadStore.getState().finishPlayground(modelId);
     });
   toast.success("Model downloaded", modelName(modelId));
+}
+
+/** Progress of a model download: the drawer item's bar, byte counts, speed and file line. */
+function handleDownloadProgress(payload: PlaygroundDownloadProgress) {
+  useDownloadStore.getState().setPlaygroundProgress(payload.modelId, payload);
 }
 
 /** A finished generation: store the result. Toasts only for the job the store is waiting on. */
@@ -150,7 +169,7 @@ function handleSpeechDone(payload: PlaygroundSpeechDone) {
 export function usePlaygroundEvents() {
   useTauriEvent<PlaygroundDownloadProgress>(
     playground.PLAYGROUND_DOWNLOAD_PROGRESS_EVENT,
-    (payload) => usePlaygroundStore.getState().setDownloadProgress(payload),
+    handleDownloadProgress,
   );
   useTauriEvent<PlaygroundDownloadDone>(
     playground.PLAYGROUND_DOWNLOAD_DONE_EVENT,

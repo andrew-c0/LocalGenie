@@ -19,7 +19,7 @@ function installedCount(models: readonly Downloadable[]): number {
 
 /**
  * Starts the catalog reads behind the landing's counts, as [route id, count] pairs. Each tool reads the
- * catalog its panel reads. The image catalog feeds two tabs (text to image lists all of it, image to image
+ * catalog the selector lists. The image catalog feeds two tabs (text to image lists all of it, image to image
  * its edit models), and the speech catalog feeds three (the audio to audio tab lists both of its tasks).
  */
 function readInstalledCounts(): [string, Promise<number>][] {
@@ -47,7 +47,7 @@ function readInstalledCounts(): [string, Promise<number>][] {
 
 /**
  * The live fact on each Playground landing row ("2 models installed"), keyed by route id. Each catalog is
- * read once on mount with the services the tools' panels already use, and is not written to the stores.
+ * read once on mount with the same services the selector uses, and is not written to the stores.
  * A row has no fact while its catalog loads, and none if the read fails.
  */
 export function usePlaygroundCounts(): Record<string, string> {

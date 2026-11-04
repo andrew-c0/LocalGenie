@@ -8,8 +8,6 @@ import type {
   ImageSize,
   InputImage,
   PlaygroundDevice,
-  PlaygroundDownloadProgress,
-  PlaygroundDownloadState,
   PlaygroundImageProgress,
   UpscaleModel,
 } from "../types";
@@ -22,14 +20,14 @@ import {
 import {
   applyModelDefaults,
   DEFAULT_IMAGE_FORM,
-  defaultImageModel,
   keepDeviceSelection,
+  keepInstalledSelection,
 } from "../utils/playground";
-import { defaultUpscaleModel } from "../utils/upscale";
 
 /**
  * Playground state, kept across page visits. It holds the model catalog, the selection, the form,
- * the image to image input, model downloads, the running generation and the last result (text to image, image to image and upscaling share one job slot). The event
+ * the image to image input, the running generation and the last result (text to image, image to image
+ * and upscaling share one job slot). Model downloads live in the download store (the drawer). The event
  * listeners and the service calls live outside the store (`PlaygroundRuntime` and the panel hooks).
  */
 interface PlaygroundState {
@@ -43,8 +41,6 @@ interface PlaygroundState {
   inputImage: InputImage | null;
   /** How far a re-draw model moves away from the input picture. */
   strength: number;
-  /** Downloads started in this session, keyed by model id. A finished download is removed. */
-  downloads: Record<string, PlaygroundDownloadState>;
   /** Upscaling models. Null until the catalog has been read. */
   upscaleModels: UpscaleModel[] | null;
   upscaleModelId: string | null;
@@ -54,7 +50,7 @@ interface PlaygroundState {
   job: ImageJob | null;
   result: ImageResult | null;
 
-  /** Replace the catalog. The selection stays when its model is still listed, else a default is chosen. */
+  /** Replace the catalog. The selection stays while its model is still installed, else it is cleared. */
   setModels: (models: ImageModel[]) => void;
   /** Replace the catalog after a delete. The deleted model is not selected again, and no default is chosen. */
   replaceModelsAfterDelete: (models: ImageModel[], deletedModelId: string) => void;
@@ -62,6 +58,8 @@ interface PlaygroundState {
   setDevices: (devices: PlaygroundDevice[]) => void;
   /** Select a model and take its size, steps and CFG scale as the form's values. */
   selectModel: (model: ImageModel) => void;
+  /** Clear the image model selection. Nothing is selected until the user picks one. */
+  clearModelSelection: () => void;
   setForm: (patch: Partial<ImageForm>) => void;
   /** Fill the form seed with a seed from a result and turn random seeds off. */
   applySeed: (seed: number) => void;
@@ -74,20 +72,16 @@ interface PlaygroundState {
   /** Select a model for image to image: its defaults, with the size taken from the input picture. */
   selectEditModel: (model: ImageModel) => void;
 
-  /** Replace the upscaling catalog. The selection stays when its model is still listed, else a default is chosen. */
+  /** Replace the upscaling catalog. The selection stays while its model is still installed, else it is cleared. */
   setUpscaleModels: (models: UpscaleModel[]) => void;
   /** Replace the upscaling catalog after a delete. The deleted model is not selected again. */
   replaceUpscaleModelsAfterDelete: (models: UpscaleModel[], deletedModelId: string) => void;
   selectUpscaleModel: (modelId: string) => void;
+  /** Clear the upscaling model selection. */
+  clearUpscaleModelSelection: () => void;
   /** Pick the upscale input picture. Its size is not known until its preview has loaded. */
   setUpscaleInput: (input: InputImage) => void;
   setUpscaleInputSize: (size: ImageSize) => void;
-
-  startDownload: (modelId: string) => void;
-  setDownloadProgress: (progress: PlaygroundDownloadProgress) => void;
-  markDownloadCancelled: (modelId: string) => void;
-  failDownload: (modelId: string, error: string) => void;
-  clearDownload: (modelId: string) => void;
 
   /** Start a job and clear the previous result. */
   startJob: (job: ImageJob) => void;
@@ -110,7 +104,6 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
   form: DEFAULT_IMAGE_FORM,
   inputImage: null,
   strength: DEFAULT_STRENGTH,
-  downloads: {},
   upscaleModels: null,
   upscaleModelId: null,
   upscaleInput: null,
@@ -118,17 +111,10 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
   result: null,
 
   setModels: (models) =>
-    set((state) => {
-      if (state.selectedModelId && models.some((m) => m.id === state.selectedModelId)) {
-        return { models };
-      }
-      const fallback = defaultImageModel(models);
-      return {
-        models,
-        selectedModelId: fallback?.id ?? null,
-        form: fallback ? applyModelDefaults(state.form, fallback.defaults) : state.form,
-      };
-    }),
+    set((state) => ({
+      models,
+      selectedModelId: keepInstalledSelection(state.selectedModelId, models),
+    })),
 
   replaceModelsAfterDelete: (models, deletedModelId) =>
     set((state) => ({
@@ -147,6 +133,8 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
       selectedModelId: model.id,
       form: applyModelDefaults(state.form, model.defaults),
     })),
+
+  clearModelSelection: () => set({ selectedModelId: null }),
 
   setForm: (patch) => set((state) => ({ form: { ...state.form, ...patch } })),
 
@@ -178,12 +166,10 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
     })),
 
   setUpscaleModels: (models) =>
-    set((state) => {
-      if (state.upscaleModelId && models.some((m) => m.id === state.upscaleModelId)) {
-        return { upscaleModels: models };
-      }
-      return { upscaleModels: models, upscaleModelId: defaultUpscaleModel(models)?.id ?? null };
-    }),
+    set((state) => ({
+      upscaleModels: models,
+      upscaleModelId: keepInstalledSelection(state.upscaleModelId, models),
+    })),
 
   replaceUpscaleModelsAfterDelete: (models, deletedModelId) =>
     set((state) => ({
@@ -193,64 +179,14 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
 
   selectUpscaleModel: (modelId) => set({ upscaleModelId: modelId }),
 
+  clearUpscaleModelSelection: () => set({ upscaleModelId: null }),
+
   setUpscaleInput: (input) => set({ upscaleInput: input }),
 
   setUpscaleInputSize: (size) =>
     set((state) =>
       state.upscaleInput ? { upscaleInput: { ...state.upscaleInput, sourceSize: size } } : {},
     ),
-
-  startDownload: (modelId) =>
-    set((state) => ({
-      downloads: {
-        ...state.downloads,
-        [modelId]: { status: "downloading", progress: null, error: null },
-      },
-    })),
-
-  setDownloadProgress: (progress) =>
-    set((state) => {
-      const current = state.downloads[progress.modelId];
-      // Late progress after a cancel must not turn the card back into a running download.
-      if (current?.status !== "downloading") return {};
-      return {
-        downloads: {
-          ...state.downloads,
-          [progress.modelId]: { ...current, progress },
-        },
-      };
-    }),
-
-  markDownloadCancelled: (modelId) =>
-    set((state) => {
-      const current = state.downloads[modelId];
-      if (!current) return {};
-      return {
-        downloads: {
-          ...state.downloads,
-          [modelId]: { ...current, status: "cancelled", error: null },
-        },
-      };
-    }),
-
-  failDownload: (modelId, error) =>
-    set((state) => {
-      const current = state.downloads[modelId];
-      if (!current) return {};
-      return {
-        downloads: {
-          ...state.downloads,
-          [modelId]: { ...current, status: "error", error },
-        },
-      };
-    }),
-
-  clearDownload: (modelId) =>
-    set((state) => {
-      const downloads = { ...state.downloads };
-      delete downloads[modelId];
-      return { downloads };
-    }),
 
   startJob: (job) => set({ job, result: null }),
 

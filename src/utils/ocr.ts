@@ -12,6 +12,7 @@ import {
   OCR_DOWNLOAD_FIRST_REASON,
   OCR_JOB_RUNNING_REASON,
   OCR_NO_MODEL_REASON,
+  OCR_SERVER_STARTING_REASON,
   OCR_SERVER_STOPPED_REASON,
   ocrOversizedMessage,
 } from "./ocrText";
@@ -31,11 +32,6 @@ export function defaultOcrMode(model: OcrModel | null): OcrMode | null {
 export function effectiveOcrMode(model: OcrModel | null, chosen: OcrMode): OcrMode {
   if (model?.modes.some((mode) => mode.id === chosen)) return chosen;
   return defaultOcrMode(model) ?? chosen;
-}
-
-/** The model a selection falls back to: the first downloaded one, else the first listed. */
-export function defaultOcrModel(models: OcrModel[]): OcrModel | null {
-  return models.find((model) => model.downloaded) ?? models[0] ?? null;
 }
 
 /** The warning for a picture that is too large, or null when its size is unknown or fine. */
@@ -60,12 +56,14 @@ export function ocrBlockedReason(gate: {
   model: OcrModel | null;
   inputPath: string | null;
   serverRunning: boolean;
+  serverStarting: boolean;
   jobRunning: boolean;
 }): string | null {
   if (gate.jobRunning) return OCR_JOB_RUNNING_REASON;
   if (!gate.model) return OCR_NO_MODEL_REASON;
   if (!gate.model.downloaded) return OCR_DOWNLOAD_FIRST_REASON;
   if (!gate.inputPath) return NO_INPUT_REASON;
+  if (gate.serverStarting) return OCR_SERVER_STARTING_REASON;
   if (!gate.serverRunning) return OCR_SERVER_STOPPED_REASON;
   return null;
 }

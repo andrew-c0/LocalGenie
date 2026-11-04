@@ -8,15 +8,15 @@ import { Flex } from "../../ui/Flex/Flex";
 import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
 import { Meta } from "../../ui/Typography/Typography";
 import { AudioInput } from "../AudioInput/AudioInput";
+import { PickModelHint } from "../PickModelHint/PickModelHint";
 import { RuntimeNotice } from "../RuntimeNotice/RuntimeNotice";
 import { SpeechJobProgress } from "../SpeechJobProgress/SpeechJobProgress";
 import { useSpeechJobCancel } from "../SpeechJobProgress/useSpeechJobCancel";
-import { SpeechModelColumn } from "../SpeechModels/SpeechModelColumn";
 import { useRuntimeCheck } from "../useRuntimeCheck";
 import { TranscriptResult } from "./TranscriptResult/TranscriptResult";
 import { useTranscription } from "./useTranscription";
 
-/** Speech to text: the model list on the left; the audio input, the running job and the transcript on the right. */
+/** Speech to text: the audio input, the running job and the transcript. The model is picked in the header's selector. */
 export default function SpeechToTextPanel() {
   const runtime = useRuntimeCheck(SHERPA_RUNTIME_ID);
   const models = useSpeechStore((s) => s.models);
@@ -37,37 +37,35 @@ export default function SpeechToTextPanel() {
   });
 
   return (
-    <Flex gap="l" align="start">
-      <SpeechModelColumn kind="stt" />
+    <Flex direction="column" gap="l">
+      {runtime.status === "missing" && (
+        <RuntimeNotice message={runtimeMissingMessage("Speech to text", SHERPA_NAME)} />
+      )}
+      {runtime.error && <ErrorBanner message={runtime.error} />}
 
-      <Flex direction="column" gap="l" className="flex-grow">
-        {runtime.status === "missing" && (
-          <RuntimeNotice message={runtimeMissingMessage("Speech to text", SHERPA_NAME)} />
-        )}
-        {runtime.error && <ErrorBanner message={runtime.error} />}
+      {models && selected === null && <PickModelHint />}
 
-        <SurfaceCard title="Transcribe">
-          <Flex direction="column" gap="m">
-            <AudioInput audio={audio} disabled={job !== null} hint={AUDIO_INPUT_HINT} />
-            <Flex gap="m" align="center" wrap>
-              <Button
-                appearance="primary"
-                disabled={blockedReason !== null}
-                onClick={() => {
-                  if (selected && audio) transcribe(selected, audio);
-                }}
-              >
-                Transcribe
-              </Button>
-              {blockedReason && <Meta>{blockedReason}</Meta>}
-            </Flex>
-            <Meta>{SPEECH_CPU_NOTE}</Meta>
+      <SurfaceCard title="Transcribe">
+        <Flex direction="column" gap="m">
+          <AudioInput audio={audio} disabled={job !== null} hint={AUDIO_INPUT_HINT} />
+          <Flex gap="m" align="center" wrap>
+            <Button
+              appearance="primary"
+              disabled={blockedReason !== null}
+              onClick={() => {
+                if (selected && audio) transcribe(selected, audio);
+              }}
+            >
+              Transcribe
+            </Button>
+            {blockedReason && <Meta>{blockedReason}</Meta>}
           </Flex>
-        </SurfaceCard>
+          <Meta>{SPEECH_CPU_NOTE}</Meta>
+        </Flex>
+      </SurfaceCard>
 
-        {sttJob && <SpeechJobProgress job={sttJob} onCancel={cancel} />}
-        {result && <TranscriptResult result={result} />}
-      </Flex>
+      {sttJob && <SpeechJobProgress job={sttJob} onCancel={cancel} />}
+      {result && <TranscriptResult result={result} />}
     </Flex>
   );
 }

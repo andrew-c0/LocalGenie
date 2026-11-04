@@ -36,6 +36,7 @@ beforeEach(() => {
   useOcrStore.setState({
     models: null,
     selectedModelId: null,
+    serverStarting: false,
     mode: "text",
     input: null,
     settings: DEFAULT_OCR_COMPUTE,
@@ -49,16 +50,37 @@ describe("ocrStore", () => {
     expect(useOcrStore.getState().settings).toEqual({ compute: "cpu", visionCompute: "npu" });
   });
 
-  it("selects the first downloaded model when the catalog arrives", () => {
+  it("selects nothing when the catalog arrives", () => {
+    useOcrStore.getState().setModels([model("a"), model("b", true)]);
+    expect(useOcrStore.getState().selectedModelId).toBeNull();
+  });
+
+  it("keeps a selection while its model is still installed", () => {
+    useOcrStore.getState().setModels([model("a"), model("b", true)]);
+    useOcrStore.getState().selectModel("b");
     useOcrStore.getState().setModels([model("a"), model("b", true)]);
     expect(useOcrStore.getState().selectedModelId).toBe("b");
   });
 
-  it("keeps a selection that is still listed", () => {
-    useOcrStore.getState().setModels([model("a"), model("b", true)]);
+  it("clears a selection whose model is listed but no longer installed", () => {
+    useOcrStore.getState().setModels([model("a", true)]);
     useOcrStore.getState().selectModel("a");
-    useOcrStore.getState().setModels([model("a"), model("b", true)]);
-    expect(useOcrStore.getState().selectedModelId).toBe("a");
+    useOcrStore.getState().setModels([model("a")]);
+    expect(useOcrStore.getState().selectedModelId).toBeNull();
+  });
+
+  it("clears the selection on request", () => {
+    useOcrStore.getState().setModels([model("a", true)]);
+    useOcrStore.getState().selectModel("a");
+    useOcrStore.getState().clearModelSelection();
+    expect(useOcrStore.getState().selectedModelId).toBeNull();
+  });
+
+  it("tracks whether the server is starting", () => {
+    useOcrStore.getState().setServerStarting(true);
+    expect(useOcrStore.getState().serverStarting).toBe(true);
+    useOcrStore.getState().setServerStarting(false);
+    expect(useOcrStore.getState().serverStarting).toBe(false);
   });
 
   it("clears the selection of a deleted model", () => {

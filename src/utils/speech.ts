@@ -10,7 +10,7 @@ import type {
   SpeechVoice,
 } from "../types";
 import type { RuntimeStatus } from "./playground";
-import { formatElapsed, runtimeBlockedReason } from "./playground";
+import { formatElapsed, keepInstalledSelection, runtimeBlockedReason } from "./playground";
 import { REFERENCE_REQUIRED_MESSAGE } from "./speechText";
 
 /** Runtime id of sherpa-onnx in the runtime registry. Speech to text and text to speech both run on it. */
@@ -53,24 +53,15 @@ export function speechModelsOfKind(models: SpeechModel[], kind: SpeechKind): Spe
   return models.filter((model) => model.kind === kind);
 }
 
-/** The model a selection of one kind falls back to: the first downloaded one, else the first listed. */
-export function defaultSpeechModel(models: SpeechModel[], kind: SpeechKind): SpeechModel | null {
-  const ofKind = speechModelsOfKind(models, kind);
-  return ofKind.find((model) => model.downloaded) ?? ofKind[0] ?? null;
-}
-
 function keepOneSelection(
   current: string | null,
   models: SpeechModel[],
   kind: SpeechKind,
 ): string | null {
-  if (current && models.some((model) => model.id === current && model.kind === kind)) {
-    return current;
-  }
-  return defaultSpeechModel(models, kind)?.id ?? null;
+  return keepInstalledSelection(current, speechModelsOfKind(models, kind));
 }
 
-/** The selections after the catalog changes. A selection stays while its model is still listed, else falls back to the kind's default. */
+/** The selections after the catalog changes. Each stays while its model is still listed and installed, else it is cleared. */
 export function keepSpeechSelection(
   selected: SpeechSelection,
   models: SpeechModel[],

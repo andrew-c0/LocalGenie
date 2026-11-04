@@ -12,7 +12,6 @@ import {
   buildTranscribeRequest,
   canSynthesize,
   clearDeletedSelection,
-  defaultSpeechModel,
   failedSpeechResult,
   fileNameOf,
   isWavPath,
@@ -100,50 +99,44 @@ describe("speech model selection", () => {
     separate({ id: "spleeter", downloaded: false }),
   ];
 
-  it("falls back to the first downloaded model of the kind, else the first listed", () => {
-    expect(defaultSpeechModel(catalog, "stt")?.id).toBe("moonshine");
-    expect(defaultSpeechModel(catalog, "tts")?.id).toBe("kokoro");
-    expect(defaultSpeechModel(catalog, "denoise")?.id).toBe("gtcrn");
-    expect(defaultSpeechModel(catalog, "separate")?.id).toBe("spleeter");
-    expect(defaultSpeechModel([model({ downloaded: false })], "stt")?.downloaded).toBe(false);
-    expect(defaultSpeechModel([], "tts")).toBeNull();
-  });
-
-  it("keeps each kind's selection while its model is still listed", () => {
+  it("keeps each kind's selection while its model is still installed", () => {
     const next = keepSpeechSelection(
-      { stt: "whisper", tts: "kokoro", denoise: "gtcrn", separate: "spleeter" },
+      { stt: "moonshine", tts: null, denoise: "gtcrn", separate: null },
       catalog,
     );
-    expect(next).toEqual({
-      stt: "whisper",
-      tts: "kokoro",
-      denoise: "gtcrn",
-      separate: "spleeter",
-    });
+    expect(next).toEqual({ stt: "moonshine", tts: null, denoise: "gtcrn", separate: null });
   });
 
-  it("falls back for a kind whose selected model is gone", () => {
+  it("clears a kind whose selected model is listed but not installed", () => {
+    const next = keepSpeechSelection(
+      { stt: "whisper", tts: "kokoro", denoise: null, separate: "spleeter" },
+      catalog,
+    );
+    expect(next).toEqual({ stt: null, tts: null, denoise: null, separate: null });
+  });
+
+  it("clears a kind whose selected model is gone", () => {
     const next = keepSpeechSelection(
       { stt: "gone", tts: null, denoise: null, separate: "gone" },
       catalog,
     );
-    expect(next).toEqual({
-      stt: "moonshine",
-      tts: "kokoro",
-      denoise: "gtcrn",
-      separate: "spleeter",
-    });
+    expect(next).toEqual({ stt: null, tts: null, denoise: null, separate: null });
   });
 
-  it("does not select a model of another kind", () => {
+  it("never chooses a model when nothing is selected", () => {
     const next = keepSpeechSelection(
-      { stt: "kokoro", tts: "gtcrn", denoise: "moonshine", separate: "kokoro" },
+      { stt: null, tts: null, denoise: null, separate: null },
       catalog,
     );
-    expect(next.stt).toBe("moonshine");
-    expect(next.tts).toBe("kokoro");
-    expect(next.denoise).toBe("gtcrn");
-    expect(next.separate).toBe("spleeter");
+    expect(next).toEqual({ stt: null, tts: null, denoise: null, separate: null });
+  });
+
+  it("does not keep a model selected under another kind", () => {
+    const next = keepSpeechSelection(
+      { stt: "gtcrn", tts: "moonshine", denoise: "moonshine", separate: "kokoro" },
+      catalog,
+    );
+    expect(next).toEqual({ stt: null, tts: null, denoise: null, separate: null });
   });
 
   it("clears only the selection of the deleted model", () => {

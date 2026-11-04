@@ -53,7 +53,7 @@ beforeEach(() => {
 });
 
 describe("setModels", () => {
-  it("chooses a default for each kind", () => {
+  it("selects nothing for any kind when the catalog arrives", () => {
     useSpeechStore
       .getState()
       .setModels([
@@ -63,21 +63,49 @@ describe("setModels", () => {
         model("spleeter", { kind: "separate", downloaded: true }),
       ]);
     expect(useSpeechStore.getState().selectedModelIds).toEqual({
-      stt: "whisper",
-      tts: "kokoro",
-      denoise: "gtcrn",
-      separate: "spleeter",
+      stt: null,
+      tts: null,
+      denoise: null,
+      separate: null,
     });
   });
 
-  it("keeps a selection that is still listed", () => {
+  it("keeps a selection while its model is still installed", () => {
+    useSpeechStore.setState({
+      selectedModelIds: { stt: "moonshine", tts: null, denoise: null, separate: null },
+    });
+    useSpeechStore
+      .getState()
+      .setModels([
+        model("whisper", { downloaded: true }),
+        model("moonshine", { downloaded: true }),
+      ]);
+    expect(useSpeechStore.getState().selectedModelIds.stt).toBe("moonshine");
+  });
+
+  it("clears a selection whose model is no longer installed", () => {
     useSpeechStore.setState({
       selectedModelIds: { stt: "moonshine", tts: null, denoise: null, separate: null },
     });
     useSpeechStore
       .getState()
       .setModels([model("whisper", { downloaded: true }), model("moonshine")]);
-    expect(useSpeechStore.getState().selectedModelIds.stt).toBe("moonshine");
+    expect(useSpeechStore.getState().selectedModelIds.stt).toBeNull();
+  });
+});
+
+describe("clearModelSelection", () => {
+  it("clears only the selection of the kind given", () => {
+    useSpeechStore.setState({
+      selectedModelIds: { stt: "whisper", tts: "kokoro", denoise: "gtcrn", separate: null },
+    });
+    useSpeechStore.getState().clearModelSelection("tts");
+    expect(useSpeechStore.getState().selectedModelIds).toEqual({
+      stt: "whisper",
+      tts: null,
+      denoise: "gtcrn",
+      separate: null,
+    });
   });
 });
 

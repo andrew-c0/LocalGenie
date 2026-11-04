@@ -38,15 +38,20 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - **Voice cloning is untested in the app** (the other Playground tabs were tested by the user, 2026-10-31). Pocket TTS (Text to speech) was committed as "not manually tested yet"; only unit tests cover it. Upscaling runs `sd-cli --upscale-model`, CPU only (the GPU backend crashes on upscaling). Steps: `manual-checklist.md`.
 - **OCR cancel does not stop the server.** A cancel drops the HTTP request; the GenieX server may keep generating until it notices the closed connection (`ocr_job.rs`). Code-read.
 - **OCR needs the GenieX server running.** The run fails with "Start the GenieX server first" otherwise; the tab can start it. Whether the server loads the OCR model on the first request, and the `compute` / `vit_compute` request fields, are read from the code only (see `geniex-server-behaviour.md` for what is verified).
-- **Duplicated server-start sequence.** `components/playground/OcrPanel/useOcrServer.ts` repeats the start sequence of `shell/Header/useModelLoader.ts` (read server settings, `startServer` on the configured port, `setServerStatus`, `setServerOptions`). Chat has no shared function for it, so a change to one must be mirrored by hand. Code-read; not unified.
+- **Duplicated server-start sequence.** `components/playground/OcrPanel/startOcrServer.ts` (called when an OCR model is picked in the header selector; it replaces `useOcrServer`) repeats the start sequence of `shell/Header/useModelLoader.ts` (read server settings, `startServer` on the configured port, `setServerStatus`, `setServerOptions`). Chat has no shared function for it, so a change to one must be mirrored by hand. Code-read; not unified.
 - **Runtime status of the Playground**: text to image, image to image, speech, audio to audio, image upscaling and OCR have been run in the app by the user. Voice cloning is still unverified there; the Runtimes update and uninstall flows have no recorded result.
+
+## Playground selector and downloads (working tree 2026-11-05; code-read and unit tests written, not run in the app)
+- The header selector, the drawer's Playground downloads and the Playground tab on Installed models have not been run in the app. Steps: `manual-checklist.md`.
+- A cancelled download reads "Paused" in the drawer for every kind. For a GenieX install cancelled during its silent setup, the label is wrong while the setup runs (see the GenieX section below).
+- The Local models page's Playground list reads four catalogs on mount and shows a failed read as a banner with no Try again (`usePlaygroundLocalModels.ts`); the popover's failed catalog does have a retry.
 
 ## GenieX CLI as a runtime (986b5dc; code-read, not run)
 - Install, update and uninstall of the GenieX CLI have not been run in the app. Steps: `manual-checklist.md`. The silent flags, the `unins000.exe` name (Inno Setup's default, assumed by `runtimes/geniex.rs`) and the version poll are not checked against a real install.
 - Cancel during `installing` only stops the wait. The drawer shows the entry cancelled, but the silent setup keeps running. The operation lock is released then, so Resume can start a second setup while the first may still run, and Uninstall can run beside it (code-read).
 - A retry downloads the setup again: a failed or cancelled install's setup file is not reused (only a `.part` is resumed). The comment in `runtimes/geniex.rs` says otherwise.
 - Uninstall stops only the server this app started (its tracked PID). A GenieX server started outside the app keeps running (code-read, `stop_tracked_server`).
-- "Check again" on a runtime that is not installed re-reads the list only. GitHub is checked at startup, when the list changes, and every 6 hours while the app is open (uncommitted, `RuntimeUpdateRuntime`), so a stale "Latest" version can stay up to 6 hours after a new release (code-read, `runtimeStore.ts`).
+- "Check again" on a runtime that is not installed re-reads the list only. GitHub is checked at startup, when the list changes, and every 6 hours while the app is open (f1e5543, `RuntimeUpdateRuntime`), so a stale "Latest" version can stay up to 6 hours after a new release (code-read, `runtimeStore.ts`).
 - Feature locks: the CLI state is unknown (null) until the first read, so nothing is locked before it; a failed read keeps the last known state (`runtimeStore.ts`, `runtimeGuards.ts`).
 
 ## Qualcomm AI Hub tab (committed 7664d01..55219bc; code-read 2026-10-28, runtime-unverified)
@@ -133,7 +138,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - The 30 s Hub timeout (`hubFetch`) and the AI Hub timeouts (`AIHUB_TIMEOUT_SECS` = 60, probes 5 s) are not measured on a slow link.
 - Nothing in this mode has been run in the app; the steps are in `manual-checklist.md` ("Offline mode").
 
-## Runtime update notifications (uncommitted, 2026-11-04; a test notification was shown in the app; the real trigger is not run)
+## Runtime update notifications (f1e5543, 2026-11-04; a test notification was shown in the app; the real trigger is not run)
 - **Clicks are not handled.** The notification has no click action. The body says "Open Settings > Runtimes to update." (`utils/runtimeUpdateNotice.ts`).
 - **Permission:** `requestPermission` does nothing on Windows (reported by the user, 2026-11-04), so the send depends on the permission state the webview already has.
 - **Delivery is not confirmed.** `sendNotification` in `@tauri-apps/plugin-notification` 2.4.0 (`dist-js/index.js`) is a plain web `Notification` call that is not awaited and reports no failure. `notify` resolves true after any call that does not throw, and the versions are recorded then. A toast that Windows does not show (for example under Focus assist) is therefore never retried for that version (code-read inference; not run).
@@ -165,5 +170,5 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Session persistence saves every changed session (`ChatRuntime/useSessionPersistence.ts`).
 - `useTauriEvent` subscribes once per event name (`hooks/index.ts`).
 - The `install_geniex` stub is removed.
-- Header model selector is wired to `ModelSelectorPopover` (`Header/Header.tsx`), with loading and errors in `Header/useModelLoader.ts`.
+- Header model selector is wired to `ModelSelectorPopover` (`Header/ChatModelSelector/`, picked by `Header/Header.tsx`), with loading and errors in `Header/useModelLoader.ts`.
 - Earlier, from git history: session persistence upsert fix, installer-based CLI update flow and update UI rework (see `cli-update.md`).

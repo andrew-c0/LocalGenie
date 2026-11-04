@@ -28,7 +28,6 @@ beforeEach(() => {
     selectedModelId: null,
     devices: null,
     form: DEFAULT_IMAGE_FORM,
-    downloads: {},
     job: null,
     result: null,
   });
@@ -50,6 +49,42 @@ describe("setDevices", () => {
     usePlaygroundStore.setState({ form: { ...DEFAULT_IMAGE_FORM, device: "GPU0" } });
     usePlaygroundStore.getState().setDevices([CPU]);
     expect(usePlaygroundStore.getState().form.device).toBe(DEVICE_AUTO);
+  });
+});
+
+describe("setModels", () => {
+  it("selects nothing when the catalog arrives, even with installed models", () => {
+    usePlaygroundStore.getState().setModels([model("a", { downloaded: true })]);
+    expect(usePlaygroundStore.getState().selectedModelId).toBeNull();
+  });
+
+  it("does not change the form when nothing is selected", () => {
+    const before = usePlaygroundStore.getState().form;
+    usePlaygroundStore.getState().setModels([
+      model("a", {
+        downloaded: true,
+        defaults: { width: 768, height: 768, steps: 8, cfgScale: 2 },
+      }),
+    ]);
+    expect(usePlaygroundStore.getState().form).toBe(before);
+  });
+
+  it("keeps a selection while its model is still installed", () => {
+    usePlaygroundStore.setState({ selectedModelId: "a" });
+    usePlaygroundStore.getState().setModels([model("a", { downloaded: true }), model("b")]);
+    expect(usePlaygroundStore.getState().selectedModelId).toBe("a");
+  });
+
+  it("clears a selection whose model is no longer installed", () => {
+    usePlaygroundStore.setState({ selectedModelId: "a" });
+    usePlaygroundStore.getState().setModels([model("a"), model("b", { downloaded: true })]);
+    expect(usePlaygroundStore.getState().selectedModelId).toBeNull();
+  });
+
+  it("clears the selection on request", () => {
+    usePlaygroundStore.setState({ selectedModelId: "a" });
+    usePlaygroundStore.getState().clearModelSelection();
+    expect(usePlaygroundStore.getState().selectedModelId).toBeNull();
   });
 });
 
@@ -200,19 +235,33 @@ describe("image upscaling", () => {
     });
   });
 
-  it("selects the first downloaded model when the catalog arrives", () => {
+  it("selects nothing when the catalog arrives", () => {
+    usePlaygroundStore
+      .getState()
+      .setUpscaleModels([upscaleModel("a", false), upscaleModel("b", true)]);
+    expect(usePlaygroundStore.getState().upscaleModelId).toBeNull();
+  });
+
+  it("keeps a selection while its model is still installed", () => {
+    usePlaygroundStore.setState({ upscaleModelId: "b" });
     usePlaygroundStore
       .getState()
       .setUpscaleModels([upscaleModel("a", false), upscaleModel("b", true)]);
     expect(usePlaygroundStore.getState().upscaleModelId).toBe("b");
   });
 
-  it("keeps a selection that is still listed", () => {
+  it("clears a selection whose model is listed but not installed", () => {
     usePlaygroundStore.setState({ upscaleModelId: "a" });
     usePlaygroundStore
       .getState()
       .setUpscaleModels([upscaleModel("a", false), upscaleModel("b", true)]);
-    expect(usePlaygroundStore.getState().upscaleModelId).toBe("a");
+    expect(usePlaygroundStore.getState().upscaleModelId).toBeNull();
+  });
+
+  it("clears the selection on request", () => {
+    usePlaygroundStore.setState({ upscaleModelId: "b" });
+    usePlaygroundStore.getState().clearUpscaleModelSelection();
+    expect(usePlaygroundStore.getState().upscaleModelId).toBeNull();
   });
 
   it("clears the selection when the selected model is deleted", () => {

@@ -28,11 +28,6 @@ export const UPSCALE_FACTOR = 4;
 /** The backend refuses pictures with a longer side than this. */
 export const UPSCALE_INPUT_MAX_SIDE = 1024;
 
-/** The model a selection falls back to: the first downloaded one, else the first listed. */
-export function defaultUpscaleModel(models: UpscaleModel[]): UpscaleModel | null {
-  return models.find((model) => model.downloaded) ?? models[0] ?? null;
-}
-
 /** True when the picture's longest side is over the limit the backend accepts. */
 export function isOversizedInput(size: ImageSize): boolean {
   return Math.max(size.width, size.height) > UPSCALE_INPUT_MAX_SIDE;

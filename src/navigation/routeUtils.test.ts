@@ -4,7 +4,14 @@ import { SD_CPP_RUNTIME_ID } from "../utils/playground";
 import { SHERPA_RUNTIME_ID } from "../utils/speech";
 import { UPSCALE_TAB_LABEL } from "../utils/upscaleText";
 import { ROUTES, type RouteMeta } from "./routes";
-import { breadcrumbsFor, childrenOf, routeById, sectionOf } from "./routeUtils";
+import {
+  breadcrumbsFor,
+  childrenOf,
+  isPlaygroundPath,
+  playgroundToolOf,
+  routeById,
+  sectionOf,
+} from "./routeUtils";
 
 function allRoutes(routes: readonly RouteMeta[]): RouteMeta[] {
   return routes.flatMap((route) => [route, ...allRoutes(route.children ?? [])]);
@@ -333,6 +340,41 @@ describe("sectionOf (sidebar active item)", () => {
 
   it("does not match a path that only shares a prefix with a section", () => {
     expect(sectionOf("/modelsx").id).toBe("overview");
+  });
+});
+
+describe("isPlaygroundPath", () => {
+  it("is true on the landing and on every tool page", () => {
+    expect(isPlaygroundPath("/playground")).toBe(true);
+    for (const route of childrenOf("playground")) {
+      expect(isPlaygroundPath(route.path)).toBe(true);
+    }
+  });
+
+  it("is false on every other section, and on a path that only shares the prefix", () => {
+    for (const path of [
+      "/",
+      "/chat",
+      "/chat/abc",
+      "/models/local",
+      "/settings/app",
+      "/playgrounds",
+    ]) {
+      expect(isPlaygroundPath(path)).toBe(false);
+    }
+  });
+});
+
+describe("playgroundToolOf", () => {
+  it("gives the tool whose page the path is", () => {
+    expect(playgroundToolOf("/playground/ocr")?.id).toBe("playground-ocr");
+    expect(playgroundToolOf("/playground/text-to-speech")?.id).toBe("playground-text-to-speech");
+  });
+
+  it("is null on the landing, on another section and on an unknown tool", () => {
+    expect(playgroundToolOf("/playground")).toBeNull();
+    expect(playgroundToolOf("/chat")).toBeNull();
+    expect(playgroundToolOf("/playground/unknown")).toBeNull();
   });
 });
 

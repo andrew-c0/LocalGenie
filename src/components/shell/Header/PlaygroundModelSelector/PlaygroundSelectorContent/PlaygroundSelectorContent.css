@@ -1,0 +1,13 @@
+/*
+ * The popover is exactly the width of the trigger (matchTargetSize). border-box keeps its padding inside
+ * that width, and the list scrolls when the models do not fit the height.
+ */
+.playground-selector {
+  box-sizing: border-box;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalM);
+  padding: var(--spacingHorizontalL);
+  overflow-y: auto;
+}

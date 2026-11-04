@@ -4,10 +4,12 @@ import {
   formatBytes,
   formatContextLength,
   formatDay,
+  formatEta,
   formatFullDate,
   formatGigabytes,
   formatRelativeDate,
   formatWhole,
+  rateLabel,
 } from "./format";
 
 describe("countLabel", () => {
@@ -152,5 +154,34 @@ describe("formatContextLength", () => {
     expect(formatContextLength(null)).toBeNull();
     expect(formatContextLength(undefined)).toBeNull();
     expect(formatContextLength(0)).toBeNull();
+  });
+});
+
+describe("formatEta", () => {
+  it("shows seconds under a minute", () => {
+    expect(formatEta(450, 10)).toBe("45s");
+  });
+
+  it("shows minutes and seconds under an hour", () => {
+    expect(formatEta(184 * 10, 10)).toBe("3m 4s");
+  });
+
+  it("shows hours and minutes from an hour", () => {
+    expect(formatEta(3720 * 10, 10)).toBe("1h 2m");
+  });
+
+  it("is a dash while the speed or the remaining bytes are unknown", () => {
+    expect(formatEta(100, 0)).toBe("—");
+    expect(formatEta(0, 10)).toBe("—");
+  });
+});
+
+describe("rateLabel", () => {
+  it("shows the speed and the time left when the size is known", () => {
+    expect(rateLabel(1024 * 1024, 184 * 1024 * 1024)).toBe("1.0 MB/s · ETA 3m 4s");
+  });
+
+  it("shows only the speed when the size is not known", () => {
+    expect(rateLabel(1024 * 1024, null)).toBe("1.0 MB/s");
   });
 });

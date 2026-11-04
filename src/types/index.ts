@@ -508,12 +508,22 @@ export interface ImageForm {
   device: string;
 }
 
-/** A model download the app started, from the first request until it is done. Image and speech models share it. */
-export interface PlaygroundDownloadState {
+/** The Playground tool a model belongs to. Its files are fetched by the backend and shown in the Downloads drawer. */
+export type PlaygroundModelKind = "image" | "upscale" | "speech" | "ocr";
+
+/**
+ * What a model row shows of its Playground download, read from the drawer's entry. A download that is
+ * not running, failed or cancelled has no view (the row then shows the files on disk).
+ */
+export interface PlaygroundDownloadView {
+  /** `downloading` covers the backend's import of an OCR model too, which the row shows as still running. */
   status: "downloading" | "cancelled" | "error";
-  /** Latest progress event. Null until the first one arrives. */
-  progress: PlaygroundDownloadProgress | null;
+  /** Whole-download percentage from the latest progress event. Null before the first one. */
+  percent: number | null;
+  /** The raw error of a failed download. The row shows the friendly text built from it. */
   error: string | null;
+  /** The service the files come from, named in a failure message. */
+  source: string;
 }
 
 /** `generate` is text to image and image to image; `upscale` is Image upscaling. Each tab shows only its own kind. */

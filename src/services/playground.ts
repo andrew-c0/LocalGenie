@@ -13,7 +13,6 @@ import type {
   UpscaleModel,
   UpscaleRequest,
 } from "../types";
-import { cancelDownload } from "./download";
 
 /** Event carrying `PlaygroundDownloadProgress` while a model's files are fetched. */
 export const PLAYGROUND_DOWNLOAD_PROGRESS_EVENT = "playground-download-progress";
@@ -30,11 +29,6 @@ export const PLAYGROUND_SPEECH_DONE_EVENT = "playground-speech-done";
 /** Event carrying `PlaygroundOcrDone` once an OCR job ends. */
 export const PLAYGROUND_OCR_DONE_EVENT = "playground-ocr-done";
 
-/** The download id the backend uses for a model, image or speech. `cancel_download` takes this id. */
-function playgroundDownloadId(modelId: string): string {
-  return `playground:${modelId}`;
-}
-
 /** Every image model the Playground knows, with its download state. */
 export async function listImageModels(): Promise<ImageModel[]> {
   return invoke("playground_image_models");
@@ -43,11 +37,6 @@ export async function listImageModels(): Promise<ImageModel[]> {
 /** Download every file of an image model. Resolves when the download has finished. */
 export async function downloadImageModel(modelId: string): Promise<void> {
   return invoke("playground_download_model", { modelId });
-}
-
-/** Stop a model download, image or speech. The backend reports the stop through `playground-download-done`. */
-export async function cancelModelDownload(modelId: string): Promise<void> {
-  return cancelDownload(playgroundDownloadId(modelId));
 }
 
 /** Compute devices the installed stable-diffusion.cpp build reports. Rejects when the runtime is not installed. */
