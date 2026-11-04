@@ -6,6 +6,7 @@ import { PlaygroundRuntime } from "../../playground/PlaygroundRuntime/Playground
 import { Breadcrumbs } from "../../ui/Breadcrumbs/Breadcrumbs";
 import CloseGuard from "../CloseGuard";
 import Header from "../Header/Header";
+import { RuntimeUpdateRuntime } from "../RuntimeUpdateRuntime/RuntimeUpdateRuntime";
 import Sidebar from "../Sidebar/Sidebar";
 import TitleBar from "../TitleBar/TitleBar";
 import "./Layouts.css";
@@ -17,6 +18,7 @@ import "./Layouts.css";
  * sits here too, so a reply keeps streaming and saving while the user is on another page.
  * `PlaygroundRuntime` sits here for the same reason: a download or image keeps updating.
  * `BenchmarkRuntime` does the same for a benchmark run's progress and end.
+ * `RuntimeUpdateRuntime` runs the periodic runtime update check and its desktop notice.
  */
 export function MainLayout() {
   const selectorOpen = useModelStore((s) => s.selectorOpen);
@@ -38,6 +40,7 @@ export function MainLayout() {
       <ChatRuntime />
       <PlaygroundRuntime />
       <BenchmarkRuntime />
+      <RuntimeUpdateRuntime />
     </div>
   );
 }

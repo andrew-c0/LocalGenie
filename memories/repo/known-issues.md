@@ -6,7 +6,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Model load/chat hangs: the GenieX warmup request in `load_model` may never get a response. The warmup carries the model's load params (committed in 6068a81), so it matches chat. Not re-validated (runtime-unverified).
 - Normal chat depends on a successful model load.
 - Known gaps (GenieX limits, not LocalGenie bugs): no per-model unload (only stopping the server unloads; see `geniex-server-behaviour.md`); the GenieX chat endpoint ignores `stop`, so LocalGenie has no stop-sequence setting (code-verified).
-- Webview `fetch` to `huggingface.co` (`hubApi.ts`, incl. `fetchContextLength` used by `downloadPipeline.ts`) is not listed in the CSP `connect-src` in `tauri.conf.json`, yet the Hub browser works in the app (reported 2026-10-28: the filters load results). The reason is not established; the policy as written suggests it should be blocked. Treat as a question, not a bug, until checked in the webview console. Unresolved. The offline mode (uncommitted) adds to it: a fetch the webview blocks throws the same `TypeError: Failed to fetch` as a dead connection, so the screens would read "You appear to be offline" while online (code-read inference, not run).
+- Webview `fetch` to `huggingface.co` (`hubApi.ts`, incl. `fetchContextLength` used by `downloadPipeline.ts`) is not listed in the CSP `connect-src` in `tauri.conf.json`, yet the Hub browser works in the app (reported 2026-10-28: the filters load results). The reason is not established; the policy as written suggests it should be blocked. Treat as a question, not a bug, until checked in the webview console. Unresolved. The offline mode (27e98d1) adds to it: a fetch the webview blocks throws the same `TypeError: Failed to fetch` as a dead connection, so the screens would read "You appear to be offline" while online (code-read inference, not run).
 - Context size from the Hub now reads only `gguf.context_length` (code-verified in `hubApi.ts`). The earlier `max_position_embeddings` / `max_sequence_length` fallback is gone, so models without GGUF metadata fall back to the DB row (possibly null).
 - Local import fails for GGUF repos whose weight files contain `mtp` in the name (GenieX `is_weight_gguf` skips them; "has no model files GenieX can load"). Workaround: rename the folder and files to remove the `mtp` token, then import. The fix belongs to GenieX (see `geniex-server-behaviour.md`); LocalGenie does not change it (reported, verified on one machine).
 - Typed event payloads and typed errors are not in place; UI matches on error text (`utils/chatError.ts`).
@@ -46,7 +46,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Cancel during `installing` only stops the wait. The drawer shows the entry cancelled, but the silent setup keeps running. The operation lock is released then, so Resume can start a second setup while the first may still run, and Uninstall can run beside it (code-read).
 - A retry downloads the setup again: a failed or cancelled install's setup file is not reused (only a `.part` is resumed). The comment in `runtimes/geniex.rs` says otherwise.
 - Uninstall stops only the server this app started (its tracked PID). A GenieX server started outside the app keeps running (code-read, `stop_tracked_server`).
-- "Check again" on a runtime that is not installed re-reads the list only. GitHub is checked again only at startup or when the list changes, so a stale "Latest" version can stay (code-read, `runtimeStore.ts`).
+- "Check again" on a runtime that is not installed re-reads the list only. GitHub is checked at startup, when the list changes, and every 6 hours while the app is open (uncommitted, `RuntimeUpdateRuntime`), so a stale "Latest" version can stay up to 6 hours after a new release (code-read, `runtimeStore.ts`).
 - Feature locks: the CLI state is unknown (null) until the first read, so nothing is locked before it; a failed read keeps the last known state (`runtimeStore.ts`, `runtimeGuards.ts`).
 
 ## Qualcomm AI Hub tab (committed 7664d01..55219bc; code-read 2026-10-28, runtime-unverified)
@@ -117,7 +117,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - `cli.rs`: timeouts and retry counts are magic numbers (move to `constants.rs`).
 - `load_sessions` (`database.rs`) matches messages with a nested `find` and loads every session at startup. `list_downloaded_models` returns the full `model_card` text the grid does not need.
 - Migration `m20261020_000001` (`add_repo_columns`) ignores every `ALTER TABLE` error. `delete_session` runs two statements without a transaction.
-- Tauri calls outside `services/`: `AihubModelDetail` imports `open` from `@tauri-apps/plugin-shell` directly. `HubModelDetail` now uses `openExternal` (uncommitted).
+- Tauri calls outside `services/`: `AihubModelDetail` imports `open` from `@tauri-apps/plugin-shell` directly. `HubModelDetail` now uses `openExternal` (27e98d1).
 - Chat streaming cost: `updateLastAssistantMessage` still rebuilds the message and `contextChars` on each flush. Chunks are written once per animation frame (`useChatStream.ts`, committed in 1b5d554), so the rate is lower; the rebuild itself is unchanged (code-verified).
 - `DEFAULT_BASE_URL` duplicates `DEFAULT_PORT` in `constants.rs`. `package.json` has an `allowScripts` field, which is not a standard npm field.
 
@@ -126,15 +126,22 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - The port is configurable and persisted in `user_preferences` (default `18181`).
 - The tracked PID is cleared when the `geniex serve` child exits, so a crashed server can be started again (code-verified in the `server.rs` exit watcher; runtime-unverified).
 
-## Offline mode (uncommitted, 2026-11-04; code-read and unit tests written, not run offline in the app)
+## Offline mode (27e98d1, 2026-11-04; code-read and unit tests written, not run offline in the app)
 - A network drop partway through the AI Hub probe set can cache a lower catalog version for the session: `resolve_version` keeps the highest probe that answered, and a partial set may not include the newest release. A restart clears it (code-read).
 - The offline classifier wins whenever `navigator.onLine` is false, so a local failure (for example a GGUF import) shown while the browser reports offline reads "You appear to be offline. Check your connection and try again." The raw error stays in the drawer entry's title attribute (`utils/networkError.ts`, `DownloadItemCard`).
 - `aihub_list_models` drops a card-info read error (`list_model`: `card_info(...).ok()`). A network drop during those reads lists the models without card facts and shows no error. Those rows are not cached, so the next open reads them again (code-read).
 - The 30 s Hub timeout (`hubFetch`) and the AI Hub timeouts (`AIHUB_TIMEOUT_SECS` = 60, probes 5 s) are not measured on a slow link.
 - Nothing in this mode has been run in the app; the steps are in `manual-checklist.md` ("Offline mode").
 
+## Runtime update notifications (uncommitted, 2026-11-04; a test notification was shown in the app; the real trigger is not run)
+- **Clicks are not handled.** The notification has no click action. The body says "Open Settings > Runtimes to update." (`utils/runtimeUpdateNotice.ts`).
+- **Permission:** `requestPermission` does nothing on Windows (reported by the user, 2026-11-04), so the send depends on the permission state the webview already has.
+- **Delivery is not confirmed.** `sendNotification` in `@tauri-apps/plugin-notification` 2.4.0 (`dist-js/index.js`) is a plain web `Notification` call that is not awaited and reports no failure. `notify` resolves true after any call that does not throw, and the versions are recorded then. A toast that Windows does not show (for example under Focus assist) is therefore never retried for that version (code-read inference; not run).
+- **App name in the toast (open).** The test toast under `tauri dev` read "Windows PowerShell" (user-observed). The reason given for that (the plugin sets the AppUserModelID only outside `target\debug|release`) is in the plugin's Rust `show()` (`src/desktop.rs`, 2.4.0), which the JS path does not call, so that rule does not explain the name (code-read). What an installed build shows is not checked. If Windows shows the raw identifier `com.localgenie.app` or another name, the fallback is to register the AppUserModelID `DisplayName` under `HKCU\Software\Classes\AppUserModelId\com.localgenie.app` at startup (not built; it would also change `tauri dev`).
+- **A failed periodic check hides the hint.** `runtimeStore.checkUpdate` removes the runtime's update entry when a check fails (existing behaviour), so Settings drops the "update available" hint until a later check succeeds. No notice is sent for that runtime in the meantime.
+
 ## Resolved (code-verified; runtime-unverified)
-- Local page Hugging Face search always returned no results: `search_models` did not ask for `siblings`, and `gguf_models` keeps only models whose file list has a `.gguf`, so every result was dropped. `commands/hub.rs` `search_url` now sends `expand[]=siblings`, and `gguf_models` has a unit test (uncommitted; code-verified, not run in the app).
+- Local page Hugging Face search always returned no results: `search_models` did not ask for `siblings`, and `gguf_models` keeps only models whose file list has a `.gguf`, so every result was dropped. `commands/hub.rs` `search_url` now sends `expand[]=siblings`, and `gguf_models` has a unit test (27e98d1; code-verified, not run in the app).
 - `search_models` parsed the response body before checking the HTTP status. The status is checked first in `commands/hub.rs` (code-verified, not run).
 - The GenieX installer is checked against GitHub's SHA-256 digest before it runs (`runtimes/geniex.rs`, `verify_download`). The old `update_geniex` ran the downloaded installer unchecked, and that command is removed (986b5dc; code-read, not run). A check is skipped when GitHub gives no digest.
 - The release fetch duplicated between the CLI check and update is gone with `cli_update.rs` (both now use `runtimes/release.rs`). The comment calling `UpdateInfo` a re-export is gone too: no such comment exists at c051c2a, and the type is removed (986b5dc).

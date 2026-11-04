@@ -2,7 +2,21 @@
 
 Run through these checks manually after building or deploying the app. Automated checks cannot fully verify installer behavior, filesystem permissions, or OS-level interactions.
 
-## Offline mode (uncommitted, 2026-11-04; not run offline in the app, none ticked)
+## Runtime update notifications (uncommitted, 2026-11-04)
+
+The user saw a test notification in the app on 2026-11-04 (the test button is removed). The items below were not run; none is ticked. Limits are in `known-issues.md`.
+
+- [ ] Real update: with an older runtime installed and a newer release on GitHub, the app shows one notification ("<name> <version> is available", body "Installed <version>. Open Settings > Runtimes to update.") at start, or within 6 hours while the app stays open.
+- [ ] Two runtimes with updates at once: one notification titled "2 runtime updates are available" that names both.
+- [ ] Restart the app with the same update still pending: no second notification.
+- [ ] Install the update, restart: no notification for the installed version; a later release notifies once.
+- [ ] Switch off ("Notify me when a runtime update is available", Settings > Application & Runtime) with an update pending, then restart: nothing is sent. Switch on: the pending update is sent at once, without a restart.
+- [ ] The switch keeps its state after a restart.
+- [ ] Clicking the notification does not open the app (known limit); the Settings > Runtimes card still shows the update.
+- [ ] Installed build: the toast header reads "LocalGenie". Under `tauri dev` it reads "Windows PowerShell". If an installed build shows the raw identifier `com.localgenie.app` or another name, see the open item in `known-issues.md`.
+- [ ] Offline start: no notification and no error toast; Settings > Runtimes shows the retry text.
+
+## Offline mode (27e98d1, 2026-11-04; not run offline in the app, none ticked)
 
 How: start the app online, then turn off the network adapter (Settings > Network & internet, or Device Manager > Disable device) and check each item. For the automatic retry, turn the adapter back on while a retry block is showing and do not click Try again.
 
@@ -131,7 +145,7 @@ The user looked at the cards and the detail pages in the app on 2026-11-04 and s
 
 ## Optional runtimes: Settings > Runtimes (not yet run)
 
-- [ ] The section lists GenieX CLI, stable-diffusion.cpp and sherpa-onnx. Latest versions come from GitHub at startup and when the list changes; offline, the cards show no latest version and the page still works.
+- [ ] The section lists GenieX CLI, stable-diffusion.cpp and sherpa-onnx. Latest versions come from GitHub at startup, when the list changes and every 6 hours; offline, the cards show no latest version and the page still works.
 - [ ] Install: the stages show in order (checking, downloading with byte counts, verifying, extracting, done). The card shows the version. `%APPDATA%\com.localgenie.app\runtimes\sd-cpp\<tag>\sd-cli.exe` exists.
 - [ ] The archive installed is the ARM64 one (`windows-arm64` in the zip name), even when GitHub's latest release is an x64-only build.
 - [ ] After a restart the card still shows the installed version.

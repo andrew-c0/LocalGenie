@@ -38,6 +38,7 @@ prost = "0.14"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 # Runtime archives: tar.bz2 (sherpa-onnx). Default backend is the pure-Rust libbz2-rs-sys: no C toolchain.
 bzip2 = "0.6"
+tauri-plugin-notification = "~2.4.0"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [
