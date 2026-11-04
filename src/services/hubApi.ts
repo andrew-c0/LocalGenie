@@ -10,12 +10,25 @@ const HUB_BASE = "https://huggingface.co";
 /** Sort keys supported by GET /api/models. */
 export type HubSort = "downloads" | "likes" | "lastModified" | "trendingScore" | "createdAt";
 
+/** Model card metadata (`cardData`). Language, licence and base model are a text or a list of texts. */
+export interface HubCardData {
+  language?: string | string[];
+  license?: string | string[];
+  license_link?: string;
+  base_model?: string | string[];
+}
+
 /** A model entry returned by GET /api/models. */
 export interface HubModel {
   _id: string;
   id: string;
+  /** Owner (user or organisation). The detail response has it. */
+  author?: string;
   likes?: number;
+  /** Downloads in the last 30 days. */
   downloads?: number;
+  /** Downloads over all time. Only with `expand[]=downloadsAllTime`. */
+  downloadsAllTime?: number;
   trendingScore?: number;
   pipeline_tag?: string;
   library_name?: string;
@@ -27,7 +40,11 @@ export interface HubModel {
   /** Present on GET /api/models/{id} — total parameter count of the repo. */
   safetensors?: { total?: number; parameters?: number };
   /** Present on GET /api/models/{id}?expand[]=gguf for GGUF repos — metadata read from the GGUF file. */
-  gguf?: { architecture?: string; context_length?: number; total?: number };
+  gguf?: { architecture?: string; context_length?: number; total?: number; chat_template?: string };
+  /** Model card metadata. Present on the detail response (`expand[]=cardData`). */
+  cardData?: HubCardData;
+  /** Derived repos by kind. Only with `expand[]=childrenModelCount`. */
+  childrenModelCount?: { adapter?: number; merge?: number; quantized?: number; finetune?: number };
 }
 
 /** Parameter-count bounds in billions. An unset bound is open-ended. */
@@ -126,24 +143,39 @@ export async function listHubModels(query: HubQuery): Promise<HubPage> {
 }
 
 /**
- * GET /api/models/{namespace}/{repo} — full details for one model, with its GGUF metadata merged in.
- * `expand[]=gguf` returns only the expanded fields, so it is fetched separately and the GGUF metadata
- * is merged in; the base response keeps downloads, likes and the rest.
+ * The detail fields the plain `/api/models/{repo}` response leaves out. With `expand[]` the Hub sends
+ * only the expanded fields, so they come from a second request. Only `downloadsAllTime` and
+ * `childrenModelCount` are missing from the plain response; the others are listed so the expanded
+ * response carries the same card metadata whichever response the Hub sends them in.
+ */
+const DETAIL_EXPAND = ["gguf", "cardData", "createdAt", "downloadsAllTime", "childrenModelCount"];
+
+/**
+ * GET /api/models/{namespace}/{repo} — full details for one model. The plain response has the counts,
+ * tags, dates, file-size data and GGUF block (with `chat_template`). The expanded response adds
+ * `downloadsAllTime` and `childrenModelCount`. A failed expanded request leaves those two out, so the
+ * page still shows the rest.
  */
 export async function getHubModel(repoId: string): Promise<HubModel> {
   const headers = { Accept: "application/json" };
-  const [baseRes, ggufRes] = await Promise.all([
+  const expandQuery = DETAIL_EXPAND.map((field) => `expand[]=${field}`).join("&");
+  const [baseRes, expandedRes] = await Promise.all([
     fetch(`${HUB_BASE}/api/models/${repoId}`, { headers }),
-    fetch(`${HUB_BASE}/api/models/${repoId}?expand[]=gguf`, { headers }).catch(() => null),
+    fetch(`${HUB_BASE}/api/models/${repoId}?${expandQuery}`, { headers }).catch(() => null),
   ]);
   if (!baseRes.ok)
     throw new Error(`Hugging Face API error ${baseRes.status}: ${baseRes.statusText}`);
   const model = (await baseRes.json()) as HubModel;
-  if (ggufRes?.ok) {
-    const expanded = (await ggufRes.json()) as Partial<HubModel>;
-    if (expanded.gguf) model.gguf = expanded.gguf;
-  }
-  return model;
+  if (!expandedRes?.ok) return model;
+  const expanded = (await expandedRes.json()) as Partial<HubModel>;
+  return {
+    ...model,
+    gguf: expanded.gguf ?? model.gguf,
+    cardData: expanded.cardData ?? model.cardData,
+    createdAt: expanded.createdAt ?? model.createdAt,
+    downloadsAllTime: expanded.downloadsAllTime,
+    childrenModelCount: expanded.childrenModelCount,
+  };
 }
 
 /** Native context window (tokens) from the repo's GGUF metadata, or null when the repo does not report one. */

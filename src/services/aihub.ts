@@ -1,5 +1,26 @@
 import { invoke } from "@tauri-apps/api/core";
 
+/** The few facts a catalog card shows, from a model's info file (the Rust `AihubCardInfo`). */
+export interface AihubCardInfo {
+  headline: string;
+  /** Size of the model file in bytes. Null when the info has none. */
+  modelSizeBytes: number | null;
+  /** Quantisation as AI Hub writes it, e.g. `Q4_0 (GGUF)`. */
+  quantization: string | null;
+  inputModalities: string[];
+  outputModalities: string[];
+  /** Context lengths as text, e.g. `512, 1024, 4096`. */
+  contextLengths: string | null;
+  /** Supported languages as text. */
+  languages: string | null;
+}
+
+/** One technical detail of a model, the value as text (the Rust `AihubDetail`). */
+export interface AihubDetail {
+  key: string;
+  value: string;
+}
+
 /** One QAIRT model in the Qualcomm AI Hub catalog (list row; the Rust `AihubCatalogEntry`). */
 export interface AihubCatalogEntry {
   id: string;
@@ -11,6 +32,8 @@ export interface AihubCatalogEntry {
   runtimes: string[];
   chipsets: string[];
   tags: string[];
+  /** Card facts from the model's info file. Null when that file could not be read. */
+  summary: AihubCardInfo | null;
 }
 
 /** One QAIRT asset (zip) of a model. `chipset` is null for an asset not tied to one chipset. */
@@ -34,6 +57,16 @@ export interface AihubModelDetail {
   sourceRepo: string | null;
   restrictModelSharing: boolean;
   callToAction: string | null;
+  tags: string[];
+  /** Technical details of the model (top-level and runtime 11/12 values, one entry per key). */
+  technicalDetails: AihubDetail[];
+  researchPaper: string | null;
+  researchPaperTitle: string | null;
+  applicableScenarios: string[];
+  /** Genie (QNN context binary) support. Null when the model has no LLM details. */
+  genieCompatible: boolean | null;
+  /** GenieX llama.cpp (GGUF) support. Null when the model has no LLM details. */
+  geniexLlamacppCompatible: boolean | null;
   assets: AihubAsset[] | null;
 }
 

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { StoredRam } from "../utils/modelRam";
+import { type StoredRam, storedRamOfRow } from "../utils/modelRam";
 import { modelSettingsKey } from "../utils/modelSettings";
 import * as db from "./database";
 
@@ -19,12 +19,8 @@ export async function loadStoredRam(): Promise<Record<string, StoredRam>> {
   const rows = await db.listDownloadedModels();
   const ram: Record<string, StoredRam> = {};
   for (const row of rows) {
-    if (row.base_ram_bytes === null) continue;
-    ram[modelSettingsKey(row.name)] = {
-      baseBytes: row.base_ram_bytes,
-      contextBytes: row.context_ram_bytes ?? 0,
-      approximate: row.ram_approximate ?? false,
-    };
+    const stored = storedRamOfRow(row);
+    if (stored) ram[modelSettingsKey(row.name)] = stored;
   }
   return ram;
 }

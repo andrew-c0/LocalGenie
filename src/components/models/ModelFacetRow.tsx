@@ -1,4 +1,3 @@
-import { precisionInfo } from "../../services/hubApi";
 import {
   type BaseRelation,
   type HubFacetSummary,
@@ -7,6 +6,7 @@ import {
   taskGroupOf,
   taskLabel,
 } from "../../utils/hubModelInfo";
+import { quantisationRangeOf } from "../../utils/modelSpecs";
 import { ModelFacts } from "./ModelFacts";
 
 const RELATION_TEXT: Record<BaseRelation, string> = {
@@ -17,28 +17,18 @@ const RELATION_TEXT: Record<BaseRelation, string> = {
 };
 
 /**
- * The quantisation text: the repo's own precisions from its file list, lowest bits first, as a range
- * (`Q2_K to Q8_0`). Without a file list it falls back to the Hub's `4-bit` and `8-bit` tags.
+ * The quantisation text: the repo's own precisions from its file list, as a range (`Q2_K to Q8_0`).
+ * Without a file list it falls back to the Hub's `4-bit` and `8-bit` tags.
  */
-function quantisationOf(
+function quantisationFact(
   facets: HubFacetSummary,
   precisions: string[] | undefined,
-): [string | null, string | undefined] {
-  if (precisions && precisions.length > 0) {
-    const bitsOf = (p: string) => precisionInfo(p).bitsPerWeight ?? Number.POSITIVE_INFINITY;
-    const sorted = [...new Set(precisions)].sort((a, b) => bitsOf(a) - bitsOf(b));
-    const first = sorted[0];
-    const last = sorted[sorted.length - 1];
-    const range =
-      Number.isFinite(bitsOf(first)) && Number.isFinite(bitsOf(last))
-        ? `${bitsOf(first)}–${bitsOf(last)} bit`
-        : undefined;
-    return [sorted.length === 1 ? first : `${first} to ${last}`, range];
-  }
-  return [
-    facets.quantBits.length > 0 ? facets.quantBits.map((b) => `${b}-bit`).join(", ") : null,
-    undefined,
-  ];
+): { value: string | null; title?: string } {
+  const range = quantisationRangeOf(precisions ?? []);
+  if (range) return { value: range.text, title: range.bits };
+  return {
+    value: facets.quantBits.length > 0 ? facets.quantBits.map((b) => `${b}-bit`).join(", ") : null,
+  };
 }
 
 /**
@@ -57,7 +47,7 @@ export function ModelFacetRow({
   const tree = facets.baseRepo
     ? `${RELATION_TEXT[facets.baseRelation ?? "quantized"]} ${facets.baseRepo}`
     : "Base model";
-  const [quant, quantRange] = quantisationOf(facets, precisions);
+  const quant = quantisationFact(facets, precisions);
   return (
     <ModelFacts
       facts={[
@@ -73,7 +63,7 @@ export function ModelFacetRow({
         { label: "Library", value: facets.library },
         { label: "License", value: facets.license },
         { label: "Model tree", value: tree },
-        { label: "Quantisation", value: quant, title: quantRange },
+        { label: "Quantisation", value: quant.value, title: quant.title },
       ]}
     />
   );

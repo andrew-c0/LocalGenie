@@ -1,31 +1,25 @@
 import { SearchBox, Spinner } from "@fluentui/react-components";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { AihubCatalogEntry } from "../../../services/aihub";
+import { useSystemMemory } from "../../../hooks/useSystemMemory";
 import { humanLabel } from "../../../utils/aihub";
 import { ChipRow } from "../../ui/ChipRow/ChipRow";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../ui/Flex/Flex";
-import { ModelCard, type ModelCardData } from "../../ui/ModelCard/ModelCard";
+import { ModelCard } from "../../ui/ModelCard/ModelCard";
+import { aihubCardData } from "../../ui/ModelCard/modelCardData";
 import { StateBlock } from "../../ui/StateBlock/StateBlock";
 import { useAihubCatalog } from "./useAihubCatalog";
 import "./AihubBrowser.css";
 
 const ALL_DOMAINS = "all";
 
-/** Card data for one catalog entry. Catalog entries have no Hub stats and are not installed. */
-function cardOf(entry: AihubCatalogEntry): ModelCardData {
-  return {
-    name: entry.displayName,
-    installed: false,
-    description: `QAIRT · ${entry.chipsets.length} chipsets`,
-  };
-}
-
 /** Qualcomm AI Hub tab (phase 1, read-only): QAIRT catalog with search and domain filter. */
 export function AihubBrowser() {
   const { entries, error } = useAihubCatalog();
   const navigate = useNavigate();
+  // Read once here for every card; each card's RAM verdict is derived from it.
+  const systemMemory = useSystemMemory();
   const [query, setQuery] = useState("");
   const [domain, setDomain] = useState(ALL_DOMAINS);
 
@@ -73,18 +67,18 @@ export function AihubBrowser() {
       ) : visible.length === 0 ? (
         <StateBlock icon="🔍" message={`No models match "${query.trim()}".`} />
       ) : (
-        <div className="aihub-browser__grid">
+        <Flex direction="column" gap="s">
           {visible.map((entry) => (
             <ModelCard
               key={entry.id}
-              model={cardOf(entry)}
+              model={aihubCardData(entry, systemMemory)}
               isLoaded={false}
               isDownloading={false}
               isLocal={false}
               onDetails={() => navigate(`/models/aihub/${encodeURIComponent(entry.id)}`)}
             />
           ))}
-        </div>
+        </Flex>
       )}
     </Flex>
   );

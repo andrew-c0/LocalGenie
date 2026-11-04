@@ -2,16 +2,20 @@ import { Button, Card, Spinner } from "@fluentui/react-components";
 import { ArrowLeftRegular, OpenRegular } from "@fluentui/react-icons";
 import { open } from "@tauri-apps/plugin-shell";
 import { useNavigate, useParams } from "react-router-dom";
+import { CapabilitiesSection } from "../../../components/models/CapabilitiesSection";
 import { ModelCardPanel, ModelDetailLayout } from "../../../components/models/ModelDetailLayout";
 import { ModelFacts } from "../../../components/models/ModelFacts";
+import { ModelSpecSection } from "../../../components/models/ModelSpecSection/ModelSpecSection";
 import { ErrorBanner } from "../../../components/ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../../components/ui/Flex/Flex";
 import { MarkdownContent } from "../../../components/ui/MarkdownContent/MarkdownContent";
 import { StateBlock } from "../../../components/ui/StateBlock/StateBlock";
 import { StatusBadge } from "../../../components/ui/StatusBadge/StatusBadge";
-import { Body, Meta } from "../../../components/ui/Typography/Typography";
+import { Meta } from "../../../components/ui/Typography/Typography";
 import type { AihubAsset } from "../../../services/aihub";
-import { hfFileOf } from "../../../utils/aihub";
+import { aihubDetailCapabilityBadges, hfFileOf } from "../../../utils/aihub";
+import { aihubCompatibilityCells, aihubSpecCells } from "../../../utils/modelSpecs";
+import { AihubAboutSection } from "./AihubAboutSection/AihubAboutSection";
 import { AihubAssetPicker } from "./AihubAssetPicker";
 import { useAihubModelDetail } from "./useAihubModelDetail";
 
@@ -117,11 +121,12 @@ function AihubModelDetailView({ id }: { id: string }) {
         />
       </Card>
 
-      {detail.description && (
-        <Card size="small">
-          <Body>{detail.description}</Body>
-        </Card>
-      )}
+      <CapabilitiesSection
+        badges={aihubDetailCapabilityBadges(detail)}
+        cells={aihubCompatibilityCells(detail)}
+      />
+      <ModelSpecSection title="Specifications" cells={aihubSpecCells(detail)} />
+      <AihubAboutSection detail={detail} />
 
       <Card size="small">
         {detail.assets === null ? (

@@ -18,7 +18,22 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] Settings > Runtimes shows a warning icon on its tab when GenieX is missing or any runtime has a newer release.
 - [ ] Start with GenieX missing: Models, Chat and Benchmarks show locked once the runtime list has been read (nothing is locked before that).
 
-## Sidebar usage chart with Playground jobs (uncommitted; text to image and OCR lines confirmed by the user)
+## Model cards and detail pages (uncommitted, 2026-11-04)
+
+The user looked at the cards and the detail pages in the app on 2026-11-04 and said they look okay for now. The items below were not run in the app and not ticked.
+
+- [ ] Card layout and clipping: at narrow widths (down to the 860 px sidebar collapse) titles, capability icons, fact items and the RAM badge wrap or truncate without overlapping. Long model names truncate with the full name in the tooltip.
+- [ ] Tooltips: hover and keyboard focus on each info icon (updated, details), each fact (task, params, quantisation, context, licence, disk), the RAM badge and the Hub downloads and likes; the text matches the card.
+- [ ] Capability icons on a Hugging Face card: a known vision model, a tool-calling model and a thinking model show the matching icon, and the detail page says "(inferred)". On an installed model the icons match the confirmed scan (not the Hub guess).
+- [ ] RAM verdicts: a small model shows a fit and a large one (for example 70B) shows "May not fit" on this PC; "estimate" appears when the parameter count is approximate.
+- [ ] AI Hub first load: with the cache empty (first open after start), time from opening the tab to the cards with their info lines. Record the time; the list waits for every info file.
+- [ ] AI Hub detail: Capabilities & compatibility, Specifications and About show for a model that has them and hide when empty; TTFT and Response Rate are not listed; the research paper link opens in the browser.
+- [ ] AI Hub card for a model whose info file cannot be read: the row shows with the `QAIRT · N chipsets` line.
+- [ ] Hugging Face detail: Specifications shows Created, Updated, Downloads (30 days and all time), Likes, Quantised versions and the Base model link. With the second (`expand[]`) request blocked, the page still loads and the two counts are missing.
+- [ ] Installed model page: Specifications shows precision, context window, parameters and RAM needed from the stored row; the card's info tooltip reads "Source: Hugging Face" for `hf` and "Source: Qualcomm AI Hub" for `aihub`.
+- [ ] Search results: no variant list on the card (the quantisation picker is on the detail page), and no Installed pill on any card.
+
+## Sidebar usage chart with Playground jobs (committed 9a18c4f; text to image and OCR lines confirmed by the user)
 
 - [ ] No model loaded and no job: no usage card in the sidebar.
 - [ ] Text to image with device Auto: the card appears with CPU, GPU and NPU lines; with a GPU device chosen, only the GPU line.

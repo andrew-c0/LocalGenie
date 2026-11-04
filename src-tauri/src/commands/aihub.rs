@@ -14,6 +14,8 @@ use tauri::State;
 use super::constants::AIHUB_TIMEOUT_SECS;
 use super::AppState;
 use crate::aihub_proto::model_info::llm_details::CallToAction;
+use crate::aihub_proto::model_info::technical_detail::Value;
+use crate::aihub_proto::model_info::TechnicalDetail;
 use crate::aihub_proto::model_release_assets::AssetDetails;
 use crate::aihub_proto::{
     ManifestModelEntry, ModelDomain, ModelInfo, ModelLicense, ModelReleaseAssets, ModelTag,
@@ -33,16 +35,20 @@ const PROBE_PATCHES_PER_MINOR: u32 = 10;
 /// Probes in flight at once, and the timeout for each one.
 const PROBE_CONCURRENCY: usize = 8;
 const PROBE_TIMEOUT_SECS: u64 = 5;
+/// Models read at once for the catalog list (release assets, then the info file for the card).
+const CATALOG_CONCURRENCY: usize = 8;
 
 const AIHUB_BASE: &str = "https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models";
 const README_BASE: &str = "https://raw.githubusercontent.com/qualcomm/ai-hub-models";
 
-/// Cache for AI Hub fetches, managed by Tauri. Holds the session's catalog version and raw
-/// protobuf bodies by URL.
+/// Cache for AI Hub fetches, managed by Tauri. Holds the session's catalog version, raw protobuf
+/// bodies by URL, and the parsed card summary of each model read for the list.
 #[derive(Default)]
 pub struct AihubCache {
     version: tokio::sync::OnceCell<String>,
     bodies: Mutex<HashMap<String, Arc<Vec<u8>>>>,
+    /// Card summaries by model id, from the info file. A failed read is not cached.
+    cards: Mutex<HashMap<String, AihubCardInfo>>,
     /// QAIRT asset URLs of the models opened this session, with the chipsets listed for each (`None`
     /// for an asset not tied to one). A URL can be listed for more than one chipset. The only AI Hub
     /// URLs `download_file` accepts (`check_asset_download`).
@@ -61,6 +67,33 @@ pub struct AihubCatalogEntry {
     pub runtimes: Vec<String>,
     pub chipsets: Vec<String>,
     pub tags: Vec<String>,
+    /// From the model's info file. `None` when that file could not be read; the row still shows.
+    pub summary: Option<AihubCardInfo>,
+}
+
+/// The few facts a catalog card shows, parsed from the model's info file.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AihubCardInfo {
+    pub headline: String,
+    /// The "Model Size" detail in bytes. `None` when absent or not parsable.
+    pub model_size_bytes: Option<u64>,
+    /// The "Quantization Type" detail, as AI Hub writes it (e.g. `Q4_0 (GGUF)`).
+    pub quantization: Option<String>,
+    pub input_modalities: Vec<String>,
+    pub output_modalities: Vec<String>,
+    /// The "Context lengths" detail as text (e.g. `512, 1024, 4096`).
+    pub context_lengths: Option<String>,
+    /// The "Supported languages" detail as text.
+    pub languages: Option<String>,
+}
+
+/// One technical detail of a model, value as text (e.g. "Model Size" = "429 MB").
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AihubDetail {
+    pub key: String,
+    pub value: String,
 }
 
 /// One QAIRT asset (a zip) for a model.
@@ -88,12 +121,23 @@ pub struct AihubModelDetail {
     pub source_repo: Option<String>,
     pub restrict_model_sharing: bool,
     pub call_to_action: Option<String>,
+    pub tags: Vec<String>,
+    /// Technical details: the top-level ones, plus the runtime 11/12 ones (see `merge_technical_details`).
+    pub technical_details: Vec<AihubDetail>,
+    pub research_paper: Option<String>,
+    pub research_paper_title: Option<String>,
+    pub applicable_scenarios: Vec<String>,
+    /// Genie (QNN context binary) support. `None` when the model has no LLM details.
+    pub genie_compatible: Option<bool>,
+    /// GenieX llama.cpp (GGUF) support. `None` when the model has no LLM details.
+    pub geniex_llamacpp_compatible: Option<bool>,
     /// `None` when the release assets could not be read; the model info is still returned.
     pub assets: Option<Vec<AihubAsset>>,
 }
 
-/// Models in the catalog that have at least one runnable asset. A model whose release assets are
-/// missing or unreadable has nothing to download, so it is left out.
+/// Models in the catalog that have at least one runnable asset, each with its card summary. A model
+/// whose release assets are missing or unreadable has nothing to download, so it is left out. A
+/// model whose info file cannot be read stays, with `summary` None.
 #[tauri::command]
 pub async fn aihub_list_models(
     state: State<'_, AppState>,
@@ -101,28 +145,33 @@ pub async fn aihub_list_models(
 ) -> Result<Vec<AihubCatalogEntry>, String> {
     let manifest = load_manifest(&state.http_client, &cache).await?;
     let entries = catalog_entries(&manifest);
-    let candidates: Vec<(String, String)> = entries
+    let candidates: Vec<(String, String, String)> = entries
         .iter()
         .filter_map(|e| {
             let urls = find_entry(&manifest, &e.id).ok()?.manifest_urls.as_ref()?;
-            Some((e.id.clone(), urls.release_assets.clone()))
+            Some((e.id.clone(), urls.release_assets.clone(), urls.info.clone()))
         })
         .collect();
     let client = &state.http_client;
     let cache: &AihubCache = &cache;
-    let runnable: Vec<String> = stream::iter(candidates)
-        .map(|(id, url)| async move {
-            has_runnable_assets(client, cache, &url, &id)
-                .await
-                .then_some(id)
+    let listed: HashMap<String, Option<AihubCardInfo>> = stream::iter(candidates)
+        .map(|(id, assets_url, info_url)| async move {
+            if !has_runnable_assets(client, cache, &assets_url, &id).await {
+                return None;
+            }
+            let summary = card_info(client, cache, &id, &info_url).await;
+            Some((id, summary))
         })
-        .buffer_unordered(PROBE_CONCURRENCY)
-        .filter_map(|id| async move { id })
+        .buffer_unordered(CATALOG_CONCURRENCY)
+        .filter_map(|row| async move { row })
         .collect()
         .await;
     Ok(entries
         .into_iter()
-        .filter(|e| runnable.contains(&e.id))
+        .filter_map(|mut e| {
+            e.summary = listed.get(&e.id)?.clone();
+            Some(e)
+        })
         .collect())
 }
 
@@ -139,6 +188,38 @@ async fn has_runnable_assets(
         .unwrap_or(false)
 }
 
+/// Card summary of a model, read from its info file. Parsed once per session and kept in
+/// `AihubCache.cards`; the raw bytes stay in the body cache, so the detail call does not fetch again.
+/// `None` when the info cannot be read or decoded (not cached, so a later call tries again).
+async fn card_info(
+    client: &reqwest::Client,
+    cache: &AihubCache,
+    id: &str,
+    info_url: &str,
+) -> Option<AihubCardInfo> {
+    if let Some(hit) = cache.cards.lock().ok().and_then(|m| m.get(id).cloned()) {
+        return Some(hit);
+    }
+    let info = read_model_info(client, cache, id, info_url).await.ok()?;
+    let card = card_from(&info);
+    if let Ok(mut map) = cache.cards.lock() {
+        map.insert(id.to_string(), card.clone());
+    }
+    Some(card)
+}
+
+/// Decoded model info for one model. The bytes come through the body cache.
+async fn read_model_info(
+    client: &reqwest::Client,
+    cache: &AihubCache,
+    id: &str,
+    info_url: &str,
+) -> Result<ModelInfo, String> {
+    let info_bytes = cached_bytes(client, cache, require_https(info_url)?).await?;
+    ModelInfo::decode(info_bytes.as_slice())
+        .map_err(|e| format!("Could not read AI Hub model info for {id}: {e}"))
+}
+
 /// Model info and QAIRT assets for one model id.
 #[tauri::command]
 pub async fn aihub_model_detail(
@@ -152,9 +233,7 @@ pub async fn aihub_model_detail(
         .manifest_urls
         .as_ref()
         .ok_or_else(|| format!("AI Hub manifest has no URLs for {id}"))?;
-    let info_bytes = cached_bytes(&state.http_client, &cache, require_https(&urls.info)?).await?;
-    let info = ModelInfo::decode(info_bytes.as_slice())
-        .map_err(|e| format!("Could not read AI Hub model info for {id}: {e}"))?;
+    let info = read_model_info(&state.http_client, &cache, &id, &urls.info).await?;
     // Only the info is required. A failed assets read still shows the model, with no assets.
     let assets =
         match fetch_release_assets(&state.http_client, &cache, &urls.release_assets, &id).await {
@@ -500,13 +579,17 @@ fn catalog_entries(manifest: &ReleaseManifest) -> Vec<AihubCatalogEntry> {
                 .map(|r| label(r.as_str_name(), "RUNTIME_"))
                 .collect(),
             chipsets: m.supported_chipsets.clone(),
-            tags: m
-                .tags
-                .iter()
-                .filter_map(|t| ModelTag::try_from(*t).ok())
-                .map(|t| label(t.as_str_name(), "MODEL_TAG_"))
-                .collect(),
+            tags: tag_labels(&m.tags),
+            summary: None,
         })
+        .collect()
+}
+
+/// Tag enum values as labels (`MODEL_TAG_LLM` -> `LLM`). Unknown values are dropped.
+fn tag_labels(tags: &[i32]) -> Vec<String> {
+    tags.iter()
+        .filter_map(|t| ModelTag::try_from(*t).ok())
+        .map(|t| label(t.as_str_name(), "MODEL_TAG_"))
         .collect()
 }
 
@@ -530,6 +613,116 @@ fn model_assets(assets: &[AssetDetails]) -> Vec<AihubAsset> {
             .then_with(|| a.chipset.cmp(&b.chipset))
     });
     out
+}
+
+/// Text of a technical detail value. Empty for a detail with no value set.
+fn detail_text(detail: &TechnicalDetail) -> String {
+    match &detail.value {
+        Some(Value::StringValue(s)) => s.clone(),
+        Some(Value::IntValue(i)) => i.to_string(),
+        Some(Value::FloatValue(f)) => f.to_string(),
+        None => String::new(),
+    }
+}
+
+/// Detail keys whose value is an explanation of a metric, not a measured figure of the model.
+const EXPLANATORY_DETAIL_KEYS: [&str; 2] = ["TTFT", "Response Rate"];
+
+/// The model's technical details as one list. Top-level details come first, then the runtime 11/12
+/// ones. A key that appears twice keeps one entry: a runtime value replaces the top-level value, and
+/// between runtimes the first listed wins. Details with an empty key or value are dropped, and so
+/// are the explanatory ones (`EXPLANATORY_DETAIL_KEYS`).
+fn merge_technical_details(info: &ModelInfo) -> Vec<AihubDetail> {
+    let top = info.technical_details.iter().map(|d| (d, false));
+    let runtime = info
+        .runtime_technical_details
+        .iter()
+        .filter(|r| is_supported_runtime(r.runtime))
+        .flat_map(|r| r.technical_details.iter())
+        .map(|d| (d, true));
+    // Each entry carries whether its value came from a runtime.
+    let mut merged: Vec<(AihubDetail, bool)> = Vec::new();
+    for (detail, from_runtime) in top.chain(runtime) {
+        let value = detail_text(detail);
+        if detail.key.is_empty()
+            || value.is_empty()
+            || EXPLANATORY_DETAIL_KEYS.contains(&detail.key.as_str())
+        {
+            continue;
+        }
+        match merged.iter_mut().find(|(m, _)| m.key == detail.key) {
+            Some((existing, existing_from_runtime)) => {
+                if from_runtime && !*existing_from_runtime {
+                    existing.value = value;
+                    *existing_from_runtime = true;
+                }
+            }
+            None => merged.push((
+                AihubDetail {
+                    key: detail.key.clone(),
+                    value,
+                },
+                from_runtime,
+            )),
+        }
+    }
+    merged.into_iter().map(|(detail, _)| detail).collect()
+}
+
+/// Card facts from the model info: the headline and the details the card shows.
+fn card_from(info: &ModelInfo) -> AihubCardInfo {
+    let details = merge_technical_details(info);
+    let find = |key: &str| {
+        details
+            .iter()
+            .find(|d| d.key == key)
+            .map(|d| d.value.clone())
+    };
+    AihubCardInfo {
+        headline: info.headline.clone(),
+        model_size_bytes: find("Model Size").as_deref().and_then(parse_model_size),
+        quantization: find("Quantization Type"),
+        input_modalities: find("Supported Input Modalities")
+            .map(|v| split_list(&v))
+            .unwrap_or_default(),
+        output_modalities: find("Supported Output Modalities")
+            .map(|v| split_list(&v))
+            .unwrap_or_default(),
+        context_lengths: find("Context lengths"),
+        languages: find("Supported languages"),
+    }
+}
+
+/// A comma-separated detail as its items (`text, image` -> `["text", "image"]`).
+fn split_list(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(String::from)
+        .collect()
+}
+
+/// Parses a size detail such as `429 MB` or `1.2 GB` into bytes. Units are powers of 1024 (decimal
+/// and binary spellings alike). `None` when the number or unit is missing or unknown.
+fn parse_model_size(text: &str) -> Option<u64> {
+    let text = text.trim();
+    let split = text
+        .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+        .unwrap_or(text.len());
+    let (number, unit) = text.split_at(split);
+    let value: f64 = number.parse().ok()?;
+    let multiplier: f64 = match unit.trim().to_ascii_uppercase().as_str() {
+        "B" => 1.0,
+        "KB" | "KIB" | "K" => 1024.0,
+        "MB" | "MIB" | "M" => 1024.0_f64.powi(2),
+        "GB" | "GIB" | "G" => 1024.0_f64.powi(3),
+        "TB" | "TIB" | "T" => 1024.0_f64.powi(4),
+        _ => return None,
+    };
+    let bytes = value * multiplier;
+    // `number` is digits and dots only, so the value is finite; the bound keeps the cast in range.
+    (bytes.is_finite() && bytes < u64::MAX as f64).then(|| bytes.round() as u64)
 }
 
 fn detail_from(info: &ModelInfo, assets: Option<&ModelReleaseAssets>) -> AihubModelDetail {
@@ -556,6 +749,21 @@ fn detail_from(info: &ModelInfo, assets: Option<&ModelReleaseAssets>) -> AihubMo
                 .ok()
                 .map(|c| label(c.as_str_name(), "CALL_TO_ACTION_"))
         }),
+        tags: tag_labels(&info.tags),
+        technical_details: merge_technical_details(info),
+        research_paper: non_empty(&info.research_paper),
+        research_paper_title: non_empty(&info.research_paper_title),
+        applicable_scenarios: info
+            .applicable_scenarios
+            .iter()
+            .filter(|s| !s.is_empty())
+            .cloned()
+            .collect(),
+        genie_compatible: info.llm_details.as_ref().map(|d| d.genie_compatible),
+        geniex_llamacpp_compatible: info
+            .llm_details
+            .as_ref()
+            .map(|d| d.geniex_llamacpp_compatible),
         assets: assets.map(|a| model_assets(&a.assets)),
     }
 }
@@ -563,6 +771,7 @@ fn detail_from(info: &ModelInfo, assets: Option<&ModelReleaseAssets>) -> AihubMo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::aihub_proto::model_info::RuntimeTechnicalDetails;
 
     const QWEN_INFO: &[u8] = include_bytes!("../../testdata/aihub/qwen3_0_6b-info.pb");
 
@@ -852,5 +1061,182 @@ mod tests {
         assert!(candidates.contains(&"0.66.0".to_string()));
         assert!(candidates.contains(&"0.67.9".to_string()));
         assert!(!candidates.contains(&"0.65.0".to_string()));
+    }
+
+    fn detail(key: &str, value: &str) -> TechnicalDetail {
+        TechnicalDetail {
+            key: key.into(),
+            value: Some(Value::StringValue(value.into())),
+        }
+    }
+
+    fn runtime_block(runtime: Runtime, details: Vec<TechnicalDetail>) -> RuntimeTechnicalDetails {
+        RuntimeTechnicalDetails {
+            runtime: runtime as i32,
+            technical_details: details,
+        }
+    }
+
+    #[test]
+    fn model_size_parses_units_as_powers_of_1024() {
+        let mb = 1024 * 1024;
+        assert_eq!(parse_model_size("429 MB"), Some(429 * mb));
+        assert_eq!(parse_model_size("429MB"), Some(429 * mb));
+        assert_eq!(parse_model_size("  429 mib "), Some(429 * mb));
+        assert_eq!(parse_model_size("1 GB"), Some(1 << 30));
+        assert_eq!(parse_model_size("1.5 KB"), Some(1536));
+        assert_eq!(parse_model_size("512 KB"), Some(512 * 1024));
+        assert_eq!(parse_model_size("2 TB"), Some(2 << 40));
+        assert_eq!(parse_model_size("100 B"), Some(100));
+        assert_eq!(
+            parse_model_size("1.2 GB"),
+            Some((1.2 * 1073741824.0_f64).round() as u64)
+        );
+    }
+
+    #[test]
+    fn model_size_is_none_when_unparsable() {
+        for text in [
+            "",
+            "MB",
+            "429",
+            "429 parsecs",
+            "-3 MB",
+            "1.2.3 GB",
+            "1e3 MB",
+            "NaN MB",
+            "1,234 MB",
+            "99999999 TB",
+        ] {
+            assert_eq!(parse_model_size(text), None, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn split_list_splits_on_commas_and_trims() {
+        assert_eq!(
+            split_list("text, image ,audio"),
+            vec!["text", "image", "audio"]
+        );
+        assert_eq!(split_list("text"), vec!["text"]);
+        assert!(split_list("").is_empty());
+        assert!(split_list(" , ").is_empty());
+    }
+
+    #[test]
+    fn runtime_detail_overrides_top_level_and_first_runtime_wins() {
+        let info = ModelInfo {
+            technical_details: vec![
+                detail("Model Size", "1 MB"),
+                detail("Top Only", "kept"),
+                detail("Empty", ""),
+            ],
+            runtime_technical_details: vec![
+                // Runtime 11 comes first, so its value wins over runtime 12's.
+                runtime_block(
+                    Runtime::GeniexQairt,
+                    vec![detail("Model Size", "2 MB"), detail("Runtime Only", "x")],
+                ),
+                runtime_block(Runtime::GeniexLlamacpp, vec![detail("Model Size", "3 MB")]),
+                // A runtime outside 11/12 is ignored.
+                runtime_block(Runtime::Unspecified, vec![detail("Other", "no")]),
+            ],
+            ..Default::default()
+        };
+        let merged = merge_technical_details(&info);
+        let pairs: Vec<(&str, &str)> = merged
+            .iter()
+            .map(|d| (d.key.as_str(), d.value.as_str()))
+            .collect();
+        assert_eq!(
+            pairs,
+            vec![
+                ("Model Size", "2 MB"),
+                ("Top Only", "kept"),
+                ("Runtime Only", "x"),
+            ]
+        );
+    }
+
+    #[test]
+    fn non_text_detail_values_are_formatted() {
+        let info = ModelInfo {
+            technical_details: vec![
+                TechnicalDetail {
+                    key: "Count".into(),
+                    value: Some(Value::IntValue(42)),
+                },
+                TechnicalDetail {
+                    key: "Ratio".into(),
+                    value: Some(Value::FloatValue(0.5)),
+                },
+                TechnicalDetail {
+                    key: "Unset".into(),
+                    value: None,
+                },
+            ],
+            ..Default::default()
+        };
+        let merged = merge_technical_details(&info);
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0].value, "42");
+        assert_eq!(merged[1].value, "0.5");
+    }
+
+    #[test]
+    fn real_qwen_info_gives_the_card_summary() {
+        let info = ModelInfo::decode(QWEN_INFO).expect("qwen info.pb decodes");
+        let card = card_from(&info);
+        assert!(!card.headline.is_empty());
+        assert_eq!(card.model_size_bytes, Some(429 * 1024 * 1024));
+        assert_eq!(card.quantization.as_deref(), Some("Q4_0 (GGUF)"));
+        assert_eq!(card.input_modalities, vec!["text"]);
+        assert_eq!(card.output_modalities, vec!["text"]);
+        assert_eq!(card.context_lengths.as_deref(), Some("512, 1024, 4096"));
+        assert_eq!(
+            card.languages.as_deref(),
+            Some("100+ languages and dialects.")
+        );
+    }
+
+    #[test]
+    fn real_qwen_info_gives_the_detail_fields() {
+        let info = ModelInfo::decode(QWEN_INFO).expect("qwen info.pb decodes");
+        let detail = detail_from(&info, None);
+        assert_eq!(detail.tags, vec!["LLM", "GENERATIVE_AI"]);
+        assert_eq!(detail.genie_compatible, Some(true));
+        assert_eq!(detail.geniex_llamacpp_compatible, Some(true));
+        assert_eq!(
+            detail.research_paper.as_deref(),
+            Some("https://arxiv.org/abs/2505.09388")
+        );
+        assert_eq!(
+            detail.research_paper_title.as_deref(),
+            Some("Qwen3 Technical Report")
+        );
+        assert_eq!(
+            detail.applicable_scenarios,
+            vec!["Dialogue", "Content Generation", "Customer Support"]
+        );
+        let size = detail
+            .technical_details
+            .iter()
+            .find(|d| d.key == "Model Size")
+            .map(|d| d.value.as_str());
+        assert_eq!(size, Some("429 MB"));
+        // The explanations of TTFT and Response Rate are not model stats and are dropped.
+        assert!(!detail
+            .technical_details
+            .iter()
+            .any(|d| d.key == "TTFT" || d.key == "Response Rate"));
+    }
+
+    #[test]
+    fn llm_compatibility_is_none_without_llm_details() {
+        let info = ModelInfo::default();
+        let detail = detail_from(&info, None);
+        assert_eq!(detail.genie_compatible, None);
+        assert_eq!(detail.geniex_llamacpp_compatible, None);
+        assert!(detail.tags.is_empty());
     }
 }

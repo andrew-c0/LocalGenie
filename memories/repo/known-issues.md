@@ -56,7 +56,14 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Chipset matching normalises names (AI Hub `qualcomm-snapdragon-x-elite` against GenieX's `Snapdragon X Elite CRD`). Not run against a live device report.
 - The download gate is in memory: a zip can be downloaded only after its model page was opened in the same session (`AihubCache.asset_urls`). After a restart, open the page first.
 - `geniex pull qualcomm/<Name>:<precision> --model-hub localfs --local-path <zip>` is the import path for runtime 11; the precision label is taken from the app (`validate_precision`), and whether GenieX accepts the label for a zip was not verified.
-- The AI Hub tab's card description is hard-coded `QAIRT · N chipsets`, so a GGUF-only model is labelled QAIRT (code-read, `AihubBrowser.tsx`).
+- The AI Hub card's fallback line `QAIRT · N chipsets` (`aihubCardData`, uncommitted) shows only when the model's info file cannot be read, so a GGUF-only model in that case is still labelled QAIRT (code-read). With the info file, the card shows the model's own facts instead.
+
+## Model cards and detail pages (uncommitted; code-read; the user looked at the layout on 2026-11-04, "okay for now")
+- Hugging Face capability icons are guesses from the Hub's tags and the GGUF chat template (`utils/hubCapabilities.ts`). The `tools` and `reasoning` words can match text that is not a tool or thinking mode. The icon and the detail line say "inferred". Not checked against real models.
+- Card RAM verdicts rest on fixed numbers: 8.5 bits per weight for 8-bit, 4.85 for 4-bit, and 1.15 times the file size for AI Hub's Model Size (`utils/cardRam.ts`). Not checked against measured memory. A GGUF repo's parameter count is approximate and the card says "estimate".
+- The AI Hub list waits for every kept model's info file on first load (`aihub_list_models`, 8 at a time). The first-load time is not measured. A model whose info file cannot be read is listed without card facts.
+- The Hugging Face detail page assumes the second `expand[]` request returns the fields the plain response lacks. Not checked against the live Hub. If that request fails, `downloadsAllTime` and `childrenModelCount` are missing and the rest of the page still shows.
+- The installed model card shows RAM and context from its stored row. A row from before the RAM and context columns shows what it has; not checked against an old row.
 
 ## Chat attachments (code-verified, runtime-unverified)
 - mp3 input is not verified with the server. The chat path sends `input_audio` with `format` `mp3` when the file is an mp3; GenieX accepts the format name and writes a temp file (code-read). The audio scan probe uses wav, so wav is the only format the scan has exercised.
@@ -76,7 +83,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - The summary is the model's own text. The code checks only that it is not empty; nothing checks it against the conversation. A weak summary stays in effect until a later summary folds it in; summaries also stay in effect when the setting is off.
 - Covered messages cannot be deleted or retried. This is enforced in the store and the UI; the summary row itself also cannot be removed.
 
-## Sidebar usage chart with Playground jobs (uncommitted; code-read, partly run)
+## Sidebar usage chart with Playground jobs (committed 9a18c4f; code-read, partly run)
 - Only the text to image and OCR lines were confirmed in the app by the user (2026-11-03). Upscaling, speech, image to image on a GPU or NPU device, and Auto on a device with no NPU counter are not checked.
 - Text to image with Auto plots all three targets: the runtime's device choice is not reported to the frontend (code-read), so the chart cannot show which one it used.
 - A GPU or NPU line depends on the engine counters in `get_system_usage`; on a device without them the line is left out (code-read, not run on that hardware).

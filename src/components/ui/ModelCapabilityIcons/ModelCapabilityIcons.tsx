@@ -1,7 +1,7 @@
 import { BrainCircuitRegular, EyeRegular, MicRegular, WrenchRegular } from "@fluentui/react-icons";
 import type { ReactElement } from "react";
-import type { CapabilityBadge, CapabilityBadgeId } from "../../../../../../utils/modelCapabilities";
-import { Flex } from "../../../../../ui/Flex/Flex";
+import type { CapabilityBadge, CapabilityBadgeId } from "../../../utils/modelCapabilities";
+import { Flex } from "../Flex/Flex";
 import "./ModelCapabilityIcons.css";
 
 const ICONS: Record<CapabilityBadgeId, ReactElement> = {

@@ -13,6 +13,12 @@ export function formatCount(n?: number): string {
   return String(n);
 }
 
+/** A whole number with thousands separators, for example `40,960`. `—` when unknown. */
+export function formatWhole(n?: number | null): string {
+  if (n == null) return "—";
+  return n.toLocaleString("en-US");
+}
+
 /** Compact byte size with units. */
 export function formatBytes(n?: number): string {
   if (n == null) return "—";
@@ -22,10 +28,59 @@ export function formatBytes(n?: number): string {
   return `${n} B`;
 }
 
+/** Context length for a card: `8K`, `128K`, or the raw count below 1K. Null when unknown. */
+export function formatContextLength(tokens: number | null | undefined): string | null {
+  if (!tokens) return null;
+  if (tokens < 1024) return `${tokens}`;
+  return `${Math.round(tokens / 1024)}K`;
+}
+
 /** Gigabytes with one decimal, for example `16.3 GB`. `—` when unknown. */
 export function formatGigabytes(n: number | null | undefined): string {
   if (n == null) return "—";
   return `${(n / 1_073_741_824).toFixed(1)} GB`;
+}
+
+const DAY_MS = 86_400_000;
+
+function plural(n: number, unit: string): string {
+  return `${n} ${unit}${n === 1 ? "" : "s"} ago`;
+}
+
+/**
+ * How long ago an ISO date was, as short text: `today`, `3 days ago`, `2 weeks ago`,
+ * `5 months ago`, `2 years ago`. A future date counts as today. Null when the date is missing or invalid.
+ */
+export function formatRelativeDate(
+  iso: string | null | undefined,
+  now: number = Date.now(),
+): string | null {
+  if (!iso) return null;
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return null;
+  const days = Math.floor(Math.max(0, now - then) / DAY_MS);
+  if (days < 1) return "today";
+  if (days < 7) return plural(days, "day");
+  if (days < 30) return plural(Math.floor(days / 7), "week");
+  const months = Math.floor(days / 30);
+  if (months < 12) return plural(months, "month");
+  return plural(Math.max(1, Math.floor(days / 365)), "year");
+}
+
+/** An ISO date as a day in the user's locale, for example `Apr 28, 2025`. Null when missing or invalid. */
+export function formatDay(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return null;
+  return then.toLocaleDateString(undefined, { dateStyle: "medium" });
+}
+
+/** Full date and time of an ISO date for a tooltip, in the user's locale. Null when missing or invalid. */
+export function formatFullDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return null;
+  return then.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
 /** Duration as `850ms` or `1.4s`. */

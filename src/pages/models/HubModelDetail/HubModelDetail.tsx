@@ -10,13 +10,19 @@ import {
 import { open } from "@tauri-apps/plugin-shell";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { CapabilitiesSection } from "../../../components/models/CapabilitiesSection";
 import { GGUFVariantList } from "../../../components/models/GGUFVariantList";
 import { ModelCardPanel, ModelDetailLayout } from "../../../components/models/ModelDetailLayout";
 import { ModelFacetRow } from "../../../components/models/ModelFacetRow";
+import { ModelSpecSection } from "../../../components/models/ModelSpecSection/ModelSpecSection";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog/ConfirmDialog";
+import { Flex } from "../../../components/ui/Flex/Flex";
 import { MarkdownContent } from "../../../components/ui/MarkdownContent/MarkdownContent";
 import { StateBlock } from "../../../components/ui/StateBlock/StateBlock";
+import { StatusBadge } from "../../../components/ui/StatusBadge/StatusBadge";
 import { Meta } from "../../../components/ui/Typography/Typography";
+import { useModelCapabilityBadges } from "../../../hooks/useModelCapabilityBadges";
+import { useSystemMemory } from "../../../hooks/useSystemMemory";
 import * as db from "../../../services/database";
 import * as geniex from "../../../services/geniex";
 import {
@@ -28,14 +34,12 @@ import {
 import type { GGUFGroup } from "../../../services/hubModels";
 import { isDownloadActive, useDownloadStore } from "../../../stores/downloadStore";
 import { useModelStore } from "../../../stores/modelStore";
-import { formatBytes, formatCount } from "../../../utils/format";
-import { facetSummaryFromModel } from "../../../utils/hubModelInfo";
-import {
-  useDownloadedPrecisions,
-  useHubModelData,
-  useStoredFacets,
-  useSystemMemory,
-} from "../useHubModelDetail";
+import { cardRamVerdict } from "../../../utils/cardRam";
+import { formatBytes } from "../../../utils/format";
+import { inferredCapabilities, inferredCapabilityBadges } from "../../../utils/hubCapabilities";
+import { facetSummaryFromModel, parseFacets } from "../../../utils/hubModelInfo";
+import { fitCell, hubSpecCells, installedSpecCells } from "../../../utils/modelSpecs";
+import { useDownloadedPrecisions, useHubModelData, useStoredModelRow } from "../useHubModelDetail";
 import "./HubModelDetail.css";
 
 interface Props {
@@ -54,7 +58,9 @@ export default function HubModelDetail({ isLocal }: Props) {
     isLocal,
   );
   const downloadedPrecisions = useDownloadedPrecisions(repoId);
-  const storedFacets = useStoredFacets(repoId, !!isLocal);
+  const storedRow = useStoredModelRow(repoId, !!isLocal);
+  // Confirmed capabilities come from the stored scan, which only an installed model has.
+  const confirmedBadges = useModelCapabilityBadges(isLocal ? repoId : null);
   const systemMemory = useSystemMemory();
   const isDownloading = useDownloadStore((s) =>
     s.downloads.some((d) => d.id === repoId && isDownloadActive(d.status)),
@@ -133,7 +139,25 @@ export default function HubModelDetail({ isLocal }: Props) {
 
   // The facets are stored with the download, so the installed model page can show them later.
   const remoteFacets = facetSummaryFromModel(model);
+  const storedFacets = parseFacets(storedRow?.facets);
   const facets = isLocal ? storedFacets : remoteFacets;
+  const groupPrecisions = ggufGroups.map((g) => g.main.precision);
+
+  // Capabilities: inferred from the Hub's tags and chat template, or confirmed by a scan when installed.
+  const capabilityBadges = isLocal
+    ? confirmedBadges
+    : inferredCapabilityBadges(inferredCapabilities(model));
+  const fitCells = isLocal
+    ? []
+    : [
+        fitCell(
+          cardRamVerdict(remoteFacets.paramCount, systemMemory),
+          remoteFacets.paramCountApproximate,
+        ),
+      ];
+  const specCells = isLocal
+    ? installedSpecCells(storedRow, storedFacets)
+    : hubSpecCells(model, remoteFacets, groupPrecisions);
 
   const handleDownload = (group: GGUFGroup) => {
     useDownloadStore.getState().enqueue({
@@ -151,16 +175,7 @@ export default function HubModelDetail({ isLocal }: Props) {
     <ModelDetailLayout
       eyebrow={isLocal ? "● INSTALLED MODEL" : "● HUGGING FACE MODEL"}
       title={model.id}
-      subtitle={[
-        // The Hub's downloads and likes only mean something for a repo that is not on this device.
-        !isLocal && `⬇ ${formatCount(model.downloads)} downloads`,
-        !isLocal && `❤ ${formatCount(model.likes)} likes`,
-        model.gguf?.context_length && `Context ${formatCount(model.gguf.context_length)} tokens`,
-        model.lastModified && `Updated ${new Date(model.lastModified).toLocaleDateString()}`,
-        model.gated && "🔒 gated",
-      ]
-        .filter(Boolean)
-        .join(" · ")}
+      subtitle={model.author}
       actions={
         <div className="model-detail__actions">
           {backButton}
@@ -197,16 +212,24 @@ export default function HubModelDetail({ isLocal }: Props) {
         </div>
       }
     >
+      {!isLocal && model.gated && (
+        <Flex gap="s" align="center">
+          <StatusBadge tone="blue">Gated repo</StatusBadge>
+          <Meta>Access must be requested on Hugging Face.</Meta>
+        </Flex>
+      )}
+
       {facets && (
         <Card size="small">
           <ModelFacetRow
             facets={facets}
-            precisions={
-              isLocal ? [...downloadedPrecisions] : ggufGroups.map((g) => g.main.precision)
-            }
+            precisions={isLocal ? [...downloadedPrecisions] : groupPrecisions}
           />
         </Card>
       )}
+
+      <CapabilitiesSection badges={capabilityBadges} isInferred={!isLocal} cells={fitCells} />
+      <ModelSpecSection title="Specifications" cells={specCells} />
 
       {!isLocal && ggufGroups.length > 0 && (
         <GGUFVariantList

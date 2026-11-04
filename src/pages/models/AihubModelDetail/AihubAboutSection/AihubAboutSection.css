@@ -1,0 +1,5 @@
+/* Bulleted scenarios. The list sits under the Meta label, so it keeps the same left edge as the text. */
+.aihub-about__list {
+  margin: 0;
+  padding-left: var(--spacingHorizontalL);
+}

@@ -1,0 +1,14 @@
+/* Label and value cells of a model page section. Cells wrap in as many columns as the width allows. */
+.model-spec-section__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--spacingVerticalM) var(--spacingHorizontalL);
+}
+
+.model-spec-section__cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalXXS);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

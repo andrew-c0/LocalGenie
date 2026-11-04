@@ -1,3 +1,4 @@
+import type { DbDownloadedModel } from "../services/database";
 import type { ModelInfo } from "../types";
 import { formatBytes } from "./format";
 import { modelSettingsKey } from "./modelSettings";
@@ -26,6 +27,27 @@ export interface ModelRamLine {
   /** For example "RAM ~4.20 GB" or "RAM about 4.20 GB". */
   label: string;
   warning: string | null;
+}
+
+/**
+ * The stored RAM of a downloaded model's row, or null until the figure is computed. A missing
+ * context share counts as zero.
+ */
+export function storedRamOfRow(
+  row: Pick<DbDownloadedModel, "base_ram_bytes" | "context_ram_bytes" | "ram_approximate">,
+): StoredRam | null {
+  if (row.base_ram_bytes === null) return null;
+  return {
+    baseBytes: row.base_ram_bytes,
+    contextBytes: row.context_ram_bytes ?? 0,
+    approximate: row.ram_approximate ?? false,
+  };
+}
+
+/** The stored RAM as a short label, for example `RAM ~4.00 GB` or `RAM about 4.00 GB` when approximate. */
+export function storedRamLabel(stored: StoredRam): string {
+  const size = formatBytes(stored.baseBytes + stored.contextBytes);
+  return `RAM ${stored.approximate ? "about " : "~"}${size}`;
 }
 
 /**
@@ -58,8 +80,7 @@ export function modelRamLine(
   if (!stored) return null;
 
   const needBytes = stored.baseBytes + stored.contextBytes;
-  const size = formatBytes(needBytes);
-  const label = `RAM ${stored.approximate ? "about " : "~"}${size}`;
+  const label = storedRamLabel(stored);
   if (loaded) return { label, warning: null };
 
   const { memory, headroomPercent } = snapshot;
@@ -69,6 +90,6 @@ export function modelRamLine(
   const keptFree = formatBytes(headroomBytes(memory.totalBytes, headroomPercent));
   return {
     label,
-    warning: `Needs ~${size}, ${formatBytes(memory.availableBytes)} free, ${keptFree} kept free`,
+    warning: `Needs ~${formatBytes(needBytes)}, ${formatBytes(memory.availableBytes)} free, ${keptFree} kept free`,
   };
 }

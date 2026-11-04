@@ -34,8 +34,15 @@ export function SectionTitle(props: ComponentProps<typeof Subtitle1>) {
   return <Subtitle1 as="h2" block {...props} />;
 }
 
-export function CardTitle(props: ComponentProps<typeof Subtitle2>) {
-  return <Subtitle2 as="h3" block {...props} />;
+export function CardTitle({ className, ...props }: ComponentProps<typeof Subtitle2>) {
+  return (
+    <Subtitle2
+      as="h3"
+      block
+      className={className ? `typography-card-title ${className}` : "typography-card-title"}
+      {...props}
+    />
+  );
 }
 
 export function Body(props: ComponentProps<typeof Body1>) {

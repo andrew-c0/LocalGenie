@@ -6,7 +6,7 @@ import { shortName } from "../../../../../utils/format";
 import type { CapabilityBadge } from "../../../../../utils/modelCapabilities";
 import type { ModelRamLine } from "../../../../../utils/modelRam";
 import { bitsBadgeColor } from "../../../../../utils/quantBadge";
-import { ModelCapabilityIcons } from "./ModelCapabilityIcons/ModelCapabilityIcons";
+import { ModelCapabilityIcons } from "../../../../ui/ModelCapabilityIcons/ModelCapabilityIcons";
 import { ModelRamNote } from "./ModelRamNote/ModelRamNote";
 import "./ModelOptionButton.css";
 

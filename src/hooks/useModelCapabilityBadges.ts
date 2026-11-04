@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
-import { loadModelCapabilities } from "../../../../../services/models";
-import { capabilityMap } from "../../../../../utils/capabilityStatus";
-import { type CapabilityBadge, capabilityBadges } from "../../../../../utils/modelCapabilities";
+import { loadModelCapabilities } from "../services/models";
+import { capabilityMap } from "../utils/capabilityStatus";
+import { type CapabilityBadge, capabilityBadges } from "../utils/modelCapabilities";
 
 /**
  * Confirmed capability badges for one model, from its stored scan results. The scan loads once per
  * mount. A failed load counts as unconfirmed. Until the result for this model arrives, the list is
- * empty.
+ * empty. Pass null when the model is not installed: nothing is read then.
  */
-export function useModelCapabilityBadges(modelName: string): CapabilityBadge[] {
+export function useModelCapabilityBadges(modelName: string | null): CapabilityBadge[] {
   const [loaded, setLoaded] = useState<{ model: string; badges: CapabilityBadge[] } | null>(null);
 
   useEffect(() => {
+    if (!modelName) return;
     let current = true;
     loadModelCapabilities(modelName)
       .catch(() => [])
@@ -25,5 +26,5 @@ export function useModelCapabilityBadges(modelName: string): CapabilityBadge[] {
   }, [modelName]);
 
   // Derived: a result for another model is never shown for this one.
-  return loaded?.model === modelName ? loaded.badges : [];
+  return loaded && loaded.model === modelName ? loaded.badges : [];
 }

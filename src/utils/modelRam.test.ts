@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ModelInfo } from "../types";
-import { estimatedRamLabel, modelRamLine, type RamSnapshot, type StoredRam } from "./modelRam";
+import {
+  estimatedRamLabel,
+  modelRamLine,
+  type RamSnapshot,
+  type StoredRam,
+  storedRamLabel,
+  storedRamOfRow,
+} from "./modelRam";
 
 const GB = 1_073_741_824;
 
@@ -84,5 +91,37 @@ describe("estimatedRamLabel", () => {
     expect(estimatedRamLabel(stored({ approximate: true }), 1 * GB)).toBe(
       "Estimated RAM: about 4.00 GB",
     );
+  });
+});
+
+describe("storedRamLabel", () => {
+  it("shows the base plus the context share, with a tilde when measured", () => {
+    expect(storedRamLabel(stored())).toBe("RAM ~4.00 GB");
+  });
+
+  it("says about when the figure is approximate", () => {
+    expect(storedRamLabel(stored({ approximate: true }))).toBe("RAM about 4.00 GB");
+  });
+});
+
+describe("storedRamOfRow", () => {
+  const row = { base_ram_bytes: 3 * GB, context_ram_bytes: 1 * GB, ram_approximate: true };
+
+  it("reads the stored figures of a row", () => {
+    expect(storedRamOfRow(row)).toEqual({
+      baseBytes: 3 * GB,
+      contextBytes: 1 * GB,
+      approximate: true,
+    });
+  });
+
+  it("is null until the base figure is computed", () => {
+    expect(storedRamOfRow({ ...row, base_ram_bytes: null })).toBeNull();
+  });
+
+  it("treats a missing context share as zero and a missing flag as measured", () => {
+    expect(
+      storedRamOfRow({ base_ram_bytes: 2 * GB, context_ram_bytes: null, ram_approximate: null }),
+    ).toEqual({ baseBytes: 2 * GB, contextBytes: 0, approximate: false });
   });
 });

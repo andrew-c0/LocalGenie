@@ -8,10 +8,7 @@ import {
   listHubModelFiles,
 } from "../../services/hubApi";
 import { convertToGGUFFiles, groupGGUFFiles } from "../../services/hubModels";
-import type { SystemMemoryInfo } from "../../services/system";
-import { getSystemMemory } from "../../services/system";
 import { useModelStore } from "../../stores/modelStore";
-import { type HubFacetSummary, parseFacets } from "../../utils/hubModelInfo";
 
 /** Loads the model, its file listing, README or stored model card, and derives GGUF groups. */
 /** True when a stored name is the repo: the same id, or the id with a precision suffix (`org/repo:Q4_K_M`). */
@@ -128,46 +125,28 @@ export function useDownloadedPrecisions(repoId: string) {
   return downloadedPrecisions;
 }
 
-/** The facet summary stored when the installed model was downloaded (null for other models). */
-export function useStoredFacets(repoId: string, enabled: boolean): HubFacetSummary | null {
-  const [facets, setFacets] = useState<HubFacetSummary | null>(null);
+/** The row stored when the installed model was downloaded (null for other models or when none matches). */
+export function useStoredModelRow(repoId: string, enabled: boolean): db.DbDownloadedModel | null {
+  const [row, setRow] = useState<db.DbDownloadedModel | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     if (!enabled || !repoId) {
-      setFacets(null);
+      setRow(null);
       return;
     }
     db.listDownloadedModels()
       .then((models) => {
         if (cancelled) return;
-        const row = models.find((m) => isSameRepo(m.name, repoId));
-        setFacets(parseFacets(row?.facets));
+        setRow(models.find((m) => isSameRepo(m.name, repoId)) ?? null);
       })
       .catch(() => {
-        if (!cancelled) setFacets(null);
+        if (!cancelled) setRow(null);
       });
     return () => {
       cancelled = true;
     };
   }, [repoId, enabled]);
 
-  return facets;
-}
-
-/** System memory snapshot, loaded once for RAM-fit estimates. */
-export function useSystemMemory() {
-  const [systemMemory, setSystemMemory] = useState<SystemMemoryInfo | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    getSystemMemory()
-      .then((mem) => !cancelled && setSystemMemory(mem))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return systemMemory;
+  return row;
 }

@@ -1,22 +1,72 @@
-.model-card__card {
+/* One model per row. The card is a plain row; its content and actions are laid out by Flex. */
+.model-card {
   min-width: 0;
 }
 
-.model-card__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacingHorizontalM);
+/* The content column takes the space the actions leave; it must shrink for the ellipsis to work. */
+.model-card__body {
+  min-width: 0;
 }
 
-.model-card__facets {
-  display: flex;
-  flex-wrap: wrap;
+/*
+ * Row 1: title, status, capability icons, then the icon-only info items. Each item keeps its
+ * width; only the title shrinks and truncates.
+ */
+.model-card__header > * {
+  flex-shrink: 0;
+}
+
+.model-card__header > .model-card__title {
+  flex-shrink: 1;
+  /* Centred in the row with the icons, so the card-title margin below is dropped. */
+  margin-block-end: 0;
+  min-width: 0;
+}
+
+.model-card__info-icon {
+  display: inline-flex;
+  color: var(--colorNeutralForeground2);
+  cursor: default;
+}
+
+.model-card__stats {
+  color: var(--colorNeutralForeground2);
+}
+
+/*
+ * Row 2: one line of plain facts (an icon and its value each) and the RAM badge. The items shrink and
+ * clip at the end instead of wrapping. The `> *` rule covers the badge too, so it keeps its own size.
+ */
+.model-card__facts {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.model-card__facts > * {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* A fact: a neutral icon and its value, no border or background. */
+.model-card__fact {
+  display: inline-flex;
   align-items: center;
   gap: var(--spacingHorizontalXS);
+  min-width: 0;
+  color: var(--colorNeutralForeground2);
+}
+
+.model-card__fact > :first-child {
+  flex-shrink: 0;
+}
+
+.model-card__fact-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .model-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacingHorizontalS);
+  flex-shrink: 0;
 }

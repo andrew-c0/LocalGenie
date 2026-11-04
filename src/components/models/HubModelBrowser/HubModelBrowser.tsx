@@ -3,11 +3,14 @@ import { Button, Dropdown, Option, SearchBox, Spinner, Switch } from "@fluentui/
 import { ArrowSortRegular, ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSystemMemory } from "../../../hooks/useSystemMemory";
 import type { HubSort } from "../../../services/hubApi";
 import { activeFacetCount, useHubBrowseStore } from "../../../stores/hubBrowseStore";
-import { baseModelOf, facetSummaryFromModel } from "../../../utils/hubModelInfo";
+import { baseModelOf } from "../../../utils/hubModelInfo";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
-import { ModelCard, type ModelCardData } from "../../ui/ModelCard/ModelCard";
+import { Flex } from "../../ui/Flex/Flex";
+import { ModelCard } from "../../ui/ModelCard/ModelCard";
+import { hubCardData } from "../../ui/ModelCard/modelCardData";
 import { StateBlock } from "../../ui/StateBlock/StateBlock";
 import { HubFacetPanel } from "./HubFacetPanel/HubFacetPanel";
 import "./HubModelBrowser.css";
@@ -30,6 +33,8 @@ export default function HubModelBrowser({ downloading }: Props) {
   const navigate = useNavigate();
   const { models, isLoading, error, refresh } = s;
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Read once here for every card; the RAM verdict is derived per model below.
+  const systemMemory = useSystemMemory();
 
   useEffect(() => {
     if (models.length === 0 && !isLoading && !error) void refresh();
@@ -114,33 +119,23 @@ export default function HubModelBrowser({ downloading }: Props) {
       ) : shown.length === 0 ? (
         <StateBlock icon="🔍" message="No models match the current filters." />
       ) : (
-        <div className="hub-model-browser__grid">
-          {shown.map((m) => {
-            const openDetail = () =>
-              navigate(`/models/${encodeURIComponent(m.id)}`, { state: { isLocal: false } });
-            const cardData: ModelCardData = {
-              name: m.id,
-              installed: false,
-              downloads: m.downloads,
-              likes: m.likes,
-              facets: facetSummaryFromModel(m),
-              gated: m.gated ? true : undefined,
-            };
-            return (
-              <ModelCard
-                key={m._id}
-                model={cardData}
-                isLocal={false}
-                isLoaded={false}
-                isDownloading={downloading.has(m.id)}
-                onOpenSelector={openDetail}
-                onDetails={(name, isLocal) =>
-                  navigate(`/models/${encodeURIComponent(name)}`, { state: { isLocal } })
-                }
-              />
-            );
-          })}
-        </div>
+        <Flex direction="column" gap="s">
+          {shown.map((m) => (
+            <ModelCard
+              key={m._id}
+              model={hubCardData(m, systemMemory)}
+              isLocal={false}
+              isLoaded={false}
+              isDownloading={downloading.has(m.id)}
+              onOpenSelector={() =>
+                navigate(`/models/${encodeURIComponent(m.id)}`, { state: { isLocal: false } })
+              }
+              onDetails={(name, isLocal) =>
+                navigate(`/models/${encodeURIComponent(name)}`, { state: { isLocal } })
+              }
+            />
+          ))}
+        </Flex>
       )}
 
       {s.nextCursor && !s.isLoading && (
