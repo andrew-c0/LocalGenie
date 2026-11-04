@@ -15,6 +15,7 @@ import type {
 } from "../../../types";
 import { errorMessage } from "../../../utils/errorMessage";
 import { formatDuration } from "../../../utils/format";
+import { networkErrorMessage, SERVICE_NAMES } from "../../../utils/networkError";
 import { ocrResultOf } from "../../../utils/ocr";
 import { OCR_DONE_TITLE, OCR_FAILED_TITLE } from "../../../utils/ocrText";
 import { speechResultOf } from "../../../utils/speech";
@@ -31,6 +32,12 @@ function modelName(modelId: string): string {
   const ocrName = useOcrStore.getState().models?.find((m) => m.id === modelId)?.name;
   const speechName = useSpeechStore.getState().models?.find((m) => m.id === modelId)?.name;
   return imageName ?? ocrName ?? speechName ?? modelId;
+}
+
+/** The service a model downloads from: speech models come from GitHub releases, the rest from Hugging Face. */
+function downloadSourceOf(modelId: string): string {
+  const isSpeech = useSpeechStore.getState().models?.some((m) => m.id === modelId) ?? false;
+  return isSpeech ? SERVICE_NAMES.github : SERVICE_NAMES.huggingFace;
 }
 
 /** Re-read the catalog that lists the model, so its card shows Ready. Image and speech models have separate catalogs. */
@@ -66,7 +73,7 @@ function handleDownloadDone(payload: PlaygroundDownloadDone) {
   if (payload.status === "error") {
     const message = errorMessage(payload.error, "The download failed.");
     store.failDownload(modelId, message);
-    toast.error("Model download failed", message);
+    toast.error("Model download failed", networkErrorMessage(message, downloadSourceOf(modelId)));
     return;
   }
 

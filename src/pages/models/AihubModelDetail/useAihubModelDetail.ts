@@ -1,40 +1,17 @@
-import { useEffect, useState } from "react";
+import type { AsyncData } from "../../../hooks/useAsyncData";
+import { useAsyncData } from "../../../hooks/useAsyncData";
 import { type AihubModelDetail, aihubModelDetail, aihubModelReadme } from "../../../services/aihub";
-import { errorMessage } from "../../../utils/errorMessage";
 
 /**
- * Detail and model card for one AI Hub model. `readme` is `undefined` while loading, `null` when
- * there is none (a failed fetch counts as none), and the text otherwise.
+ * Detail and model card for one AI Hub model, as two loads that start together. The detail is the
+ * page: its failure gives the page a retry. The card has its own status: a null `data` means the Hub
+ * has no card, so the card says so and has nothing to retry.
  */
 export function useAihubModelDetail(id: string): {
-  detail: AihubModelDetail | null;
-  readme: string | null | undefined;
-  error: string | null;
+  detail: AsyncData<AihubModelDetail>;
+  readme: AsyncData<string | null>;
 } {
-  const [detail, setDetail] = useState<AihubModelDetail | null>(null);
-  const [readme, setReadme] = useState<string | null | undefined>(undefined);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    aihubModelDetail(id)
-      .then((d) => {
-        if (active) setDetail(d);
-      })
-      .catch((err: unknown) => {
-        if (active) setError(errorMessage(err, "Could not load this model."));
-      });
-    aihubModelReadme(id)
-      .then((text) => {
-        if (active) setReadme(text);
-      })
-      .catch(() => {
-        if (active) setReadme(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, [id]);
-
-  return { detail, readme, error };
+  const detail = useAsyncData(id, aihubModelDetail);
+  const readme = useAsyncData(id, aihubModelReadme);
+  return { detail, readme };
 }

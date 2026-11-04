@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { GGUFFile } from "../services/hubModels";
 import type { HubFacetSummary } from "../utils/hubModelInfo";
+import { SERVICE_NAMES } from "../utils/networkError";
 
 /**
  * `queued` = requested by the app, not yet picked up by the download drawer.
@@ -87,6 +88,13 @@ interface DownloadState {
   setStatus: (id: string, status: DownloadStatus, error?: string) => void;
   remove: (id: string) => void;
   clearFinished: () => void;
+}
+
+/** The service a download comes from, named in its failure text: AI Hub zips, runtime installs (GitHub), else Hugging Face. */
+export function downloadSourceName(download: Pick<DownloadItem, "aihub" | "runtime">): string {
+  if (download.aihub) return SERVICE_NAMES.aihub;
+  if (download.runtime) return SERVICE_NAMES.github;
+  return SERVICE_NAMES.huggingFace;
 }
 
 /** True while queued, downloading or importing. */

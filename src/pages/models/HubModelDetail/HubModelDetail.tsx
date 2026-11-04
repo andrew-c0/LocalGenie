@@ -6,7 +6,7 @@ import {
   DeleteRegular,
   OpenRegular,
 } from "@fluentui/react-icons";
-import { open } from "@tauri-apps/plugin-shell";
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { CapabilitiesSection } from "../../../components/models/CapabilitiesSection";
@@ -17,9 +17,14 @@ import { ModelSpecSection } from "../../../components/models/ModelSpecSection/Mo
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog/ConfirmDialog";
 import { Flex } from "../../../components/ui/Flex/Flex";
 import { MarkdownContent } from "../../../components/ui/MarkdownContent/MarkdownContent";
+import { RetryBlock } from "../../../components/ui/RetryBlock/RetryBlock";
+import { SkeletonBlock } from "../../../components/ui/Skeletons/SkeletonBlock";
+import { SkeletonLines } from "../../../components/ui/Skeletons/SkeletonLines";
+import { SkeletonRows } from "../../../components/ui/Skeletons/SkeletonRows";
 import { StateBlock } from "../../../components/ui/StateBlock/StateBlock";
 import { StatusBadge } from "../../../components/ui/StatusBadge/StatusBadge";
 import { Meta } from "../../../components/ui/Typography/Typography";
+import type { AsyncData } from "../../../hooks/useAsyncData";
 import { useModelCapabilityBadges } from "../../../hooks/useModelCapabilityBadges";
 import { useSystemMemory } from "../../../hooks/useSystemMemory";
 import * as db from "../../../services/database";
@@ -31,15 +36,36 @@ import {
   ramFitForBytes,
 } from "../../../services/hubApi";
 import type { GGUFGroup } from "../../../services/hubModels";
+import { openExternal } from "../../../services/system";
 import { isDownloadActive, useDownloadStore } from "../../../stores/downloadStore";
 import { useModelStore } from "../../../stores/modelStore";
 import { cardRamVerdict } from "../../../utils/cardRam";
+import { errorMessage } from "../../../utils/errorMessage";
 import { formatBytes } from "../../../utils/format";
 import { inferredCapabilities, inferredCapabilityBadges } from "../../../utils/hubCapabilities";
 import { facetSummaryFromModel, parseFacets } from "../../../utils/hubModelInfo";
 import { fitCell, hubSpecCells, installedSpecCells } from "../../../utils/modelSpecs";
 import { useDownloadedPrecisions, useHubModelData, useStoredModelRow } from "../useHubModelDetail";
 import "./HubModelDetail.css";
+
+/** The README panel's body: the installed model's stored card, or the Hub README with its own loading and retry. */
+function readmeBody(
+  isLocal: boolean,
+  localCard: string | null,
+  readme: AsyncData<string | null>,
+): ReactNode {
+  if (isLocal) {
+    return localCard ? <MarkdownContent allowHtml>{localCard}</MarkdownContent> : undefined;
+  }
+  if (readme.status === "loading") return <SkeletonLines lines={6} />;
+  if (readme.status === "error") {
+    return (
+      <RetryBlock compact error={readme.error} subject="Hugging Face" onRetry={readme.retry} />
+    );
+  }
+  // A repo with no README (404) is ready with no content: the panel says there is no card.
+  return readme.data ? <MarkdownContent allowHtml>{readme.data}</MarkdownContent> : undefined;
+}
 
 interface Props {
   /** Viewing a locally installed model (DB-backed). The route decides: `/models/local/:repoId` is true. */
@@ -50,7 +76,7 @@ export default function HubModelDetail({ isLocal }: Props) {
   const { repoId = "" } = useParams<{ repoId: string }>();
   const navigate = useNavigate();
   const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
-  const { model, files, readme, localCard, ggufGroups, loading, error, setError } = useHubModelData(
+  const { model, localCard, status, error, retry, files, readme, ggufGroups } = useHubModelData(
     repoId,
     isLocal,
   );
@@ -69,6 +95,7 @@ export default function HubModelDetail({ isLocal }: Props) {
   );
   const [filesOpen, setFilesOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleDelete = async () => {
     if (!model) return;
@@ -83,30 +110,49 @@ export default function HubModelDetail({ isLocal }: Props) {
       }
       navigate("/models/local");
     } catch (err) {
-      setError(String(err));
+      setDeleteError(String(err));
     } finally {
       setConfirmDelete(null);
     }
   };
 
-  if (loading) {
+  if (status === "loading") {
+    // An installed model is read from the local database, so the loading text names no cloud service.
+    if (isLocal) {
+      return (
+        <ModelDetailLayout title={repoId}>
+          <StateBlock icon="⏳" message={`Loading ${repoId}…`} />
+        </ModelDetailLayout>
+      );
+    }
     return (
       <ModelDetailLayout
         title={repoId}
         subtitle="Fetching model metadata and files from Hugging Face."
       >
-        <StateBlock icon="⏳" message={`Loading ${repoId} from Hugging Face…`} />
+        <SkeletonBlock height={64} />
+        <SkeletonRows count={3} variant="row" />
       </ModelDetailLayout>
     );
   }
 
-  if (error || !model) {
+  if (!isLocal && status === "error") {
     return (
       <ModelDetailLayout title={repoId} subtitle="This model could not be displayed.">
-        <StateBlock icon="⚠️" message={error ?? "Model not found."} />
+        <RetryBlock error={error} subject="Hugging Face" onRetry={retry} />
       </ModelDetailLayout>
     );
   }
+
+  if (status === "error" || deleteError || !model) {
+    return (
+      <ModelDetailLayout title={repoId} subtitle="This model could not be displayed.">
+        <StateBlock icon="⚠️" message={deleteError ?? errorMessage(error, "Model not found.")} />
+      </ModelDetailLayout>
+    );
+  }
+
+  const fileList = files.data ?? [];
 
   const paramsCount = model?.safetensors?.parameters ?? null;
   // GGUF files have actual size — compute RAM fit directly from file size (with overhead for KV cache/activations)
@@ -154,7 +200,6 @@ export default function HubModelDetail({ isLocal }: Props) {
   };
 
   const busy = isDownloading;
-  const modelContent = isLocal ? localCard : readme;
 
   return (
     <ModelDetailLayout
@@ -185,7 +230,7 @@ export default function HubModelDetail({ isLocal }: Props) {
             appearance="secondary"
             icon={<OpenRegular />}
             onClick={() =>
-              open(hubModelPageUrl(model.id)).catch((err) =>
+              openExternal(hubModelPageUrl(model.id)).catch((err) =>
                 console.error("Failed to open browser:", err),
               )
             }
@@ -214,6 +259,14 @@ export default function HubModelDetail({ isLocal }: Props) {
       <CapabilitiesSection badges={capabilityBadges} isInferred={!isLocal} cells={fitCells} />
       <ModelSpecSection title="Specifications" cells={specCells} />
 
+      {/* The file list drives the variant list and the Files card: each shows its own loading and retry. */}
+      {!isLocal && files.status === "loading" && <SkeletonRows count={3} variant="row" />}
+      {!isLocal && files.status === "error" && (
+        <Card size="small">
+          <RetryBlock compact error={files.error} subject="Hugging Face" onRetry={files.retry} />
+        </Card>
+      )}
+
       {!isLocal && ggufGroups.length > 0 && (
         <GGUFVariantList
           groups={ggufGroups}
@@ -229,7 +282,13 @@ export default function HubModelDetail({ isLocal }: Props) {
         />
       )}
 
-      {!isLocal && files.length > 0 && (
+      {!isLocal && files.status === "loading" && (
+        <Card size="small">
+          <SkeletonBlock height={32} />
+        </Card>
+      )}
+
+      {!isLocal && fileList.length > 0 && (
         <Card size="small">
           <Button
             appearance="secondary"
@@ -238,10 +297,10 @@ export default function HubModelDetail({ isLocal }: Props) {
             aria-expanded={filesOpen}
             onClick={() => setFilesOpen((v) => !v)}
           >
-            Files ({files.length})
+            Files ({fileList.length})
           </Button>
           {filesOpen &&
-            files.map((f) => (
+            fileList.map((f) => (
               <div key={f.path} className="hub-model-detail__file-row">
                 <Meta className="hub-model-detail__file-name">
                   {f.type === "directory" ? "📁" : "📄"} {f.path}
@@ -252,9 +311,7 @@ export default function HubModelDetail({ isLocal }: Props) {
         </Card>
       )}
 
-      <ModelCardPanel>
-        {modelContent ? <MarkdownContent allowHtml>{modelContent}</MarkdownContent> : undefined}
-      </ModelCardPanel>
+      <ModelCardPanel>{readmeBody(isLocal, localCard, readme)}</ModelCardPanel>
 
       {confirmDelete && (
         <ConfirmDialog

@@ -1,0 +1,10 @@
+/* A long raw error (a Rust or HTTP message) may not fit on one line: let the text break and shrink. */
+.retry-block__compact > :first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.retry-block__full {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}

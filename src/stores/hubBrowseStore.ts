@@ -54,7 +54,10 @@ interface HubBrowseState {
   isFetchingMore: boolean;
   /** A filter changed while a page was loading; the next refresh runs once that load ends. */
   refreshQueued: boolean;
+  /** Why the first page did not load. The list stays empty when this is set. */
   error: string | null;
+  /** Why the next page did not load. The loaded list stays on screen when this is set. */
+  loadMoreError: string | null;
 
   setSearch: (search: string) => void;
   setSort: (sort: HubSort) => void;
@@ -158,7 +161,7 @@ export const useHubBrowseStore = create<HubBrowseState>((set, get) => {
 
   /** Reset the list and refetch the first page. */
   const changed = (partial: Partial<HubBrowseState>) => {
-    set({ ...partial, models: [], nextCursor: null });
+    set({ ...partial, models: [], nextCursor: null, error: null, loadMoreError: null });
     void get().refresh();
   };
 
@@ -174,6 +177,7 @@ export const useHubBrowseStore = create<HubBrowseState>((set, get) => {
     isFetchingMore: false,
     refreshQueued: false,
     error: null,
+    loadMoreError: null,
 
     setSearch: (search) => set({ search }),
     setSort: (sort) => changed({ sort }),
@@ -208,13 +212,18 @@ export const useHubBrowseStore = create<HubBrowseState>((set, get) => {
             // Serve from cache when fresh.
             const cached = resultCache.get(key);
             if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
-              set({ models: cached.models, nextCursor: cached.nextCursor, isLoading: false });
+              set({
+                models: cached.models,
+                nextCursor: cached.nextCursor,
+                isLoading: false,
+                error: null,
+              });
               resolve();
               return;
             }
 
             const seq = ++refreshSeq;
-            set({ isLoading: true, error: null });
+            set({ isLoading: true, error: null, loadMoreError: null });
             try {
               const page = await fetchPage(s);
               if (seq !== refreshSeq) {
@@ -239,7 +248,7 @@ export const useHubBrowseStore = create<HubBrowseState>((set, get) => {
     fetchMore: async () => {
       const s = get();
       if (!s.nextCursor || s.isFetchingMore) return;
-      set({ isFetchingMore: true });
+      set({ isFetchingMore: true, loadMoreError: null });
       try {
         const page = await fetchPage({ ...s, cursor: s.nextCursor });
         set({
@@ -248,7 +257,7 @@ export const useHubBrowseStore = create<HubBrowseState>((set, get) => {
           isFetchingMore: false,
         });
       } catch (err) {
-        set({ error: String(err), isFetchingMore: false });
+        set({ loadMoreError: String(err), isFetchingMore: false });
       }
     },
   };

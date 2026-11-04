@@ -1,0 +1,61 @@
+/*
+ * Shapes for the loading placeholders (SkeletonRows, SkeletonLines, SkeletonBlock). Widths and
+ * heights go on our own wrappers, not on Fluent's SkeletonItem: Fluent sets an item's height from
+ * its size, and a wrapper avoids fighting those rules. The one override that must reach a
+ * SkeletonItem is scoped (`.skeleton-block .skeleton-block__fill`) so it beats Fluent's class.
+ */
+
+/* An ItemRow-shaped row: the same border, radius and padding as an item row. */
+.skeleton-rows__item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+  padding: var(--spacingVerticalS) var(--spacingHorizontalL);
+  border: 1px solid var(--colorNeutralStroke2);
+  border-radius: var(--borderRadiusXLarge);
+  background: var(--colorNeutralBackground1);
+}
+
+.skeleton-rows__lead {
+  flex-shrink: 0;
+}
+
+.skeleton-rows__text {
+  min-width: 0;
+}
+
+.skeleton-rows__title {
+  width: 40%;
+}
+
+.skeleton-rows__detail {
+  width: 60%;
+}
+
+/* The trailing pill: a rounded clip around a short placeholder. */
+.skeleton-rows__pill {
+  flex-shrink: 0;
+  width: 72px;
+  overflow: hidden;
+  border-radius: var(--borderRadiusCircular);
+}
+
+.skeleton-rows__fact {
+  width: 96px;
+}
+
+.skeleton-rows__fact--short {
+  width: 64px;
+}
+
+.skeleton-lines__line {
+  width: 100%;
+}
+
+.skeleton-lines__line--short {
+  width: 60%;
+}
+
+.skeleton-block .skeleton-block__fill {
+  height: 100%;
+}

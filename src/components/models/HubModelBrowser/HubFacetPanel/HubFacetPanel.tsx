@@ -7,6 +7,8 @@ import {
   TASK_GROUPS,
   taskLabel,
 } from "../../../../utils/hubModelInfo";
+import { RetryBlock } from "../../../ui/RetryBlock/RetryBlock";
+import { SkeletonBlock } from "../../../ui/Skeletons/SkeletonBlock";
 import { Meta } from "../../../ui/Typography/Typography";
 import { CatalogueCombobox } from "./CatalogueCombobox";
 import { CommitInput } from "./CommitInput";
@@ -28,7 +30,8 @@ export function HubFacetPanel() {
   const facets = useHubBrowseStore((s) => s.facets);
   const setFacet = useHubBrowseStore((s) => s.setFacet);
   const clearFacets = useHubBrowseStore((s) => s.clearFacets);
-  const { tags, error } = useHubTags();
+  const tags = useHubTags();
+  const catalogue = tags.data;
   const count = activeFacetCount(facets);
 
   // Task options come from the static group map; the Hub's catalogue supplies library and licence.
@@ -84,22 +87,30 @@ export function HubFacetPanel() {
 
       <div className="hub-facet-panel__field">
         <Meta>Library</Meta>
-        <CatalogueCombobox
-          label="Library"
-          options={(tags?.library ?? []).map((t) => ({ value: t.id, label: t.label }))}
-          value={facets.library}
-          onSelect={(value) => setFacet("library", value)}
-        />
+        {tags.status === "loading" ? (
+          <SkeletonBlock height={32} />
+        ) : (
+          <CatalogueCombobox
+            label="Library"
+            options={(catalogue?.library ?? []).map((t) => ({ value: t.id, label: t.label }))}
+            value={facets.library}
+            onSelect={(value) => setFacet("library", value)}
+          />
+        )}
       </div>
 
       <div className="hub-facet-panel__field">
         <Meta>License</Meta>
-        <CatalogueCombobox
-          label="License"
-          options={(tags?.license ?? []).map((id) => ({ value: id, label: id }))}
-          value={facets.license}
-          onSelect={(value) => setFacet("license", value)}
-        />
+        {tags.status === "loading" ? (
+          <SkeletonBlock height={32} />
+        ) : (
+          <CatalogueCombobox
+            label="License"
+            options={(catalogue?.license ?? []).map((id) => ({ value: id, label: id }))}
+            value={facets.license}
+            onSelect={(value) => setFacet("license", value)}
+          />
+        )}
       </div>
 
       <div className="hub-facet-panel__field hub-facet-panel__wide">
@@ -161,10 +172,10 @@ export function HubFacetPanel() {
         </div>
       </div>
 
-      {error && (
-        <Meta className="hub-facet-panel__wide">
-          Library and licence values could not load: {error}
-        </Meta>
+      {tags.status === "error" && (
+        <div className="hub-facet-panel__wide">
+          <RetryBlock compact error={tags.error} subject="Hugging Face" onRetry={tags.retry} />
+        </div>
       )}
 
       {count > 0 && (

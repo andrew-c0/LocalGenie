@@ -26,3 +26,10 @@
   margin-block-start: 0;
   margin-block-end: 0.5em;
 }
+
+/* The "Latest" slot while the release is checked: a short bar, the height of the summary text. */
+.runtime-panel__latest-placeholder {
+  display: inline-block;
+  width: 96px;
+  vertical-align: middle;
+}

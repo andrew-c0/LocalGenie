@@ -30,7 +30,12 @@ describe("runtimeStore", () => {
   beforeEach(() => {
     listRuntimes.mockReset();
     checkRuntimeUpdate.mockReset();
-    useRuntimeStore.setState({ runtimes: null, readError: null, updatesById: {} });
+    useRuntimeStore.setState({
+      runtimes: null,
+      readError: null,
+      updatesById: {},
+      updateChecks: {},
+    });
     useModelStore.setState({ cliInstalled: null });
   });
 
@@ -100,6 +105,7 @@ describe("checkUpdates", () => {
       runtimes: [runtime("geniex", null), runtime("sd-cpp", "1.0.0")],
       readError: null,
       updatesById: {},
+      updateChecks: {},
     });
   });
 
@@ -134,6 +140,56 @@ describe("checkUpdates", () => {
     await useRuntimeStore.getState().checkUpdates();
     expect(checkRuntimeUpdate).not.toHaveBeenCalled();
     expect(useRuntimeStore.getState().updatesById).toEqual({});
+  });
+
+  it("marks every runtime as checking before any answer comes back", () => {
+    checkRuntimeUpdate.mockReturnValue(new Promise(() => {}));
+    void useRuntimeStore.getState().checkUpdates();
+    expect(useRuntimeStore.getState().updateChecks).toEqual({
+      geniex: { status: "checking", error: null },
+      "sd-cpp": { status: "checking", error: null },
+    });
+  });
+
+  it("sets a runtime to ok when its check succeeds", async () => {
+    checkRuntimeUpdate.mockResolvedValue(update("geniex", "2.0.0"));
+    await useRuntimeStore.getState().checkUpdate("geniex");
+    expect(useRuntimeStore.getState().updateChecks.geniex).toEqual({ status: "ok", error: null });
+  });
+
+  it("sets a runtime to failed with the reason and drops its old entry when its check fails", async () => {
+    useRuntimeStore.setState({ updatesById: { "sd-cpp": update("sd-cpp", "1.0.0") } });
+    checkRuntimeUpdate.mockRejectedValueOnce(new Error("GitHub API error 403"));
+    await useRuntimeStore.getState().checkUpdate("sd-cpp");
+    const state = useRuntimeStore.getState();
+    expect(state.updateChecks["sd-cpp"]).toEqual({
+      status: "failed",
+      error: "GitHub API error 403",
+    });
+    expect(state.updatesById["sd-cpp"]).toBeUndefined();
+  });
+
+  it("keeps the runtime list when a check fails", async () => {
+    checkRuntimeUpdate.mockRejectedValue("offline");
+    await useRuntimeStore.getState().checkUpdates();
+    expect(useRuntimeStore.getState().runtimes).toHaveLength(2);
+    expect(useRuntimeStore.getState().readError).toBeNull();
+  });
+
+  it("re-checks only the runtime it names", async () => {
+    useRuntimeStore.setState({
+      updateChecks: {
+        geniex: { status: "failed", error: "offline" },
+        "sd-cpp": { status: "ok", error: null },
+      },
+    });
+    checkRuntimeUpdate.mockResolvedValue(update("geniex", "2.0.0"));
+    await useRuntimeStore.getState().checkUpdate("geniex");
+    expect(checkRuntimeUpdate).toHaveBeenCalledTimes(1);
+    expect(useRuntimeStore.getState().updateChecks).toEqual({
+      geniex: { status: "ok", error: null },
+      "sd-cpp": { status: "ok", error: null },
+    });
   });
 });
 

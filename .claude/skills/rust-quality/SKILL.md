@@ -60,3 +60,4 @@ description: Rust and Tauri quality workflow for LocalGenie's backend. Use when 
 - Boolean parameters that change behaviour (`fn pull(force: bool, quiet: bool, …)`). Use an enum or an options struct.
 - Generic names from the list above, or abbreviations a new reader would have to look up.
 - Changing a command's arguments or return type without naming the frontend change.
+- A request to the internet with no timeout, a network failure returned as a bare error without `Failed to reach <service>`, or a failed read stored in a cache (offline handling: a retry must go back to the network).

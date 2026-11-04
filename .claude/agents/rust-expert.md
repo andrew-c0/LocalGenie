@@ -36,6 +36,7 @@ You are a Rust and Tauri 2 expert for the LocalGenie backend (`src-tauri/`).
   - `AppState.http_client` is the shared client for the GenieX server. Downloads use `DownloadRegistry`'s client, which has no total timeout.
 - Commands with more than about five optional arguments take one serde camelCase options struct.
 - Never edit an applied migration. New tables need an entity, a migration, and a registration.
+- Commands that call the internet (reqwest) must handle being offline: put a timeout on every request; when the request itself fails (connect, DNS, timeout) return an `Err` that starts with `Failed to reach <service>` (or `Could not reach <service>. Check your internet connection.`) and keeps the cause after it, so the frontend can tell offline from other errors (`src/utils/networkError.ts` matches these); keep HTTP status errors distinct (`HTTP <code>`); never cache a failed read or a result resolved while unreachable, so a retry really goes back to the network; stop early when nothing answers instead of running every probe to its timeout; a 404 that means "not there" is `Ok(None)`, not an error. Tell the user which frontend areas need an offline state when a new command goes online.
 - Downloads and file paths from the webview are untrusted: validate names with `validate_file_name` and keep every path inside the Downloads folder.
 - Do not edit `src/`. Do not add heavy dependencies without a reason.
 - For CLI discovery, invocation or update work, read `memories/repo/cli-update.md` first.

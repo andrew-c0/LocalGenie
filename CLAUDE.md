@@ -24,6 +24,7 @@ Working agents: `.claude/agents/` (`rust-expert`, `react-expert`, `geniex-specia
 - `invoke()` only in `src/services/`; routes only in `src/Navigation.tsx`; `App.tsx` stays scaffolding.
 - Rust commands return `Result<T, String>`, no panics; one domain per module; never edit applied migrations.
 - Changing a `#[tauri::command]` signature is an IPC contract change: update `src/services/*`.
+- Anything that loads from the internet is built with offline handling: skeleton while loading, a Try again block on failure, a classifiable error from Rust (details in the `react-expert` and `rust-expert` agents).
 - Model load/chat has a known warmup-hang risk; validate that path, don't assume it is fixed.
 - Keep docs short; don't duplicate facts across files.
 

@@ -3,10 +3,13 @@ import { PaintBrushRegular, PersonVoiceRegular, PuzzlePieceRegular } from "@flue
 import type { ReactNode } from "react";
 import geniexLogo from "../../../../assets/geniex-logo.png";
 import { useRuntimeBusy } from "../../../../hooks/useRuntimeBusy";
+import type { UpdateCheck } from "../../../../stores/runtimeStore";
 import type { RuntimeInfo, RuntimeUpdateInfo } from "../../../../types";
+import { SERVICE_NAMES } from "../../../../utils/networkError";
 import { SD_CPP_RUNTIME_ID } from "../../../../utils/playground";
 import { GENIEX_RUNTIME_ID } from "../../../../utils/runtimeSpecifics";
 import { SHERPA_RUNTIME_ID } from "../../../../utils/speech";
+import { RetryBlock } from "../../../ui/RetryBlock/RetryBlock";
 import RuntimePanel, { type RuntimeMenuItem } from "../RuntimePanel/RuntimePanel";
 import type { RuntimeDetail } from "../useRuntimeDetails";
 
@@ -21,12 +24,16 @@ interface RuntimeCardProps {
   runtime: RuntimeInfo;
   /** Undefined when the update check for this runtime failed or has not run. */
   update: RuntimeUpdateInfo | undefined;
+  /** Where this runtime's update check stands: checking shows a placeholder, failed shows a retry line. */
+  updateCheck: UpdateCheck;
   /** Extra lines under the title, from `useRuntimeDetails`. */
   details: RuntimeDetail[];
   onInstall: () => void;
   onUninstall: () => void;
   /** Re-reads the runtime list. Offered while the runtime is not installed. */
   onCheckAgain: () => void;
+  /** Checks this runtime's latest release again. Offered when the check failed. */
+  onRecheckUpdate: () => void;
 }
 
 /**
@@ -37,10 +44,12 @@ interface RuntimeCardProps {
 export default function RuntimeCard({
   runtime,
   update,
+  updateCheck,
   details,
   onInstall,
   onUninstall,
   onCheckAgain,
+  onRecheckUpdate,
 }: RuntimeCardProps) {
   const { installing, removing } = useRuntimeBusy(runtime.id);
   const busy = installing || removing;
@@ -72,6 +81,18 @@ export default function RuntimeCard({
     );
   }
 
+  // A failed check does not block install or uninstall: it only offers a retry line under the row.
+  const updateNotice =
+    updateCheck.status === "failed" ? (
+      <RetryBlock
+        compact
+        lead="Could not check for updates."
+        error={updateCheck.error}
+        subject={SERVICE_NAMES.github}
+        onRetry={onRecheckUpdate}
+      />
+    ) : undefined;
+
   return (
     <RuntimePanel
       title={runtime.displayName}
@@ -79,8 +100,10 @@ export default function RuntimeCard({
       repo={runtime.repo}
       installedVersion={runtime.installedVersion}
       latestVersion={update?.latestVersion ?? null}
+      isCheckingLatest={updateCheck.status === "checking"}
       details={details}
       releaseUrl={update?.releaseUrl}
+      notice={updateNotice}
       isBusy={busy}
       primaryAction={primaryAction}
       menuItems={menuItems}

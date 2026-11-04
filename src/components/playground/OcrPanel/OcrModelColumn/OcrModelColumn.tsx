@@ -11,6 +11,7 @@ import { PlaygroundModelCard } from "../../PlaygroundModelCard/PlaygroundModelCa
 import { usePlaygroundModelActions } from "../../usePlaygroundModelActions";
 import { useOcrModelDelete } from "../useOcrModelDelete";
 import "./OcrModelColumn.css";
+import { SERVICE_NAMES } from "../../../../utils/networkError";
 
 interface OcrModelColumnProps {
   models: OcrModel[];
@@ -34,6 +35,7 @@ export function OcrModelColumn({ models, selectedModelId, onSelect }: OcrModelCo
         <PlaygroundModelCard
           key={model.id}
           model={model}
+          downloadSource={SERVICE_NAMES.huggingFace}
           sizeBytes={model.sizeBytes}
           details={[{ label: OCR_BEST_FOR_LABEL, value: model.bestFor }]}
           isSelected={model.id === selectedModelId}

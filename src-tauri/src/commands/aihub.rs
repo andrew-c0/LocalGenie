@@ -4,6 +4,7 @@
 //! discovered once per session by probing the bucket (see `resolve_version`); nothing calls PyPI.
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::{Arc, Mutex};
 
 use futures_util::{stream, StreamExt};
@@ -41,10 +42,16 @@ const CATALOG_CONCURRENCY: usize = 8;
 const AIHUB_BASE: &str = "https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models";
 const README_BASE: &str = "https://raw.githubusercontent.com/qualcomm/ai-hub-models";
 
+/// Message when the AI Hub gets no answer at all. The cause is appended after it (see `FetchError`).
+const AIHUB_UNREACHABLE: &str =
+    "Could not reach the Qualcomm AI Hub. Check your internet connection.";
+
 /// Cache for AI Hub fetches, managed by Tauri. Holds the session's catalog version, raw protobuf
-/// bodies by URL, and the parsed card summary of each model read for the list.
+/// bodies by URL, and the parsed card summary of each model read for the list. Only successful
+/// reads are stored.
 #[derive(Default)]
 pub struct AihubCache {
+    /// Set only by a probe that got an answer from the AI Hub (see `resolve_version`).
     version: tokio::sync::OnceCell<String>,
     bodies: Mutex<HashMap<String, Arc<Vec<u8>>>>,
     /// Card summaries by model id, from the info file. A failed read is not cached.
@@ -137,7 +144,8 @@ pub struct AihubModelDetail {
 
 /// Models in the catalog that have at least one runnable asset, each with its card summary. A model
 /// whose release assets are missing or unreadable has nothing to download, so it is left out. A
-/// model whose info file cannot be read stays, with `summary` None.
+/// model whose info file cannot be read stays, with `summary` None. When the AI Hub cannot be reached
+/// at all, this fails instead of returning an empty or partial catalog.
 #[tauri::command]
 pub async fn aihub_list_models(
     state: State<'_, AppState>,
@@ -154,18 +162,20 @@ pub async fn aihub_list_models(
         .collect();
     let client = &state.http_client;
     let cache: &AihubCache = &cache;
-    let listed: HashMap<String, Option<AihubCardInfo>> = stream::iter(candidates)
-        .map(|(id, assets_url, info_url)| async move {
-            if !has_runnable_assets(client, cache, &assets_url, &id).await {
-                return None;
-            }
-            let summary = card_info(client, cache, &id, &info_url).await;
-            Some((id, summary))
-        })
-        .buffer_unordered(CATALOG_CONCURRENCY)
-        .filter_map(|row| async move { row })
-        .collect()
-        .await;
+    let reads = run_in_batches(
+        candidates,
+        CATALOG_CONCURRENCY,
+        |(id, assets_url, info_url)| async move {
+            list_model(client, cache, id, &assets_url, &info_url).await
+        },
+        has_answer,
+    )
+    .await;
+    if let Some(err) = network_down_error(&reads) {
+        return Err(err.into());
+    }
+    let listed: HashMap<String, Option<AihubCardInfo>> =
+        reads.into_iter().filter_map(Result::ok).flatten().collect();
     Ok(entries
         .into_iter()
         .filter_map(|mut e| {
@@ -175,37 +185,46 @@ pub async fn aihub_list_models(
         .collect())
 }
 
-/// Whether a model's release assets list at least one runnable file. False when they cannot be read.
-async fn has_runnable_assets(
+/// One model's read for the catalog list. `Ok(None)` leaves the model out: it has no runnable asset,
+/// or its assets could not be read although the server answered. `Ok(Some((id, summary)))` lists it,
+/// with `summary` None when the info could not be read. `Err` only when the network gave no answer.
+async fn list_model(
     client: &reqwest::Client,
     cache: &AihubCache,
-    url: &str,
-    id: &str,
-) -> bool {
-    fetch_release_assets(client, cache, url, id)
-        .await
-        .map(|assets| !model_assets(&assets.assets).is_empty())
-        .unwrap_or(false)
+    id: String,
+    assets_url: &str,
+    info_url: &str,
+) -> Result<Option<(String, Option<AihubCardInfo>)>, FetchError> {
+    let assets = match fetch_release_assets(client, cache, assets_url, &id).await {
+        Ok(assets) => assets,
+        Err(err @ FetchError::Unreachable(_)) => return Err(err),
+        Err(FetchError::Other(_)) => return Ok(None),
+    };
+    if model_assets(&assets.assets).is_empty() {
+        return Ok(None);
+    }
+    let summary = card_info(client, cache, &id, info_url).await.ok();
+    Ok(Some((id, summary)))
 }
 
 /// Card summary of a model, read from its info file. Parsed once per session and kept in
 /// `AihubCache.cards`; the raw bytes stay in the body cache, so the detail call does not fetch again.
-/// `None` when the info cannot be read or decoded (not cached, so a later call tries again).
+/// A failed read is returned as an error and not cached, so a later call tries again.
 async fn card_info(
     client: &reqwest::Client,
     cache: &AihubCache,
     id: &str,
     info_url: &str,
-) -> Option<AihubCardInfo> {
+) -> Result<AihubCardInfo, FetchError> {
     if let Some(hit) = cache.cards.lock().ok().and_then(|m| m.get(id).cloned()) {
-        return Some(hit);
+        return Ok(hit);
     }
-    let info = read_model_info(client, cache, id, info_url).await.ok()?;
+    let info = read_model_info(client, cache, id, info_url).await?;
     let card = card_from(&info);
     if let Ok(mut map) = cache.cards.lock() {
         map.insert(id.to_string(), card.clone());
     }
-    Some(card)
+    Ok(card)
 }
 
 /// Decoded model info for one model. The bytes come through the body cache.
@@ -214,10 +233,11 @@ async fn read_model_info(
     cache: &AihubCache,
     id: &str,
     info_url: &str,
-) -> Result<ModelInfo, String> {
-    let info_bytes = cached_bytes(client, cache, require_https(info_url)?).await?;
+) -> Result<ModelInfo, FetchError> {
+    let url = require_https(info_url).map_err(FetchError::Other)?;
+    let info_bytes = cached_bytes(client, cache, url).await?;
     ModelInfo::decode(info_bytes.as_slice())
-        .map_err(|e| format!("Could not read AI Hub model info for {id}: {e}"))
+        .map_err(|e| FetchError::Other(format!("Could not read AI Hub model info for {id}: {e}")))
 }
 
 /// Model info and QAIRT assets for one model id.
@@ -234,12 +254,14 @@ pub async fn aihub_model_detail(
         .as_ref()
         .ok_or_else(|| format!("AI Hub manifest has no URLs for {id}"))?;
     let info = read_model_info(&state.http_client, &cache, &id, &urls.info).await?;
-    // Only the info is required. A failed assets read still shows the model, with no assets.
+    // Only the info is required. A failed assets read still shows the model, with no assets, unless
+    // the network gave no answer: then the model cannot be opened and the error is returned.
     let assets =
         match fetch_release_assets(&state.http_client, &cache, &urls.release_assets, &id).await {
             Ok(assets) => Some(assets),
-            Err(e) => {
-                eprintln!("AI Hub release assets unavailable: {e}");
+            Err(err @ FetchError::Unreachable(_)) => return Err(err.into()),
+            Err(FetchError::Other(message)) => {
+                eprintln!("AI Hub release assets unavailable: {message}");
                 None
             }
         };
@@ -341,10 +363,14 @@ async fn fetch_release_assets(
     cache: &AihubCache,
     url: &str,
     id: &str,
-) -> Result<ModelReleaseAssets, String> {
-    let bytes = cached_bytes(client, cache, require_https(url)?).await?;
-    ModelReleaseAssets::decode(bytes.as_slice())
-        .map_err(|e| format!("Could not read AI Hub release assets for {id}: {e}"))
+) -> Result<ModelReleaseAssets, FetchError> {
+    let url = require_https(url).map_err(FetchError::Other)?;
+    let bytes = cached_bytes(client, cache, url).await?;
+    ModelReleaseAssets::decode(bytes.as_slice()).map_err(|e| {
+        FetchError::Other(format!(
+            "Could not read AI Hub release assets for {id}: {e}"
+        ))
+    })
 }
 
 /// Raw README for a model at the session's release. `None` when the repo has no README (404).
@@ -355,7 +381,7 @@ pub async fn aihub_model_readme(
     id: String,
 ) -> Result<Option<String>, String> {
     validate_model_id(&id)?;
-    let version = resolve_version(&state.http_client, &cache).await;
+    let version = resolve_version(&state.http_client, &cache).await?;
     let url = readme_url(&version, &id);
     let resp = state
         .http_client
@@ -363,17 +389,14 @@ pub async fn aihub_model_readme(
         .timeout(std::time::Duration::from_secs(AIHUB_TIMEOUT_SECS))
         .send()
         .await
-        .map_err(|e| format!("README request failed: {e}"))?;
+        .map_err(transport_error)?;
     if resp.status() == reqwest::StatusCode::NOT_FOUND {
         return Ok(None);
     }
     if !resp.status().is_success() {
         return Err(format!("README request returned HTTP {}", resp.status()));
     }
-    let text = resp
-        .text()
-        .await
-        .map_err(|e| format!("Could not read README: {e}"))?;
+    let text = resp.text().await.map_err(transport_error)?;
     Ok(Some(text))
 }
 
@@ -423,45 +446,54 @@ fn find_entry<'a>(
 async fn load_manifest(
     client: &reqwest::Client,
     cache: &AihubCache,
-) -> Result<ReleaseManifest, String> {
-    let version = resolve_version(client, cache).await;
+) -> Result<ReleaseManifest, FetchError> {
+    let version = resolve_version(client, cache).await?;
     let bytes = cached_bytes(client, cache, &manifest_url(&version)).await?;
     ReleaseManifest::decode(bytes.as_slice())
-        .map_err(|e| format!("Could not read the AI Hub manifest: {e}"))
+        .map_err(|e| FetchError::Other(format!("Could not read the AI Hub manifest: {e}")))
 }
 
-/// Catalog version for this session. The first call probes the bucket and caches the result in
-/// `cache.version`; later calls reuse it.
+/// Catalog version for this session. The first successful call probes the bucket and caches the
+/// result in `cache.version`; later calls reuse it. A call that gets no answer from the AI Hub caches
+/// nothing, so the next call probes again.
 ///
 /// Heuristic, not an API: the bucket answers HEAD 200 for a release manifest that exists and 403
 /// for one that does not (listing is denied, so a missing object is reported as 403). The probe
-/// checks the candidates in `probe_candidates` and keeps the highest that answered 200. If every
-/// probe fails (network down, bucket error) or none is newer, the fallback is used.
-async fn resolve_version(client: &reqwest::Client, cache: &AihubCache) -> String {
+/// checks the candidates in `probe_candidates` and keeps the highest that answered 200. See
+/// `version_from_probes` for the fallback rule.
+async fn resolve_version(
+    client: &reqwest::Client,
+    cache: &AihubCache,
+) -> Result<String, FetchError> {
     cache
         .version
-        .get_or_init(|| async {
-            let found: Vec<String> = stream::iter(probe_candidates(AIHUB_FALLBACK_VERSION))
-                .map(|v| async move { probe_exists(client, &v).await.then_some(v) })
-                .buffer_unordered(PROBE_CONCURRENCY)
-                .filter_map(|v| async move { v })
-                .collect()
-                .await;
-            highest_available(AIHUB_FALLBACK_VERSION, &found)
+        .get_or_try_init(|| async {
+            let probes = run_in_batches(
+                probe_candidates(AIHUB_FALLBACK_VERSION),
+                PROBE_CONCURRENCY,
+                |version: String| async move {
+                    let exists = probe_exists(client, &version).await;
+                    exists.map(|exists| (version, exists))
+                },
+                has_answer,
+            )
+            .await;
+            version_from_probes(AIHUB_FALLBACK_VERSION, &probes)
         })
         .await
-        .clone()
+        .cloned()
 }
 
-/// HEAD on a candidate's manifest. Any error counts as "not available".
-async fn probe_exists(client: &reqwest::Client, version: &str) -> bool {
-    client
+/// HEAD on a candidate's manifest: `Ok(true)` when it exists (200), `Ok(false)` when the bucket
+/// refuses it (403 for a missing object), and `Err` when the request got no answer.
+async fn probe_exists(client: &reqwest::Client, version: &str) -> Result<bool, FetchError> {
+    let resp = client
         .head(manifest_url(version))
         .timeout(std::time::Duration::from_secs(PROBE_TIMEOUT_SECS))
         .send()
         .await
-        .map(|r| r.status().is_success())
-        .unwrap_or(false)
+        .map_err(transport_error)?;
+    Ok(resp.status().is_success())
 }
 
 /// `x.y.z` as numbers. Anything else is `None`.
@@ -511,12 +543,100 @@ fn highest_available(fallback: &str, available: &[String]) -> String {
     best
 }
 
-/// GET a protobuf body, cached for the session. Failures are not cached.
+/// Why a read from the AI Hub failed. `Unreachable` means no answer came back (connect, DNS, timeout,
+/// dropped connection), so the network is down. An HTTP error or an unreadable body is `Other`.
+#[derive(Debug, Clone, PartialEq)]
+enum FetchError {
+    Unreachable(String),
+    Other(String),
+}
+
+impl From<FetchError> for String {
+    fn from(err: FetchError) -> String {
+        match err {
+            FetchError::Unreachable(cause) => {
+                format!("{AIHUB_UNREACHABLE} Failed to reach the AI Hub: {cause}")
+            }
+            FetchError::Other(message) => message,
+        }
+    }
+}
+
+/// A transfer that failed before or while the answer arrived is a network failure.
+fn transport_error(err: reqwest::Error) -> FetchError {
+    FetchError::Unreachable(err.to_string())
+}
+
+/// Whether a read got an answer from the server. Only an unreachable read does not.
+fn has_answer<T>(read: &Result<T, FetchError>) -> bool {
+    !matches!(read, Err(FetchError::Unreachable(_)))
+}
+
+/// The error to report when no read in `reads` got an answer: the network is down, so the first
+/// read's error is returned. `None` when any read answered, or when there were no reads.
+fn network_down_error<T>(reads: &[Result<T, FetchError>]) -> Option<FetchError> {
+    if reads.iter().any(has_answer) {
+        return None;
+    }
+    reads.iter().find_map(|read| read.as_ref().err().cloned())
+}
+
+/// Runs `task` over `items`, `concurrency` at a time, one batch after another. Stops when no result
+/// so far got an answer (`got_answer`), so an offline machine does not wait out the rest. Once any
+/// result has an answer, every batch runs, so a probe set is never cut short by a slow batch.
+async fn run_in_batches<I, T, Fut>(
+    mut items: Vec<I>,
+    concurrency: usize,
+    task: impl Fn(I) -> Fut,
+    got_answer: impl Fn(&T) -> bool,
+) -> Vec<T>
+where
+    Fut: Future<Output = T>,
+{
+    let width = concurrency.max(1);
+    let mut results = Vec::new();
+    while !items.is_empty() {
+        let take = width.min(items.len());
+        let batch: Vec<I> = items.drain(..take).collect();
+        let done: Vec<T> = stream::iter(batch)
+            .map(&task)
+            .buffer_unordered(take)
+            .collect()
+            .await;
+        results.extend(done);
+        if !results.iter().any(&got_answer) {
+            break;
+        }
+    }
+    results
+}
+
+/// The catalog version from the probe results. A server that answered for at least one probe gives
+/// a legitimate result even when no version is newer: the highest that answered 200, or the fallback.
+/// When no probe got an answer, the network is down and the error is returned, so nothing is cached.
+fn version_from_probes(
+    fallback: &str,
+    probes: &[Result<(String, bool), FetchError>],
+) -> Result<String, FetchError> {
+    if let Some(err) = network_down_error(probes) {
+        return Err(err);
+    }
+    let found: Vec<String> = probes
+        .iter()
+        .filter_map(|probe| match probe {
+            Ok((version, true)) => Some(version.clone()),
+            _ => None,
+        })
+        .collect();
+    Ok(highest_available(fallback, &found))
+}
+
+/// GET a protobuf body, cached for the session. Only a successful read is cached.
 async fn cached_bytes(
     client: &reqwest::Client,
     cache: &AihubCache,
     url: &str,
-) -> Result<Arc<Vec<u8>>, String> {
+) -> Result<Arc<Vec<u8>>, FetchError> {
     if let Some(hit) = cache.bodies.lock().ok().and_then(|m| m.get(url).cloned()) {
         return Ok(hit);
     }
@@ -525,16 +645,14 @@ async fn cached_bytes(
         .timeout(std::time::Duration::from_secs(AIHUB_TIMEOUT_SECS))
         .send()
         .await
-        .map_err(|e| format!("AI Hub request failed: {e}"))?;
+        .map_err(transport_error)?;
     if !resp.status().is_success() {
-        return Err(format!("AI Hub returned HTTP {} for {url}", resp.status()));
+        return Err(FetchError::Other(format!(
+            "AI Hub returned HTTP {} for {url}",
+            resp.status()
+        )));
     }
-    let body = Arc::new(
-        resp.bytes()
-            .await
-            .map_err(|e| format!("Could not read AI Hub response: {e}"))?
-            .to_vec(),
-    );
+    let body = Arc::new(resp.bytes().await.map_err(transport_error)?.to_vec());
     if let Ok(mut map) = cache.bodies.lock() {
         map.insert(url.to_string(), body.clone());
     }
@@ -772,6 +890,7 @@ fn detail_from(info: &ModelInfo, assets: Option<&ModelReleaseAssets>) -> AihubMo
 mod tests {
     use super::*;
     use crate::aihub_proto::model_info::RuntimeTechnicalDetails;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     const QWEN_INFO: &[u8] = include_bytes!("../../testdata/aihub/qwen3_0_6b-info.pb");
 
@@ -1238,5 +1357,214 @@ mod tests {
         assert_eq!(detail.genie_compatible, None);
         assert_eq!(detail.geniex_llamacpp_compatible, None);
         assert!(detail.tags.is_empty());
+    }
+
+    fn probe_down() -> Result<(String, bool), FetchError> {
+        Err(FetchError::Unreachable("dns error".into()))
+    }
+
+    fn probe_answer(version: &str, exists: bool) -> Result<(String, bool), FetchError> {
+        Ok((version.to_string(), exists))
+    }
+
+    #[test]
+    fn version_probes_with_no_answer_are_an_error_not_a_fallback() {
+        let probes = vec![probe_down(), probe_down()];
+        let err = version_from_probes("0.65.0", &probes).expect_err("network is down");
+        assert!(matches!(err, FetchError::Unreachable(_)));
+    }
+
+    #[test]
+    fn version_falls_back_when_the_server_answers_with_no_newer_release() {
+        // A 403 is an answer: the bucket has no newer manifest, so the fallback is the legitimate result.
+        let probes = vec![probe_answer("0.65.1", false), probe_down()];
+        assert_eq!(
+            version_from_probes("0.65.0", &probes).as_deref(),
+            Ok("0.65.0")
+        );
+    }
+
+    #[test]
+    fn version_is_the_highest_probe_that_answered_200() {
+        let probes = vec![
+            probe_answer("0.65.3", true),
+            probe_down(),
+            probe_answer("0.65.5", true),
+            probe_answer("0.65.2", false),
+        ];
+        assert_eq!(
+            version_from_probes("0.65.0", &probes).as_deref(),
+            Ok("0.65.5")
+        );
+    }
+
+    #[test]
+    fn network_down_only_when_no_read_answered() {
+        let none: Vec<Result<u8, FetchError>> = Vec::new();
+        assert!(network_down_error(&none).is_none());
+        let some_answer: Vec<Result<u8, FetchError>> = vec![
+            Err(FetchError::Unreachable("timed out".into())),
+            Err(FetchError::Other("HTTP 404".into())),
+        ];
+        assert!(network_down_error(&some_answer).is_none());
+        let all_down: Vec<Result<u8, FetchError>> =
+            vec![Err(FetchError::Unreachable("timed out".into()))];
+        assert!(matches!(
+            network_down_error(&all_down),
+            Some(FetchError::Unreachable(_))
+        ));
+    }
+
+    #[test]
+    fn unreachable_error_names_the_ai_hub_and_keeps_the_cause() {
+        let text = String::from(FetchError::Unreachable("dns error: no such host".into()));
+        assert!(text.starts_with(
+            "Could not reach the Qualcomm AI Hub. Check your internet connection. Failed to reach the AI Hub: "
+        ));
+        assert!(text.ends_with("dns error: no such host"));
+        assert_eq!(
+            String::from(FetchError::Other("AI Hub returned HTTP 500".into())),
+            "AI Hub returned HTTP 500"
+        );
+    }
+
+    #[tokio::test]
+    async fn batches_stop_when_the_first_batch_has_no_answer() {
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = calls.clone();
+        let reads = run_in_batches(
+            (0..20u32).collect(),
+            8,
+            move |_| {
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                async { Err::<(), FetchError>(FetchError::Unreachable("down".into())) }
+            },
+            has_answer,
+        )
+        .await;
+        // One batch of 8 ran; the remaining 12 were never started.
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 8);
+        assert_eq!(reads.len(), 8);
+    }
+
+    #[tokio::test]
+    async fn batches_run_to_the_end_when_one_answers() {
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = calls.clone();
+        let reads = run_in_batches(
+            (0..20u32).collect(),
+            8,
+            move |n| {
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                async move {
+                    if n == 0 {
+                        Ok(())
+                    } else {
+                        Err(FetchError::Unreachable("down".into()))
+                    }
+                }
+            },
+            has_answer,
+        )
+        .await;
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 20);
+        assert_eq!(reads.len(), 20);
+    }
+
+    /// A local HTTP server that answers every request with `response` and counts the requests.
+    async fn serve_response(
+        response: &'static str,
+    ) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind local server");
+        let addr = listener.local_addr().expect("local address");
+        let hits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = hits.clone();
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                read_request_head(&mut socket).await;
+                let _ = socket.write_all(response.as_bytes()).await;
+                let _ = socket.shutdown().await;
+            }
+        });
+        (format!("http://{addr}/model.pb"), hits)
+    }
+
+    /// Reads the request up to the blank line, so the response is not sent over unread input.
+    async fn read_request_head(socket: &mut tokio::net::TcpStream) {
+        let mut head = Vec::new();
+        let mut buf = [0u8; 512];
+        while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+            match socket.read(&mut buf).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => head.extend_from_slice(&buf[..n]),
+            }
+        }
+    }
+
+    fn test_client() -> reqwest::Client {
+        // No proxy, so the local server is reached directly.
+        reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("test client")
+    }
+
+    #[tokio::test]
+    async fn failed_read_is_not_cached_so_a_retry_hits_the_network() {
+        let (url, hits) = serve_response(
+            "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        )
+        .await;
+        let cache = AihubCache::default();
+        let client = test_client();
+        assert!(matches!(
+            cached_bytes(&client, &cache, &url).await,
+            Err(FetchError::Other(_))
+        ));
+        assert!(matches!(
+            cached_bytes(&client, &cache, &url).await,
+            Err(FetchError::Other(_))
+        ));
+        assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 2);
+        assert!(cache.bodies.lock().expect("bodies lock").is_empty());
+    }
+
+    #[tokio::test]
+    async fn successful_read_is_cached_for_the_session() {
+        let (url, hits) =
+            serve_response("HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nabc")
+                .await;
+        let cache = AihubCache::default();
+        let client = test_client();
+        let first = cached_bytes(&client, &cache, &url)
+            .await
+            .expect("first read");
+        let second = cached_bytes(&client, &cache, &url)
+            .await
+            .expect("cached read");
+        assert_eq!(first.as_slice(), b"abc");
+        assert_eq!(second.as_slice(), b"abc");
+        assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn refused_connection_is_reported_as_unreachable_and_not_cached() {
+        // Bind to get a free port, then drop the listener: nothing answers on it.
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .expect("bind")
+            .local_addr()
+            .expect("local address")
+            .port();
+        let url = format!("http://127.0.0.1:{port}/model.pb");
+        let cache = AihubCache::default();
+        let err = cached_bytes(&test_client(), &cache, &url)
+            .await
+            .expect_err("connection refused");
+        assert!(matches!(err, FetchError::Unreachable(_)));
+        assert!(String::from(err).contains("Failed to reach"));
+        assert!(cache.bodies.lock().expect("bodies lock").is_empty());
     }
 }

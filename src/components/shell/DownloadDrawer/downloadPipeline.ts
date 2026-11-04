@@ -12,6 +12,7 @@ import {
 } from "../../../stores/downloadStore";
 import type { DownloadedModelMeta } from "../../../types";
 import { serializeFacets } from "../../../utils/hubModelInfo";
+import { networkErrorMessage, SERVICE_NAMES } from "../../../utils/networkError";
 import { refreshAfterRuntimeChange, refreshModelList } from "../../../utils/runtimeUsage";
 import { toast } from "../../../utils/toast";
 
@@ -55,7 +56,10 @@ export async function runGGUFDownload(variant: GGUFVariant): Promise<void> {
           // A cancel must stop the whole pipeline; any other projector failure is skipped, with a
           // warning, so the model imports without it.
           if (String(err).includes("cancelled")) throw err;
-          toast.error("Projector not downloaded", `${name}: ${String(err)}`);
+          toast.error(
+            "Projector not downloaded",
+            `${name}: ${networkErrorMessage(err, SERVICE_NAMES.huggingFace)}`,
+          );
         },
       );
     }
@@ -65,7 +69,11 @@ export async function runGGUFDownload(variant: GGUFVariant): Promise<void> {
     const facets = variant.facets ? serializeFacets(variant.facets) : null;
     await importGGUF(folder, repoId, fileName, main.precision, sidecarNames, facets);
   } catch (err) {
-    recordFailure(repoId, err);
+    recordFailure(repoId, err, {
+      title: "Download",
+      name: repoId,
+      subject: SERVICE_NAMES.huggingFace,
+    });
   }
 }
 
@@ -86,7 +94,11 @@ export async function runAihubDownload(download: AihubDownload): Promise<void> {
     // The backend emits model-pull-start/complete around the import and sets the status.
     await importAihubZip(folder, zipName, modelName, precision, serializeFacets(facets));
   } catch (err) {
-    recordFailure(modelName, err);
+    recordFailure(modelName, err, {
+      title: "Download",
+      name: modelName,
+      subject: SERVICE_NAMES.aihub,
+    });
   }
 }
 
@@ -108,7 +120,11 @@ export async function runRuntimeInstall(runtime: RuntimeDownload): Promise<void>
     toast.success(`${runtime.displayName} installed`, `Version ${version}`);
     store.setStatus(id, "finished");
   } catch (err) {
-    recordFailure(id, err, "Install", runtime.displayName);
+    recordFailure(id, err, {
+      title: "Install",
+      name: runtime.displayName,
+      subject: SERVICE_NAMES.github,
+    });
   } finally {
     // The operation may have changed the list, or failed partway: the Settings cards, the feature locks
     // and the model library read it.
@@ -116,16 +132,31 @@ export async function runRuntimeInstall(runtime: RuntimeDownload): Promise<void>
   }
 }
 
-/** Mark a pipeline entry cancelled or failed, and tell the user. */
-function recordFailure(id: string, err: unknown, title = "Download", name = id): void {
+interface FailureContext {
+  /** The action in the toast title: "Download" or "Install". */
+  title: string;
+  /** What failed, named in the toast body. */
+  name: string;
+  /** The service the request went to, named in an offline, rate-limit or timeout message. */
+  subject: string;
+}
+
+/**
+ * Mark a pipeline entry cancelled or failed, and tell the user. The entry keeps the raw error, so the
+ * drawer can show the technical text; the toast shows the friendly text from `networkErrorMessage`.
+ */
+function recordFailure(id: string, err: unknown, context: FailureContext): void {
   const store = useDownloadStore.getState();
   const message = String(err);
   if (message.includes("cancelled")) {
     store.setStatus(id, "cancelled");
-    toast.info(`${title} cancelled`, name);
+    toast.info(`${context.title} cancelled`, context.name);
   } else {
     store.setStatus(id, "error", message);
-    toast.error(`${title} failed`, `${name}: ${message}`);
+    toast.error(
+      `${context.title} failed`,
+      `${context.name}: ${networkErrorMessage(err, context.subject)}`,
+    );
   }
 }
 

@@ -21,20 +21,15 @@ pub async fn search_models(
     state: State<'_, AppState>,
     query: String,
 ) -> Result<Vec<SearchModel>, String> {
-    let url = format!(
-        "https://huggingface.co/api/models?search={}&filter=gguf&sort=downloads&direction=-1&limit=20",
-        urlencoding::encode(&query)
-    );
-
     let resp = state
         .http_client
-        .get(&url)
+        .get(search_url(&query))
         .timeout(std::time::Duration::from_secs(
             super::constants::HTTP_TIMEOUT_SECS,
         ))
         .send()
         .await
-        .map_err(|e| format!("HF API request failed: {e}"))?;
+        .map_err(|e| format!("Failed to reach the Hugging Face API: {e}"))?;
     if !resp.status().is_success() {
         return Err(format!("HF API returned HTTP {}", resp.status()));
     }
@@ -44,11 +39,25 @@ pub async fn search_models(
         .await
         .map_err(|e| format!("Failed to parse HF API response: {e}"))?;
 
-    Ok(models
-        .into_iter()
+    Ok(gguf_models(&models))
+}
+
+/// Search URL for GGUF models by downloads. `expand[]=siblings` is required: without it the API
+/// omits each model's file list, and `gguf_models` would drop every result.
+fn search_url(query: &str) -> String {
+    format!(
+        "https://huggingface.co/api/models?search={}&filter=gguf&sort=downloads&direction=-1&limit=20&expand[]=siblings",
+        urlencoding::encode(query)
+    )
+}
+
+/// Models from a search response that list a `.gguf` file among their siblings. A model without
+/// a file list is left out, since its GGUF files cannot be seen.
+fn gguf_models(models: &[serde_json::Value]) -> Vec<SearchModel> {
+    models
+        .iter()
         .filter_map(|m| {
             let id = m["id"].as_str()?.to_string();
-            // Only include models that likely have GGUF files
             let has_gguf = m["siblings"].as_array()?.iter().any(|s| {
                 s["rfilename"]
                     .as_str()
@@ -71,5 +80,42 @@ pub async fn search_models(
                 pipeline_tag: m["pipeline_tag"].as_str().map(String::from),
             })
         })
-        .collect())
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn search_url_asks_for_the_file_list_and_encodes_the_query() {
+        let url = search_url("qwen 3");
+        assert!(url.starts_with("https://huggingface.co/api/models?search=qwen%203&filter=gguf"));
+        assert!(url.ends_with("&expand[]=siblings"));
+    }
+
+    #[test]
+    fn gguf_models_keeps_only_models_with_a_gguf_file() {
+        let models = vec![
+            json!({
+                "id": "unsloth/Qwen3-GGUF",
+                "downloads": 10,
+                "likes": 2,
+                "tags": ["gguf", "qwen3"],
+                "siblings": [{"rfilename": "README.md"}, {"rfilename": "Qwen3-Q4_K_M.gguf"}]
+            }),
+            // No GGUF file among the siblings.
+            json!({"id": "org/safetensors-only", "siblings": [{"rfilename": "model.safetensors"}]}),
+            // No file list at all (the search was made without `expand[]=siblings`).
+            json!({"id": "org/no-file-list", "downloads": 5}),
+        ];
+        let found = gguf_models(&models);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].id, "unsloth/Qwen3-GGUF");
+        assert_eq!(found[0].name, "unsloth/Qwen3-GGUF");
+        assert_eq!(found[0].downloads, Some(10));
+        assert_eq!(found[0].tags, Some(vec!["gguf".into(), "qwen3".into()]));
+    }
 }

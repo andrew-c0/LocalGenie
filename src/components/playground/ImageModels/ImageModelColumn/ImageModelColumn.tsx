@@ -8,6 +8,7 @@ import { usePlaygroundModelActions } from "../../usePlaygroundModelActions";
 import { ImageModelDeleteDialog } from "../ImageModelDeleteDialog/ImageModelDeleteDialog";
 import { useImageModelDelete } from "../useImageModelDelete";
 import "./ImageModelColumn.css";
+import { SERVICE_NAMES } from "../../../../utils/networkError";
 
 interface ImageModelColumnProps {
   /** The models this tab lists, in catalog order. */
@@ -42,6 +43,7 @@ export function ImageModelColumn({
         <PlaygroundModelCard
           key={model.id}
           model={model}
+          downloadSource={SERVICE_NAMES.huggingFace}
           sizeBytes={model.totalBytes}
           tag={tagFor?.(model)}
           isSelected={model.id === selectedModelId}

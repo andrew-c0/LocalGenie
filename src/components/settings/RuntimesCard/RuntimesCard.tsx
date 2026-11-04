@@ -40,6 +40,7 @@ export default function RuntimesCard() {
             key={runtime.id}
             runtime={runtime}
             update={update}
+            updateCheck={catalog.updateCheckOf(runtime.id)}
             details={details[runtime.id] ?? []}
             onInstall={() =>
               enqueueRuntime({
@@ -50,6 +51,7 @@ export default function RuntimesCard() {
             }
             onUninstall={() => setUninstallTarget(runtime)}
             onCheckAgain={() => void refreshAfterRuntimeChange(runtime.id)}
+            onRecheckUpdate={() => catalog.recheckUpdate(runtime.id)}
           />
         );
       })}

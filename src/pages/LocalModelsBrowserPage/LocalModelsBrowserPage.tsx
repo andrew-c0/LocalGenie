@@ -16,6 +16,8 @@ import { Flex } from "../../components/ui/Flex/Flex";
 import { ModelCard } from "../../components/ui/ModelCard/ModelCard";
 import { hubCardData } from "../../components/ui/ModelCard/modelCardData";
 import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
+import { RetryBlock } from "../../components/ui/RetryBlock/RetryBlock";
+import { SkeletonRows } from "../../components/ui/Skeletons/SkeletonRows";
 import { StateBlock } from "../../components/ui/StateBlock/StateBlock";
 import { useSystemMemory } from "../../hooks/useSystemMemory";
 import * as db from "../../services/database";
@@ -53,6 +55,8 @@ export default function LocalModelsBrowserPage() {
   const [query, setQuery] = useState("");
   const [family, setFamily] = useState(FAMILY_ALL);
   const [error, setError] = useState<string | null>(null);
+  /** Why the Hugging Face search failed. Shown as a retry under the list, not as the banner. */
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [downloadedMeta, setDownloadedMeta] = useState<Map<string, db.DbDownloadedModel>>(
     new Map(),
@@ -77,12 +81,12 @@ export default function LocalModelsBrowserPage() {
   const handleSearch = useCallback(async () => {
     if (!query.trim()) return;
     setIsSearching(true);
-    setError(null);
+    setSearchError(null);
     try {
       const results = await geniex.searchModels(query);
       setSearchResults(results);
     } catch (err) {
-      setError(String(err));
+      setSearchError(String(err));
     } finally {
       setIsSearching(false);
     }
@@ -147,6 +151,14 @@ export default function LocalModelsBrowserPage() {
       remote: remoteResults.filter((r) => matches(r.id)),
     };
   }, [models, remoteResults, query, activeFamily]);
+  /** Whether any card is shown. With none, the list shows a search in progress, its retry, or a text. */
+  const hasRows = visible.installed.length + visible.remote.length > 0;
+  const noRowsState =
+    models.length + remoteResults.length === 0 ? (
+      <StateBlock icon="📦" message="No models found. Search Hugging Face to pull one." />
+    ) : (
+      <StateBlock icon="🔍" message={`No models match "${query.trim()}".`} />
+    );
 
   return (
     <div className="local-models-browser-page__page">
@@ -222,11 +234,7 @@ export default function LocalModelsBrowserPage() {
           </div>
         )}
 
-        {models.length + remoteResults.length === 0 ? (
-          <StateBlock icon="📦" message="No models found. Search Hugging Face to pull one." />
-        ) : visible.installed.length + visible.remote.length === 0 ? (
-          <StateBlock icon="🔍" message={`No models match "${query.trim()}".`} />
-        ) : (
+        {hasRows || isSearching || searchError ? (
           <Flex direction="column" gap="s">
             {visible.installed.map((m) => (
               <LocalModelCard
@@ -251,7 +259,18 @@ export default function LocalModelsBrowserPage() {
                 onDetails={openHubDetails}
               />
             ))}
+            {searchError && (
+              <RetryBlock
+                compact
+                error={searchError}
+                subject="Hugging Face"
+                onRetry={() => void handleSearch()}
+              />
+            )}
+            {isSearching && <SkeletonRows count={3} variant="card" />}
           </Flex>
+        ) : (
+          noRowsState
         )}
 
         {confirmRemove && (

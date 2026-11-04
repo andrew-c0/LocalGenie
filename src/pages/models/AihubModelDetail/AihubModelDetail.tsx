@@ -1,24 +1,33 @@
-import { Button, Card, Spinner } from "@fluentui/react-components";
+import { Button, Card } from "@fluentui/react-components";
 import { OpenRegular } from "@fluentui/react-icons";
 import { open } from "@tauri-apps/plugin-shell";
+import type { ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { CapabilitiesSection } from "../../../components/models/CapabilitiesSection";
 import { ModelCardPanel, ModelDetailLayout } from "../../../components/models/ModelDetailLayout";
 import { ModelFacts } from "../../../components/models/ModelFacts";
 import { ModelSpecSection } from "../../../components/models/ModelSpecSection/ModelSpecSection";
-import { ErrorBanner } from "../../../components/ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../../components/ui/Flex/Flex";
 import { MarkdownContent } from "../../../components/ui/MarkdownContent/MarkdownContent";
+import { RetryBlock } from "../../../components/ui/RetryBlock/RetryBlock";
+import { SkeletonBlock } from "../../../components/ui/Skeletons/SkeletonBlock";
+import { SkeletonLines } from "../../../components/ui/Skeletons/SkeletonLines";
+import { SkeletonRows } from "../../../components/ui/Skeletons/SkeletonRows";
 import { StateBlock } from "../../../components/ui/StateBlock/StateBlock";
 import { StatusBadge } from "../../../components/ui/StatusBadge/StatusBadge";
 import { Meta } from "../../../components/ui/Typography/Typography";
+import type { AsyncData } from "../../../hooks/useAsyncData";
 import { useBreadcrumbLabel } from "../../../navigation/useBreadcrumbLabel";
 import type { AihubAsset } from "../../../services/aihub";
 import { aihubDetailCapabilityBadges, hfFileOf } from "../../../utils/aihub";
 import { aihubCompatibilityCells, aihubSpecCells } from "../../../utils/modelSpecs";
+import { SERVICE_NAMES } from "../../../utils/networkError";
 import { AihubAboutSection } from "./AihubAboutSection/AihubAboutSection";
 import { AihubAssetPicker } from "./AihubAssetPicker";
 import { useAihubModelDetail } from "./useAihubModelDetail";
+
+/** Shown on the assets card when the release assets could not be read. Not a network text, so it shows as written. */
+const ASSETS_UNAVAILABLE = "Could not read this model's assets from Qualcomm AI Hub.";
 
 /** Detail of a Qualcomm AI Hub model: facts, QAIRT assets to download, and the model card. */
 export default function AihubModelDetail() {
@@ -40,22 +49,45 @@ function openLink(url: string) {
   open(url).catch((err) => console.error("Failed to open browser:", err));
 }
 
+/** The model card panel's body: a skeleton while it loads, a retry for a failed read, else the text. */
+function readmeBody(readme: AsyncData<string | null>): ReactNode {
+  if (readme.status === "loading") return <SkeletonLines lines={6} />;
+  if (readme.status === "error") {
+    return (
+      <RetryBlock
+        compact
+        error={readme.error}
+        subject={SERVICE_NAMES.aihub}
+        onRetry={readme.retry}
+      />
+    );
+  }
+  // The Hub has no card (null): the panel says so.
+  return readme.data ? <MarkdownContent>{readme.data}</MarkdownContent> : undefined;
+}
+
 function AihubModelDetailView({ id }: { id: string }) {
-  const { detail, readme, error } = useAihubModelDetail(id);
+  const { detail: detailLoad, readme } = useAihubModelDetail(id);
+  const detail = detailLoad.data;
   // The trail's last crumb shows the model's name; until it loads, the id from the URL.
   useBreadcrumbLabel(detail?.name || null);
 
-  if (error) {
+  if (detailLoad.status === "error") {
     return (
-      <ModelDetailLayout title={id}>
-        <ErrorBanner message={error} />
+      <ModelDetailLayout title={id} subtitle="This model could not be displayed.">
+        <RetryBlock
+          error={detailLoad.error}
+          subject={SERVICE_NAMES.aihub}
+          onRetry={detailLoad.retry}
+        />
       </ModelDetailLayout>
     );
   }
   if (!detail) {
     return (
       <ModelDetailLayout title={id}>
-        <StateBlock icon={<Spinner size="small" />} message="Loading model…" />
+        <SkeletonBlock height={120} />
+        <SkeletonRows count={3} variant="row" />
       </ModelDetailLayout>
     );
   }
@@ -120,7 +152,12 @@ function AihubModelDetailView({ id }: { id: string }) {
 
       <Card size="small">
         {detail.assets === null ? (
-          <StateBlock icon="⚠️" message="Assets unavailable" />
+          <RetryBlock
+            compact
+            error={ASSETS_UNAVAILABLE}
+            subject={SERVICE_NAMES.aihub}
+            onRetry={detailLoad.retry}
+          />
         ) : assets.length === 0 ? (
           <StateBlock icon="📦" message="No QAIRT assets for this model." />
         ) : (
@@ -128,13 +165,7 @@ function AihubModelDetailView({ id }: { id: string }) {
         )}
       </Card>
 
-      <ModelCardPanel>
-        {readme === undefined ? (
-          <Meta>Loading model card…</Meta>
-        ) : readme === null ? undefined : (
-          <MarkdownContent>{readme}</MarkdownContent>
-        )}
-      </ModelCardPanel>
+      <ModelCardPanel>{readmeBody(readme)}</ModelCardPanel>
     </ModelDetailLayout>
   );
 }

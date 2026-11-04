@@ -2,7 +2,30 @@
 
 Run through these checks manually after building or deploying the app. Automated checks cannot fully verify installer behavior, filesystem permissions, or OS-level interactions.
 
-## Settings > About (uncommitted, 2026-11-04)
+## Offline mode (uncommitted, 2026-11-04; not run offline in the app, none ticked)
+
+How: start the app online, then turn off the network adapter (Settings > Network & internet, or Device Manager > Disable device) and check each item. For the automatic retry, turn the adapter back on while a retry block is showing and do not click Try again.
+
+- [ ] Models > Hugging Face, first open offline: skeleton cards while loading, then the full retry block ("You appear to be offline..." with Try again). No "No models match" text.
+- [ ] Reconnect with that block on screen: the list loads by itself, without a click.
+- [ ] Load more offline: the loaded list stays, a compact retry sits under it; after reconnecting, Try again loads the next page.
+- [ ] Filter panel offline: its tag lists show skeleton lines, then a retry; after reconnecting the lists load.
+- [ ] Local page, Hugging Face search offline: skeleton cards, then a compact retry under the installed models; the installed models still show and open.
+- [ ] Local page, Hugging Face search online: a search returns GGUF results (the search no longer comes back empty; this is the fixed bug, not run).
+- [ ] Hugging Face detail offline: page skeleton, then the retry block; reconnecting loads the page. With the record loaded and the network then dropped: the file list and the README each show their own retry. "No model card available" appears only for a model with no README (404), never for a failed load.
+- [ ] Installed model detail offline: no skeleton, no retry and no Hugging Face wording; Load & Chat and Remove still work.
+- [ ] Chat with an installed model, offline: replies still stream (the local server only).
+- [ ] Models > Qualcomm AI Hub offline: skeleton cards, then the retry block; reconnecting loads the catalog.
+- [ ] AI Hub model detail offline: the page retry block; reconnecting loads it. With the page loaded and the network then dropped, the README shows its own retry; the assets card's retry reloads the detail.
+- [ ] AI Hub download while offline: the drawer entry shows "You appear to be offline..." (or "Could not reach the Qualcomm AI Hub"); hovering the text shows the raw error; Resume after reconnecting imports the zip.
+- [ ] Hugging Face GGUF download while offline: the drawer entry fails with the same kind of text; a projector failure toast names Hugging Face.
+- [ ] Playground model download while offline (an image model, then a speech model): the card shows the friendly text; the toast reads "Model download failed"; a speech model names GitHub.
+- [ ] Settings > Runtimes offline: each card shows a placeholder where "Latest" appears while it checks, then "Could not check for updates." with Try again. Installed versions still show; Uninstall of an installed runtime is still enabled.
+- [ ] App start offline: no update toast appears; the failure shows only in Settings > Runtimes.
+- [ ] Hugging Face page link on a model detail opens in the system browser (through `openExternal`), not in the app window.
+- [ ] Slow link, not an offline test: a Hub request that takes longer than 30 s shows "took too long to answer. Try again." (needs a throttled connection; not tried).
+
+## Settings > About (committed 1ab5267, 2026-11-04)
 
 The user looked at the page in the app on 2026-11-04 and said it looked good. The items below were not run; none is ticked.
 

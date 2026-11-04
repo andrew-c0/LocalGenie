@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useRuntimeStore } from "../../../stores/runtimeStore";
+import { IDLE_UPDATE_CHECK, type UpdateCheck, useRuntimeStore } from "../../../stores/runtimeStore";
 import type { RuntimeInfo, RuntimeUpdateInfo } from "../../../types";
 
 export interface RuntimeCatalog {
@@ -7,6 +7,10 @@ export interface RuntimeCatalog {
   runtimes: RuntimeInfo[] | null;
   /** Update status by runtime id. A runtime whose check failed has no entry. */
   updatesById: Record<string, RuntimeUpdateInfo>;
+  /** Check state by runtime id. A runtime never checked reads as idle. */
+  updateCheckOf: (runtimeId: string) => UpdateCheck;
+  /** Checks one runtime's latest release again. */
+  recheckUpdate: (runtimeId: string) => void;
   loadError: string | null;
 }
 
@@ -19,6 +23,7 @@ export function useRuntimeCatalog(): RuntimeCatalog {
   const runtimeList = useRuntimeStore((s) => s.runtimes);
   const readError = useRuntimeStore((s) => s.readError);
   const updatesById = useRuntimeStore((s) => s.updatesById);
+  const updateChecks = useRuntimeStore((s) => s.updateChecks);
 
   useEffect(() => {
     void useRuntimeStore.getState().refresh();
@@ -31,6 +36,8 @@ export function useRuntimeCatalog(): RuntimeCatalog {
   return {
     runtimes: runtimeList,
     updatesById,
+    updateCheckOf: (runtimeId) => updateChecks[runtimeId] ?? IDLE_UPDATE_CHECK,
+    recheckUpdate: (runtimeId) => void useRuntimeStore.getState().checkUpdate(runtimeId),
     loadError: runtimeList ? null : readError,
   };
 }

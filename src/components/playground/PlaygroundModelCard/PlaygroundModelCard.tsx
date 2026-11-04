@@ -2,6 +2,7 @@ import { Button, Card } from "@fluentui/react-components";
 import type { ReactNode } from "react";
 import type { PlaygroundDownloadState } from "../../../types";
 import { formatBytes } from "../../../utils/format";
+import { networkErrorMessage } from "../../../utils/networkError";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { ExternalLink } from "../../ui/ExternalLink/ExternalLink";
 import { Flex } from "../../ui/Flex/Flex";
@@ -47,6 +48,8 @@ interface PlaygroundModelCardProps {
   /** A small badge beside the status, e.g. how the model uses an input picture. */
   tag?: ReactNode;
   isSelected: boolean;
+  /** The service the model downloads from, named in a failure message: Hugging Face or GitHub. */
+  downloadSource: string;
   /** This model's download, if one was started in this session. */
   download: PlaygroundDownloadState | undefined;
   /** Another model is downloading. Downloads run one at a time. */
@@ -66,6 +69,7 @@ export function PlaygroundModelCard({
   details = [],
   tag,
   isSelected,
+  downloadSource,
   download,
   isOtherDownloading,
   isDeleteBusy,
@@ -105,7 +109,9 @@ export function PlaygroundModelCard({
         </Flex>
 
         {isDownloading && <ModelDownloadProgress progress={download.progress} />}
-        {download?.status === "error" && download.error && <ErrorBanner message={download.error} />}
+        {download?.status === "error" && download.error && (
+          <ErrorBanner message={networkErrorMessage(download.error, downloadSource)} />
+        )}
         {download?.status === "cancelled" && <Meta>Download cancelled.</Meta>}
 
         <Flex gap="s" align="center" wrap>

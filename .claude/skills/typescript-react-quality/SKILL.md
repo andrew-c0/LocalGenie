@@ -67,3 +67,4 @@ description: TypeScript and React quality workflow for LocalGenie's frontend. Us
 - Custom navigation: `window.location` or history wrappers.
 - A component that takes a boolean that switches between two unrelated layouts. Split it into two components, or use a variant union.
 - Generic names from the list above, or abbreviations a new reader would have to look up.
+- A load from the internet with no skeleton while it waits, a silent failure, a raw error string shown to the user, or an empty state shown next to an error (offline handling is part of the area: `Skeletons`, `RetryBlock`, `useAsyncData`, `networkErrorMessage`).

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAsyncData } from "../../hooks/useAsyncData";
 import * as db from "../../services/database";
 import {
   fetchHubModelReadme,
@@ -10,84 +11,68 @@ import {
 import { convertToGGUFFiles, groupGGUFFiles } from "../../services/hubModels";
 import { useModelStore } from "../../stores/modelStore";
 
-/** Loads the model, its file listing, README or stored model card, and derives GGUF groups. */
 /** True when a stored name is the repo: the same id, or the id with a precision suffix (`org/repo:Q4_K_M`). */
 function isSameRepo(name: string, repoId: string): boolean {
   return repoId === name || repoId.startsWith(`${name}:`);
 }
 
+/** An installed model's synthetic Hub-shaped record and the stored card to show. */
+interface LocalModelData {
+  model: HubModel;
+  card: string | null;
+}
+
+/** Reads an installed model from the database. The card is the exact-name row's, else the repo's first row. */
+async function loadLocalModel(repoId: string): Promise<LocalModelData> {
+  const rows = await db.listDownloadedModels();
+  const row = rows.find((m) => isSameRepo(m.name, repoId));
+  if (!row) throw new Error("Local model not found in database.");
+  const exact = rows.find((m) => m.name === repoId);
+  return {
+    model: {
+      _id: repoId,
+      id: repoId,
+      downloads: 0,
+      likes: 0,
+      gated: false,
+      safetensors: { parameters: row.param_count ?? undefined },
+    },
+    card: exact?.model_card || row.model_card || null,
+  };
+}
+
+const NO_FILES: HubFileEntry[] = [];
+
+/**
+ * The detail page's data. An installed model reads the database only. A Hub model loads in three
+ * parts with their own status: the model record (its failure has no partial view, so the page
+ * shows a retry), then the file tree and the README, which start once the record is in. A repo
+ * the Hub does not know gets no file or README request.
+ */
 export function useHubModelData(repoId: string, isLocal = false) {
-  const [model, setModel] = useState<HubModel | null>(null);
-  const [files, setFiles] = useState<HubFileEntry[]>([]);
-  const [readme, setReadme] = useState<string | null>(null);
-  const [localCard, setLocalCard] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const local = useAsyncData(isLocal ? repoId : null, loadLocalModel);
+  const remote = useAsyncData(isLocal ? null : repoId, getHubModel);
+  const partsKey = !isLocal && remote.data ? repoId : null;
+  const files = useAsyncData(partsKey, listHubModelFiles);
+  const readme = useAsyncData(partsKey, fetchHubModelReadme);
 
-  const ggufGroups = useMemo(() => groupGGUFFiles(convertToGGUFFiles(files)), [files]);
+  const ggufGroups = useMemo(
+    () => groupGGUFFiles(convertToGGUFFiles(files.data ?? NO_FILES)),
+    [files.data],
+  );
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setModel(null);
-    setFiles([]);
-    setReadme(null);
-    (async () => {
-      try {
-        if (isLocal) {
-          // Local model: build synthetic HubModel from DB so UI works
-          const models = await db.listDownloadedModels();
-          const row = models.find((m) => isSameRepo(m.name, repoId));
-          if (row) {
-            setModel({
-              _id: repoId,
-              id: repoId,
-              downloads: 0,
-              likes: 0,
-              gated: false,
-              safetensors: { parameters: row.param_count ?? undefined },
-            });
-            if (row.model_card) setLocalCard(row.model_card);
-            else setLocalCard(null);
-          } else {
-            setError("Local model not found in database.");
-          }
-          setLoading(false);
-          return;
-        }
-        const m = await getHubModel(repoId);
-        if (cancelled) return;
-        setModel(m);
-        listHubModelFiles(repoId)
-          .then((f) => !cancelled && setFiles(f))
-          .catch(() => undefined);
-        fetchHubModelReadme(repoId)
-          .then((r) => !cancelled && setReadme(r))
-          .catch(() => undefined);
-      } catch (err) {
-        if (!cancelled) setError(String(err));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [repoId, isLocal]);
-
-  // For local models, fetch stored model card from DB
-  useEffect(() => {
-    if (!isLocal || !repoId) return;
-    db.listDownloadedModels()
-      .then((models) => {
-        const row = models.find((m) => m.name === repoId);
-        if (row?.model_card) setLocalCard(row.model_card);
-      })
-      .catch(() => setLocalCard(null));
-  }, [isLocal, repoId]);
-
-  return { model, files, readme, localCard, ggufGroups, loading, error, setError };
+  const load = isLocal ? local : remote;
+  return {
+    model: isLocal ? (local.data?.model ?? null) : remote.data,
+    localCard: local.data?.card ?? null,
+    /** Status, error and retry of the model record, the part the whole page depends on. */
+    status: load.status,
+    error: load.error,
+    retry: load.retry,
+    files,
+    readme,
+    ggufGroups,
+  };
 }
 
 /** Precisions of this repo that are already imported into the local DB. */

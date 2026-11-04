@@ -7,6 +7,19 @@
 
 const HUB_BASE = "https://huggingface.co";
 
+/**
+ * Longest wait for one Hub request, including reading the body. A slower answer is an abort, which
+ * the screens report as a timeout with a retry (`utils/networkError.ts`).
+ */
+const REQUEST_TIMEOUT_MS = 30_000;
+
+/** `fetch` to the Hub with the request timeout. */
+function hubFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+}
+
+const JSON_HEADERS: RequestInit = { headers: { Accept: "application/json" } };
+
 /** Sort keys supported by GET /api/models. */
 export type HubSort = "downloads" | "likes" | "lastModified" | "trendingScore" | "createdAt";
 
@@ -126,10 +139,10 @@ function parseCursor(linkHeader: string | null): string | null {
  */
 export async function listHubModels(query: HubQuery): Promise<HubPage> {
   const url = `${HUB_BASE}/api/models?${buildQuery(query)}`;
-  let res = await fetch(url, { headers: { Accept: "application/json" } });
+  let res = await hubFetch(url, JSON_HEADERS);
   if (res.status === 429) {
     await new Promise((r) => setTimeout(r, 1500));
-    res = await fetch(url, { headers: { Accept: "application/json" } });
+    res = await hubFetch(url, JSON_HEADERS);
   }
   if (!res.ok) {
     throw new Error(
@@ -157,11 +170,10 @@ const DETAIL_EXPAND = ["gguf", "cardData", "createdAt", "downloadsAllTime", "chi
  * page still shows the rest.
  */
 export async function getHubModel(repoId: string): Promise<HubModel> {
-  const headers = { Accept: "application/json" };
   const expandQuery = DETAIL_EXPAND.map((field) => `expand[]=${field}`).join("&");
   const [baseRes, expandedRes] = await Promise.all([
-    fetch(`${HUB_BASE}/api/models/${repoId}`, { headers }),
-    fetch(`${HUB_BASE}/api/models/${repoId}?${expandQuery}`, { headers }).catch(() => null),
+    hubFetch(`${HUB_BASE}/api/models/${repoId}`, JSON_HEADERS),
+    hubFetch(`${HUB_BASE}/api/models/${repoId}?${expandQuery}`, JSON_HEADERS).catch(() => null),
   ]);
   if (!baseRes.ok)
     throw new Error(`Hugging Face API error ${baseRes.status}: ${baseRes.statusText}`);
@@ -201,20 +213,20 @@ export interface HubFileEntry {
  * Used by the model detail page to show weights and config files.
  */
 export async function listHubModelFiles(repoId: string, rev = "main"): Promise<HubFileEntry[]> {
-  const res = await fetch(`${HUB_BASE}/api/models/${repoId}/tree/${rev}`, {
-    headers: { Accept: "application/json" },
-  });
+  const res = await hubFetch(`${HUB_BASE}/api/models/${repoId}/tree/${rev}`, JSON_HEADERS);
   if (!res.ok) throw new Error(`Hugging Face API error ${res.status}: ${res.statusText}`);
   return (await res.json()) as HubFileEntry[];
 }
 
 /**
  * Fetch the raw README.md of a model repo (resolve endpoint, follows redirect).
- * Returns null when the repo has no README.
+ * Returns null when the repo has no README (a 404). Any other failure throws, so the page can show
+ * a retry instead of an empty card.
  */
 export async function fetchHubModelReadme(repoId: string, rev = "main"): Promise<string | null> {
-  const res = await fetch(`${HUB_BASE}/${repoId}/resolve/${rev}/README.md`);
-  if (!res.ok) return null;
+  const res = await hubFetch(`${HUB_BASE}/${repoId}/resolve/${rev}/README.md`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Hugging Face API error ${res.status}: ${res.statusText}`);
   return res.text();
 }
 
@@ -259,9 +271,7 @@ export function listHubTags(): Promise<HubTagCatalogue> {
 }
 
 async function fetchHubTags(): Promise<HubTagCatalogue> {
-  const res = await fetch(`${HUB_BASE}/api/models-tags-by-type`, {
-    headers: { Accept: "application/json" },
-  });
+  const res = await hubFetch(`${HUB_BASE}/api/models-tags-by-type`, JSON_HEADERS);
   if (!res.ok) throw new Error(`Hugging Face API error ${res.status}: ${res.statusText}`);
   const raw = (await res.json()) as Record<string, RawTag[] | undefined>;
   const toTag = (t: RawTag): HubTag => ({ id: t.id, label: t.label ?? t.id });

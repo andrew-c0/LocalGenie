@@ -1,13 +1,15 @@
-import { SearchBox, Spinner } from "@fluentui/react-components";
-import { useMemo, useState } from "react";
+import { SearchBox } from "@fluentui/react-components";
+import { type ReactNode, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSystemMemory } from "../../../hooks/useSystemMemory";
 import { humanLabel } from "../../../utils/aihub";
+import { SERVICE_NAMES } from "../../../utils/networkError";
 import { ChipRow } from "../../ui/ChipRow/ChipRow";
-import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../ui/Flex/Flex";
 import { ModelCard } from "../../ui/ModelCard/ModelCard";
 import { aihubCardData } from "../../ui/ModelCard/modelCardData";
+import { RetryBlock } from "../../ui/RetryBlock/RetryBlock";
+import { SkeletonRows } from "../../ui/Skeletons/SkeletonRows";
 import { StateBlock } from "../../ui/StateBlock/StateBlock";
 import { useAihubCatalog } from "./useAihubCatalog";
 import "./AihubBrowser.css";
@@ -19,7 +21,7 @@ const ALL_DOMAINS = "all";
  * Each card opens the model's detail page, where the assets are downloaded; nothing is downloaded here.
  */
 export function AihubBrowser() {
-  const { entries, error } = useAihubCatalog();
+  const { entries, status, error, retry } = useAihubCatalog();
   const navigate = useNavigate();
   // Read once here for every card; each card's RAM verdict is derived from it.
   const systemMemory = useSystemMemory();
@@ -39,6 +41,33 @@ export function AihubBrowser() {
         (!q || e.displayName.toLowerCase().includes(q) || e.id.toLowerCase().includes(q)),
     );
   }, [entries, query, domain]);
+
+  /** The results area: a skeleton while loading, the retry for a failed load, a text, or the cards. */
+  const resultsView = (): ReactNode => {
+    if (status === "error") {
+      return <RetryBlock error={error} subject={SERVICE_NAMES.aihub} onRetry={retry} />;
+    }
+    if (entries === null) return <SkeletonRows count={8} variant="card" />;
+    if (entries.length === 0) {
+      return <StateBlock icon="📦" message="No QAIRT models in the Qualcomm AI Hub catalog." />;
+    }
+    if (visible.length === 0) {
+      return <StateBlock icon="🔍" message={`No models match "${query.trim()}".`} />;
+    }
+    return (
+      <Flex direction="column" gap="s">
+        {visible.map((entry) => (
+          <ModelCard
+            key={entry.id}
+            model={aihubCardData(entry, systemMemory)}
+            isLoaded={false}
+            isDownloading={false}
+            onDetails={() => navigate(`/models/aihub/${encodeURIComponent(entry.id)}`)}
+          />
+        ))}
+      </Flex>
+    );
+  };
 
   return (
     <Flex direction="column" gap="m">
@@ -61,27 +90,7 @@ export function AihubBrowser() {
         />
       )}
 
-      {error ? (
-        <ErrorBanner message={error} />
-      ) : entries === null ? (
-        <StateBlock icon={<Spinner size="small" />} message="Loading Qualcomm AI Hub models…" />
-      ) : entries.length === 0 ? (
-        <StateBlock icon="📦" message="No QAIRT models in the Qualcomm AI Hub catalog." />
-      ) : visible.length === 0 ? (
-        <StateBlock icon="🔍" message={`No models match "${query.trim()}".`} />
-      ) : (
-        <Flex direction="column" gap="s">
-          {visible.map((entry) => (
-            <ModelCard
-              key={entry.id}
-              model={aihubCardData(entry, systemMemory)}
-              isLoaded={false}
-              isDownloading={false}
-              onDetails={() => navigate(`/models/aihub/${encodeURIComponent(entry.id)}`)}
-            />
-          ))}
-        </Flex>
-      )}
+      {resultsView()}
     </Flex>
   );
 }

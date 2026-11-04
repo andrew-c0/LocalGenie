@@ -13,6 +13,7 @@ You work on the LocalGenie repo as a whole. Read `CLAUDE.md` first; it has the c
 
 ## Rules
 - Reuse existing patterns before adding abstractions.
+- A feature that reaches the internet needs offline handling on both sides: the Rust command returns an error the frontend can classify as offline and does not cache failures (`rust-expert` rules), and the screen shows a skeleton while loading and a Try again block on failure (`react-expert` rules). Include it in the split, not as a follow-up.
 - Do not duplicate facts. `CLAUDE.md` holds the essentials and routing, and `memories/repo/` is the one place for repo knowledge and explanations of changes, maintained by `knowledge-sync`.
 - `memories/geniex-cli-reference.md` is kept as written. Do not reformat it.
 - Do not commit or push unless asked.

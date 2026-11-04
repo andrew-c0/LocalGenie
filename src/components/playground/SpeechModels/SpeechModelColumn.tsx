@@ -15,6 +15,7 @@ import { useModelCatalog } from "../useModelCatalog";
 import { usePlaygroundModelActions } from "../usePlaygroundModelActions";
 import { useSpeechModelDelete } from "./useSpeechModelDelete";
 import "./SpeechModelColumn.css";
+import { SERVICE_NAMES } from "../../../utils/networkError";
 
 /**
  * The lines a speech card shows beyond the common ones: the languages when the model names any (the
@@ -64,6 +65,7 @@ export function SpeechModelColumn({ kind }: SpeechModelColumnProps) {
         <PlaygroundModelCard
           key={model.id}
           model={model}
+          downloadSource={SERVICE_NAMES.github}
           sizeBytes={model.sizeBytes}
           details={speechModelDetails(model)}
           isSelected={model.id === selectedModelId}

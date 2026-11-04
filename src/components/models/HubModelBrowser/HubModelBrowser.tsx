@@ -1,16 +1,17 @@
 import type { DropdownProps } from "@fluentui/react-components";
 import { Button, Dropdown, Option, SearchBox, Spinner, Switch } from "@fluentui/react-components";
 import { ArrowSortRegular, ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSystemMemory } from "../../../hooks/useSystemMemory";
 import type { HubSort } from "../../../services/hubApi";
 import { activeFacetCount, useHubBrowseStore } from "../../../stores/hubBrowseStore";
 import { baseModelOf } from "../../../utils/hubModelInfo";
-import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../ui/Flex/Flex";
 import { ModelCard } from "../../ui/ModelCard/ModelCard";
 import { hubCardData } from "../../ui/ModelCard/modelCardData";
+import { RetryBlock } from "../../ui/RetryBlock/RetryBlock";
+import { SkeletonRows } from "../../ui/Skeletons/SkeletonRows";
 import { StateBlock } from "../../ui/StateBlock/StateBlock";
 import { HubFacetPanel } from "./HubFacetPanel/HubFacetPanel";
 import "./HubModelBrowser.css";
@@ -44,6 +45,40 @@ export default function HubModelBrowser({ downloading }: Props) {
   const sortLabel = SORT_OPTIONS.find(([value]) => value === s.sort)?.[1] ?? "";
   // "Base models only" is applied to the loaded page: the Hub has no filter for it.
   const shown = s.facets.baseOnly ? s.models.filter((m) => baseModelOf(m.tags) === null) : s.models;
+
+  /** The list area: a skeleton while loading, the retry for a failed first load, a text, or the cards. */
+  const resultsView = (): ReactNode => {
+    if (s.isLoading) return <SkeletonRows count={8} variant="card" />;
+    // A failed first load shows only the retry, not the "no models" text.
+    if (s.error && shown.length === 0) {
+      return <RetryBlock error={s.error} subject="Hugging Face" onRetry={() => void s.refresh()} />;
+    }
+    if (shown.length === 0) {
+      return <StateBlock icon="🔍" message="No models match the current filters." />;
+    }
+    return (
+      <Flex direction="column" gap="s">
+        {s.error && (
+          <RetryBlock
+            compact
+            error={s.error}
+            subject="Hugging Face"
+            onRetry={() => void s.refresh()}
+          />
+        )}
+        {shown.map((m) => (
+          <ModelCard
+            key={m._id}
+            model={hubCardData(m, systemMemory)}
+            isLoaded={false}
+            isDownloading={downloading.has(m.id)}
+            onDetails={(name) => navigate(`/models/huggingface/${encodeURIComponent(name)}`)}
+          />
+        ))}
+        {s.isFetchingMore && <SkeletonRows count={3} variant="card" />}
+      </Flex>
+    );
+  };
 
   const handleSortSelect: DropdownProps["onOptionSelect"] = (_, data) => {
     const next = SORT_OPTIONS.find(([value]) => value === data.optionValue);
@@ -112,35 +147,26 @@ export default function HubModelBrowser({ downloading }: Props) {
         </div>
       )}
 
-      {s.error && <ErrorBanner message={s.error} />}
-
-      {s.isLoading ? (
-        <StateBlock icon="⏳" message="Loading models from Hugging Face…" />
-      ) : shown.length === 0 ? (
-        <StateBlock icon="🔍" message="No models match the current filters." />
-      ) : (
-        <Flex direction="column" gap="s">
-          {shown.map((m) => (
-            <ModelCard
-              key={m._id}
-              model={hubCardData(m, systemMemory)}
-              isLoaded={false}
-              isDownloading={downloading.has(m.id)}
-              onDetails={(name) => navigate(`/models/huggingface/${encodeURIComponent(name)}`)}
-            />
-          ))}
-        </Flex>
-      )}
+      {resultsView()}
 
       {s.nextCursor && !s.isLoading && (
         <div className="hub-model-browser__center">
-          <Button
-            appearance="secondary"
-            disabled={s.isFetchingMore}
-            onClick={() => void s.fetchMore()}
-          >
-            {s.isFetchingMore ? <Spinner size="tiny" /> : "Load more"}
-          </Button>
+          {s.loadMoreError ? (
+            <RetryBlock
+              compact
+              error={s.loadMoreError}
+              subject="Hugging Face"
+              onRetry={() => void s.fetchMore()}
+            />
+          ) : (
+            <Button
+              appearance="secondary"
+              disabled={s.isFetchingMore}
+              onClick={() => void s.fetchMore()}
+            >
+              {s.isFetchingMore ? <Spinner size="tiny" /> : "Load more"}
+            </Button>
+          )}
         </div>
       )}
     </div>

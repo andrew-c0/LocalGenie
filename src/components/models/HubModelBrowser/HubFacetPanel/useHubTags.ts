@@ -1,22 +1,11 @@
-import { useEffect, useState } from "react";
+import { type AsyncData, useAsyncData } from "../../../../hooks/useAsyncData";
 import { type HubTagCatalogue, listHubTags } from "../../../../services/hubApi";
 
-/** The Hub's filter values, loaded once for the filter panel. `error` is set when they cannot load. */
-export function useHubTags(): { tags: HubTagCatalogue | null; error: string | null } {
-  const [state, setState] = useState<{ tags: HubTagCatalogue | null; error: string | null }>({
-    tags: null,
-    error: null,
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    listHubTags()
-      .then((tags) => !cancelled && setState({ tags, error: null }))
-      .catch((err: unknown) => !cancelled && setState({ tags: null, error: String(err) }));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return state;
+/**
+ * The Hub's filter values (library, licence, ...), loaded once for the filter panel. The status
+ * drives the skeleton and the retry; `retry` asks the Hub again (a failed fetch is not cached).
+ */
+export function useHubTags(): AsyncData<HubTagCatalogue> {
+  // The catalogue is one request, so its key is a constant.
+  return useAsyncData("hub-tags", listHubTags);
 }

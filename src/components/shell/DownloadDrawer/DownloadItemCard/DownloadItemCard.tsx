@@ -8,8 +8,9 @@ import {
   Text,
 } from "@fluentui/react-components";
 import { DeleteRegular, PauseRegular, PlayRegular } from "@fluentui/react-icons";
-import type { DownloadItem } from "../../../../stores/downloadStore";
+import { type DownloadItem, downloadSourceName } from "../../../../stores/downloadStore";
 import { formatBytes } from "../../../../utils/format";
+import { networkErrorMessage } from "../../../../utils/networkError";
 import { DownloadStatusBadge } from "../DownloadStatusBadge";
 import "./DownloadItemCard.css";
 
@@ -121,7 +122,10 @@ export function DownloadItemCard({
           )}
         </div>
         {d.status === "error" && d.error && (
-          <Caption1 className="download-card__error">{d.error}</Caption1>
+          // The friendly text shows; the raw error stays on hover for a bug report.
+          <Caption1 className="download-card__error" title={d.error}>
+            {networkErrorMessage(d.error, downloadSourceName(d))}
+          </Caption1>
         )}
       </Card>
     );
