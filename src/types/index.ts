@@ -198,6 +198,19 @@ export interface PlatformInfo {
   totalMemoryBytes: number;
 }
 
+/** The app's name, version and the Tauri runtime version, from the Tauri app API. */
+export interface AppVersions {
+  name: string;
+  version: string;
+  tauriVersion: string;
+}
+
+/** What the About page shows about the app and the host it runs on. */
+export interface AppInfo {
+  versions: AppVersions;
+  platform: PlatformInfo;
+}
+
 /**
  * Model load parameters. Sent with the warmup and with every chat request; the server reloads the
  * model when they change, so a model is always used with the parameters it was loaded with.

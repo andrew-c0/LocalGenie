@@ -88,7 +88,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Text to image with Auto plots all three targets: the runtime's device choice is not reported to the frontend (code-read), so the chart cannot show which one it used.
 - A GPU or NPU line depends on the engine counters in `get_system_usage`; on a device without them the line is left out (code-read, not run on that hardware).
 
-## Navigation redesign (uncommitted; the user approved it in the app on 2026-11-04/05; items not run are in `manual-checklist.md`)
+## Navigation redesign (committed 24528c2; the user approved it in the app on 2026-11-04/05; items not run are in `manual-checklist.md`)
 - The app uses a `MemoryRouter`, so a breadcrumb or sidebar click leaves a page without a "save first" check. Unsaved edits on a benchmark prompt or suite item page are lost when the user leaves that way. Known limit, not a blocker (user decision).
 - The sidebar is expanded until the saved `sidebar_collapsed` preference is read at startup (`AppBootstrap`); a failed read keeps it expanded (code-read).
 

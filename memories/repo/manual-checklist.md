@@ -2,7 +2,14 @@
 
 Run through these checks manually after building or deploying the app. Automated checks cannot fully verify installer behavior, filesystem permissions, or OS-level interactions.
 
-## Navigation redesign (uncommitted, 2026-11-04/05)
+## Settings > About (uncommitted, 2026-11-04)
+
+The user looked at the page in the app on 2026-11-04 and said it looked good. The items below were not run; none is ticked.
+
+- [ ] Links: the LocalGenie source link and each runtime's "Source code" link open in the system browser, not in the app window.
+- [ ] Runtimes list: opening About first (before the runtime list is loaded) fills in the runtime lines; a runtime not installed reads "Not installed".
+
+## Navigation redesign (committed 24528c2, 2026-11-04/05)
 
 The user looked at the landings, the breadcrumbs, Recent conversations, the item rows and the chat header actions in the app on 2026-11-04/05 and approved them. The items below were not run; none is ticked.
 

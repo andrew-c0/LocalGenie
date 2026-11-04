@@ -37,7 +37,7 @@ import SettingsSectionPage from "./pages/SettingsSectionPage/SettingsSectionPage
  * - `/models/aihub` Qualcomm AI Hub catalog, `/models/aihub/:id` its detail
  * - `/chat` default content, `/chat/:sessionId` one conversation
  * - `/playground` landing, `/playground/text-to-image|image-to-image|image-upscaling|ocr|speech-to-text|text-to-speech|audio-to-audio` one tool each
- * - `/settings` landing, `/settings/app|runtimes|inference|logs` one page each
+ * - `/settings` landing, `/settings/app|runtimes|inference|logs|about` one page each
  * - `/benchmarks` landing, `/benchmarks/prompts|suites|run|runs|compare` (benchmark sub-pages share one frame),
  *   `/benchmarks/prompts/new|:promptId`, `/benchmarks/suites/new|:suiteId`, `/benchmarks/run/:suiteId`,
  *   `/benchmarks/runs/:runId` (one item each)
@@ -121,6 +121,7 @@ export default function Navigation() {
           element={<SettingsSectionPage routeId="settings-inference" />}
         />
         <Route path="/settings/logs" element={<SettingsSectionPage routeId="settings-logs" />} />
+        <Route path="/settings/about" element={<SettingsSectionPage routeId="settings-about" />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

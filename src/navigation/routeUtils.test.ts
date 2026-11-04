@@ -66,6 +66,13 @@ describe("breadcrumbsFor", () => {
     ]);
   });
 
+  it("gives Settings > About for the About page", () => {
+    expect(breadcrumbsFor("/settings/about")).toEqual([
+      { label: "Settings", to: "/settings" },
+      { label: "About", to: "/settings/about" },
+    ]);
+  });
+
   it("gives Benchmarks > Runs for a benchmark sub-page", () => {
     expect(breadcrumbsFor("/benchmarks/runs")).toEqual([
       { label: "Benchmarks", to: "/benchmarks" },
@@ -173,13 +180,20 @@ describe("childrenOf", () => {
     expect(childrenOf("models-local").map((route) => route.id)).toEqual(["models-local-detail"]);
   });
 
-  it("lists the Settings sections in order", () => {
+  it("lists the Settings sections in order, About last", () => {
     expect(childrenOf("settings").map((route) => route.id)).toEqual([
       "settings-app",
       "settings-runtimes",
       "settings-inference",
       "settings-logs",
+      "settings-about",
     ]);
+  });
+
+  it("gives the About row its title and path", () => {
+    const about = childrenOf("settings").find((route) => route.id === "settings-about");
+    expect(about?.title).toBe("About");
+    expect(about?.path).toBe("/settings/about");
   });
 
   it("lists the Playground tools in order", () => {
@@ -240,6 +254,7 @@ describe("routeById", () => {
   it("finds a sub-page by its id", () => {
     expect(routeById("settings-runtimes")?.title).toBe("Runtimes");
     expect(routeById("benchmarks-prompts")?.title).toBe("Prompt Library");
+    expect(routeById("settings-about")?.title).toBe("About");
   });
 
   it("finds a top-level section by its id", () => {
@@ -265,7 +280,13 @@ describe("sectionOf (sidebar active item)", () => {
   });
 
   it("highlights the parent section on every Settings and benchmark sub-route", () => {
-    for (const path of ["/settings", "/settings/app", "/settings/runtimes", "/settings/logs"]) {
+    for (const path of [
+      "/settings",
+      "/settings/app",
+      "/settings/runtimes",
+      "/settings/logs",
+      "/settings/about",
+    ]) {
       expect(sectionOf(path).id).toBe("settings");
     }
     for (const path of [

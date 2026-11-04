@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import AppSettings from "../../components/AppSettings/AppSettings";
 import ModelSettings from "../../components/ModelSettings/ModelSettings";
+import AboutSettings from "../../components/settings/AboutSettings/AboutSettings";
 import RuntimesCard from "../../components/settings/RuntimesCard/RuntimesCard";
 import ServerLogsCard from "../../components/settings/ServerLogsCard/ServerLogsCard";
 import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
@@ -13,7 +14,8 @@ export type SettingsRouteId =
   | "settings-app"
   | "settings-runtimes"
   | "settings-inference"
-  | "settings-logs";
+  | "settings-logs"
+  | "settings-about";
 
 const PANELS: Record<SettingsRouteId, { subtitle: string; panel: ReactElement }> = {
   "settings-app": {
@@ -32,6 +34,10 @@ const PANELS: Record<SettingsRouteId, { subtitle: string; panel: ReactElement }>
     subtitle:
       "Live output from the GenieX server process, useful for diagnosing load or inference errors.",
     panel: <ServerLogsCard />,
+  },
+  "settings-about": {
+    subtitle: "The app version, the installed runtimes, the licence and where to find the code.",
+    panel: <AboutSettings />,
   },
 };
 
@@ -53,9 +59,11 @@ export default function SettingsSectionPage({ routeId }: { routeId: SettingsRout
 
         {panel}
 
-        <Meta>
-          Preferences are stored locally and applied on the next server start where applicable.
-        </Meta>
+        {routeId !== "settings-about" && (
+          <Meta>
+            Preferences are stored locally and applied on the next server start where applicable.
+          </Meta>
+        )}
       </div>
     </div>
   );

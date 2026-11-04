@@ -20,6 +20,7 @@ import {
   HardDriveRegular,
   ImageEditRegular,
   ImageSparkleRegular,
+  InfoRegular,
   MicRegular,
   MusicNote2Regular,
   PlayCircleRegular,
@@ -260,6 +261,13 @@ const SETTINGS_ROUTE: RouteMeta = {
       title: "Logs",
       icon: createElement(DocumentBulletListRegular),
       description: "GenieX server output",
+    },
+    {
+      id: "settings-about",
+      path: "/settings/about",
+      title: "About",
+      icon: createElement(InfoRegular),
+      description: "Version, licence and links",
     },
   ],
 };
