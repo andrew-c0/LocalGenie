@@ -24,6 +24,7 @@ import PlaygroundLandingPage from "./pages/PlaygroundLandingPage/PlaygroundLandi
 import PlaygroundSectionPage from "./pages/PlaygroundSectionPage/PlaygroundSectionPage";
 import SettingsLandingPage from "./pages/SettingsLandingPage/SettingsLandingPage";
 import SettingsSectionPage from "./pages/SettingsSectionPage/SettingsSectionPage";
+import { audioTaskUrl } from "./utils/audioTask";
 
 /**
  * Single source of truth for the route tree. All route definitions live here; `App.tsx` only mounts
@@ -36,7 +37,8 @@ import SettingsSectionPage from "./pages/SettingsSectionPage/SettingsSectionPage
  * - `/models/huggingface` Hugging Face browser, `/models/huggingface/:repoId` its detail
  * - `/models/aihub` Qualcomm AI Hub catalog, `/models/aihub/:id` its detail
  * - `/chat` default content, `/chat/:sessionId` one conversation
- * - `/playground` landing, `/playground/text-to-image|image-to-image|image-upscaling|ocr|speech-to-text|text-to-speech|audio-to-audio` one tool each
+ * - `/playground` landing, `/playground/text-to-image|image-to-image|image-upscaling|ocr|audio` one tool each; the old
+ *   `speech-to-text|text-to-speech|audio-to-audio` paths redirect to `audio` with `?task=`
  * - `/settings` landing, `/settings/app|runtimes|inference|logs|about` one page each
  * - `/benchmarks` landing, `/benchmarks/prompts|suites|run|runs|compare` (benchmark sub-pages share one frame),
  *   `/benchmarks/prompts/new|:promptId`, `/benchmarks/suites/new|:suiteId`, `/benchmarks/run/:suiteId`,
@@ -97,16 +99,21 @@ export default function Navigation() {
           element={<PlaygroundSectionPage routeId="playground-ocr" />}
         />
         <Route
+          path="/playground/audio"
+          element={<PlaygroundSectionPage routeId="playground-audio" />}
+        />
+        {/* The three audio tools before the Audio tool: each opens it on its task. */}
+        <Route
           path="/playground/speech-to-text"
-          element={<PlaygroundSectionPage routeId="playground-speech-to-text" />}
+          element={<Navigate to={audioTaskUrl("transcribe")} replace />}
         />
         <Route
           path="/playground/text-to-speech"
-          element={<PlaygroundSectionPage routeId="playground-text-to-speech" />}
+          element={<Navigate to={audioTaskUrl("speak")} replace />}
         />
         <Route
           path="/playground/audio-to-audio"
-          element={<PlaygroundSectionPage routeId="playground-audio-to-audio" />}
+          element={<Navigate to={audioTaskUrl("enhance")} replace />}
         />
         <Route path="/benchmark" element={<Navigate to="/benchmarks" replace />} />
         <Route path="/prompt-benchmark/*" element={<Navigate to="/benchmarks" replace />} />

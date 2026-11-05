@@ -167,6 +167,13 @@ describe("breadcrumbsFor", () => {
     expect(breadcrumbsFor("/playground/ocr")[1]?.label).toBe(OCR_TAB_LABEL);
     expect(breadcrumbsFor("/playground/image-upscaling")[1]?.label).toBe(UPSCALE_TAB_LABEL);
   });
+
+  it("gives Playground > Audio for the Audio tool", () => {
+    expect(breadcrumbsFor("/playground/audio")).toEqual([
+      { label: "Playground", to: "/playground" },
+      { label: "Audio", to: "/playground/audio" },
+    ]);
+  });
 });
 
 describe("childrenOf", () => {
@@ -203,15 +210,13 @@ describe("childrenOf", () => {
     expect(about?.path).toBe("/settings/about");
   });
 
-  it("lists the Playground tools in order", () => {
+  it("lists the Playground tools in order, with one Audio tool for the three speech tasks", () => {
     expect(childrenOf("playground").map((route) => route.id)).toEqual([
       "playground-text-to-image",
       "playground-image-to-image",
       "playground-image-upscaling",
       "playground-ocr",
-      "playground-speech-to-text",
-      "playground-text-to-speech",
-      "playground-audio-to-audio",
+      "playground-audio",
     ]);
   });
 
@@ -222,8 +227,6 @@ describe("childrenOf", () => {
       SD_CPP_RUNTIME_ID,
       SD_CPP_RUNTIME_ID,
       "cli",
-      SHERPA_RUNTIME_ID,
-      SHERPA_RUNTIME_ID,
       SHERPA_RUNTIME_ID,
     ]);
   });
@@ -368,7 +371,11 @@ describe("isPlaygroundPath", () => {
 describe("playgroundToolOf", () => {
   it("gives the tool whose page the path is", () => {
     expect(playgroundToolOf("/playground/ocr")?.id).toBe("playground-ocr");
-    expect(playgroundToolOf("/playground/text-to-speech")?.id).toBe("playground-text-to-speech");
+    expect(playgroundToolOf("/playground/audio")?.id).toBe("playground-audio");
+  });
+
+  it("gives no tool for the old speech paths, which redirect to the Audio tool", () => {
+    expect(playgroundToolOf("/playground/text-to-speech")).toBeNull();
   });
 
   it("is null on the landing, on another section and on an unknown tool", () => {

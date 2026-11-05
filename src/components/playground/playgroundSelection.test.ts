@@ -63,6 +63,7 @@ beforeEach(() => {
   useSpeechStore.setState({
     models: [speechModel("whisper", "stt"), speechModel("gtcrn", "denoise")],
     selectedModelIds: NO_SPEECH_SELECTION,
+    audioTask: "transcribe",
     enhanceKind: "denoise",
   });
 });
@@ -106,23 +107,29 @@ describe("clearToolModel", () => {
     expect(usePlaygroundStore.getState().upscaleModelId).toBeNull();
   });
 
-  it("clears only the speech selection of the tool's kind", () => {
+  it("clears only the model of the audio task the tool is set to", () => {
     useSpeechStore.setState({
       selectedModelIds: { ...NO_SPEECH_SELECTION, stt: "whisper", denoise: "gtcrn" },
+      audioTask: "transcribe",
+      enhanceKind: "denoise",
     });
-    clearToolModel("playground-speech-to-text");
+    clearToolModel("playground-audio");
     expect(useSpeechStore.getState().selectedModelIds).toEqual({
       ...NO_SPEECH_SELECTION,
       denoise: "gtcrn",
     });
   });
 
-  it("clears the audio to audio selection of the task it is set to", () => {
+  it("clears the clean up or split model when the task is enhance", () => {
     useSpeechStore.setState({
-      selectedModelIds: { ...NO_SPEECH_SELECTION, denoise: "gtcrn" },
+      selectedModelIds: { ...NO_SPEECH_SELECTION, denoise: "gtcrn", stt: "whisper" },
+      audioTask: "enhance",
       enhanceKind: "denoise",
     });
-    clearToolModel("playground-audio-to-audio");
-    expect(useSpeechStore.getState().selectedModelIds.denoise).toBeNull();
+    clearToolModel("playground-audio");
+    expect(useSpeechStore.getState().selectedModelIds).toEqual({
+      ...NO_SPEECH_SELECTION,
+      stt: "whisper",
+    });
   });
 });

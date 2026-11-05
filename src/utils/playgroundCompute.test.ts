@@ -150,12 +150,7 @@ describe("computeRowsOf", () => {
   });
 
   it("gives the CPU-only tools a fixed CPU row", () => {
-    for (const toolId of [
-      "playground-image-upscaling",
-      "playground-speech-to-text",
-      "playground-text-to-speech",
-      "playground-audio-to-audio",
-    ] as const) {
+    for (const toolId of ["playground-image-upscaling", "playground-audio"] as const) {
       const rows = computeRowsOf(toolId, state);
       expect(rows).toHaveLength(1);
       expect(rows[0]?.setting).toBeNull();

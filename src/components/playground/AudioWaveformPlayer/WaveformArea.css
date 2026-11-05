@@ -1,0 +1,115 @@
+/* The area is a column: the panel with the bars, then the time axis under it. */
+.waveform-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalXXS);
+}
+
+/* The panel is an inset, rounded background. Gridlines, bars and playhead are drawn inside it. */
+.waveform-area__stage {
+  position: relative;
+  box-sizing: border-box;
+  height: 104px;
+  overflow: hidden;
+  border-radius: var(--borderRadiusMedium);
+  background-color: var(--colorNeutralBackground3);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+/* The bars sit in the middle of the panel. Their box is measured to count the bars. */
+.waveform-area__bars {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  bottom: 12px;
+  left: 0;
+}
+
+.waveform-area__svg {
+  display: block;
+}
+
+.waveform-area__bar {
+  fill: var(--colorNeutralForeground4);
+}
+
+.waveform-area__bar--played {
+  fill: var(--colorBrandForeground1);
+}
+
+/* Faint lines at the axis ticks, through the whole panel. */
+.waveform-area__grid {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--colorNeutralStroke2);
+  pointer-events: none;
+}
+
+/* The playhead's hit area is wider than its 2px line, so it is easy to grab. Its line spans the full height. */
+.waveform-area__playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 16px;
+  margin-left: -8px;
+  cursor: ew-resize;
+}
+
+.waveform-area__playhead:focus-visible {
+  outline: 2px solid var(--colorStrokeFocus2);
+  outline-offset: 2px;
+}
+
+.waveform-area__line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background-color: var(--colorBrandBackground);
+}
+
+.waveform-area__dot {
+  position: absolute;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background-color: var(--colorBrandBackground);
+}
+
+.waveform-area__dot--top {
+  top: 2px;
+}
+
+.waveform-area__dot--bottom {
+  bottom: 2px;
+}
+
+/* The axis labels sit under the panel, each over its tick. The first and last hug the edges. */
+.waveform-area__axis {
+  position: relative;
+  height: 16px;
+  color: var(--colorNeutralForeground3);
+}
+
+.waveform-area__tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.waveform-area__tick--start {
+  transform: none;
+}
+
+.waveform-area__tick--end {
+  transform: translateX(-100%);
+}

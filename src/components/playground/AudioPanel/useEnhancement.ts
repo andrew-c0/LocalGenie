@@ -6,7 +6,7 @@ import { errorMessage } from "../../../utils/errorMessage";
 import { failedSpeechResult } from "../../../utils/speech";
 
 /**
- * Start an audio to audio job. Progress and the saved files come from the `PlaygroundRuntime` listeners.
+ * Start a clean up or split job. Progress and the saved files come from the `PlaygroundRuntime` listeners.
  * A failed start is recorded here as the job's result.
  */
 export function useEnhancement(): {

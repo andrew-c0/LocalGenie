@@ -1,20 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { SpeechJob, SpeechModel } from "../types";
-import {
-  buildEnhanceRequest,
-  DEFAULT_ENHANCE_KIND,
-  enhanceJobOf,
-  isEnhanceKind,
-} from "./audioEnhance";
-
-const job = (overrides: Partial<SpeechJob> = {}): SpeechJob => ({
-  jobId: "job-5",
-  kind: "denoise",
-  modelId: "gtcrn-simple",
-  startedAt: 0,
-  phase: "running",
-  ...overrides,
-});
+import type { SpeechModel } from "../types";
+import { buildEnhanceRequest, DEFAULT_ENHANCE_KIND, isEnhanceKind } from "./audioEnhance";
 
 const gtcrn: SpeechModel = {
   id: "gtcrn-simple",
@@ -38,24 +24,8 @@ describe("isEnhanceKind", () => {
     expect(isEnhanceKind("tts")).toBe(false);
   });
 
-  it("starts the tab on clean up speech", () => {
+  it("starts the task on clean up speech", () => {
     expect(DEFAULT_ENHANCE_KIND).toBe("denoise");
-  });
-});
-
-describe("enhanceJobOf", () => {
-  it("returns a running clean-up or split job, so the tab can show it from either task", () => {
-    expect(enhanceJobOf(job())).toEqual(job());
-    expect(enhanceJobOf(job({ kind: "separate" }))).toEqual(job({ kind: "separate" }));
-  });
-
-  it("leaves out the speech to text and speech synthesis jobs", () => {
-    expect(enhanceJobOf(job({ kind: "stt" }))).toBeNull();
-    expect(enhanceJobOf(job({ kind: "tts" }))).toBeNull();
-  });
-
-  it("is null when no job runs", () => {
-    expect(enhanceJobOf(null)).toBeNull();
   });
 });
 

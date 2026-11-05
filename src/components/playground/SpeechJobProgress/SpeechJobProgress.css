@@ -1,0 +1,4 @@
+/* The stage, the bar and the elapsed time form one block, no wider than a short list. */
+.speech-job-progress__content {
+  width: min(100%, 420px);
+}

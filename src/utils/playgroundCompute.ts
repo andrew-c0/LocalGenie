@@ -147,7 +147,7 @@ export interface ComputeState {
 
 /**
  * The compute rows a tool shows in the selector, in order. The landing has none, since no tool is
- * chosen there. Speech and audio to audio run on the CPU only, like upscaling.
+ * chosen there. Upscaling and the Audio tool run on the CPU only.
  */
 export function computeRowsOf(
   toolId: PlaygroundToolId | null,
@@ -161,9 +161,7 @@ export function computeRowsOf(
       return ocrComputeRows(state.ocr);
     case "playground-image-upscaling":
       return [cpuOnlyRow(UPSCALE_CPU_ONLY_HINT)];
-    case "playground-speech-to-text":
-    case "playground-text-to-speech":
-    case "playground-audio-to-audio":
+    case "playground-audio":
       return [cpuOnlyRow(SPEECH_CPU_ONLY_HINT)];
     case null:
       return [];

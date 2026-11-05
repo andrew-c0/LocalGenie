@@ -51,6 +51,7 @@ function usePlaygroundSelectorInput(): PlaygroundSelectorInput {
   const ocrSelectedId = useOcrStore((s) => s.selectedModelId);
   const speech = useSpeechStore((s) => s.models);
   const speechSelectedIds = useSpeechStore((s) => s.selectedModelIds);
+  const audioTask = useSpeechStore((s) => s.audioTask);
   const enhanceKind = useSpeechStore((s) => s.enhanceKind);
 
   return {
@@ -62,6 +63,7 @@ function usePlaygroundSelectorInput(): PlaygroundSelectorInput {
     ocrSelectedId,
     speech,
     speechSelectedIds,
+    audioTask,
     enhanceKind,
   };
 }

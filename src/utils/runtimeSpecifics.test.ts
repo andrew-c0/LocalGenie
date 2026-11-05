@@ -11,9 +11,7 @@ describe("uninstallMessage", () => {
     expect(uninstallMessage("sd-cpp")).toContain(
       "Text to image, Image to image and Image upscaling",
     );
-    expect(uninstallMessage("sherpa-onnx")).toContain(
-      "Speech to text, Text to speech and Audio to audio",
-    );
+    expect(uninstallMessage("sherpa-onnx")).toContain("The Playground's Audio tab stays locked");
   });
 
   it("gives an unknown runtime the generic text only", () => {

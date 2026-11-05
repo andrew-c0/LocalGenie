@@ -1,0 +1,17 @@
+/* Three columns: the buttons sit in the middle one, so they stay centred under the waveform whatever the width of the
+   time at the right edge. The left column is empty and balances the right one. */
+.player-controls {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--spacingHorizontalS);
+}
+
+.player-controls__buttons {
+  grid-column: 2;
+}
+
+.player-controls__time {
+  grid-column: 3;
+  justify-self: end;
+}

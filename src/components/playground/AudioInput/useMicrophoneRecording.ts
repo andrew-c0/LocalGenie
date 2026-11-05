@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { type MicrophoneCapture, startMicrophoneCapture } from "../../../services/microphone";
 import { storeAudio } from "../../../services/playground";
 import { useSpeechStore } from "../../../stores/speechStore";
+import type { AudioTask } from "../../../types";
 import { errorMessage } from "../../../utils/errorMessage";
 import { recordingName, STT_SAMPLE_RATE } from "../../../utils/speech";
 import { EMPTY_RECORDING_MESSAGE, microphoneErrorMessage } from "../../../utils/speechText";
@@ -19,10 +20,11 @@ export interface MicrophoneRecording {
 }
 
 /**
- * Records from the microphone and saves the recording as a 16 kHz WAV, which becomes the speech input.
+ * Records from the microphone and saves the recording as a 16 kHz WAV, which becomes the input of the task given.
+ * The task is the one that was open when the recording stopped, so a switch while it saves does not move it.
  * Leaving the tab stops a recording still running, so the microphone is released.
  */
-export function useMicrophoneRecording(): MicrophoneRecording {
+export function useMicrophoneRecording(task: AudioTask): MicrophoneRecording {
   const setAudio = useSpeechStore((s) => s.setAudio);
   const captureRef = useRef<MicrophoneCapture | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -63,7 +65,7 @@ export function useMicrophoneRecording(): MicrophoneRecording {
 
     setIsSaving(true);
     storeAudio(Array.from(wav), "wav")
-      .then((audioPath) => setAudio({ audioPath, audioName: recordingName(seconds) }))
+      .then((audioPath) => setAudio(task, { audioPath, audioName: recordingName(seconds) }))
       .catch((err: unknown) => setError(errorMessage(err, "Could not save the recording.")))
       .finally(() => setIsSaving(false));
   };

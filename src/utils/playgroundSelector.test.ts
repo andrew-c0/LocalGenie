@@ -76,9 +76,7 @@ const TITLES: Record<PlaygroundToolId, string> = {
   "playground-image-to-image": "Image to image",
   "playground-image-upscaling": "Image upscaling",
   "playground-ocr": "OCR",
-  "playground-speech-to-text": "Speech to text",
-  "playground-text-to-speech": "Text to speech",
-  "playground-audio-to-audio": "Audio to audio",
+  "playground-audio": "Audio",
 };
 
 const titleOf = (toolId: PlaygroundToolId) => TITLES[toolId];
@@ -93,6 +91,7 @@ function input(overrides: Partial<PlaygroundSelectorInput> = {}): PlaygroundSele
     ocrSelectedId: null,
     speech: [],
     speechSelectedIds: NO_SPEECH_SELECTION,
+    audioTask: "transcribe",
     enhanceKind: "denoise",
     ...overrides,
   };
@@ -110,7 +109,7 @@ describe("toolIdOf", () => {
     expect(toolIdOf("chat")).toBeNull();
   });
 
-  it("lists the same seven tools as the route table, in the same order", () => {
+  it("lists the same five tools as the route table, in the same order", () => {
     expect([...PLAYGROUND_TOOL_IDS]).toEqual(childrenOf("playground").map((route) => route.id));
   });
 });
@@ -140,7 +139,7 @@ describe("buildToolModels", () => {
   it("leaves a tool's models null while its catalog has not loaded", () => {
     const tools = buildToolModels(input({ image: null, speech: null }), titleOf);
     expect(toolOf(tools, "playground-text-to-image").models).toBeNull();
-    expect(toolOf(tools, "playground-speech-to-text").models).toBeNull();
+    expect(toolOf(tools, "playground-audio").models).toBeNull();
   });
 
   it("names the selected model when the tool lists it", () => {
@@ -184,23 +183,35 @@ describe("buildToolModels", () => {
     expect(toolOf(tools, "playground-ocr").selected?.name).toBe("Qwen VL");
   });
 
-  it("lists the speech kind of each speech tool", () => {
-    const tools = buildToolModels(
+  it("lists the speech kind of the Audio tool's task, titled with the task", () => {
+    const models = [
+      speech({ id: "stt-1", kind: "stt" }),
+      speech({ id: "tts-1", kind: "tts", voices: [] }),
+      speech({ id: "den-1", kind: "denoise" }),
+    ];
+    const transcribe = buildToolModels(
+      input({ speech: models, speechSelectedIds: { ...NO_SPEECH_SELECTION, stt: "stt-1" } }),
+      titleOf,
+    );
+    const audio = toolOf(transcribe, "playground-audio");
+    expect(audio.models?.map((m) => m.id)).toEqual(["stt-1"]);
+    expect(audio.selected?.id).toBe("stt-1");
+    expect(audio.title).toBe("Audio: Speech to text");
+
+    const speak = buildToolModels(
       input({
-        speech: [
-          speech({ id: "stt-1", kind: "stt" }),
-          speech({ id: "tts-1", kind: "tts", voices: [] }),
-          speech({ id: "den-1", kind: "denoise" }),
-        ],
+        speech: models,
+        audioTask: "speak",
         speechSelectedIds: { ...NO_SPEECH_SELECTION, tts: "tts-1" },
       }),
       titleOf,
     );
-    expect(toolOf(tools, "playground-speech-to-text").models?.map((m) => m.id)).toEqual(["stt-1"]);
-    expect(toolOf(tools, "playground-text-to-speech").selected?.id).toBe("tts-1");
+    expect(toolOf(speak, "playground-audio").models?.map((m) => m.id)).toEqual(["tts-1"]);
+    expect(toolOf(speak, "playground-audio").selected?.id).toBe("tts-1");
+    expect(toolOf(speak, "playground-audio").title).toBe("Audio: Text to speech");
   });
 
-  it("follows the audio to audio task for its models and selection", () => {
+  it("follows the clean up or split kind while the Audio tool's task is enhance", () => {
     const speechModels = [
       speech({ id: "den-1", kind: "denoise", downloaded: true }),
       speech({ id: "sep-1", kind: "separate" }),
@@ -211,19 +222,29 @@ describe("buildToolModels", () => {
       separate: "sep-1",
     };
     const denoise = buildToolModels(
-      input({ speech: speechModels, speechSelectedIds: selectedIds, enhanceKind: "denoise" }),
+      input({
+        speech: speechModels,
+        speechSelectedIds: selectedIds,
+        audioTask: "enhance",
+        enhanceKind: "denoise",
+      }),
       titleOf,
     );
-    expect(toolOf(denoise, "playground-audio-to-audio").models?.map((m) => m.id)).toEqual([
-      "den-1",
-    ]);
-    expect(toolOf(denoise, "playground-audio-to-audio").selected?.id).toBe("den-1");
+    expect(toolOf(denoise, "playground-audio").models?.map((m) => m.id)).toEqual(["den-1"]);
+    expect(toolOf(denoise, "playground-audio").selected?.id).toBe("den-1");
+    expect(toolOf(denoise, "playground-audio").title).toBe("Audio: Clean up and split");
 
     const separate = buildToolModels(
-      input({ speech: speechModels, speechSelectedIds: selectedIds, enhanceKind: "separate" }),
+      input({
+        speech: speechModels,
+        speechSelectedIds: selectedIds,
+        audioTask: "enhance",
+        enhanceKind: "separate",
+      }),
       titleOf,
     );
-    expect(toolOf(separate, "playground-audio-to-audio").selected?.id).toBe("sep-1");
+    expect(toolOf(separate, "playground-audio").models?.map((m) => m.id)).toEqual(["sep-1"]);
+    expect(toolOf(separate, "playground-audio").selected?.id).toBe("sep-1");
   });
 });
 
@@ -283,7 +304,10 @@ describe("selectorSections", () => {
 
   it("groups rows by tool in tool order and leaves out a tool with no row in a section", () => {
     const [installed] = selectorSections(tools());
-    expect(installed?.groups.map((g) => g.title)).toEqual(["Text to image", "Speech to text"]);
+    expect(installed?.groups.map((g) => g.title)).toEqual([
+      "Text to image",
+      "Audio: Speech to text",
+    ]);
   });
 
   it("marks the row of the model the tool uses", () => {

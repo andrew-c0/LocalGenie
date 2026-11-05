@@ -1,0 +1,9 @@
+/* The voice list takes the room it needs on the row; the speed slider is short, so both fit side by side. */
+.speak-settings__voice {
+  flex: 1 1 240px;
+  max-width: 420px;
+}
+
+.speak-settings__speed {
+  width: 140px;
+}

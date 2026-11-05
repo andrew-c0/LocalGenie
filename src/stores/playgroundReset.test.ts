@@ -177,32 +177,47 @@ describe("speech reset", () => {
     text: null,
     outputPath: "C:/o.wav",
   };
-  const audio = { audioPath: "C:/rec.wav", audioName: "rec.wav" };
+  const clip = { audioPath: "C:/rec.wav", audioName: "rec.wav" };
+  const audios = {
+    transcribe: clip,
+    speak: { audioPath: "C:/ref.wav", audioName: "ref.wav" },
+    enhance: clip,
+  };
 
   function seedSpeech(job: SpeechJob | null = null) {
     useSpeechStore.setState({
-      audio,
+      audios,
       results: { stt: sttResult, tts: ttsResult, denoise: null, separate: null },
       job,
     });
   }
 
-  it("clears its own results and the audio when the user leaves for another tool", () => {
+  it("clears every result and every task's input when the user leaves the Audio tool", () => {
     seedSpeech();
-    useSpeechStore.getState().resetSpeechWork("playground-speech-to-text", false);
+    useSpeechStore.getState().resetAudioWork();
     const state = useSpeechStore.getState();
-    expect(state.results.stt).toBeNull();
-    expect(state.results.tts).toBe(ttsResult);
-    expect(state.audio).toBeNull();
+    expect(state.results).toEqual({ stt: null, tts: null, denoise: null, separate: null });
+    expect(state.audios).toEqual({ transcribe: null, speak: null, enhance: null });
   });
 
-  it("keeps the audio when the user moves to another speech tool", () => {
+  it("keeps the preferences: models, form, task and clean up or split kind", () => {
+    const form = { text: "Hello", voiceId: 3, speed: 1.2 };
     seedSpeech();
-    useSpeechStore.getState().resetSpeechWork("playground-speech-to-text", true);
-    expect(useSpeechStore.getState().audio).toEqual(audio);
+    useSpeechStore.setState({
+      selectedModelIds: { stt: "whisper", tts: "kokoro", denoise: null, separate: null },
+      form,
+      audioTask: "enhance",
+      enhanceKind: "separate",
+    });
+    useSpeechStore.getState().resetAudioWork();
+    const state = useSpeechStore.getState();
+    expect(state.selectedModelIds.stt).toBe("whisper");
+    expect(state.form).toEqual(form);
+    expect(state.audioTask).toBe("enhance");
+    expect(state.enhanceKind).toBe("separate");
   });
 
-  it("keeps the audio while a speech job still reads it", () => {
+  it("keeps every task's input and every result while a speech job runs", () => {
     const job: SpeechJob = {
       jobId: "t2",
       kind: "tts",
@@ -211,8 +226,11 @@ describe("speech reset", () => {
       phase: "loading",
     };
     seedSpeech(job);
-    useSpeechStore.getState().resetSpeechWork("playground-speech-to-text", false);
-    expect(useSpeechStore.getState().audio).toEqual(audio);
-    expect(useSpeechStore.getState().job).toBe(job);
+    useSpeechStore.getState().resetAudioWork();
+    const state = useSpeechStore.getState();
+    expect(state.audios).toEqual(audios);
+    expect(state.results.stt).toBe(sttResult);
+    expect(state.results.tts).toBe(ttsResult);
+    expect(state.job).toBe(job);
   });
 });

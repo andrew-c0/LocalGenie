@@ -82,10 +82,10 @@ Tab reset:
 - [ ] Generate a text picture, go to Image to image, then back to Text to image: the earlier text picture is gone; the prompt and settings are kept.
 - [ ] Choose a picture in Image to image, go to Chat, then come back: the picture is gone; the model selection is kept.
 - [ ] Use this image as input from Text to image: the picture stays in Image to image after the switch.
-- [ ] Speech to text with a recording, then Text to speech: the audio stays, and the transcript is gone. Then Overview, back to Text to speech: the audio is gone.
+- [ ] Audio: a recording chosen for Speech to text, then Overview, back to Audio: the input and the transcript are gone; the task and the model are kept.
 - [ ] OCR: a picture and its text are gone after switching to another Playground tool; the mode and compute choices are kept.
 - [ ] Leave a tool during a job and come back: the job's progress or result and its picture are still there.
-- [ ] The speech audio check shows whether the page stays mounted between speech tools; this is not known from the code.
+- [ ] Audio: a file chosen for Speech to text is still there after switching to Text to speech and back (each task keeps its own input).
 
 Sidebar rail:
 - [ ] Collapsed rail: the icons sit in one column, centred, level with the brand and toggle buttons.
@@ -103,7 +103,7 @@ Selector (header, on the Playground pages):
 - [ ] Recommended hides when every model of the listed tools is downloaded; the Installed section then lists them all.
 - [ ] Recommended Download: the row reads Downloading; the other Download buttons are disabled; the drawer shows the entry; when it finishes the model moves to Installed and reads Ready on the tool page.
 - [ ] A failed catalog read shows a compact Try again above the sections; the models that did load stay listed.
-- [ ] "Run on" rows: text to image and image to image list Auto, NPU, GPU and CPU for the devices this build lists (GPU shows the experimental hint); upscaling and both speech tools show CPU only; OCR shows two rows (language model: Auto, NPU, GPU, CPU; vision encoder: NPU or CPU). A choice changes the next generation's device.
+- [ ] "Run on" rows: text to image and image to image list Auto, NPU, GPU and CPU for the devices this build lists (GPU shows the experimental hint); upscaling and the Audio tool show CPU only; OCR shows two rows (language model: Auto, NPU, GPU, CPU; vision encoder: NPU or CPU). A choice changes the next generation's device.
 - [ ] "Find more on Hugging Face" is disabled and marked Coming soon.
 
 Playground downloads (drawer):
@@ -209,7 +209,7 @@ The user looked at the landings, the breadcrumbs, Recent conversations, the item
 - [ ] Lock tooltips: with GenieX removed, the sidebar's Models, Chat and Benchmarks are disabled and their tooltip reads "Needs the GenieX CLI. Install it in Settings > Runtimes."; the Playground landing's OCR row is disabled with the same reason.
 - [ ] Route guard: with GenieX removed, a navigation to /models, /chat or /benchmarks (for example from the dev console) lands on Settings > Runtimes with the toast "This area is unavailable".
 - [ ] Overview: with GenieX removed, Browse Models and Start Local Chat are disabled with the tooltip; "Models Installed" shows "—"; the "Open Runtimes" block opens Settings > Runtimes.
-- [ ] Playground landing: with stable-diffusion.cpp missing, Text to image, Image to image and Image upscaling are disabled; with sherpa-onnx missing, Speech to text, Text to speech and Audio to audio are disabled. Each row names the runtime and points to Settings > Runtimes.
+- [ ] Playground landing: with stable-diffusion.cpp missing, Text to image, Image to image and Image upscaling are disabled; with sherpa-onnx missing, the Audio row is disabled. Each row names the runtime and points to Settings > Runtimes.
 - [ ] Settings landing: the Runtimes row shows "No runtime installed" when none is installed, or "A runtime update is available" when one has a newer release, with a warning icon.
 - [ ] Start with GenieX missing: Models, Chat and Benchmarks show locked once the runtime list has been read (nothing is locked before that).
 
@@ -317,18 +317,42 @@ The user looked at the cards and the detail pages in the app on 2026-11-04 and s
 - [ ] A result made in Text to image does not show in Image to image, and the reverse. "Use this image as input" on a text-to-image result switches to Image to image with it as input.
 - [ ] Cancel, leaving the tab and coming back, and closing the window behave as for text to image.
 
-## Playground: speech (not yet run)
+## Playground: Audio tool (merged 2026-11-05; the user tested it and reports it works as intended; none ticked)
 
-- [ ] Install sherpa-onnx in Settings > Runtimes: the `win-arm64 ... MinSizeRel.tar.bz2` archive installs, and `runtimes\sherpa-onnx\<tag>\bin\sherpa-onnx-offline.exe` and `sherpa-onnx-offline-tts.exe` exist. Before that, both speech tabs show the not-installed notice.
+Limits are in `known-issues.md` ("Audio tool").
+
+Entry and runtime:
+- [ ] The Playground landing has one Audio row. With sherpa-onnx missing it is disabled with its reason and points to Settings > Runtimes; the tool shows the not-installed notice.
+- [ ] Install sherpa-onnx in Settings > Runtimes: the `win-arm64 ... MinSizeRel.tar.bz2` archive installs, and `runtimes\sherpa-onnx\<tag>\bin\sherpa-onnx-offline.exe` and `sherpa-onnx-offline-tts.exe` exist.
+- [ ] Old links: `/playground/speech-to-text`, `/playground/text-to-speech` and `/playground/audio-to-audio` open Audio on Speech to text, Text to speech and Clean up and split.
+- [ ] The header selector lists the active task's models, titled "Audio: <task>", with a CPU only row. The Audio card has no compute note.
+
+Models:
 - [ ] Speech to text lists Whisper tiny (English) and Moonshine base (English); Text to speech lists Kokoro v1.0 (int8). Download each (about 110-130 MB): progress, Ready, cancel and resume; delete frees the folder.
-- [ ] Speech to text with a .wav file: the phases show (loading, transcribing), the transcript appears and can be copied. A non-WAV file is refused. Silence gives "No speech was recognised."
-- [ ] Speech to text from the microphone: access is granted, a recording transcribes, a copy exists in the app cache `playground-audio` folder, and recordings older than a day are removed on the next save.
-- [ ] Text to speech: pick a voice and speed, generate; a `.wav` appears in `Music\LocalGenie`, plays in the app, and Reveal in Explorer selects it. Text with accents or curly quotes still speaks (non-ASCII is converted).
-- [ ] Cancel a speech job: the status is cancelled and no process remains. Close the window during a job: the process ends. Leave the tab and return: the progress or result is still there.
-- [ ] Both speech tabs say CPU only; there is no GPU or NPU choice.
-- [ ] A device that sd-cli no longer lists is refused with the "Pick a device from the list" message.
-- [ ] Voice cloning: in Text to speech pick Pocket TTS (voice cloning) and download it (98 MB). The voice and speed controls are hidden and a Voice to copy input appears. Generate stays disabled until a clip is chosen; the output plays and sounds like the clip. Kokoro still shows its voices and speed.
-- [ ] Audio to audio (not yet checked in the app by the user beyond the first pass): clean up and split both play, Show in folder works, Cancel stops the process.
+
+Speech to text:
+- [ ] A .wav file: its waveform shows under the input; the phases show (loading, transcribing); the transcript appears, and Copy puts it on the clipboard. A non-WAV file is refused. Silence gives "No speech was recognised."
+- [ ] Microphone: while recording the input shows no waveform; after Stop the clip shows with its waveform and transcribes. A copy is in the app cache `playground-audio` folder, and recordings older than a day are removed on the next save.
+
+Text to speech:
+- [ ] Voice and Speed sit on one row. Pick a voice and speed and generate: a `.wav` appears in `Music\LocalGenie`, the result shows a waveform player, and Show in folder selects the file. Text with accents or curly quotes still speaks (non-ASCII is converted).
+- [ ] Use as input on a speech result: the file becomes the Speech to text input and the task switches to Speech to text.
+
+Clean up and split:
+- [ ] Both outputs show a player each, with its own Use as input. Show in folder works; the info icon next to the button explains the saved files. Cancel stops the process.
+
+Players:
+- [ ] Play, back and forward 10 s, dragging the playhead, arrow keys (5 s; Shift for 10 s), Home and End. The played part is in the brand colour, and the time reads `m:ss`. Starting one clip pauses the other.
+
+Jobs and leaving the tool:
+- [ ] Cancel a job: the status is cancelled and no process remains. Close the window during a job: the process ends.
+- [ ] Leave the tool during a job and come back: the progress is still there. Leave after a finished job and come back: the result and the inputs are gone; the task, model, voice, speed and clean up or split choice are kept.
+
+Not yet run:
+- [ ] Offline: a speech model download with no connection shows the offline text (GitHub); Retry works after reconnecting.
+- [ ] Voice cloning: in Text to speech pick Pocket TTS (voice cloning) and download it (98 MB). The voice and speed row is hidden and a Voice to copy input appears. Generate stays disabled until a clip is chosen; the output plays and sounds like the clip. Kokoro still shows its voices and speed.
+- [ ] A WAV over 10 MB: the input preview shows an error; note whether the job still runs on it.
+- [ ] A long clip (several minutes): the waveform takes a while to draw, and the page stays usable meanwhile.
 
 ## Conversation compaction (tested by the user on 2026-11-02: the main flow with a 2048 window, the summary row and a second summary; the items below were not ticked one by one)
 - [ ] Settings > Compact long conversations: off by default; the threshold slider (50 to 90, default 70) appears only when the switch is on; Save persists after a restart.

@@ -660,8 +660,11 @@ export interface InputImage {
   sourceSize: ImageSize | null;
 }
 
-/** The two tasks of the Audio to audio tab, each with its own kind of model: `denoise` cleans up speech, `separate` splits voice from music. */
+/** The two tasks of the Audio tool's clean up and split task, each with its own kind of model: `denoise` cleans up speech, `separate` splits voice from music. */
 export type EnhanceKind = "denoise" | "separate";
+
+/** The tasks of the Playground Audio tool. `enhance` runs the `EnhanceKind` the tool is set to. */
+export type AudioTask = "transcribe" | "speak" | "enhance";
 
 /** Speech models: `stt` turns a recording into text, `tts` reads text aloud, and the `EnhanceKind` tasks process audio. */
 export type SpeechKind = "stt" | "tts" | EnhanceKind;

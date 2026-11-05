@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { SpeechJob, SpeechModel, SpeechResult } from "../types";
 import { DEFAULT_SPEECH_FORM } from "../utils/speech";
-import { useSpeechStore } from "./speechStore";
+import { NO_AUDIO_INPUTS, useSpeechStore } from "./speechStore";
 
 const model = (id: string, overrides: Partial<SpeechModel> = {}): SpeechModel => ({
   id,
@@ -44,8 +44,9 @@ beforeEach(() => {
   useSpeechStore.setState({
     models: null,
     selectedModelIds: { stt: null, tts: null, denoise: null, separate: null },
-    audio: null,
+    audios: NO_AUDIO_INPUTS,
     form: DEFAULT_SPEECH_FORM,
+    audioTask: "transcribe",
     enhanceKind: "denoise",
     job: null,
     results: { stt: null, tts: null, denoise: null, separate: null },
@@ -157,12 +158,94 @@ describe("setForm", () => {
 });
 
 describe("setEnhanceKind", () => {
-  it("switches the audio to audio task and leaves the speech input alone", () => {
-    const audio = { audioPath: "/tmp/a.wav", audioName: "a.wav" };
-    useSpeechStore.setState({ audio });
+  it("switches the clean up or split kind and leaves every task's input alone", () => {
+    const clip = { audioPath: "/tmp/a.wav", audioName: "a.wav" };
+    useSpeechStore.setState({ audios: { ...NO_AUDIO_INPUTS, enhance: clip } });
     useSpeechStore.getState().setEnhanceKind("separate");
     expect(useSpeechStore.getState().enhanceKind).toBe("separate");
-    expect(useSpeechStore.getState().audio).toEqual(audio);
+    expect(useSpeechStore.getState().audios.enhance).toEqual(clip);
+  });
+});
+
+describe("setAudio", () => {
+  const clip = { audioPath: "/tmp/a.wav", audioName: "a.wav" };
+
+  it("gives the clip to the task it is chosen for, and leaves the other tasks empty", () => {
+    useSpeechStore.getState().setAudio("transcribe", clip);
+    expect(useSpeechStore.getState().audios).toEqual({
+      transcribe: clip,
+      speak: null,
+      enhance: null,
+    });
+  });
+
+  it("keeps the other tasks' clips when one task's clip changes", () => {
+    const other = { audioPath: "/tmp/b.wav", audioName: "b.wav" };
+    useSpeechStore.setState({ audios: { transcribe: clip, speak: null, enhance: other } });
+    useSpeechStore.getState().setAudio("transcribe", null);
+    expect(useSpeechStore.getState().audios).toEqual({
+      transcribe: null,
+      speak: null,
+      enhance: other,
+    });
+  });
+});
+
+describe("takeAsInput", () => {
+  const output = { audioPath: "/music/speech.wav", audioName: "speech.wav" };
+
+  it("sets only the target task's input and switches to that task", () => {
+    useSpeechStore.setState({
+      audioTask: "speak",
+      audios: {
+        transcribe: { audioPath: "/tmp/mine.wav", audioName: "mine.wav" },
+        speak: null,
+        enhance: null,
+      },
+    });
+    useSpeechStore.getState().takeAsInput("transcribe", output);
+    const state = useSpeechStore.getState();
+    expect(state.audioTask).toBe("transcribe");
+    expect(state.audios.transcribe).toEqual(output);
+    expect(state.audios.enhance).toBeNull();
+    expect(state.audios.speak).toBeNull();
+  });
+
+  it("leaves the input of the task it came from alone", () => {
+    const speakClip = { audioPath: "/tmp/ref.wav", audioName: "ref.wav" };
+    useSpeechStore.setState({
+      audioTask: "speak",
+      audios: { ...NO_AUDIO_INPUTS, speak: speakClip },
+    });
+    useSpeechStore.getState().takeAsInput("enhance", output);
+    expect(useSpeechStore.getState().audios.speak).toEqual(speakClip);
+    expect(useSpeechStore.getState().audios.enhance).toEqual(output);
+  });
+});
+
+describe("setAudioTask", () => {
+  it("starts on speech to text", () => {
+    expect(useSpeechStore.getState().audioTask).toBe("transcribe");
+  });
+
+  it("switches the task and keeps the shared input and every other task's result", () => {
+    const clip = { audioPath: "/tmp/a.wav", audioName: "a.wav" };
+    useSpeechStore.setState({
+      audios: { ...NO_AUDIO_INPUTS, transcribe: clip },
+      results: { stt: result(), tts: result({ kind: "tts" }), denoise: null, separate: null },
+    });
+    useSpeechStore.getState().setAudioTask("speak");
+    const state = useSpeechStore.getState();
+    expect(state.audioTask).toBe("speak");
+    expect(state.audios.transcribe).toEqual(clip);
+    expect(state.results.stt?.text).toBe("hello");
+    expect(state.results.tts?.kind).toBe("tts");
+  });
+
+  it("does not stop a running job when the task changes", () => {
+    useSpeechStore.setState({ job: job() });
+    useSpeechStore.getState().setAudioTask("enhance");
+    expect(useSpeechStore.getState().job?.jobId).toBe("job-1");
   });
 });
 

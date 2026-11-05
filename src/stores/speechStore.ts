@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type {
+  AudioTask,
   EnhanceKind,
   PlaygroundSpeechProgress,
   SpeechAudioInput,
@@ -10,7 +11,7 @@ import type {
   SpeechResult,
 } from "../types";
 import { DEFAULT_ENHANCE_KIND } from "../utils/audioEnhance";
-import { SPEECH_KINDS_BY_TOOL, type SpeechToolId } from "../utils/playgroundReset";
+import { DEFAULT_AUDIO_TASK } from "../utils/audioTask";
 import {
   clearDeletedSelection,
   DEFAULT_SPEECH_FORM,
@@ -19,21 +20,42 @@ import {
   type SpeechSelection,
 } from "../utils/speech";
 
+/** No result for any kind. */
+const NO_SPEECH_RESULTS: Record<SpeechKind, SpeechResult | null> = {
+  stt: null,
+  tts: null,
+  denoise: null,
+  separate: null,
+};
+
+/** No input clip for any task. */
+export const NO_AUDIO_INPUTS: Record<AudioTask, SpeechAudioInput | null> = {
+  transcribe: null,
+  speak: null,
+  enhance: null,
+};
+
 /**
- * Speech state, kept across page visits: the catalog, each tab's selected model, the speech input, the
- * text to speech form, the Audio to audio task, the running job and the last result of each kind. Downloads
- * live in the download store (the drawer). The event listeners and the service calls live outside the store
- * (`PlaygroundRuntime` and the panel hooks).
+ * Speech state, kept across page visits: the catalog, the selected model of each kind, one input clip per task, the
+ * text to speech form, the Audio tool's task and clean up or split kind, the running job and the last result of each
+ * kind. Downloads live in the download store (the drawer). The event listeners and the service calls live outside the
+ * store (`PlaygroundRuntime` and the panel hooks).
  */
 interface SpeechState {
-  /** Every speech model, of all kinds. Null until the catalog has been read. Each tab shows its own kind. */
+  /** Every speech model, of all kinds. Null until the catalog has been read. The Audio tool lists the kind of its task. */
   models: SpeechModel[] | null;
   selectedModelIds: SpeechSelection;
-  /** The recording or file the speech to text and audio to audio tabs read. */
-  audio: SpeechAudioInput | null;
+  /**
+   * The input clip of each task: the file or recording that task reads. The speak entry is the voice-copy clip of a
+   * cloning model. Tasks never share an input; only "Use as input" moves a file from one task to another.
+   */
+  audios: Record<AudioTask, SpeechAudioInput | null>;
   form: SpeechForm;
-  /** The task the Audio to audio tab runs: clean up speech or split voice and music. */
+  /** The Audio tool's task: transcribe, speak or enhance. */
+  audioTask: AudioTask;
+  /** The kind the enhance task runs: clean up speech or split voice and music. */
   enhanceKind: EnhanceKind;
+  /** The running speech job of any task. There is one job slot. */
   job: SpeechJob | null;
   /** The last job of each kind that ended, kept until the next job of that kind starts. */
   results: Record<SpeechKind, SpeechResult | null>;
@@ -42,19 +64,23 @@ interface SpeechState {
   setModels: (models: SpeechModel[]) => void;
   /** Replace the catalog after a delete. The deleted model is not selected again, and no default is chosen. */
   replaceModelsAfterDelete: (models: SpeechModel[], deletedModelId: string) => void;
-  /** Select a model for the tab of its kind. */
+  /** Select a model for the kind of its own. */
   selectModel: (model: SpeechModel) => void;
   /** Clear the selection of one kind. */
   clearModelSelection: (kind: SpeechKind) => void;
-  setAudio: (audio: SpeechAudioInput | null) => void;
+  /** Set the input clip of one task. The other tasks keep theirs. */
+  setAudio: (task: AudioTask, audio: SpeechAudioInput | null) => void;
+  /** "Use as input": sets the clip of the task given, and switches to that task. No other task's input changes. */
+  takeAsInput: (task: AudioTask, audio: SpeechAudioInput) => void;
   setForm: (patch: Partial<SpeechForm>) => void;
+  setAudioTask: (task: AudioTask) => void;
   setEnhanceKind: (kind: EnhanceKind) => void;
 
   /**
-   * Clears the finished results of one speech tool. The shared audio is cleared too, unless `keepAudio` (the user moves
-   * to another speech tool) or a speech job runs, which still reads it. A running job is not touched.
+   * Clears every result of the Audio tool and every task's input clip, when the user leaves the tool. Preferences (models,
+   * form, task, enhance kind) are kept. A running job is not touched: nothing is cleared while one runs.
    */
-  resetSpeechWork: (tool: SpeechToolId, keepAudio: boolean) => void;
+  resetAudioWork: () => void;
 
   /** Start a job and clear the previous result of its kind. */
   startJob: (job: SpeechJob) => void;
@@ -66,11 +92,12 @@ interface SpeechState {
 export const useSpeechStore = create<SpeechState>((set) => ({
   models: null,
   selectedModelIds: NO_SPEECH_SELECTION,
-  audio: null,
+  audios: NO_AUDIO_INPUTS,
   form: DEFAULT_SPEECH_FORM,
+  audioTask: DEFAULT_AUDIO_TASK,
   enhanceKind: DEFAULT_ENHANCE_KIND,
   job: null,
-  results: { stt: null, tts: null, denoise: null, separate: null },
+  results: NO_SPEECH_RESULTS,
 
   setModels: (models) =>
     set((state) => ({
@@ -94,18 +121,24 @@ export const useSpeechStore = create<SpeechState>((set) => ({
       selectedModelIds: { ...state.selectedModelIds, [kind]: null },
     })),
 
-  setAudio: (audio) => set({ audio }),
+  setAudio: (task, audio) => set((state) => ({ audios: { ...state.audios, [task]: audio } })),
+
+  takeAsInput: (task, audio) =>
+    set((state) => ({
+      audios: { ...state.audios, [task]: audio },
+      audioTask: task,
+    })),
 
   setForm: (patch) => set((state) => ({ form: { ...state.form, ...patch } })),
 
+  setAudioTask: (audioTask) => set({ audioTask }),
+
   setEnhanceKind: (enhanceKind) => set({ enhanceKind }),
 
-  resetSpeechWork: (tool, keepAudio) =>
+  resetAudioWork: () =>
     set((state) => {
-      const results = { ...state.results };
-      for (const kind of SPEECH_KINDS_BY_TOOL[tool]) results[kind] = null;
-      const audioInUse = keepAudio || state.job !== null;
-      return { results, audio: audioInUse ? state.audio : null };
+      if (state.job !== null) return {};
+      return { results: NO_SPEECH_RESULTS, audios: NO_AUDIO_INPUTS };
     }),
 
   startJob: (job) =>

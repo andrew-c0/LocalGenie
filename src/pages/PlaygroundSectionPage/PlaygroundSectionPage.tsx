@@ -1,12 +1,10 @@
 import type { ReactElement } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import AudioToAudioPanel from "../../components/playground/AudioToAudioPanel/AudioToAudioPanel";
+import AudioPanel from "../../components/playground/AudioPanel/AudioPanel";
 import ImageToImagePanel from "../../components/playground/ImageToImagePanel/ImageToImagePanel";
 import ImageUpscalingPanel from "../../components/playground/ImageUpscalingPanel/ImageUpscalingPanel";
 import OcrPanel from "../../components/playground/OcrPanel/OcrPanel";
-import SpeechToTextPanel from "../../components/playground/SpeechToTextPanel/SpeechToTextPanel";
 import TextToImagePanel from "../../components/playground/TextToImagePanel/TextToImagePanel";
-import TextToSpeechPanel from "../../components/playground/TextToSpeechPanel/TextToSpeechPanel";
 import { usePlaygroundTabReset } from "../../components/playground/usePlaygroundTabReset";
 import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
 import { useRuntimeLocks } from "../../hooks/useRuntimeLocks";
@@ -33,12 +31,7 @@ const PANELS: Record<PlaygroundRouteId, ToolPanel> = {
   "playground-image-upscaling": { ownsRuntimeNotice: true, render: () => <ImageUpscalingPanel /> },
   // OCR needs the GenieX CLI. Its panel has no runtime notice, only a server one, so it is not shown while locked.
   "playground-ocr": { ownsRuntimeNotice: false, render: () => <OcrPanel /> },
-  "playground-speech-to-text": {
-    ownsRuntimeNotice: true,
-    render: () => <SpeechToTextPanel />,
-  },
-  "playground-text-to-speech": { ownsRuntimeNotice: true, render: () => <TextToSpeechPanel /> },
-  "playground-audio-to-audio": { ownsRuntimeNotice: true, render: () => <AudioToAudioPanel /> },
+  "playground-audio": { ownsRuntimeNotice: true, render: () => <AudioPanel /> },
 };
 
 /** One Playground tool: its title and one-line subtitle from the route table, then its panel. */

@@ -4,10 +4,18 @@ import navigationSource from "../Navigation.tsx?raw";
 import { ROUTES, type RouteMeta } from "./routes";
 
 /**
- * Paths Navigation.tsx declares with no route-table entry: the catch-all and the redirects from the old
- * benchmark URLs. Each must still be declared, so this list cannot keep a path Navigation has dropped.
+ * Paths Navigation.tsx declares with no route-table entry: the catch-all, the redirects from the old benchmark
+ * URLs and the redirects from the three old Playground audio URLs to the Audio tool. Each must still be declared,
+ * so this list cannot keep a path Navigation has dropped.
  */
-const NAVIGATION_ONLY_PATHS = ["*", "/benchmark", "/prompt-benchmark/*"];
+const NAVIGATION_ONLY_PATHS = [
+  "*",
+  "/benchmark",
+  "/prompt-benchmark/*",
+  "/playground/speech-to-text",
+  "/playground/text-to-speech",
+  "/playground/audio-to-audio",
+];
 
 /** Every `path="..."` attribute in Navigation.tsx, in source order. */
 const declaredPaths = [...navigationSource.matchAll(/\bpath="([^"]+)"/g)].map((match) => match[1]);

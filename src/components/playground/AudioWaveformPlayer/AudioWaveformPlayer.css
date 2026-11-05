@@ -1,0 +1,5 @@
+/* The webview's own player, shown only when a clip cannot be drawn. It takes the width it is given. */
+.audio-waveform-player__fallback {
+  display: block;
+  width: 100%;
+}

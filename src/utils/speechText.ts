@@ -3,8 +3,6 @@ import { errorMessage } from "./errorMessage";
 
 /** Copy for the Playground speech tabs, kept in one place so wording changes stay in one file. */
 
-export const SPEECH_CPU_NOTE = "Compute: CPU only for now.";
-
 export const SPEED_HELP =
   "How fast the voice speaks. 1.0x is the model's normal pace; lower is slower, higher is faster.";
 

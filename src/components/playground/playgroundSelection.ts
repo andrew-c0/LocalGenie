@@ -2,6 +2,7 @@ import { useOcrStore } from "../../stores/ocrStore";
 import { usePlaygroundStore } from "../../stores/playgroundStore";
 import { useSpeechStore } from "../../stores/speechStore";
 import type { PlaygroundModelKind } from "../../types";
+import { speechKindOfTask } from "../../utils/audioTask";
 import type { ComputeSetting, RunOnValue } from "../../utils/playgroundCompute";
 import { imageDeviceForRunOn } from "../../utils/playgroundCompute";
 import type { PlaygroundToolId, SelectorModel } from "../../utils/playgroundSelector";
@@ -33,9 +34,7 @@ export function selectToolModel(toolId: PlaygroundToolId, modelId: string): void
     case "playground-ocr":
       useOcrStore.getState().selectModel(modelId);
       return;
-    case "playground-speech-to-text":
-    case "playground-text-to-speech":
-    case "playground-audio-to-audio": {
+    case "playground-audio": {
       const store = useSpeechStore.getState();
       const model = store.models?.find((candidate) => candidate.id === modelId);
       if (model) store.selectModel(model);
@@ -57,15 +56,11 @@ export function clearToolModel(toolId: PlaygroundToolId): void {
     case "playground-ocr":
       useOcrStore.getState().clearModelSelection();
       return;
-    case "playground-speech-to-text":
-      useSpeechStore.getState().clearModelSelection("stt");
+    case "playground-audio": {
+      const store = useSpeechStore.getState();
+      store.clearModelSelection(speechKindOfTask(store.audioTask, store.enhanceKind));
       return;
-    case "playground-text-to-speech":
-      useSpeechStore.getState().clearModelSelection("tts");
-      return;
-    case "playground-audio-to-audio":
-      useSpeechStore.getState().clearModelSelection(useSpeechStore.getState().enhanceKind);
-      return;
+    }
   }
 }
 

@@ -10,7 +10,7 @@ Legend: **yes** = works and is offered in the app. **works, not offered** = runs
 |---|---|---|---|
 | GenieX CLI and server (llama.cpp and QAIRT backends) | The GenieX installer | Language and vision-language models | Chat, Benchmarks, OCR |
 | stable-diffusion.cpp (`sd-cli`, our fork `andrew-c0/stable-diffusion.cpp`, upstream code plus CI files) | Settings > Runtimes | Diffusion image models and ESRGAN upscalers | Text to image, Image to image, Image upscaling |
-| sherpa-onnx (prebuilt `shared-MT-MinSizeRel`) | Settings > Runtimes | ONNX speech models | Speech to text, Text to speech (incl. voice cloning), Audio to audio |
+| sherpa-onnx (prebuilt `shared-MT-MinSizeRel`) | Settings > Runtimes | ONNX speech models | Audio tool: speech to text, text to speech (incl. voice cloning), clean up or split |
 
 ## Matrix
 
@@ -23,9 +23,9 @@ Legend: **yes** = works and is offered in the app. **works, not offered** = runs
 | Text to image | stable-diffusion.cpp | SD 1.5, FLUX.2 klein 4B, Z-Image Turbo (Q4) | yes (default) | works, not offered by default: slower than the CPU, blank images with CFG above 1 unless `--batched-cfg off` | no |
 | Image to image | stable-diffusion.cpp | SD 1.5 (re-draw), FLUX.2 klein 4B (instruction edit) | yes | not tried here; needs `--batched-cfg off` (always applied) | no |
 | Image upscaling | stable-diffusion.cpp | Real-ESRGAN anime 6B, 4xNomos2 | yes (about 10 to 16 s for 256 px to 1024 px, newest build) | no: aborts with `GGML_ASSERT(dst->extra)` in the OpenCL add kernel | no |
-| Speech to text | sherpa-onnx | Whisper tiny.en, Moonshine base | yes | no | not tried |
-| Text to speech, voice cloning | sherpa-onnx | Kokoro multi-lang (voices), Pocket TTS (cloning) | yes | no | not tried |
-| Audio to audio (denoise, split) | sherpa-onnx | GTCRN, DPDFNet4, Spleeter 2 stems | yes | no | not tried |
+| Audio tool: speech to text | sherpa-onnx | Whisper tiny.en, Moonshine base | yes | no | not tried |
+| Audio tool: text to speech, voice cloning | sherpa-onnx | Kokoro multi-lang (voices), Pocket TTS (cloning) | yes | no | not tried |
+| Audio tool: clean up or split (denoise, split) | sherpa-onnx | GTCRN, DPDFNet4, Spleeter 2 stems | yes | no | not tried |
 
 ## Why some cells are missing
 

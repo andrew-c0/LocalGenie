@@ -2,32 +2,18 @@ import { useEffect, useRef } from "react";
 import { useOcrStore } from "../../stores/ocrStore";
 import { usePlaygroundStore } from "../../stores/playgroundStore";
 import { useSpeechStore } from "../../stores/speechStore";
-import {
-  keepsSpeechAudio,
-  type PlaygroundToolId,
-  type SpeechToolId,
-} from "../../utils/playgroundReset";
-
-/** Clears the work area of the tool that was left. `entered` is the tool now open, or null when the user left the Playground. */
-type LeftToolReset = (entered: PlaygroundToolId | null) => void;
-
-function speechReset(tool: SpeechToolId): LeftToolReset {
-  return (entered) =>
-    useSpeechStore.getState().resetSpeechWork(tool, keepsSpeechAudio(tool, entered));
-}
+import type { PlaygroundToolId } from "../../utils/playgroundReset";
 
 /**
  * The reset of each tool, by the store action it runs. It is typed by tool id, so a new tool must add its reset here.
- * Preferences (model, form, settings, modes, voice) are never reset; a running job is never touched.
+ * Preferences (model, form, settings, modes, voice, audio task) are never reset; a running job is never touched.
  */
-const RESET_WHEN_LEFT: Record<PlaygroundToolId, LeftToolReset> = {
+const RESET_WHEN_LEFT: Record<PlaygroundToolId, () => void> = {
   "playground-text-to-image": () => usePlaygroundStore.getState().resetTextToImageWork(),
   "playground-image-to-image": () => usePlaygroundStore.getState().resetImageToImageWork(),
   "playground-image-upscaling": () => usePlaygroundStore.getState().resetUpscaleWork(),
   "playground-ocr": () => useOcrStore.getState().resetOcrWork(),
-  "playground-speech-to-text": speechReset("playground-speech-to-text"),
-  "playground-text-to-speech": speechReset("playground-text-to-speech"),
-  "playground-audio-to-audio": speechReset("playground-audio-to-audio"),
+  "playground-audio": () => useSpeechStore.getState().resetAudioWork(),
 };
 
 /**
@@ -45,7 +31,7 @@ export function usePlaygroundTabReset(toolId: PlaygroundToolId): void {
   useEffect(() => {
     const leftTool = openTool.current;
     openTool.current = toolId;
-    if (leftTool !== null && leftTool !== toolId) RESET_WHEN_LEFT[leftTool](toolId);
+    if (leftTool !== null && leftTool !== toolId) RESET_WHEN_LEFT[leftTool]();
   }, [toolId]);
 
   useEffect(() => {
@@ -55,7 +41,7 @@ export function usePlaygroundTabReset(toolId: PlaygroundToolId): void {
       queueMicrotask(() => {
         const leftTool = openTool.current;
         if (isMounted.current || leftTool === null) return;
-        RESET_WHEN_LEFT[leftTool](null);
+        RESET_WHEN_LEFT[leftTool]();
       });
     };
   }, []);

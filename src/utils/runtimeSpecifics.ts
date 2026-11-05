@@ -14,7 +14,7 @@ const UNINSTALL_NOTES: Partial<Record<string, string>> = {
   [SD_CPP_RUNTIME_ID]:
     "The Playground's Text to image, Image to image and Image upscaling tabs stay locked until it is installed again. Downloaded image models are not deleted.",
   [SHERPA_RUNTIME_ID]:
-    "The Playground's Speech to text, Text to speech and Audio to audio tabs stay locked until it is installed again. Downloaded speech and audio models are not deleted.",
+    "The Playground's Audio tab stays locked until it is installed again. Downloaded speech and audio models are not deleted.",
 };
 
 /** The confirm dialog's text for uninstalling a runtime. */
