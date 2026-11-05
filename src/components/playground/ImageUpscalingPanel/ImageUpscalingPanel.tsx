@@ -6,35 +6,27 @@ import {
   jobOfKind,
   oversizedInputWarning,
   resultOfKind,
-  UPSCALE_FACTOR,
   upscaleBlockedReason,
 } from "../../../utils/upscale";
-import {
-  UPSCALE_ACTION_LABEL,
-  UPSCALE_CPU_NOTE,
-  UPSCALE_FACTOR_NOTE,
-  UPSCALE_INPUT_HINT,
-  UPSCALE_RUNTIME_PURPOSE,
-  UPSCALE_SECTION_TITLE,
-} from "../../../utils/upscaleText";
+import { UPSCALE_RUNTIME_PURPOSE, UPSCALE_SECTION_TITLE } from "../../../utils/upscaleText";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../ui/Flex/Flex";
 import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
-import { Body, Meta } from "../../ui/Typography/Typography";
-import { GenerateFooter } from "../ImageGeneration/GenerateFooter/GenerateFooter";
 import { newImageJobId, useImageGeneration } from "../ImageGeneration/useImageGeneration";
-import { InputImagePicker } from "../ImageToImagePanel/InputImagePicker/InputImagePicker";
 import { useInputImagePicker } from "../ImageToImagePanel/InputImagePicker/useInputImagePicker";
 import { PickModelHint } from "../PickModelHint/PickModelHint";
 import { RuntimeNotice } from "../RuntimeNotice/RuntimeNotice";
 import { useRuntimeCheck } from "../useRuntimeCheck";
-import { UpscaleProgress } from "./UpscaleProgress/UpscaleProgress";
-import { UpscaleResult } from "./UpscaleResult/UpscaleResult";
+import { UpscaleCompareToggle } from "./UpscaleCompareToggle";
+import { UpscaleForm } from "./UpscaleForm";
+import { UpscaleScale } from "./UpscaleScale";
+import { UpscaleStage } from "./UpscaleStage/UpscaleStage";
 import { useUpscale } from "./useUpscale";
+import { useUpscaleStage } from "./useUpscaleStage";
 
 /**
- * Image upscaling (CPU only): the input picture, the fixed 4x note, the running job and the result. The
- * upscaling model is picked in the header's selector.
+ * Image upscaling (CPU only): one card with the picture picker, the fixed 4x note and Upscale, and below them the
+ * stage that shows the input, the running job or the result. The upscaling model is picked in the header's selector.
  */
 export default function ImageUpscalingPanel() {
   const runtime = useRuntimeCheck(SD_CPP_RUNTIME_ID);
@@ -46,13 +38,15 @@ export default function ImageUpscalingPanel() {
   const input = usePlaygroundStore((s) => s.upscaleInput);
   const setInput = usePlaygroundStore((s) => s.setUpscaleInput);
   const setInputSize = usePlaygroundStore((s) => s.setUpscaleInputSize);
+  const clearInput = usePlaygroundStore((s) => s.clearUpscaleInput);
   const anyJob = usePlaygroundStore((s) => s.job);
   const job = jobOfKind(anyJob, "upscale");
-  const result = resultOfKind(
+  const lastResult = resultOfKind(
     usePlaygroundStore((s) => s.result),
     "upscale",
   );
   const picker = useInputImagePicker(setInput);
+  const stage = useUpscaleStage(input, lastResult);
 
   const selected = models?.find((m) => m.id === selectedModelId) ?? null;
   const blockedReason = upscaleBlockedReason({
@@ -61,7 +55,6 @@ export default function ImageUpscalingPanel() {
     inputPath: input?.path ?? null,
     jobRunning: anyJob !== null,
   });
-  const sizeWarning = oversizedInputWarning(input?.sourceSize ?? null);
 
   const start = () => {
     if (!selected || !input) return;
@@ -78,31 +71,44 @@ export default function ImageUpscalingPanel() {
       {models && selected === null && <PickModelHint />}
 
       {models && (
-        <>
-          <SurfaceCard title={UPSCALE_SECTION_TITLE}>
-            <Flex direction="column" gap="m">
-              <InputImagePicker
-                input={input}
-                error={picker.error}
-                disabled={job !== null}
-                hint={UPSCALE_INPUT_HINT}
-                onChoose={picker.chooseFile}
-                onSourceSize={setInputSize}
-              />
-              {sizeWarning && <ErrorBanner message={sizeWarning} />}
-              <Body>Scale: {UPSCALE_FACTOR}x</Body>
-              <Meta>{UPSCALE_FACTOR_NOTE}</Meta>
-              <GenerateFooter
-                onGenerate={start}
-                blockedReason={blockedReason}
-                actionLabel={UPSCALE_ACTION_LABEL}
-                note={UPSCALE_CPU_NOTE}
-              />
+        <SurfaceCard
+          title={UPSCALE_SECTION_TITLE}
+          action={
+            <Flex gap="m" align="center">
+              <UpscaleScale />
+              {stage.pictureShown && (
+                <UpscaleCompareToggle
+                  checked={stage.comparing}
+                  disabled={!stage.compareReady}
+                  onToggle={stage.toggleCompare}
+                />
+              )}
             </Flex>
-          </SurfaceCard>
-          {job && <UpscaleProgress job={job} onCancel={cancel} />}
-          {result && <UpscaleResult result={result} />}
-        </>
+          }
+        >
+          <Flex direction="column" gap="m">
+            <UpscaleStage
+              input={input}
+              job={job}
+              stage={stage}
+              onCancel={cancel}
+              onSourceSize={setInputSize}
+            />
+
+            <UpscaleForm
+              input={input}
+              pickerError={picker.error}
+              jobRunning={job !== null}
+              sizeWarning={oversizedInputWarning(input?.sourceSize ?? null)}
+              blockedReason={blockedReason}
+              onChoose={picker.chooseFile}
+              onSourceSize={setInputSize}
+              onUpscale={start}
+              upscaled={stage.pictureShown ? stage.result : null}
+              onClear={clearInput}
+            />
+          </Flex>
+        </SurfaceCard>
       )}
     </Flex>
   );

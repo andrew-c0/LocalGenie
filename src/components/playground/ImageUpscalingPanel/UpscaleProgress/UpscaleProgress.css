@@ -1,0 +1,5 @@
+/* The phase, the bar and the elapsed time form one block, no wider than a short bar. The stage holds the height. */
+.upscale-progress__content {
+  width: min(100%, 360px);
+  text-align: center;
+}

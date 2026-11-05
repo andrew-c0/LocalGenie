@@ -1,0 +1,81 @@
+/* Both pictures fill this box at the same displayed size, so the divider points at the same place in each. The box
+   takes the card width, its shape comes from the upscaled picture (aspect-ratio, set inline), and it has no
+   height cap, like the single picture. Until that picture has loaded, the box keeps a minimum height. */
+.image-compare__box {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 160px;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: var(--borderRadiusMedium);
+  background-color: var(--colorNeutralBackground3);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+/* Both pictures sit on the box, not in the flow. Clicks and drags go to the box, so the pictures ignore the pointer. */
+.image-compare__picture {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* A 2px line at the divider's position, full height, with the handle in its middle. The line is nudged left by
+   half its width so its centre sits on the position. */
+.image-compare__divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background-color: var(--colorNeutralBackground1);
+  box-shadow: 0 0 0 1px var(--colorNeutralStroke1);
+}
+
+.image-compare__handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--colorNeutralStroke1);
+  border-radius: 50%;
+  background-color: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground1);
+  box-shadow: var(--shadow4);
+  cursor: ew-resize;
+}
+
+.image-compare__handle:focus-visible {
+  outline: 2px solid var(--colorStrokeFocus2);
+  outline-offset: 2px;
+}
+
+/* The corner labels are small chips with their own background, so they read in light and dark mode alike. */
+.image-compare__label {
+  position: absolute;
+  top: var(--spacingVerticalS);
+  padding: var(--spacingVerticalXXS) var(--spacingHorizontalS);
+  border-radius: var(--borderRadiusMedium);
+  background-color: var(--colorNeutralBackground1);
+  box-shadow: var(--shadow4);
+  pointer-events: none;
+}
+
+.image-compare__label--before {
+  left: var(--spacingHorizontalS);
+}
+
+.image-compare__label--after {
+  right: var(--spacingHorizontalS);
+}

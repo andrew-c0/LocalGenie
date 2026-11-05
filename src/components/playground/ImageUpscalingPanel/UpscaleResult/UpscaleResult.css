@@ -1,4 +1,24 @@
-/* The saved path can be long with no spaces to wrap on. */
-.upscale-result__path {
-  overflow-wrap: anywhere;
+/* The picture is a button, so it takes the stage width and keeps the picture's shape. The picture is as wide as the
+   card and as tall as its shape needs. */
+.upscale-result__picture-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--borderRadiusMedium);
+  background: none;
+  cursor: zoom-in;
+}
+
+.upscale-result__picture-button:focus-visible {
+  outline: 2px solid var(--colorStrokeFocus2);
+  outline-offset: 2px;
+}
+
+.upscale-result__picture {
+  display: block;
+  width: 100%;
+  object-fit: contain;
+  border-radius: var(--borderRadiusMedium);
+  cursor: zoom-in;
 }

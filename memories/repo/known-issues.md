@@ -47,6 +47,14 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - A cancelled download reads "Paused" in the drawer for every kind. For a GenieX install cancelled during its silent setup, the label is wrong while the setup runs (see the GenieX section below).
 - The Local models page's Playground list reads four catalogs on mount and shows a failed read as a banner with no Try again (`usePlaygroundLocalModels.ts`); the popover's failed catalog does have a retry.
 
+## Image upscaling redesign (2026-11-05; code-read, not run in the app)
+- The new card (one stage plus controls, Compare, Clear, the info icons) is not run. Steps: `manual-checklist.md`, section "Image upscaling redesign". The committed upscale tab was run by the user (see "Runtime status of the Playground").
+- The hidden input preview (`InputImagePreview`, `hidden` attribute) still mounts and loads, so its `onLoad` reports the picture size. Assumed to work in WebView2; not checked.
+- The input picture is read twice while a result for it shows: the hidden preview and `useUpscaleStage` each call `readInputImage`. Code-read; not measured.
+- Clear returns to the first step and keeps the result in the store. Picking the same file again brings the saved result back (code-read).
+- Unchecked: the controls row and the stage at narrow widths, Compare at the large size in dark and light themes, and the hover and focus tooltips on a blocked Upscale button (`disabledFocusable`).
+- The source comments in `ImageCompare.css` and `UpscaleResult.css` say there is a height cap; there is none (see `codebase-map.md`, drift).
+
 ## GenieX CLI as a runtime (986b5dc; code-read, not run)
 - Install, update and uninstall of the GenieX CLI have not been run in the app. Steps: `manual-checklist.md`. The silent flags, the `unins000.exe` name (Inno Setup's default, assumed by `runtimes/geniex.rs`) and the version poll are not checked against a real install.
 - Cancel during `installing` only stops the wait. The drawer shows the entry cancelled, but the silent setup keeps running. The operation lock is released then, so Resume can start a second setup while the first may still run, and Uninstall can run beside it (code-read).

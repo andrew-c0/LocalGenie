@@ -1,7 +1,5 @@
-import { Tooltip } from "@fluentui/react-components";
-import { InfoRegular } from "@fluentui/react-icons";
 import { Flex } from "../Flex/Flex";
-import "./HelpLabel.css";
+import { InfoTooltip } from "../InfoTooltip/InfoTooltip";
 
 interface HelpLabelProps {
   /** Visible label text. Also names the help button for screen readers. */
@@ -15,11 +13,7 @@ export function HelpLabel({ label, help }: HelpLabelProps) {
   return (
     <Flex as="span" align="center" gap="xs">
       <span>{label}</span>
-      <Tooltip content={help} relationship="description" withArrow>
-        <button type="button" className="help-label__button" aria-label={`About ${label}`}>
-          <InfoRegular aria-hidden />
-        </button>
-      </Tooltip>
+      <InfoTooltip label={`About ${label}`} help={help} />
     </Flex>
   );
 }

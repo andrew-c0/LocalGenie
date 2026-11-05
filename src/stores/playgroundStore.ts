@@ -81,6 +81,8 @@ interface PlaygroundState {
   clearUpscaleModelSelection: () => void;
   /** Pick the upscale input picture. Its size is not known until its preview has loaded. */
   setUpscaleInput: (input: InputImage) => void;
+  /** Back to the first step: no picture on the form. */
+  clearUpscaleInput: () => void;
   setUpscaleInputSize: (size: ImageSize) => void;
 
   /** Start a job and clear the previous result. */
@@ -182,6 +184,8 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
   clearUpscaleModelSelection: () => set({ upscaleModelId: null }),
 
   setUpscaleInput: (input) => set({ upscaleInput: input }),
+
+  clearUpscaleInput: () => set({ upscaleInput: null }),
 
   setUpscaleInputSize: (size) =>
     set((state) =>

@@ -1,5 +1,5 @@
 /* A native button, not a Fluent action: it is only an info icon, so it is reset to read as an icon. */
-.help-label__button {
+.info-tooltip__button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -12,7 +12,7 @@
   font-size: var(--fontSizeBase300);
 }
 
-.help-label__button:focus-visible {
+.info-tooltip__button:focus-visible {
   outline: 2px solid var(--colorStrokeFocus2);
   outline-offset: 2px;
 }

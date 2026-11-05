@@ -6,6 +6,9 @@ export const INPUT_PICK_LABEL = "Choose image";
 
 export const INPUT_HINT = "PNG or JPG. The picture is read from disk and not changed.";
 
+/** The accessible name of the info icon that holds the hint when the hint sits in a tooltip. */
+export const INPUT_HINT_LABEL = "About the picture";
+
 export const UNSUPPORTED_INPUT_MESSAGE = "Pick a PNG or JPG image.";
 
 export const NO_INPUT_REASON = "Choose an input image first.";

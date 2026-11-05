@@ -10,16 +10,41 @@ export const UPSCALE_ACTION_LABEL = "Upscale";
 
 export const UPSCALE_PROGRESS_TITLE = "Upscaling";
 
-export const UPSCALE_RESULT_TITLE = "Result";
+export const UPSCALE_COMPARE_LABEL = "Compare";
+
+export const UPSCALE_COMPARE_SLIDER_LABEL = "Comparison position";
+
+export const UPSCALE_ENLARGE_LABEL = "Enlarge upscaled picture";
+
+export const UPSCALE_SHOW_FOLDER_LABEL = "Show in folder";
+
+/** Shown in the stage before a picture is chosen, so the empty card still says what to do. */
+export const UPSCALE_STAGE_EMPTY_MESSAGE = "Choose a picture to upscale it here.";
+
+export const UPSCALE_OPENING_MESSAGE = "Opening the image…";
+
+export const UPSCALE_REVEAL_FAILED_TITLE = "Could not open the folder";
 
 export const UPSCALE_FACTOR_NOTE =
   "Upscaling is fixed at 4x: each side of the picture becomes four times longer.";
 
+/** The accessible name of the info icon next to the scale in the card header. */
+export const UPSCALE_SCALE_INFO_LABEL = "About the scale";
+
+export const UPSCALE_CLEAR_LABEL = "Clear";
+
+/** The accessible name of the folder icon under a result; its tooltip is the saved path. */
+export const UPSCALE_SAVED_PATH_LABEL = "Where the picture was saved";
+
+export const UPSCALE_TIME_LABEL = "How long it took";
+
+/** The tooltip of the timer icon under a result, e.g. "Upscaled in 21.1s". */
+export function upscaledInLabel(duration: string): string {
+  return `Upscaled in ${duration}`;
+}
+
 export const UPSCALE_INPUT_HINT =
   "PNG or JPG, up to 1024 px on the longest side and 30 MB. The picture is read from disk and not changed.";
-
-export const UPSCALE_CPU_NOTE =
-  "Upscaling runs on the CPU only. A 256 px picture takes about 10 to 20 seconds on the newest runtime build; older builds and larger pictures are much slower. Update the runtime in Settings > Runtimes.";
 
 export const UPSCALE_LOADING_MODELS = "Reading upscaling models…";
 
@@ -46,6 +71,11 @@ export const UPSCALE_BEST_FOR_LABEL = "Best for";
 export const UPSCALE_BEFORE_LABEL = "Before";
 
 export const UPSCALE_AFTER_LABEL = "After (4x)";
+
+/** The picture's own alt text, shared by the result and the comparison. */
+export const UPSCALE_INPUT_ALT = "Input image";
+
+export const UPSCALE_OUTPUT_ALT = "Upscaled image";
 
 /** The runtime check names the tab's job in its missing-runtime message. */
 export const UPSCALE_RUNTIME_PURPOSE = "Image upscaling";

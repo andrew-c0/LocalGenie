@@ -1,0 +1,27 @@
+/* The stage holds a minimum height, so the controls below it stay in one place whether the stage is empty, shows
+   the picture, or shows the running job. The content is centred in it. */
+.upscale-stage {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--spacingVerticalM);
+  min-height: 240px;
+}
+
+/* The empty prompt: a dashed frame the size of the stage, where the picture will go. */
+.upscale-stage__empty {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  padding: var(--spacingVerticalL) var(--spacingHorizontalL);
+  text-align: center;
+  border: var(--strokeWidthThin) dashed var(--colorNeutralStroke1);
+  border-radius: var(--borderRadiusMedium);
+}
+
+/* The picture's file name under it. It exists only while the input picture is shown. */
+.upscale-stage__name {
+  overflow-wrap: anywhere;
+}

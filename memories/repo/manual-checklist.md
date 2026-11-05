@@ -2,6 +2,34 @@
 
 Run through these checks manually after building or deploying the app. Automated checks cannot fully verify installer behavior, filesystem permissions, or OS-level interactions.
 
+## Playground: Image upscaling redesign (2026-11-05; not run, none ticked)
+
+Limits are in `known-issues.md` ("Image upscaling redesign").
+
+Empty and first step:
+- [ ] The card header shows "Scale 4x" with an info icon (hover: the fixed 4x note) and no Compare button. The body shows the dashed "Choose a picture to upscale it here." frame.
+- [ ] The controls row: "Choose image" with an info icon (hover: the PNG or JPG hint) on the left; Upscale on the right.
+- [ ] With no model or no picture, Upscale is disabled and still focusable: hover or Tab to it shows the reason.
+
+Input and job:
+- [ ] Choosing a picture shows it large across the card width, with its file name under it. A tall picture is not capped in height.
+- [ ] A PNG or JPG over the limits shows the size warning above the controls.
+- [ ] Upscale: the input preview is replaced by the centred progress block (phase, bar, elapsed) with Cancel under it. After Cancel the input preview returns with the cancelled message under it.
+
+Result:
+- [ ] After a success the upscaled picture fills the stage. The controls row shows a timer icon with the duration (hover: "Upscaled in ...") and a folder icon (hover: the saved path) on the left, and Show in folder and Clear on the right.
+- [ ] Click the upscaled picture: it opens larger; Open location works.
+- [ ] Compare is off until both pictures have loaded, then enabled. Compare shows Before and After (4x) labels. Dragging anywhere in the box moves the divider; Tab to the handle, then the arrows move it 2 percent and Shift+arrows 10 percent; Home and End go to the edges.
+- [ ] Turning Compare on does not change the box's shape (no jump). Compare off returns to the single picture.
+- [ ] Clear returns to the first step with the picker and Upscale. Choosing the same file again shows its saved result again (expected from code).
+- [ ] Leave the Playground tab and come back during and after a job: the stage matches the job or the saved result.
+- [ ] A failed or cancelled job shows its message in the stage with the input preview above it.
+
+Shared pieces:
+- [ ] Image to image: the picker's hint, preview size (capped), name line and Choose image look as before.
+- [ ] Help labels (compute and generate fields) show their text on hover and focus.
+- [ ] Light and dark themes: the Compare labels and handle are readable. Narrow window: the controls row wraps without overlap.
+
 ## Playground selector, Playground downloads and installed Playground models (31a9e7c, 2026-11-05; not run, none ticked)
 
 Limits are in `known-issues.md` ("Playground selector and downloads").
