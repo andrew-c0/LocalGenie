@@ -1,0 +1,22 @@
+/* Steps, CFG scale and Seed share one width, so the settings read as one aligned row. The selector targets Fluent's
+   spin button root by its own class, the only way to set its width from a wrapper. */
+.setting-field__spin {
+  width: 140px;
+  max-width: 100%;
+}
+
+.setting-field__spin > .fui-SpinButton {
+  width: 100%;
+}
+
+/* The seed box and the Random seed switch as one control: the switch sits beside the box, level with it. */
+.seed-fields {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacingHorizontalM);
+}
+
+/* The switch label stays on one line. */
+.seed-fields__switch {
+  white-space: nowrap;
+}

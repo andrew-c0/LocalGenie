@@ -66,6 +66,8 @@ interface PlaygroundState {
 
   /** Pick the input picture. Its size is not known until its preview has loaded. */
   setInputImage: (input: InputImage) => void;
+  /** Clears the picked input picture, so the tab goes back to its first step. Form and settings are kept. */
+  clearInputImage: () => void;
   /** Store the input picture's pixel size and set the form's size from it, for the selected model. */
   setInputSourceSize: (size: ImageSize) => void;
   setStrength: (strength: number) => void;
@@ -143,6 +145,8 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
   applySeed: (seed) => set((state) => ({ form: { ...state.form, seed, randomSeed: false } })),
 
   setInputImage: (input) => set({ inputImage: input }),
+
+  clearInputImage: () => set({ inputImage: null }),
 
   setInputSourceSize: (size) =>
     set((state) => {

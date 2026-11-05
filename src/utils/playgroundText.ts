@@ -2,6 +2,35 @@ import type { ImagePhase, PlaygroundDeviceKind } from "../types";
 
 /** Copy for the Playground text-to-image form, kept in one place so wording changes stay in one file. */
 
+/** Shared by the Playground image tabs: the compare switch and its slider, the folder button, and the reveal error. */
+export const COMPARE_LABEL = "Compare";
+
+export const COMPARE_SLIDER_LABEL = "Comparison position";
+
+export const SHOW_IN_FOLDER_LABEL = "Show in folder";
+
+export const REVEAL_FAILED_TITLE = "Could not open the folder";
+
+export const OPENING_IMAGE_MESSAGE = "Opening the image…";
+
+/** The corner chips and alt texts of the before and after comparison. */
+export interface CompareCopy {
+  before: string;
+  after: string;
+  beforeAlt: string;
+  afterAlt: string;
+}
+
+/** The words a result view needs: the reasons it has no picture, the enlarge label, and the comparison copy. */
+export interface ResultCopy {
+  failedMessage: string;
+  cancelledMessage: string;
+  notSavedMessage: string;
+  enlargeLabel: string;
+  outputAlt: string;
+  compare: CompareCopy;
+}
+
 export const STEPS_HELP =
   "How many refinement passes the model makes. More steps usually add detail up to a point, but take proportionally longer. Fast 'turbo' models are made for 1-8 steps; more does not help them.";
 

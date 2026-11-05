@@ -1,4 +1,5 @@
 import type { ImagePhase, ImageSize } from "../types";
+import type { ResultCopy } from "./playgroundText";
 
 /** Copy for the Playground Image upscaling tab, kept in one place so wording changes stay in one file. */
 
@@ -10,20 +11,10 @@ export const UPSCALE_ACTION_LABEL = "Upscale";
 
 export const UPSCALE_PROGRESS_TITLE = "Upscaling";
 
-export const UPSCALE_COMPARE_LABEL = "Compare";
-
-export const UPSCALE_COMPARE_SLIDER_LABEL = "Comparison position";
-
 export const UPSCALE_ENLARGE_LABEL = "Enlarge upscaled picture";
-
-export const UPSCALE_SHOW_FOLDER_LABEL = "Show in folder";
 
 /** Shown in the stage before a picture is chosen, so the empty card still says what to do. */
 export const UPSCALE_STAGE_EMPTY_MESSAGE = "Choose a picture to upscale it here.";
-
-export const UPSCALE_OPENING_MESSAGE = "Opening the image…";
-
-export const UPSCALE_REVEAL_FAILED_TITLE = "Could not open the folder";
 
 export const UPSCALE_FACTOR_NOTE =
   "Upscaling is fixed at 4x: each side of the picture becomes four times longer.";
@@ -98,3 +89,18 @@ export function oversizedInputMessage(size: ImageSize, maxSide: number): string 
 export function upscalePartLabel(step: number, steps: number): string {
   return `Upscaling part ${step} of ${steps}`;
 }
+
+/** The result view's words for an upscale: its failure reasons, the enlarge label and the Before / After comparison. */
+export const UPSCALE_RESULT_COPY: ResultCopy = {
+  failedMessage: UPSCALE_FAILED_MESSAGE,
+  cancelledMessage: UPSCALE_CANCELLED_MESSAGE,
+  notSavedMessage: UPSCALE_NOT_SAVED_MESSAGE,
+  enlargeLabel: UPSCALE_ENLARGE_LABEL,
+  outputAlt: UPSCALE_OUTPUT_ALT,
+  compare: {
+    before: UPSCALE_BEFORE_LABEL,
+    after: UPSCALE_AFTER_LABEL,
+    beforeAlt: UPSCALE_INPUT_ALT,
+    afterAlt: UPSCALE_OUTPUT_ALT,
+  },
+};

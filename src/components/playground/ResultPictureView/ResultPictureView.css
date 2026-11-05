@@ -1,6 +1,6 @@
 /* The picture is a button, so it takes the stage width and keeps the picture's shape. The picture is as wide as the
-   card and as tall as its shape needs. */
-.upscale-result__picture-button {
+   stage and as tall as its shape needs. */
+.result-picture__button {
   display: block;
   width: 100%;
   padding: 0;
@@ -10,12 +10,12 @@
   cursor: zoom-in;
 }
 
-.upscale-result__picture-button:focus-visible {
+.result-picture__button:focus-visible {
   outline: 2px solid var(--colorStrokeFocus2);
   outline-offset: 2px;
 }
 
-.upscale-result__picture {
+.result-picture__image {
   display: block;
   width: 100%;
   object-fit: contain;

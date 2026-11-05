@@ -1,16 +1,16 @@
 import { Button } from "@fluentui/react-components";
 import type { ImageResult, ImageSize, InputImage } from "../../../types";
+import { SHOW_IN_FOLDER_LABEL } from "../../../utils/playgroundText";
 import {
   UPSCALE_ACTION_LABEL,
   UPSCALE_CLEAR_LABEL,
   UPSCALE_INPUT_HINT,
-  UPSCALE_SHOW_FOLDER_LABEL,
 } from "../../../utils/upscaleText";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../ui/Flex/Flex";
+import { BlockedReasonButton } from "../BlockedReasonButton/BlockedReasonButton";
 import { InputImagePicker } from "../ImageToImagePanel/InputImagePicker/InputImagePicker";
-import { revealUpscaled } from "./revealUpscaled";
-import { UpscaleButton } from "./UpscaleButton";
+import { revealSavedImage } from "../revealSavedImage";
 import { UpscaleResultBar } from "./UpscaleResultBar";
 
 interface UpscaleFormProps {
@@ -53,8 +53,8 @@ export function UpscaleForm({
         <UpscaleResultBar result={upscaled} />
         <Flex gap="s" align="center">
           {path && (
-            <Button appearance="secondary" onClick={() => revealUpscaled(path)}>
-              {UPSCALE_SHOW_FOLDER_LABEL}
+            <Button appearance="secondary" onClick={() => revealSavedImage(path)}>
+              {SHOW_IN_FOLDER_LABEL}
             </Button>
           )}
           <Button appearance="secondary" onClick={onClear}>
@@ -78,7 +78,7 @@ export function UpscaleForm({
         onChoose={onChoose}
         onSourceSize={onSourceSize}
         trailing={
-          <UpscaleButton
+          <BlockedReasonButton
             label={UPSCALE_ACTION_LABEL}
             blockedReason={blockedReason}
             onClick={onUpscale}

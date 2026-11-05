@@ -1,17 +1,18 @@
 import { useState } from "react";
-import { readImage, readInputImage } from "../../../services/playground";
-import type { ImageResult, InputImage } from "../../../types";
-import { useSavedDataUrl } from "../useSavedDataUrl";
+import { readImage, readInputImage } from "../../services/playground";
+import type { ImageResult, InputImage } from "../../types";
+import { resultForInput } from "../../utils/resultStage";
+import { useSavedDataUrl } from "./useSavedDataUrl";
 
 interface LoadedPicture {
   dataUrl: string | null;
   error: string | null;
 }
 
-export interface UpscaleStageState {
+export interface ResultStageState {
   /** The last result, only when it was made from the picture on the form. Null for any other picture. */
   result: ImageResult | null;
-  /** The upscaled picture is saved and can be shown. */
+  /** The result's picture is saved and can be shown. */
   pictureShown: boolean;
   output: LoadedPicture;
   /** The input picture as a data URL, loaded only while a saved result is shown for it. */
@@ -23,19 +24,16 @@ export interface UpscaleStageState {
 }
 
 /**
- * The stage's state for the upscale tab: which result belongs to the picture on the form, the saved pictures, and
- * Compare. Compare is remembered per job, so a new job starts with it off.
+ * The stage state of an image tab: which result belongs to the picture on the form, the saved pictures, and Compare.
+ * Compare is remembered per job, so a new job starts with it off.
  */
-export function useUpscaleStage(
+export function useResultStage(
   input: InputImage | null,
   lastResult: ImageResult | null,
-): UpscaleStageState {
+): ResultStageState {
   const [compareJobId, setCompareJobId] = useState<string | null>(null);
 
-  const result =
-    lastResult !== null && input !== null && lastResult.inputPath === input.path
-      ? lastResult
-      : null;
+  const result = resultForInput(lastResult, input);
   const savedPath = result?.status === "done" ? result.path : null;
   const pictureShown = savedPath !== null;
 

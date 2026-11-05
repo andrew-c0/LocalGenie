@@ -1,6 +1,6 @@
 /* The stage holds a minimum height, so the controls below it stay in one place whether the stage is empty, shows
    the picture, or shows the running job. The content is centred in it. */
-.upscale-stage {
+.picture-stage {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -9,7 +9,7 @@
 }
 
 /* The empty prompt: a dashed frame the size of the stage, where the picture will go. */
-.upscale-stage__empty {
+.picture-stage__empty {
   display: flex;
   flex: 1 1 auto;
   align-items: center;
@@ -22,6 +22,6 @@
 }
 
 /* The picture's file name under it. It exists only while the input picture is shown. */
-.upscale-stage__name {
+.picture-stage__name {
   overflow-wrap: anywhere;
 }

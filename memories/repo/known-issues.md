@@ -39,7 +39,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - **OCR cancel does not stop the server.** A cancel drops the HTTP request; the GenieX server may keep generating until it notices the closed connection (`ocr_job.rs`). Code-read.
 - **OCR needs the GenieX server running.** The run fails with "Start the GenieX server first" otherwise; the tab can start it. Whether the server loads the OCR model on the first request, and the `compute` / `vit_compute` request fields, are read from the code only (see `geniex-server-behaviour.md` for what is verified).
 - **Duplicated server-start sequence.** `components/playground/OcrPanel/startOcrServer.ts` (called when an OCR model is picked in the header selector; it replaces `useOcrServer`) repeats the start sequence of `shell/Header/useModelLoader.ts` (read server settings, `startServer` on the configured port, `setServerStatus`, `setServerOptions`). Chat has no shared function for it, so a change to one must be mirrored by hand. Code-read; not unified.
-- **Runtime status of the Playground**: text to image, image to image, speech, audio to audio, image upscaling and OCR have been run in the app by the user. Voice cloning is still unverified there; the Runtimes update and uninstall flows have no recorded result.
+- **Runtime status of the Playground**: text to image, image to image (before its 2026-11-05 redesign), speech, audio to audio, image upscaling (before its 2026-11-05 redesign) and OCR have been run in the app by the user. Voice cloning is still unverified there; the Runtimes update and uninstall flows have no recorded result.
 - **OCR page redesign not run in the app** (c84c413, 2026-11-05): the two-column layout, the spinner, the Markdown view and the shared image dialog are unverified. The Markdown view renders the model's text with `MarkdownContent` (no raw HTML), so how the two models' output looks there is unchecked. Code-read; steps in `manual-checklist.md`.
 
 ## Playground selector and downloads (31a9e7c, 2026-11-05; code-read and unit tests written, not run in the app)
@@ -47,13 +47,15 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - A cancelled download reads "Paused" in the drawer for every kind. For a GenieX install cancelled during its silent setup, the label is wrong while the setup runs (see the GenieX section below).
 - The Local models page's Playground list reads four catalogs on mount and shows a failed read as a banner with no Try again (`usePlaygroundLocalModels.ts`); the popover's failed catalog does have a retry.
 
-## Image upscaling redesign (2026-11-05; code-read, not run in the app)
-- The new card (one stage plus controls, Compare, Clear, the info icons) is not run. Steps: `manual-checklist.md`, section "Image upscaling redesign". The committed upscale tab was run by the user (see "Runtime status of the Playground").
-- The hidden input preview (`InputImagePreview`, `hidden` attribute) still mounts and loads, so its `onLoad` reports the picture size. Assumed to work in WebView2; not checked.
-- The input picture is read twice while a result for it shows: the hidden preview and `useUpscaleStage` each call `readInputImage`. Code-read; not measured.
-- Clear returns to the first step and keeps the result in the store. Picking the same file again brings the saved result back (code-read).
-- Unchecked: the controls row and the stage at narrow widths, Compare at the large size in dark and light themes, and the hover and focus tooltips on a blocked Upscale button (`disabledFocusable`).
-- The source comments in `ImageCompare.css` and `UpscaleResult.css` say there is a height cap; there is none (see `codebase-map.md`, drift).
+## Image upscaling and Image to image redesign (2026-11-05; code-read, not run in the app)
+- The new cards (one stage plus controls, Compare, Clear, the info icons; Image to image also the size popover and Advanced settings) are not run. Steps: `manual-checklist.md`, sections "Playground: Image upscaling redesign" and "Playground: Image to image redesign". The committed tabs before this were run by the user (see "Runtime status of the Playground").
+- The input picture is read twice while a result for it shows: the hidden `InputImagePreview` in `PictureStage` and `useResultStage` each call `readInputImage`. Code-read; not measured.
+- The hidden input preview still mounts and loads, so its `onLoad` reports the picture size. Assumed to work in WebView2; not checked.
+- Clear returns to the first step and keeps the result in the store (`clearInputImage`, `clearUpscaleInput`). Picking the same file again brings the saved result back (code-read).
+- Image to image: Advanced settings is unmounted while a job runs (its settings are hidden then), so it closes after each job (code-read).
+- Image to image: the size popover has no disabled state, so it can be changed during a job. The job keeps the size it started with (`startEdit` builds the request when it starts; code-read).
+- Locked fields (CFG on a fixed-CFG model, negative prompt on a model without one) show their reason in a tooltip on a span (`LockedTooltip`), because a disabled control does not react to the pointer. Hover in WebView2 is not checked.
+- Unchecked: the controls row and the stage at narrow widths, Compare at the large size in dark and light themes, the hover and focus tooltips on a blocked Generate or Upscale button (`BlockedReasonButton`, `disabledFocusable`), the Advanced grid alignment, Compare and enlarge on an edit result, Clear and "Use this image as input", Text to image after the shared settings change, and the upscale empty state.
 
 ## GenieX CLI as a runtime (986b5dc; code-read, not run)
 - Install, update and uninstall of the GenieX CLI have not been run in the app. Steps: `manual-checklist.md`. The silent flags, the `unins000.exe` name (Inno Setup's default, assumed by `runtimes/geniex.rs`) and the version poll are not checked against a real install.
@@ -155,6 +157,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - **A failed periodic check hides the hint.** `runtimeStore.checkUpdate` removes the runtime's update entry when a check fails (existing behaviour), so Settings drops the "update available" hint until a later check succeeds. No notice is sent for that runtime in the meantime.
 
 ## Resolved (code-verified; runtime-unverified)
+- The upscale comparison's source comments said there was a height cap, but the code has none. `ImageCompare.css` now says there is none, and `UpscaleResult.css` is deleted with the redesign (`ResultPictureView`, `ImageCompare`; code-verified 2026-11-05, not run).
 - Local page Hugging Face search always returned no results: `search_models` did not ask for `siblings`, and `gguf_models` keeps only models whose file list has a `.gguf`, so every result was dropped. `commands/hub.rs` `search_url` now sends `expand[]=siblings`, and `gguf_models` has a unit test (27e98d1; code-verified, not run in the app).
 - `search_models` parsed the response body before checking the HTTP status. The status is checked first in `commands/hub.rs` (code-verified, not run).
 - The GenieX installer is checked against GitHub's SHA-256 digest before it runs (`runtimes/geniex.rs`, `verify_download`). The old `update_geniex` ran the downloaded installer unchecked, and that command is removed (986b5dc; code-read, not run). A check is skipped when GitHub gives no digest.

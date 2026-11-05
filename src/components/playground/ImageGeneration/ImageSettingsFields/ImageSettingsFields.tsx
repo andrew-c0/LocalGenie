@@ -1,23 +1,9 @@
-import { Field, SpinButton, Switch } from "@fluentui/react-components";
 import type { ImageForm, ImageModel } from "../../../../types";
-import { imageFormControls } from "../../../../utils/playground";
-import {
-  CFG_SCALE_HELP,
-  NEGATIVE_PROMPT_HELP,
-  NEGATIVE_PROMPT_HINT,
-  SEED_HELP,
-  STEPS_HELP,
-} from "../../../../utils/playgroundText";
-import { spinNumber } from "../../../../utils/spinValue";
 import { Flex } from "../../../ui/Flex/Flex";
-import { HelpLabel } from "../../../ui/HelpLabel/HelpLabel";
-import { PromptField } from "../PromptField/PromptField";
 import { ImageSizeSection } from "./ImageSizeSection";
-
-const MAX_STEPS = 150;
-const CFG_MIN = 1;
-const CFG_MAX = 20;
-const CFG_STEP = 0.5;
+import { NegativePromptField } from "./NegativePromptField";
+import { SeedFields } from "./SeedFields";
+import { StepsCfgFields } from "./StepsCfgFields";
 
 interface ImageSettingsFieldsProps {
   form: ImageForm;
@@ -42,17 +28,12 @@ export function ImageSettingsFields({
   sizeStep,
   sizeHint,
 }: ImageSettingsFieldsProps) {
-  const controls = imageFormControls(model);
-
   return (
     <Flex direction="column" gap="m">
-      <PromptField
-        label={<HelpLabel label="Negative prompt" help={NEGATIVE_PROMPT_HELP} />}
-        hint={controls.negativePromptReason ?? NEGATIVE_PROMPT_HINT}
-        disabled={controls.negativePromptReason !== null}
+      <NegativePromptField
         value={form.negativePrompt}
+        model={model}
         onChange={(negativePrompt) => onChange({ negativePrompt })}
-        rows={2}
       />
 
       <ImageSizeSection
@@ -65,49 +46,11 @@ export function ImageSettingsFields({
       />
 
       <Flex gap="m" wrap align="end">
-        <Field label={<HelpLabel label="Steps" help={STEPS_HELP} />}>
-          <SpinButton
-            min={1}
-            max={MAX_STEPS}
-            step={1}
-            value={form.steps}
-            onChange={(_, data) =>
-              onChange({ steps: spinNumber(data, 1, MAX_STEPS) ?? form.steps })
-            }
-          />
-        </Field>
-        <Field
-          label={<HelpLabel label="CFG scale" help={CFG_SCALE_HELP} />}
-          hint={controls.cfgReason ?? undefined}
-        >
-          <SpinButton
-            disabled={controls.cfgReason !== null}
-            min={CFG_MIN}
-            max={CFG_MAX}
-            step={CFG_STEP}
-            precision={1}
-            value={form.cfgScale}
-            onChange={(_, data) =>
-              onChange({ cfgScale: spinNumber(data, CFG_MIN, CFG_MAX) ?? form.cfgScale })
-            }
-          />
-        </Field>
+        <StepsCfgFields form={form} model={model} onChange={onChange} />
       </Flex>
 
       <Flex gap="m" wrap align="end">
-        <Switch
-          label="Random seed"
-          checked={form.randomSeed}
-          onChange={(_, data) => onChange({ randomSeed: data.checked })}
-        />
-        <Field label={<HelpLabel label="Seed" help={SEED_HELP} />}>
-          <SpinButton
-            disabled={form.randomSeed}
-            step={1}
-            value={form.seed}
-            onChange={(_, data) => onChange({ seed: spinNumber(data) ?? form.seed })}
-          />
-        </Field>
+        <SeedFields form={form} onChange={onChange} />
       </Flex>
     </Flex>
   );

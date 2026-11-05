@@ -7,7 +7,7 @@ Run through these checks manually after building or deploying the app. Automated
 Limits are in `known-issues.md` ("Image upscaling redesign").
 
 Empty and first step:
-- [ ] The card header shows "Scale 4x" with an info icon (hover: the fixed 4x note) and no Compare button. The body shows the dashed "Choose a picture to upscale it here." frame.
+- [ ] Before a result the card header shows "Scale 4x" with its info icon and no Compare button. The body shows the dashed "Choose a picture to upscale it here." frame.
 - [ ] The controls row: "Choose image" with an info icon (hover: the PNG or JPG hint) on the left; Upscale on the right.
 - [ ] With no model or no picture, Upscale is disabled and still focusable: hover or Tab to it shows the reason.
 
@@ -26,9 +26,42 @@ Result:
 - [ ] A failed or cancelled job shows its message in the stage with the input preview above it.
 
 Shared pieces:
-- [ ] Image to image: the picker's hint, preview size (capped), name line and Choose image look as before.
 - [ ] Help labels (compute and generate fields) show their text on hover and focus.
 - [ ] Light and dark themes: the Compare labels and handle are readable. Narrow window: the controls row wraps without overlap.
+
+## Playground: Image to image redesign (2026-11-05; not run, none ticked)
+
+Limits are in `known-issues.md` ("Image upscaling and Image to image redesign").
+
+Empty and input:
+- [ ] One card, "Edit image": the header has the "W x H" size button and no Compare button. The body shows the dashed "Choose a picture to edit it here." frame, with Choose image and its info icon (hover: the PNG or JPG hint) on the left and Generate with its info icon (hover: the time note) on the right.
+- [ ] With no model or no picture, Generate is disabled and still focusable: hover or Tab to it shows the reason.
+- [ ] The size button opens the size popover; the button text follows the width and height.
+- [ ] Choosing a picture shows it large across the card with its file name under it. A tall picture is not capped in height. Choose image and Generate stay on the controls row.
+
+Settings:
+- [ ] Advanced settings is collapsed at first. Opened: the negative prompt, then one row with Steps, CFG scale and Seed (the Random seed switch beside the seed box). For SD 1.5 (re-draw) Strength comes last in the row. The boxes line up; the row wraps in a narrow window.
+- [ ] FLUX.2 klein (no negative prompt, fixed CFG): the negative prompt and CFG boxes are locked, and hovering them shows the reason.
+- [ ] Advanced settings closes again after a job (expected from code).
+
+Job:
+- [ ] While a job runs, the picture is replaced by the progress block with Cancel; the settings and the controls row are hidden.
+- [ ] After Cancel or a failure, the picture, settings and controls return, with the message in the stage above them.
+- [ ] The size button can be changed during a job; the job keeps the size it started with (expected from code).
+
+Result:
+- [ ] After a success, the settings and the Generate row are replaced by the result row: timer and duration, a device icon (hover: "Computed on ..."), the seed with Use seed, and a folder icon (hover: the saved path) on the left; Show in folder, Use this image as input and Clear on the right.
+- [ ] Click the result: it opens larger; Open location works.
+- [ ] Compare is off until both pictures have loaded, then enabled. Input and Result labels show; the divider moves by drag and by the keys; Compare off returns to the single picture; the box does not jump.
+- [ ] Use seed sets the seed and turns Random seed off.
+- [ ] Use this image as input: the result becomes the input with its size; the settings return; the form is kept.
+- [ ] Clear: returns to the picker, with the form and settings kept. Choosing the same file again shows its saved result again (expected from code).
+- [ ] Leave the tab during and after a job: the stage matches the job or the saved result.
+
+Shared with Text to image and Image upscaling:
+- [ ] Text to image: Steps and CFG scale share one row, with Seed and its switch after them; locked CFG and negative prompt show their reasons on hover; no helper line sits under the boxes.
+- [ ] Image upscaling: the empty frame shows; Compare appears in the header only after a result; Show in folder and Clear work.
+- [ ] Light and dark themes: the Compare labels and handle are readable.
 
 ## Playground selector, Playground downloads and installed Playground models (31a9e7c, 2026-11-05; not run, none ticked)
 

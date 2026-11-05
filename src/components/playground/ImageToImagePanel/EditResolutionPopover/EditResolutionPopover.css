@@ -1,0 +1,4 @@
+/* The size editor needs room for its two fields and the preset buttons, without stretching across the window. */
+.edit-resolution__body {
+  width: min(360px, 80vw);
+}

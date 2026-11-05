@@ -8,25 +8,31 @@ import {
   resultOfKind,
   upscaleBlockedReason,
 } from "../../../utils/upscale";
-import { UPSCALE_RUNTIME_PURPOSE, UPSCALE_SECTION_TITLE } from "../../../utils/upscaleText";
+import {
+  UPSCALE_RESULT_COPY,
+  UPSCALE_RUNTIME_PURPOSE,
+  UPSCALE_SECTION_TITLE,
+  UPSCALE_STAGE_EMPTY_MESSAGE,
+} from "../../../utils/upscaleText";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../ui/Flex/Flex";
 import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
+import { CompareToggle } from "../CompareToggle/CompareToggle";
 import { newImageJobId, useImageGeneration } from "../ImageGeneration/useImageGeneration";
 import { useInputImagePicker } from "../ImageToImagePanel/InputImagePicker/useInputImagePicker";
 import { PickModelHint } from "../PickModelHint/PickModelHint";
+import { PictureStage } from "../PictureStage/PictureStage";
 import { RuntimeNotice } from "../RuntimeNotice/RuntimeNotice";
+import { useResultStage } from "../useResultStage";
 import { useRuntimeCheck } from "../useRuntimeCheck";
-import { UpscaleCompareToggle } from "./UpscaleCompareToggle";
 import { UpscaleForm } from "./UpscaleForm";
+import { UpscaleProgress } from "./UpscaleProgress/UpscaleProgress";
 import { UpscaleScale } from "./UpscaleScale";
-import { UpscaleStage } from "./UpscaleStage/UpscaleStage";
 import { useUpscale } from "./useUpscale";
-import { useUpscaleStage } from "./useUpscaleStage";
 
 /**
- * Image upscaling (CPU only): one card with the picture picker, the fixed 4x note and Upscale, and below them the
- * stage that shows the input, the running job or the result. The upscaling model is picked in the header's selector.
+ * Image upscaling (CPU only): one card with the picture stage on top and the controls below it. The upscaling model
+ * is picked in the header's selector.
  */
 export default function ImageUpscalingPanel() {
   const runtime = useRuntimeCheck(SD_CPP_RUNTIME_ID);
@@ -46,7 +52,7 @@ export default function ImageUpscalingPanel() {
     "upscale",
   );
   const picker = useInputImagePicker(setInput);
-  const stage = useUpscaleStage(input, lastResult);
+  const stage = useResultStage(input, lastResult);
 
   const selected = models?.find((m) => m.id === selectedModelId) ?? null;
   const blockedReason = upscaleBlockedReason({
@@ -77,7 +83,7 @@ export default function ImageUpscalingPanel() {
             <Flex gap="m" align="center">
               <UpscaleScale />
               {stage.pictureShown && (
-                <UpscaleCompareToggle
+                <CompareToggle
                   checked={stage.comparing}
                   disabled={!stage.compareReady}
                   onToggle={stage.toggleCompare}
@@ -87,14 +93,15 @@ export default function ImageUpscalingPanel() {
           }
         >
           <Flex direction="column" gap="m">
-            <UpscaleStage
+            <PictureStage
               input={input}
-              job={job}
+              jobRunning={job !== null}
+              progress={job && <UpscaleProgress job={job} onCancel={cancel} />}
+              emptyMessage={UPSCALE_STAGE_EMPTY_MESSAGE}
+              copy={UPSCALE_RESULT_COPY}
               stage={stage}
-              onCancel={cancel}
               onSourceSize={setInputSize}
             />
-
             <UpscaleForm
               input={input}
               pickerError={picker.error}

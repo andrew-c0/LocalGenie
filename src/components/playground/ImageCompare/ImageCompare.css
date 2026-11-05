@@ -15,13 +15,16 @@
   user-select: none;
 }
 
-/* Both pictures sit on the box, not in the flow. Clicks and drags go to the box, so the pictures ignore the pointer. */
+/* Both pictures sit on the box, not in the flow. Clicks and drags go to the box, so the pictures ignore the pointer.
+   Both are stretched to the box (fill, not contain): an edit result can differ slightly in shape from its input, and
+   contain would leave a strip of the other picture showing at the edge. A small stretch keeps every detail at the
+   same place in both pictures, which is what the divider compares. */
 .image-compare__picture {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: fill;
   pointer-events: none;
 }
 

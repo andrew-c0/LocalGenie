@@ -1,0 +1,4 @@
+/* The span takes the width of the control it wraps, so a full-width box stays full width. */
+.locked-tooltip {
+  display: block;
+}

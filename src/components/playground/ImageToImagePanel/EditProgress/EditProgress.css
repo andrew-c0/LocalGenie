@@ -1,0 +1,4 @@
+/* The stages, the bar and the times form one block, no wider than a short list. The stage holds the height. */
+.edit-progress__content {
+  width: min(100%, 420px);
+}

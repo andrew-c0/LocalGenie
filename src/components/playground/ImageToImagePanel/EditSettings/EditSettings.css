@@ -1,0 +1,6 @@
+/* The strength slider is compact, so it fits in the settings row after the seed. It is as tall as the boxes
+   beside it: the slider centres on the box line, and the label above lines up with their labels. */
+.edit-settings__strength {
+  width: 200px;
+  max-width: 100%;
+}
