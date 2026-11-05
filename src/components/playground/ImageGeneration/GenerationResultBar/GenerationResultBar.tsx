@@ -2,32 +2,38 @@ import { Button } from "@fluentui/react-components";
 import { DesktopRegular, FolderRegular, TimerRegular } from "@fluentui/react-icons";
 import type { ImageResult, PlaygroundDevice } from "../../../../types";
 import { formatDuration } from "../../../../utils/format";
+import { deviceSummaryLabel } from "../../../../utils/playground";
+import type { ResultBarCopy } from "../../../../utils/playgroundText";
 import {
   COMPUTED_ON_LABEL,
   computedOnLabel,
-  EDIT_RESULT_TIME_LABEL,
-  editedInLabel,
   SAVED_PATH_LABEL,
   seedLabel,
   USE_SEED_LABEL,
-} from "../../../../utils/imageToImageText";
-import { deviceSummaryLabel } from "../../../../utils/playground";
+} from "../../../../utils/playgroundText";
 import { Flex } from "../../../ui/Flex/Flex";
 import { InfoTooltip } from "../../../ui/InfoTooltip/InfoTooltip";
 import { Meta } from "../../../ui/Typography/Typography";
 
-interface EditResultBarProps {
+interface GenerationResultBarProps {
   result: ImageResult;
   /** Names the device the result ran on. Empty until the devices have been read. */
   devices: PlaygroundDevice[] | null;
   onUseSeed: (seed: number) => void;
+  /** The time tooltip's wording, which differs by tab. */
+  copy: ResultBarCopy;
 }
 
 /**
- * What the last edit says about itself, beside the picker: how long it took, where it ran, its seed (with Use seed) and
- * where it was saved. The time, device and path are icons with tooltips, so the row stays one line.
+ * What a finished image says about itself, shared by both image tabs: how long it took, the device it ran on, its seed
+ * (shown, with Use seed) and where it was saved. The time, device and path are icons with tooltips.
  */
-export function EditResultBar({ result, devices, onUseSeed }: EditResultBarProps) {
+export function GenerationResultBar({
+  result,
+  devices,
+  onUseSeed,
+  copy,
+}: GenerationResultBarProps) {
   const duration = result.seconds === null ? null : formatDuration(result.seconds * 1000);
   const seed = result.seed;
 
@@ -36,8 +42,8 @@ export function EditResultBar({ result, devices, onUseSeed }: EditResultBarProps
       {duration !== null && (
         <Flex gap="xs" align="center">
           <InfoTooltip
-            label={EDIT_RESULT_TIME_LABEL}
-            help={editedInLabel(duration)}
+            label={copy.timeLabel}
+            help={copy.timeHelp(duration)}
             icon={<TimerRegular aria-hidden />}
           />
           <Meta>{duration}</Meta>

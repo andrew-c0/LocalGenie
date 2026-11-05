@@ -1,6 +1,7 @@
 import { usePlaygroundStore } from "../../../stores/playgroundStore";
 import { SD_CPP_NAME, SD_CPP_RUNTIME_ID } from "../../../utils/playground";
 import { runtimeMissingMessage } from "../../../utils/playgroundText";
+import { resultForInput } from "../../../utils/resultStage";
 import {
   buildUpscaleRequest,
   jobOfKind,
@@ -52,7 +53,7 @@ export default function ImageUpscalingPanel() {
     "upscale",
   );
   const picker = useInputImagePicker(setInput);
-  const stage = useResultStage(input, lastResult);
+  const stage = useResultStage(resultForInput(lastResult, input));
 
   const selected = models?.find((m) => m.id === selectedModelId) ?? null;
   const blockedReason = upscaleBlockedReason({

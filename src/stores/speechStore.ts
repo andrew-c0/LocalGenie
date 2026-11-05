@@ -10,6 +10,7 @@ import type {
   SpeechResult,
 } from "../types";
 import { DEFAULT_ENHANCE_KIND } from "../utils/audioEnhance";
+import { SPEECH_KINDS_BY_TOOL, type SpeechToolId } from "../utils/playgroundReset";
 import {
   clearDeletedSelection,
   DEFAULT_SPEECH_FORM,
@@ -48,6 +49,12 @@ interface SpeechState {
   setAudio: (audio: SpeechAudioInput | null) => void;
   setForm: (patch: Partial<SpeechForm>) => void;
   setEnhanceKind: (kind: EnhanceKind) => void;
+
+  /**
+   * Clears the finished results of one speech tool. The shared audio is cleared too, unless `keepAudio` (the user moves
+   * to another speech tool) or a speech job runs, which still reads it. A running job is not touched.
+   */
+  resetSpeechWork: (tool: SpeechToolId, keepAudio: boolean) => void;
 
   /** Start a job and clear the previous result of its kind. */
   startJob: (job: SpeechJob) => void;
@@ -92,6 +99,14 @@ export const useSpeechStore = create<SpeechState>((set) => ({
   setForm: (patch) => set((state) => ({ form: { ...state.form, ...patch } })),
 
   setEnhanceKind: (enhanceKind) => set({ enhanceKind }),
+
+  resetSpeechWork: (tool, keepAudio) =>
+    set((state) => {
+      const results = { ...state.results };
+      for (const kind of SPEECH_KINDS_BY_TOOL[tool]) results[kind] = null;
+      const audioInUse = keepAudio || state.job !== null;
+      return { results, audio: audioInUse ? state.audio : null };
+    }),
 
   startJob: (job) =>
     set((state) => ({

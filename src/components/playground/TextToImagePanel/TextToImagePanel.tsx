@@ -6,17 +6,27 @@ import {
   SD_CPP_NAME,
   SD_CPP_RUNTIME_ID,
 } from "../../../utils/playground";
-import { runtimeMissingMessage } from "../../../utils/playgroundText";
+import {
+  GENERATE_PROGRESS_LABEL,
+  GENERATE_RESULT_COPY,
+  GENERATE_SECTION_TITLE,
+  runtimeMissingMessage,
+  TEXT_STAGE_EMPTY_MESSAGE,
+} from "../../../utils/playgroundText";
+import { textResultOf } from "../../../utils/resultStage";
 import { jobOfKind, resultOfKind } from "../../../utils/upscale";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../ui/Flex/Flex";
 import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
-import GeneratedImage from "../ImageGeneration/GeneratedImage/GeneratedImage";
-import GenerationProgress from "../ImageGeneration/GenerationProgress/GenerationProgress";
+import { ImageJobProgress } from "../ImageGeneration/ImageJobProgress/ImageJobProgress";
 import { newImageJobId, useImageGeneration } from "../ImageGeneration/useImageGeneration";
 import { PickModelHint } from "../PickModelHint/PickModelHint";
+import { PictureStage } from "../PictureStage/PictureStage";
+import { ResolutionPopover } from "../ResolutionPopover/ResolutionPopover";
 import { RuntimeNotice } from "../RuntimeNotice/RuntimeNotice";
+import { useResultStage } from "../useResultStage";
 import { useRuntimeCheck } from "../useRuntimeCheck";
+import { GenerateControls } from "./GenerateControls/GenerateControls";
 import GenerateForm from "./GenerateForm/GenerateForm";
 
 interface TextToImagePanelProps {
@@ -24,7 +34,10 @@ interface TextToImagePanelProps {
   onOpenImageToImage: () => void;
 }
 
-/** Text to image: the form, the running image and the last result. The model is picked in the header's selector. */
+/**
+ * Text to image: one card with the picture stage on top (the running job or the last result), then the prompt and the
+ * settings, then the controls. The model is picked in the header's selector.
+ */
 export default function TextToImagePanel({ onOpenImageToImage }: TextToImagePanelProps) {
   const runtime = useRuntimeCheck(SD_CPP_RUNTIME_ID);
   const { generate, cancel: cancelJob } = useImageGeneration();
@@ -40,10 +53,11 @@ export default function TextToImagePanel({ onOpenImageToImage }: TextToImagePane
     usePlaygroundStore((s) => s.job),
     "generate",
   );
-  const result = resultOfKind(
+  const lastResult = resultOfKind(
     usePlaygroundStore((s) => s.result),
     "generate",
   );
+  const stage = useResultStage(textResultOf(lastResult));
 
   const selected = models?.find((m) => m.id === selectedModelId) ?? null;
   const blockedReason = generateBlockedReason({
@@ -52,8 +66,11 @@ export default function TextToImagePanel({ onOpenImageToImage }: TextToImagePane
     prompt: form.prompt,
     jobRunning: job !== null,
   });
-  // The image to image tab shows its own results, so this tab shows only the text to image ones.
-  const textResult = result?.inputPath ? null : result;
+  const shownResult = stage.pictureShown ? stage.result : null;
+
+  const startGenerate = () => {
+    if (selected) generate(buildImageRequest(newImageJobId(), selected, form), form, null);
+  };
 
   const useResultAsInput = (path: string) => {
     setInputImage({ path, name: inputFileName(path), sourceSize: null });
@@ -70,29 +87,47 @@ export default function TextToImagePanel({ onOpenImageToImage }: TextToImagePane
       {models && selected === null && <PickModelHint />}
 
       {models && (
-        <>
-          <SurfaceCard title="Generate">
-            <GenerateForm
-              form={form}
-              model={selected}
+        <SurfaceCard
+          title={GENERATE_SECTION_TITLE}
+          action={
+            <ResolutionPopover
+              width={form.width}
+              height={form.height}
+              nativeSize={selected?.defaults ?? null}
               onChange={setForm}
-              blockedReason={blockedReason}
-              onGenerate={() => {
-                if (selected)
-                  generate(buildImageRequest(newImageJobId(), selected, form), form, null);
-              }}
             />
-          </SurfaceCard>
-          {job && <GenerationProgress job={job} onCancel={cancelJob} />}
-          {textResult && (
-            <GeneratedImage
-              result={textResult}
-              devices={devices}
-              onUseSeed={applySeed}
-              onUseAsInput={useResultAsInput}
+          }
+        >
+          <Flex direction="column" gap="m">
+            <PictureStage
+              input={null}
+              jobRunning={job !== null}
+              progress={
+                job && (
+                  <ImageJobProgress
+                    job={job}
+                    label={GENERATE_PROGRESS_LABEL}
+                    onCancel={cancelJob}
+                  />
+                )
+              }
+              emptyMessage={TEXT_STAGE_EMPTY_MESSAGE}
+              copy={GENERATE_RESULT_COPY}
+              stage={stage}
             />
-          )}
-        </>
+            {job === null && <GenerateForm form={form} model={selected} onChange={setForm} />}
+            {job === null && (
+              <GenerateControls
+                result={shownResult}
+                blockedReason={blockedReason}
+                devices={devices}
+                onGenerate={startGenerate}
+                onUseSeed={applySeed}
+                onUseAsInput={useResultAsInput}
+              />
+            )}
+          </Flex>
+        </SurfaceCard>
       )}
     </Flex>
   );

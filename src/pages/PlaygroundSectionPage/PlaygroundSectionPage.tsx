@@ -7,20 +7,15 @@ import OcrPanel from "../../components/playground/OcrPanel/OcrPanel";
 import SpeechToTextPanel from "../../components/playground/SpeechToTextPanel/SpeechToTextPanel";
 import TextToImagePanel from "../../components/playground/TextToImagePanel/TextToImagePanel";
 import TextToSpeechPanel from "../../components/playground/TextToSpeechPanel/TextToSpeechPanel";
+import { usePlaygroundTabReset } from "../../components/playground/usePlaygroundTabReset";
 import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
 import { useRuntimeLocks } from "../../hooks/useRuntimeLocks";
 import { routeById } from "../../navigation/routeUtils";
+import type { PlaygroundToolId } from "../../utils/playgroundReset";
 import "./PlaygroundSectionPage.css";
 
 /** The Playground tools, by route id. Each route in `Navigation.tsx` names one of them. */
-export type PlaygroundRouteId =
-  | "playground-text-to-image"
-  | "playground-image-to-image"
-  | "playground-image-upscaling"
-  | "playground-ocr"
-  | "playground-speech-to-text"
-  | "playground-text-to-speech"
-  | "playground-audio-to-audio";
+export type PlaygroundRouteId = PlaygroundToolId;
 
 interface ToolPanel {
   /** The panel shows its own notice when its runtime is missing. Without one, a locked tool goes back to the landing. */
@@ -51,6 +46,7 @@ export default function PlaygroundSectionPage({ routeId }: { routeId: Playground
   const navigate = useNavigate();
   const lockedReason = useRuntimeLocks();
   const route = routeById(routeId);
+  usePlaygroundTabReset(routeId);
   const { ownsRuntimeNotice, render } = PANELS[routeId];
 
   if (route?.needs && lockedReason(route.needs) !== null && !ownsRuntimeNotice) {

@@ -4,7 +4,7 @@ Run through these checks manually after building or deploying the app. Automated
 
 ## Playground: Image upscaling redesign (2026-11-05; not run, none ticked)
 
-Limits are in `known-issues.md` ("Image upscaling redesign").
+Limits are in `known-issues.md` ("Image upscaling and Image to image redesign").
 
 Empty and first step:
 - [ ] Before a result the card header shows "Scale 4x" with its info icon and no Compare button. The body shows the dashed "Choose a picture to upscale it here." frame.
@@ -62,6 +62,34 @@ Shared with Text to image and Image upscaling:
 - [ ] Text to image: Steps and CFG scale share one row, with Seed and its switch after them; locked CFG and negative prompt show their reasons on hover; no helper line sits under the boxes.
 - [ ] Image upscaling: the empty frame shows; Compare appears in the header only after a result; Show in folder and Clear work.
 - [ ] Light and dark themes: the Compare labels and handle are readable.
+
+## Playground: Text to image redesign, tab reset and the rail (2026-11-05; not run, none ticked)
+
+Limits are in `known-issues.md` ("Text to image redesign, tab reset and rail").
+
+Text to image:
+- [ ] One card, "Generate": the header has the "W x H" size button; a click opens the size popover, with the step of 8 and the native-size hint.
+- [ ] Before a job the picture area shows the dashed "The generated picture appears here." frame. Below it: the Prompt, the collapsed "Advanced settings", and the controls row with Generate and its info icon (hover: the time note) on the right.
+- [ ] With no model or no prompt, Generate is disabled and still focusable: hover or Tab to it shows the reason.
+- [ ] Advanced settings opened: the negative prompt, then Steps, CFG scale and Seed in one row (no Strength). A locked field shows its reason on hover.
+- [ ] While a job runs, the picture area shows the progress with Cancel; the prompt, settings and controls are hidden. Advanced settings is closed after the job (expected from code).
+- [ ] After a success: the picture shows large and opens larger on click; there is no Compare. The controls row shows the time, device icon, seed with Use seed and folder icon on the left; Show in folder and Use this image as input on the right; no Clear. The prompt and settings are visible below.
+- [ ] Use this image as input: Image to image opens with the picture as its input, and its settings are kept.
+- [ ] After Cancel or a failure, the message shows in the picture area and the previous picture is gone (expected from code).
+- [ ] Changing the size during a job does not change the running job (expected from code).
+
+Tab reset:
+- [ ] Generate a text picture, go to Image to image, then back to Text to image: the earlier text picture is gone; the prompt and settings are kept.
+- [ ] Choose a picture in Image to image, go to Chat, then come back: the picture is gone; the model selection is kept.
+- [ ] Use this image as input from Text to image: the picture stays in Image to image after the switch.
+- [ ] Speech to text with a recording, then Text to speech: the audio stays, and the transcript is gone. Then Overview, back to Text to speech: the audio is gone.
+- [ ] OCR: a picture and its text are gone after switching to another Playground tool; the mode and compute choices are kept.
+- [ ] Leave a tool during a job and come back: the job's progress or result and its picture are still there.
+- [ ] The speech audio check shows whether the page stays mounted between speech tools; this is not known from the code.
+
+Sidebar rail:
+- [ ] Collapsed rail: the icons sit in one column, centred, level with the brand and toggle buttons.
+- [ ] Collapse and expand several times, and after a rail click on another page: the selection indicator sits on the selected page each time.
 
 ## Playground selector, Playground downloads and installed Playground models (31a9e7c, 2026-11-05; not run, none ticked)
 

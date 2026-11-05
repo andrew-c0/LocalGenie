@@ -1,6 +1,5 @@
 import { Button } from "@fluentui/react-components";
 import type { ImageJob } from "../../../../types";
-import { EDIT_PROGRESS_LABEL } from "../../../../utils/imageToImageText";
 import {
   formatElapsed,
   generationEtaLabel,
@@ -9,19 +8,24 @@ import {
 import { Flex } from "../../../ui/Flex/Flex";
 import { ProgressBar } from "../../../ui/ProgressBar/ProgressBar";
 import { Meta } from "../../../ui/Typography/Typography";
-import { GenerationPhaseList } from "../../ImageGeneration/GenerationProgress/GenerationPhaseList/GenerationPhaseList";
 import { useNow } from "../../useNow";
-import "./EditProgress.css";
+import { GenerationPhaseList } from "../GenerationProgress/GenerationPhaseList/GenerationPhaseList";
+import "./ImageJobProgress.css";
 
 const CLOCK_TICK_MS = 1000;
 
-interface EditProgressProps {
+interface ImageJobProgressProps {
   job: ImageJob;
+  /** The accessible name of the progress block, e.g. "Generating". */
+  label: string;
   onCancel: () => void;
 }
 
-/** The running edit in the stage: its stages, one bar, the elapsed time with the estimate, and Cancel. */
-export function EditProgress({ job, onCancel }: EditProgressProps) {
+/**
+ * A running image job in the stage, for both image tabs: its stages, one bar, the elapsed time with the estimate, and
+ * Cancel. It has no card of its own; the stage holds it.
+ */
+export function ImageJobProgress({ job, label, onCancel }: ImageJobProgressProps) {
   const now = useNow(CLOCK_TICK_MS);
   const eta = generationEtaLabel(job);
 
@@ -32,9 +36,9 @@ export function EditProgress({ job, onCancel }: EditProgressProps) {
       gap="m"
       align="center"
       justify="center"
-      aria-label={EDIT_PROGRESS_LABEL}
+      aria-label={label}
     >
-      <div className="edit-progress__content">
+      <div className="image-job-progress__content">
         <Flex direction="column" gap="m">
           <GenerationPhaseList progress={job} />
           <ProgressBar value={jobProgressPercent(job)} />

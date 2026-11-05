@@ -57,7 +57,10 @@ export default function Sidebar() {
         <SidebarToggle collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
       </Flex>
 
+      {/* Fluent measures the tabs to place the selection indicator. The rail swaps every tab for a different one,
+          so the list is remounted with it; otherwise the indicator keeps the first tab's position. */}
       <TabList
+        key={collapsed ? "rail" : "full"}
         vertical
         aria-label="Main navigation"
         selectedValue={sectionOf(pathname).path}

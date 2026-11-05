@@ -43,6 +43,9 @@ interface OcrState {
   setCompute: (compute: OcrCompute) => void;
   setVisionCompute: (visionCompute: OcrVisionCompute) => void;
 
+  /** Clears the OCR picture and its result. Left alone while an OCR job runs, so the job keeps its picture. */
+  resetOcrWork: () => void;
+
   /** Start a job and clear the previous result. */
   startJob: (job: OcrJob) => void;
   /** Store the result of the running job. A result for any other job is ignored. */
@@ -88,6 +91,8 @@ export const useOcrStore = create<OcrState>((set) => ({
 
   setVisionCompute: (visionCompute) =>
     set((state) => ({ settings: { ...state.settings, visionCompute } })),
+
+  resetOcrWork: () => set((state) => (state.job !== null ? {} : { input: null, result: null })),
 
   startJob: (job) => set({ job, result: null }),
 

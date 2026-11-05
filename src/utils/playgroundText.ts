@@ -13,6 +13,12 @@ export const REVEAL_FAILED_TITLE = "Could not open the folder";
 
 export const OPENING_IMAGE_MESSAGE = "Opening the image…";
 
+/** The result bar's time tooltip: the label of the icon and the sentence that names the duration. */
+export interface ResultBarCopy {
+  timeLabel: string;
+  timeHelp: (duration: string) => string;
+}
+
 /** The corner chips and alt texts of the before and after comparison. */
 export interface CompareCopy {
   before: string;
@@ -28,7 +34,8 @@ export interface ResultCopy {
   notSavedMessage: string;
   enlargeLabel: string;
   outputAlt: string;
-  compare: CompareCopy;
+  /** The comparison copy. Left out by a tab with no input picture, which has no comparison. */
+  compare?: CompareCopy;
 }
 
 export const STEPS_HELP =
@@ -52,8 +59,6 @@ export const SIZE_HINT_WITHOUT_MODEL =
 
 export const MODEL_LOAD_NOTE =
   "The model is loaded when you generate and released when the image is done.";
-
-export const CPU_TIME_NOTE = "CPU generation can take several minutes.";
 
 export const COMPUTE_HELP =
   "Where the image is computed. Auto uses the CPU. GPU (OpenCL, Qualcomm Adreno) is experimental: on small models it can be slower than the CPU, and very small images (around 128 px) may come out blank; it may be faster on larger models. NPU is not supported yet. Only the devices your build reports are listed.";
@@ -113,3 +118,53 @@ export function nativeSizeHint(nativeSizeLabel: string): string {
 export function runtimeMissingMessage(purpose: string, runtimeName: string): string {
   return `${purpose} needs ${runtimeName}. Install it in Settings > Runtimes.`;
 }
+
+export const ADVANCED_SETTINGS_LABEL = "Advanced settings";
+
+export const GENERATE_LABEL = "Generate";
+
+export const GENERATE_PROGRESS_LABEL = "Generating";
+
+/** The text to image stage before any picture has been generated. */
+export const TEXT_STAGE_EMPTY_MESSAGE = "The generated picture appears here.";
+
+export const COMPUTED_ON_LABEL = "Where it was computed";
+
+export const SAVED_PATH_LABEL = "Where the picture was saved";
+
+export const USE_SEED_LABEL = "Use seed";
+
+export const GENERATE_RESULT_COPY: ResultCopy = {
+  failedMessage: "The image could not be generated.",
+  cancelledMessage: "Generation cancelled.",
+  notSavedMessage: "The image was not saved.",
+  enlargeLabel: "Enlarge generated picture",
+  outputAlt: "Generated image",
+};
+
+export const GENERATE_RESULT_BAR_COPY: ResultBarCopy = {
+  timeLabel: "How long it took",
+  timeHelp: (duration) => `Generated in ${duration}`,
+};
+
+/** The size button's text, e.g. "512 x 768". Shared by both image tabs. */
+export function sizeLabel(width: number, height: number): string {
+  return `${width} x ${height}`;
+}
+
+/** The tooltip that names the device a result ran on. */
+export function computedOnLabel(deviceSummary: string): string {
+  return `Computed on ${deviceSummary}`;
+}
+
+export function seedLabel(seed: number): string {
+  return `Seed ${seed}`;
+}
+
+export const GENERATE_SECTION_TITLE = "Generate";
+
+export const GENERATE_PROMPT_LABEL = "Prompt";
+
+export const GENERATE_PROMPT_PLACEHOLDER = "Describe the image";
+
+export const GENERATE_TIME_INFO_LABEL = "About the generation time";

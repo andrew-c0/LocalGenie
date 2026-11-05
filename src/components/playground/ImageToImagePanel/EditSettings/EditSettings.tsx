@@ -1,20 +1,11 @@
-import {
-  Accordion,
-  AccordionHeader,
-  AccordionItem,
-  AccordionPanel,
-} from "@fluentui/react-components";
 import type { ImageForm, ImageModel } from "../../../../types";
 import { editPromptLabel } from "../../../../utils/imageToImage";
 import {
-  EDIT_ADVANCED_LABEL,
   PROMPT_PLACEHOLDER_INIT,
   PROMPT_PLACEHOLDER_REFERENCE,
 } from "../../../../utils/imageToImageText";
 import { Flex } from "../../../ui/Flex/Flex";
-import { NegativePromptField } from "../../ImageGeneration/ImageSettingsFields/NegativePromptField";
-import { SeedFields } from "../../ImageGeneration/ImageSettingsFields/SeedFields";
-import { StepsCfgFields } from "../../ImageGeneration/ImageSettingsFields/StepsCfgFields";
+import { AdvancedSettings } from "../../ImageGeneration/AdvancedSettings/AdvancedSettings";
 import { PromptField } from "../../ImageGeneration/PromptField/PromptField";
 import { StrengthField } from "./StrengthField";
 import "./EditSettings.css";
@@ -31,9 +22,8 @@ interface EditSettingsProps {
 }
 
 /**
- * The edit settings below the picture: the prompt, and an accordion (closed at first) with the rest: for a re-draw
- * model the negative prompt, then one row with steps, CFG scale, seed and the strength. The parent hides all of it while a job
- * runs or a result shows.
+ * The edit settings below the picture: the prompt, then the shared advanced settings. For a re-draw model the strength
+ * joins the settings row. The parent hides all of it while a job runs or a result shows.
  */
 export function EditSettings({
   form,
@@ -53,29 +43,18 @@ export function EditSettings({
         rows={PROMPT_ROWS}
         placeholder={kind === "reference" ? PROMPT_PLACEHOLDER_REFERENCE : PROMPT_PLACEHOLDER_INIT}
       />
-      <Accordion collapsible>
-        <AccordionItem value="advanced">
-          <AccordionHeader>{EDIT_ADVANCED_LABEL}</AccordionHeader>
-          <AccordionPanel>
-            <Flex direction="column" gap="m">
-              <NegativePromptField
-                value={form.negativePrompt}
-                model={model}
-                onChange={(negativePrompt) => onChange({ negativePrompt })}
-              />
-              <Flex gap="m" wrap align="start">
-                <StepsCfgFields form={form} model={model} onChange={onChange} />
-                <SeedFields form={form} onChange={onChange} />
-                {kind === "init" && (
-                  <div className="edit-settings__strength">
-                    <StrengthField value={strength} onChange={onStrengthChange} />
-                  </div>
-                )}
-              </Flex>
-            </Flex>
-          </AccordionPanel>
-        </AccordionItem>
-      </Accordion>
+      <AdvancedSettings
+        form={form}
+        model={model}
+        onChange={onChange}
+        extra={
+          kind === "init" && (
+            <div className="edit-settings__strength">
+              <StrengthField value={strength} onChange={onStrengthChange} />
+            </div>
+          )
+        }
+      />
     </Flex>
   );
 }

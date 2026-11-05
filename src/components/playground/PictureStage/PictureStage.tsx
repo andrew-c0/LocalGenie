@@ -8,6 +8,7 @@ import type { ResultStageState } from "../useResultStage";
 import "./PictureStage.css";
 
 interface PictureStageProps {
+  /** The input picture. Null tabs with no input picture, such as text to image, leave it out. */
   input: InputImage | null;
   /** A job runs for this tab. The input is hidden while it does. */
   jobRunning: boolean;
@@ -16,7 +17,8 @@ interface PictureStageProps {
   emptyMessage: string;
   copy: ResultCopy;
   stage: ResultStageState;
-  onSourceSize: (size: ImageSize) => void;
+  /** Reports the input picture's size. Left out by a tab with no input picture. */
+  onSourceSize?: (size: ImageSize) => void;
 }
 
 /**
@@ -33,15 +35,16 @@ export function PictureStage({
   onSourceSize,
 }: PictureStageProps) {
   const hidePreview = jobRunning || stage.pictureShown;
+  const showEmpty = input === null && !jobRunning && stage.result === null;
 
   return (
     <div className="picture-stage">
-      {input === null && (
+      {showEmpty && (
         <div className="picture-stage__empty">
           <Secondary>{emptyMessage}</Secondary>
         </div>
       )}
-      {input && (
+      {input && onSourceSize && (
         <InputImagePreview
           input={input}
           onSourceSize={onSourceSize}

@@ -2,9 +2,9 @@ import type { ImageResult, ImageSize, InputImage, PlaygroundDevice } from "../..
 import {
   EDIT_TIME_INFO_LABEL,
   EDIT_TIME_NOTE,
-  GENERATE_LABEL,
   INPUT_HINT,
 } from "../../../../utils/imageToImageText";
+import { GENERATE_LABEL } from "../../../../utils/playgroundText";
 import { Flex } from "../../../ui/Flex/Flex";
 import { InfoTooltip } from "../../../ui/InfoTooltip/InfoTooltip";
 import { BlockedReasonButton } from "../../BlockedReasonButton/BlockedReasonButton";

@@ -23,6 +23,7 @@ import {
   keepDeviceSelection,
   keepInstalledSelection,
 } from "../utils/playground";
+import { type ImageWorkKind, imageWorkKind } from "../utils/playgroundReset";
 
 /**
  * Playground state, kept across page visits. It holds the model catalog, the selection, the form,
@@ -87,11 +88,32 @@ interface PlaygroundState {
   clearUpscaleInput: () => void;
   setUpscaleInputSize: (size: ImageSize) => void;
 
+  /** Clears text to image's finished result. A running text to image job is left alone. */
+  resetTextToImageWork: () => void;
+  /** Clears image to image's picked picture and its finished edit. A running edit is left alone. */
+  resetImageToImageWork: () => void;
+  /** Clears the upscaling picture and its finished result. A running upscale is left alone. */
+  resetUpscaleWork: () => void;
+
   /** Start a job and clear the previous result. */
   startJob: (job: ImageJob) => void;
   setJobProgress: (progress: PlaygroundImageProgress) => void;
   /** Store the result of the running job, with the job's device and input. A result for any other job is ignored. */
   finishJob: (result: ImageOutcome) => void;
+}
+
+/**
+ * The patch that clears one image tool's work: its finished result, and `extra` (its picked picture). A running job
+ * of the tool keeps everything, so it finishes in the background and its picture is still there when the user returns.
+ */
+function clearImageToolWork(
+  state: Pick<PlaygroundState, "job" | "result">,
+  tool: ImageWorkKind,
+  extra: Partial<PlaygroundState>,
+): Partial<PlaygroundState> {
+  if (imageWorkKind(state.job) === tool) return {};
+  const finished = imageWorkKind(state.result) === tool ? { result: null } : {};
+  return { ...extra, ...finished };
 }
 
 /** The model the selection points at, when it is in the catalog. */
@@ -195,6 +217,14 @@ export const usePlaygroundStore = create<PlaygroundState>((set) => ({
     set((state) =>
       state.upscaleInput ? { upscaleInput: { ...state.upscaleInput, sourceSize: size } } : {},
     ),
+
+  resetTextToImageWork: () => set((state) => clearImageToolWork(state, "text", {})),
+
+  resetImageToImageWork: () =>
+    set((state) => clearImageToolWork(state, "edit", { inputImage: null })),
+
+  resetUpscaleWork: () =>
+    set((state) => clearImageToolWork(state, "upscale", { upscaleInput: null })),
 
   startJob: (job) => set({ job, result: null }),
 

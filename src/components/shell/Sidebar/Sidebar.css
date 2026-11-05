@@ -44,7 +44,16 @@
 
 /* The rail's tabs hold only an icon. Fluent lays a tab out for text, so the icon sits to the left;
    centring it needs a rule scoped to the rail, which beats Fluent's own tab styles. */
+/* A vertical tab list sizes each tab to its content and pins it to the left, so in the rail the list is stretched
+   and each tab fills the 40 px between the paddings: the icons then sit in one centred column, level with the
+   brand and toggle buttons above them. */
+.sidebar--collapsed .fui-TabList {
+  align-items: stretch;
+}
+
 .sidebar--collapsed .fui-Tab {
+  box-sizing: border-box;
+  width: 100%;
   justify-content: center;
   padding-inline: 0;
   min-width: 0;
@@ -53,6 +62,10 @@
 /* Wraps each tab so a tooltip can sit on it, and lets the tab fill the rail's width. */
 .sidebar__nav-item {
   display: flex;
+}
+
+.sidebar--collapsed .sidebar__nav-item {
+  width: 100%;
 }
 
 /* The installed-model count on the Models icon in the rail. */

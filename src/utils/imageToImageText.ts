@@ -1,4 +1,4 @@
-import type { CompareCopy, ResultCopy } from "./playgroundText";
+import type { CompareCopy, ResultBarCopy, ResultCopy } from "./playgroundText";
 
 /** Copy for the Playground image to image tab, kept in one place so wording changes stay in one file. */
 
@@ -66,17 +66,7 @@ export const EDIT_TIME_INFO_LABEL = "About the edit time";
 
 export const EDIT_RESULT_TIME_LABEL = "How long it took";
 
-export const COMPUTED_ON_LABEL = "Where it was computed";
-
-export const SAVED_PATH_LABEL = "Where the picture was saved";
-
-export const USE_SEED_LABEL = "Use seed";
-
-export const GENERATE_LABEL = "Generate";
-
 export const CLEAR_INPUT_LABEL = "Clear";
-
-export const EDIT_ADVANCED_LABEL = "Advanced settings";
 
 export const EDIT_COMPARE_COPY: CompareCopy = {
   before: EDIT_BEFORE_LABEL,
@@ -94,21 +84,12 @@ export const EDIT_RESULT_COPY: ResultCopy = {
   compare: EDIT_COMPARE_COPY,
 };
 
-/** The size button's text, e.g. "512 x 768". */
-export function editSizeLabel(width: number, height: number): string {
-  return `${width} x ${height}`;
-}
-
 /** The tooltip of the time icon in the result bar, e.g. "Edited in 1 min 4 s". */
 export function editedInLabel(duration: string): string {
   return `Edited in ${duration}`;
 }
 
-/** The tooltip of the device icon in the result bar. */
-export function computedOnLabel(deviceSummary: string): string {
-  return `Computed on ${deviceSummary}`;
-}
-
-export function seedLabel(seed: number): string {
-  return `Seed ${seed}`;
-}
+export const EDIT_BAR_COPY: ResultBarCopy = {
+  timeLabel: EDIT_RESULT_TIME_LABEL,
+  timeHelp: editedInLabel,
+};

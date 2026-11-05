@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ImageResult, InputImage } from "../types";
-import { resultForInput } from "./resultStage";
+import { resultForInput, textResultOf } from "./resultStage";
 
 const picture = (path: string): InputImage => ({ path, name: "a.png", sourceSize: null });
 
@@ -33,5 +33,20 @@ describe("resultForInput", () => {
   it("shows nothing without a result or without a picture", () => {
     expect(resultForInput(null, picture("C:/in/a.png"))).toBeNull();
     expect(resultForInput(result("C:/in/a.png"), null)).toBeNull();
+  });
+});
+
+describe("textResultOf", () => {
+  it("shows the last result made without an input picture", () => {
+    const text = result(null);
+    expect(textResultOf(text)).toBe(text);
+  });
+
+  it("hides an edit result, which has an input picture", () => {
+    expect(textResultOf(result("C:/in/a.png"))).toBeNull();
+  });
+
+  it("shows nothing without a result", () => {
+    expect(textResultOf(null)).toBeNull();
   });
 });

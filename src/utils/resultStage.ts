@@ -11,3 +11,8 @@ export function resultForInput(
   if (lastResult === null || input === null) return null;
   return lastResult.inputPath === input.path ? lastResult : null;
 }
+
+/** The result to show on text to image: the last result when it was made without an input picture, else null. */
+export function textResultOf(lastResult: ImageResult | null): ImageResult | null {
+  return lastResult !== null && lastResult.inputPath === null ? lastResult : null;
+}

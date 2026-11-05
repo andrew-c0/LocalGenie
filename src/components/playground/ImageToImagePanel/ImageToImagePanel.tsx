@@ -6,16 +6,19 @@ import {
   inputFileName,
 } from "../../../utils/imageToImage";
 import {
+  EDIT_PROGRESS_LABEL,
   EDIT_RESULT_COPY,
   EDIT_SECTION_TITLE,
   EDIT_STAGE_EMPTY_MESSAGE,
 } from "../../../utils/imageToImageText";
 import { SD_CPP_NAME, SD_CPP_RUNTIME_ID } from "../../../utils/playground";
 import { runtimeMissingMessage } from "../../../utils/playgroundText";
+import { resultForInput } from "../../../utils/resultStage";
 import { jobOfKind, resultOfKind } from "../../../utils/upscale";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../ui/Flex/Flex";
 import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
+import { ImageJobProgress } from "../ImageGeneration/ImageJobProgress/ImageJobProgress";
 import { newImageJobId, useImageGeneration } from "../ImageGeneration/useImageGeneration";
 import { PickModelHint } from "../PickModelHint/PickModelHint";
 import { PictureStage } from "../PictureStage/PictureStage";
@@ -24,7 +27,6 @@ import { useResultStage } from "../useResultStage";
 import { useRuntimeCheck } from "../useRuntimeCheck";
 import { EditControls } from "./EditControls/EditControls";
 import { EditHeaderAction } from "./EditHeaderAction";
-import { EditProgress } from "./EditProgress/EditProgress";
 import { EditSettings } from "./EditSettings/EditSettings";
 import { useInputImagePicker } from "./InputImagePicker/useInputImagePicker";
 
@@ -57,7 +59,7 @@ export default function ImageToImagePanel() {
     usePlaygroundStore((s) => s.result),
     "generate",
   );
-  const stage = useResultStage(inputImage, lastResult);
+  const stage = useResultStage(resultForInput(lastResult, inputImage));
 
   const editModels = models ? imageToImageModels(models) : null;
   const selected = editModels?.find((m) => m.id === selectedModelId) ?? null;
@@ -109,7 +111,11 @@ export default function ImageToImagePanel() {
             <PictureStage
               input={inputImage}
               jobRunning={job !== null}
-              progress={job && <EditProgress job={job} onCancel={cancelJob} />}
+              progress={
+                job && (
+                  <ImageJobProgress job={job} label={EDIT_PROGRESS_LABEL} onCancel={cancelJob} />
+                )
+              }
               emptyMessage={EDIT_STAGE_EMPTY_MESSAGE}
               copy={EDIT_RESULT_COPY}
               stage={stage}

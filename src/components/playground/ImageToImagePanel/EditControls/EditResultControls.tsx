@@ -1,10 +1,14 @@
 import { Button } from "@fluentui/react-components";
 import type { ImageResult, PlaygroundDevice } from "../../../../types";
-import { CLEAR_INPUT_LABEL, USE_AS_INPUT_LABEL } from "../../../../utils/imageToImageText";
+import {
+  CLEAR_INPUT_LABEL,
+  EDIT_BAR_COPY,
+  USE_AS_INPUT_LABEL,
+} from "../../../../utils/imageToImageText";
 import { SHOW_IN_FOLDER_LABEL } from "../../../../utils/playgroundText";
 import { Flex } from "../../../ui/Flex/Flex";
+import { GenerationResultBar } from "../../ImageGeneration/GenerationResultBar/GenerationResultBar";
 import { revealSavedImage } from "../../revealSavedImage";
-import { EditResultBar } from "../EditResultBar/EditResultBar";
 
 interface EditResultControlsProps {
   result: ImageResult;
@@ -30,7 +34,12 @@ export function EditResultControls({
 }: EditResultControlsProps) {
   return (
     <Flex gap="m" align="center" justify="between" wrap>
-      <EditResultBar result={result} devices={devices} onUseSeed={onUseSeed} />
+      <GenerationResultBar
+        result={result}
+        devices={devices}
+        onUseSeed={onUseSeed}
+        copy={EDIT_BAR_COPY}
+      />
       <Flex gap="s" align="center" wrap>
         <Button appearance="secondary" onClick={() => revealSavedImage(path)}>
           {SHOW_IN_FOLDER_LABEL}

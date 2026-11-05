@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ImageResult, ImageSize } from "../../../types";
+import { inputFileName } from "../../../utils/imageToImage";
 import type { ResultCopy } from "../../../utils/playgroundText";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
 import { Body } from "../../ui/Typography/Typography";
@@ -41,19 +42,18 @@ export function ResultPictureView({
   const path = result.path;
   if (path === null) return <ErrorBanner message={copy.notSavedMessage} />;
 
-  const fileName = path.split(/[/]/).pop() ?? path;
-
-  return comparing && inputDataUrl && output.dataUrl ? (
+  const compareCopy = copy.compare;
+  return comparing && compareCopy && inputDataUrl && output.dataUrl ? (
     <ImageCompare
       before={inputDataUrl}
       after={output.dataUrl}
       size={size}
       onSize={setSize}
-      copy={copy.compare}
+      copy={compareCopy}
     />
   ) : (
     <ResultPicture
-      title={fileName}
+      title={inputFileName(path)}
       dataUrl={output.dataUrl}
       error={output.error}
       alt={copy.outputAlt}

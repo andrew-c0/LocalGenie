@@ -1,7 +1,9 @@
 import type { ImageSize } from "../../../types";
+import { EDIT_SIZE_STEP } from "../../../utils/imageToImage";
+import { EDIT_SIZE_HINT } from "../../../utils/imageToImageText";
 import { Flex } from "../../ui/Flex/Flex";
 import { CompareToggle } from "../CompareToggle/CompareToggle";
-import { EditResolutionPopover } from "./EditResolutionPopover/EditResolutionPopover";
+import { ResolutionPopover } from "../ResolutionPopover/ResolutionPopover";
 
 interface EditHeaderActionProps {
   width: number;
@@ -29,11 +31,13 @@ export function EditHeaderAction({
 }: EditHeaderActionProps) {
   return (
     <Flex gap="m" align="center">
-      <EditResolutionPopover
+      <ResolutionPopover
         width={width}
         height={height}
         nativeSize={nativeSize}
         onChange={onSizeChange}
+        step={EDIT_SIZE_STEP}
+        hint={EDIT_SIZE_HINT}
       />
       {pictureShown && (
         <CompareToggle checked={comparing} disabled={!compareReady} onToggle={onToggleCompare} />

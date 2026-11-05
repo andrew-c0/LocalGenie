@@ -39,7 +39,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - **OCR cancel does not stop the server.** A cancel drops the HTTP request; the GenieX server may keep generating until it notices the closed connection (`ocr_job.rs`). Code-read.
 - **OCR needs the GenieX server running.** The run fails with "Start the GenieX server first" otherwise; the tab can start it. Whether the server loads the OCR model on the first request, and the `compute` / `vit_compute` request fields, are read from the code only (see `geniex-server-behaviour.md` for what is verified).
 - **Duplicated server-start sequence.** `components/playground/OcrPanel/startOcrServer.ts` (called when an OCR model is picked in the header selector; it replaces `useOcrServer`) repeats the start sequence of `shell/Header/useModelLoader.ts` (read server settings, `startServer` on the configured port, `setServerStatus`, `setServerOptions`). Chat has no shared function for it, so a change to one must be mirrored by hand. Code-read; not unified.
-- **Runtime status of the Playground**: text to image, image to image (before its 2026-11-05 redesign), speech, audio to audio, image upscaling (before its 2026-11-05 redesign) and OCR have been run in the app by the user. Voice cloning is still unverified there; the Runtimes update and uninstall flows have no recorded result.
+- **Runtime status of the Playground**: text to image (before its 2026-11-05 redesign), image to image (before its 2026-11-05 redesign), speech, audio to audio, image upscaling (before its 2026-11-05 redesign) and OCR have been run in the app by the user. Voice cloning is still unverified there; the Runtimes update and uninstall flows have no recorded result.
 - **OCR page redesign not run in the app** (c84c413, 2026-11-05): the two-column layout, the spinner, the Markdown view and the shared image dialog are unverified. The Markdown view renders the model's text with `MarkdownContent` (no raw HTML), so how the two models' output looks there is unchecked. Code-read; steps in `manual-checklist.md`.
 
 ## Playground selector and downloads (31a9e7c, 2026-11-05; code-read and unit tests written, not run in the app)
@@ -55,7 +55,18 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Image to image: Advanced settings is unmounted while a job runs (its settings are hidden then), so it closes after each job (code-read).
 - Image to image: the size popover has no disabled state, so it can be changed during a job. The job keeps the size it started with (`startEdit` builds the request when it starts; code-read).
 - Locked fields (CFG on a fixed-CFG model, negative prompt on a model without one) show their reason in a tooltip on a span (`LockedTooltip`), because a disabled control does not react to the pointer. Hover in WebView2 is not checked.
-- Unchecked: the controls row and the stage at narrow widths, Compare at the large size in dark and light themes, the hover and focus tooltips on a blocked Generate or Upscale button (`BlockedReasonButton`, `disabledFocusable`), the Advanced grid alignment, Compare and enlarge on an edit result, Clear and "Use this image as input", Text to image after the shared settings change, and the upscale empty state.
+- Unchecked: the controls row and the stage at narrow widths, Compare at the large size in dark and light themes, the hover and focus tooltips on a blocked Generate or Upscale button (`BlockedReasonButton`, `disabledFocusable`), the Advanced grid alignment, Compare and enlarge on an edit result, Clear and "Use this image as input", and the upscale empty state.
+
+## Text to image redesign, tab reset and rail (2026-11-05; code-read, not run in the app)
+- The text to image card (picture stage, prompt and settings, controls) is not run. Steps: `manual-checklist.md`, section "Playground: Text to image redesign, tab reset and the rail". The text tab was run by the user before this change (see "Runtime status of the Playground").
+- Advanced settings closes after each text to image job: the form is not rendered while a job runs (`TextToImagePanel`), as on Image to image. Expected from code.
+- A new job clears the previous result in the store (`startJob`), so after a cancel or a failure no earlier text picture shows. Expected from code.
+- The size button stays usable during a job; the job keeps the size it started with, because the request is built when Generate is pressed (code-read).
+- Tab reset: `usePlaygroundTabReset` runs from effects. `PlaygroundSectionPage` has one route element per tool with no key, so React is expected to keep one instance across tools (the reset then runs from the tool-change effect). Not checked in the app; the speech audio rule depends on it.
+- Tab reset tests cover the store actions and the tables (`stores/playgroundReset.test.ts`, `utils/playgroundReset.test.ts`). The hook itself (effect order, StrictMode, leaving to Chat and back) has no test.
+- A reset clears the left tool's finished result even when the tool's audio is kept: Speech to text to Text to speech clears the transcript and keeps the audio (code-read).
+- A running job is not stopped. Its input (image, OCR picture) is kept, and speech audio is kept while a speech job reads it (`resetOcrWork`, `resetImageToImageWork`, `resetSpeechWork`).
+- Sidebar rail (`Sidebar.css`, `Sidebar.tsx`): the tabs are stretched and the `TabList` is keyed by `collapsed`. Whether the icons centre and the indicator follows the page after each toggle is not checked in the app.
 
 ## GenieX CLI as a runtime (986b5dc; code-read, not run)
 - Install, update and uninstall of the GenieX CLI have not been run in the app. Steps: `manual-checklist.md`. The silent flags, the `unins000.exe` name (Inno Setup's default, assumed by `runtimes/geniex.rs`) and the version poll are not checked against a real install.
@@ -157,6 +168,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - **A failed periodic check hides the hint.** `runtimeStore.checkUpdate` removes the runtime's update entry when a check fails (existing behaviour), so Settings drops the "update available" hint until a later check succeeds. No notice is sent for that runtime in the meantime.
 
 ## Resolved (code-verified; runtime-unverified)
+- `ResultPictureView` split the file name on `/` only, so a Windows path showed its folder in the title. It now uses `inputFileName` (`utils/imageToImage.ts`, which splits on both separators; code-verified 2026-11-05, not run).
 - The upscale comparison's source comments said there was a height cap, but the code has none. `ImageCompare.css` now says there is none, and `UpscaleResult.css` is deleted with the redesign (`ResultPictureView`, `ImageCompare`; code-verified 2026-11-05, not run).
 - Local page Hugging Face search always returned no results: `search_models` did not ask for `siblings`, and `gguf_models` keeps only models whose file list has a `.gguf`, so every result was dropped. `commands/hub.rs` `search_url` now sends `expand[]=siblings`, and `gguf_models` has a unit test (27e98d1; code-verified, not run in the app).
 - `search_models` parsed the response body before checking the HTTP status. The status is checked first in `commands/hub.rs` (code-verified, not run).
