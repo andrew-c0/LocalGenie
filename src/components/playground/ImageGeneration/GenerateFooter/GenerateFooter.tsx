@@ -6,8 +6,8 @@ interface GenerateFooterProps {
   onGenerate: () => void;
   /** Why Generate is off. Null when it can run. */
   blockedReason: string | null;
-  /** The note under the button, e.g. how long a run takes. */
-  note: string;
+  /** The note under the button, e.g. how long a run takes. Left out when a tab has none. */
+  note?: string;
   /** The button text. Generate unless a tab names its action differently. */
   actionLabel?: string;
 }
@@ -27,7 +27,7 @@ export function GenerateFooter({
         </Button>
         {blockedReason && <Meta>{blockedReason}</Meta>}
       </Flex>
-      <Meta>{note}</Meta>
+      {note && <Meta>{note}</Meta>}
     </Flex>
   );
 }

@@ -10,6 +10,7 @@ import {
 import { revealAttachment } from "../../../services/attachments";
 import type { AttachmentFile } from "../../../types";
 import { toast } from "../../../utils/toast";
+import { ImagePreviewDialog } from "../../ui/ImagePreviewDialog/ImagePreviewDialog";
 import "./AttachmentPreview.css";
 
 interface AttachmentPreviewProps {
@@ -20,9 +21,22 @@ interface AttachmentPreviewProps {
 
 /**
  * Modal preview of an image, text file or audio clip. Closes with Close or Escape. Open location
- * shows the file in Explorer; if the file is gone, a toast says so.
+ * shows the file in Explorer; if the file is gone, a toast says so. Images use the shared
+ * ImagePreviewDialog.
  */
 export function AttachmentPreview({ file, onClose }: AttachmentPreviewProps) {
+  if (file?.kind === "image" && file.data && file.mime) {
+    return (
+      <ImagePreviewDialog
+        open
+        title={file.name}
+        src={`data:${file.mime};base64,${file.data}`}
+        onClose={onClose}
+        onOpenLocation={() => openLocation(file)}
+      />
+    );
+  }
+
   return (
     <Dialog open={file !== null} onOpenChange={(_, data) => !data.open && onClose()}>
       <DialogSurface className="attachment-preview">
@@ -59,15 +73,13 @@ async function openLocation(file: AttachmentFile) {
   }
 }
 
+/** Text or audio. Images never reach here; they use ImagePreviewDialog. */
 function PreviewBody({ file }: { file: AttachmentFile }) {
   if (file.kind === "text") {
     return <pre className="attachment-preview__text">{file.text}</pre>;
   }
-  if (!file.data || !file.mime) return null;
+  if (file.kind !== "audio" || !file.data || !file.mime) return null;
   const url = `data:${file.mime};base64,${file.data}`;
-  if (file.kind === "image") {
-    return <img className="attachment-preview__image" src={url} alt={file.name} />;
-  }
   // biome-ignore lint/a11y/useMediaCaption: the clip is the user's own file and has no captions to show
   return <audio className="attachment-preview__audio" controls preload="metadata" src={url} />;
 }

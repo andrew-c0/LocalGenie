@@ -1,9 +1,8 @@
-import { Button } from "@fluentui/react-components";
+import { Button, Spinner } from "@fluentui/react-components";
 import type { OcrJob } from "../../../../types";
-import { OCR_PROGRESS_TITLE, OCR_TIME_NOTE } from "../../../../utils/ocrText";
+import { OCR_PROGRESS_TITLE } from "../../../../utils/ocrText";
 import { formatElapsed } from "../../../../utils/playground";
 import { Flex } from "../../../ui/Flex/Flex";
-import { ProgressBar } from "../../../ui/ProgressBar/ProgressBar";
 import { SurfaceCard } from "../../../ui/SurfaceCard/SurfaceCard";
 import { Meta } from "../../../ui/Typography/Typography";
 import { useNow } from "../../useNow";
@@ -15,7 +14,7 @@ interface OcrProgressProps {
   onCancel: () => void;
 }
 
-/** The running OCR job: an indeterminate bar (the server reports no progress), the elapsed time and Cancel. */
+/** The running OCR job: a centred spinner (the server reports no progress) with the elapsed time under it, and Cancel. */
 export function OcrProgress({ job, onCancel }: OcrProgressProps) {
   const now = useNow(CLOCK_TICK_MS);
 
@@ -28,10 +27,9 @@ export function OcrProgress({ job, onCancel }: OcrProgressProps) {
         </Button>
       }
     >
-      <Flex direction="column" gap="m">
-        <ProgressBar value={null} />
+      <Flex direction="column" gap="s" align="center" justify="center" grow>
+        <Spinner size="large" aria-label={OCR_PROGRESS_TITLE} />
         <Meta>Elapsed {formatElapsed(now - job.startedAt)}</Meta>
-        <Meta>{OCR_TIME_NOTE}</Meta>
       </Flex>
     </SurfaceCard>
   );

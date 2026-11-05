@@ -10,6 +10,12 @@ export const OCR_PROGRESS_TITLE = "Reading";
 
 export const OCR_RESULT_TITLE = "Recognised text";
 
+/** The switch in the result card header that shows the text as rendered Markdown. */
+export const OCR_MARKDOWN_LABEL = "Markdown";
+
+/** The right column before any job has run. */
+export const OCR_PLACEHOLDER_MESSAGE = "The recognised text appears here.";
+
 export const OCR_INPUT_HINT =
   "PNG or JPG, up to 2500 px on the longest side and 30 MB. The picture is read from disk and not changed.";
 
@@ -49,9 +55,6 @@ export const OCR_VISION_LABEL = "Vision encoder";
 
 export const OCR_COMPUTE_HELP =
   "Measured on a Snapdragon X Elite, the NPU cut a small page from about 48 s to about 17 s. The language model is fastest on the CPU, the NPU is similar overall and the GPU is slowest.";
-
-export const OCR_TIME_NOTE =
-  "There is no progress bar: the model reads the whole picture before it answers, so the time depends on the picture and the compute choices.";
 
 export const OCR_SERVER_START_FAILED = "Could not start the GenieX server.";
 

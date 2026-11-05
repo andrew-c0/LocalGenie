@@ -1,0 +1,49 @@
+/* Long text scrolls inside the card: the text area stops at 60% of the window height instead of stretching the page.
+   Scoped to the inner textarea because Fluent's own sizing wins over a class set on the field. */
+.ocr-result-card__text textarea {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* The field and the Markdown box take the free space above the footer row. Set on the field root, which is the
+   flex item. The Markdown box starts at the textarea's ten rows. */
+.ocr-result-card__text,
+.ocr-result-card__markdown {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The Markdown view: a bordered box that looks like the textarea, with the same 60% cap and inner scroll. */
+.ocr-result-card__markdown {
+  box-sizing: border-box;
+  min-height: calc(10 * var(--lineHeightBase300));
+  max-height: 60vh;
+  overflow: auto;
+  padding: var(--spacingVerticalS) var(--spacingHorizontalM);
+  border: 1px solid var(--colorNeutralStroke1);
+  border-radius: var(--borderRadiusMedium);
+  background-color: var(--colorNeutralBackground1);
+}
+
+.ocr-result-card__markdown > .markdown-content__root > :first-child {
+  margin-top: 0;
+}
+
+/* Tables are not styled for this box in the chat renderer: the header is bold and shaded, and a table wider than
+   the box scrolls sideways instead of squeezing its columns. Scoped here so chat tables are unchanged. The selectors
+   repeat the root class so they win over MarkdownContent's own table rules. */
+.ocr-result-card__markdown .markdown-content__root table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.ocr-result-card__markdown .markdown-content__root th,
+.ocr-result-card__markdown .markdown-content__root td {
+  padding: var(--spacingVerticalXS) var(--spacingHorizontalS);
+  vertical-align: top;
+}
+
+.ocr-result-card__markdown .markdown-content__root th {
+  font-weight: var(--fontWeightSemibold);
+  background-color: var(--colorNeutralBackground3);
+}

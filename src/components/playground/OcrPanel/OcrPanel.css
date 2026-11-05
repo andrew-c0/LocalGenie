@@ -1,0 +1,36 @@
+/* OCR: the input on the left, the running job and the result on the right. Both columns share the width
+   and stretch to the same height, so the result card reaches the bottom of the input card. */
+.ocr-panel__layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--spacingVerticalL) var(--spacingHorizontalL);
+}
+
+/* The result (or placeholder) takes the rest of the right column below the progress card. Its card fills the
+   wrapper, and the card body grows so the footer row of the result card sits at the bottom. These rules reach
+   into SurfaceCard's own body class because the card has no hook for its body; they only apply inside this
+   wrapper. */
+.ocr-panel__fill {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.ocr-panel__fill > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.ocr-panel__fill .surface-card__card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Narrow windows stack the columns: the input first, the result under it. */
+@media (max-width: 900px) {
+  .ocr-panel__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

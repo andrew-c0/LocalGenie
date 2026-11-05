@@ -1,4 +1,5 @@
-import { Button, Textarea } from "@fluentui/react-components";
+import { Button, Switch, Textarea } from "@fluentui/react-components";
+import { useState } from "react";
 import { saveOcrText } from "../../../../services/playground";
 import type { OcrResult } from "../../../../types";
 import { errorMessage } from "../../../../utils/errorMessage";
@@ -11,6 +12,7 @@ import {
   OCR_COPY_LABEL,
   OCR_EMPTY_MESSAGE,
   OCR_FAILED_MESSAGE,
+  OCR_MARKDOWN_LABEL,
   OCR_RESULT_TITLE,
   OCR_SAVE_FAILED_TITLE,
   OCR_SAVE_LABEL,
@@ -20,15 +22,22 @@ import {
 import { toast } from "../../../../utils/toast";
 import { ErrorBanner } from "../../../ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../../ui/Flex/Flex";
+import { MarkdownContent } from "../../../ui/MarkdownContent/MarkdownContent";
 import { SurfaceCard } from "../../../ui/SurfaceCard/SurfaceCard";
 import { Body, Meta } from "../../../ui/Typography/Typography";
+import "./OcrResultCard.css";
 
 interface OcrResultCardProps {
   result: OcrResult;
 }
 
-/** The last OCR job: the text in a read-only field with Copy and Save as .txt, and how long it took. */
+/**
+ * The last OCR job: the text in a read-only field (or rendered as Markdown on request) with Copy and Save as .txt,
+ * and how long it took. Copy and Save always use the raw text.
+ */
 export function OcrResultCard({ result }: OcrResultCardProps) {
+  const [showMarkdown, setShowMarkdown] = useState(false);
+
   if (result.status === "error") {
     return (
       <SurfaceCard title={OCR_RESULT_TITLE}>
@@ -61,11 +70,36 @@ export function OcrResultCard({ result }: OcrResultCardProps) {
       .catch((err: unknown) => toast.error(OCR_SAVE_FAILED_TITLE, errorMessage(err)));
   };
 
+  const markdownSwitch = (
+    <Switch
+      label={OCR_MARKDOWN_LABEL}
+      checked={showMarkdown}
+      onChange={(_, data) => setShowMarkdown(data.checked)}
+    />
+  );
+
   return (
-    <SurfaceCard
-      title={OCR_RESULT_TITLE}
-      action={
-        <Flex gap="s">
+    <SurfaceCard title={OCR_RESULT_TITLE} action={markdownSwitch}>
+      <Flex direction="column" gap="s" grow>
+        {showMarkdown ? (
+          <section className="ocr-result-card__markdown" aria-label={OCR_RESULT_TITLE}>
+            <MarkdownContent>{text}</MarkdownContent>
+          </section>
+        ) : (
+          <Textarea
+            className="ocr-result-card__text"
+            aria-label={OCR_RESULT_TITLE}
+            readOnly
+            resize="vertical"
+            rows={10}
+            value={text}
+          />
+        )}
+        {text === "" && <Meta>{OCR_EMPTY_MESSAGE}</Meta>}
+        {result.seconds !== null && (
+          <Meta>{ocrTookLabel(formatDuration(result.seconds * 1000))}</Meta>
+        )}
+        <Flex gap="s" justify="end">
           <Button appearance="secondary" onClick={copy} disabled={text === ""}>
             {OCR_COPY_LABEL}
           </Button>
@@ -73,14 +107,6 @@ export function OcrResultCard({ result }: OcrResultCardProps) {
             {OCR_SAVE_LABEL}
           </Button>
         </Flex>
-      }
-    >
-      <Flex direction="column" gap="s">
-        <Textarea aria-label={OCR_RESULT_TITLE} readOnly resize="vertical" rows={10} value={text} />
-        {text === "" && <Meta>{OCR_EMPTY_MESSAGE}</Meta>}
-        {result.seconds !== null && (
-          <Meta>{ocrTookLabel(formatDuration(result.seconds * 1000))}</Meta>
-        )}
       </Flex>
     </SurfaceCard>
   );
