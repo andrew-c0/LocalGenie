@@ -2,7 +2,7 @@
 
 Run through these checks manually after building or deploying the app. Automated checks cannot fully verify installer behavior, filesystem permissions, or OS-level interactions.
 
-## Playground selector, Playground downloads and installed Playground models (working tree, 2026-11-05; not run, none ticked)
+## Playground selector, Playground downloads and installed Playground models (31a9e7c, 2026-11-05; not run, none ticked)
 
 Limits are in `known-issues.md` ("Playground selector and downloads").
 
@@ -29,6 +29,28 @@ Installed models (Models > Local):
 - [ ] The name filter applies to the Playground list; the Search button and Enter do not search Hugging Face there.
 - [ ] Delete from that list: the dialog shows the size; the model leaves the list and the tool's selector; a file shared with another downloaded model (the Qwen3-4B encoder) is kept while the other model is installed.
 - [ ] An OCR model listed here also appears under the GenieX models list after the import.
+
+## Playground: OCR page layout and result view (c84c413, 2026-11-05; not run, none ticked)
+
+Limits are in `known-issues.md` ("Runtime status of the Playground").
+
+Layout:
+- [ ] Wide window (more than 900 px): the input card is on the left and the progress or result column on the right; both reach the same bottom edge.
+- [ ] Before any job: the right column shows "Recognised text" with "The recognised text appears here."
+- [ ] Narrow window (900 px or less): the columns stack, the input first and the result under it.
+- [ ] After a read: the result card's Copy and Save as .txt sit right-aligned in its bottom row; long text scrolls inside the box instead of growing the page.
+
+Running and result:
+- [ ] A running job shows a centred spinner with "Elapsed" and the time under it, and Cancel; there is no progress bar and no time note.
+- [ ] The Generate button has no note line under it on the OCR tab.
+- [ ] Markdown switch on: headings, lists and a table render; a wide table scrolls sideways inside the box, and its header is bold and shaded. Switch off: the plain text field returns.
+- [ ] Copy and Save as .txt write the raw text (the Markdown symbols are kept) even while the Markdown view is on.
+- [ ] A new job turns the Markdown switch back off.
+
+Input picture and chat preview:
+- [ ] The input preview is larger; clicking it opens the picture in a dialog with the file name in the title (a long name is clipped with an ellipsis). Close and Escape close it; Open location shows the file in Explorer.
+- [ ] A chat image attachment opens in the same dialog, with Open location. Audio and text attachments open as before.
+- [ ] On every Playground tool with no model picked, an info bar reads "Pick a model in the selector above" at the top of the page.
 
 ## Runtime update notifications (f1e5543, 2026-11-04)
 
