@@ -14,7 +14,11 @@ import {
 import type { DownloadedModelMeta } from "../../../types";
 import { isAutomaticRetry, willRetryAutomatically } from "../../../utils/downloadAutoRetry";
 import { serializeFacets } from "../../../utils/hubModelInfo";
-import { networkErrorMessage, SERVICE_NAMES } from "../../../utils/networkError";
+import {
+  classifyNetworkError,
+  networkErrorMessage,
+  SERVICE_NAMES,
+} from "../../../utils/networkError";
 import { refreshAfterRuntimeChange, refreshModelList } from "../../../utils/runtimeUsage";
 import { toast } from "../../../utils/toast";
 
@@ -56,9 +60,12 @@ export async function runGGUFDownload(variant: GGUFVariant): Promise<void> {
       await downloadFile(repoId, hfFileUrl(repoId, sidecar.filename), folder, name).then(
         () => sidecarNames.push(name),
         (err: unknown) => {
-          // A cancel must stop the whole pipeline; any other projector failure is skipped, with a
-          // warning, so the model imports without it.
+          // A cancel must stop the whole pipeline, and so must a network failure: the entry then
+          // fails and is retried on its own, resuming from the partial files. Any other projector
+          // failure is skipped, with a warning, so the model imports without it.
           if (String(err).includes("cancelled")) throw err;
+          const kind = classifyNetworkError(err);
+          if (kind === "offline" || kind === "timeout") throw err;
           toast.error(
             "Projector not downloaded",
             `${name}: ${networkErrorMessage(err, SERVICE_NAMES.huggingFace)}`,

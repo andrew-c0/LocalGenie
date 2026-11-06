@@ -24,6 +24,12 @@ const CONFIG: Record<
   cancelled: { icon: <PauseRegular />, color: "subtle", label: "Paused" },
 };
 
+const RETRY_CONFIG = {
+  icon: <ClockRegular />,
+  color: "informative" as const,
+  label: "Retrying soon",
+};
+
 /** The pill's text. A runtime's import step reads as installing; a step message wins over that. */
 function labelFor(status: DownloadStatus, isRuntime: boolean, importingProgress?: string): string {
   if (status !== "importing") return CONFIG[status].label;
@@ -36,6 +42,8 @@ interface DownloadStatusBadgeProps {
   /** True for a runtime entry, which changes the import wording. False for model downloads. */
   isRuntime?: boolean;
   importingProgress?: string;
+  /** A failed entry that retries by itself: reads as waiting, not as an error. */
+  retrying?: boolean;
 }
 
 /** Colored status pill for a download entry. */
@@ -43,11 +51,12 @@ export function DownloadStatusBadge({
   status,
   isRuntime = false,
   importingProgress,
+  retrying = false,
 }: DownloadStatusBadgeProps) {
-  const config = CONFIG[status];
+  const config = status === "error" && retrying ? RETRY_CONFIG : CONFIG[status];
   return (
     <Badge appearance="tint" color={config.color} icon={config.icon}>
-      {labelFor(status, isRuntime, importingProgress)}
+      {config === RETRY_CONFIG ? config.label : labelFor(status, isRuntime, importingProgress)}
     </Badge>
   );
 }

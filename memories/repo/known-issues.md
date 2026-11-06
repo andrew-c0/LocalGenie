@@ -173,13 +173,12 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - **App name in the toast (open).** The test toast under `tauri dev` read "Windows PowerShell" (user-observed). The reason given for that (the plugin sets the AppUserModelID only outside `target\debug|release`) is in the plugin's Rust `show()` (`src/desktop.rs`, 2.4.0), which the JS path does not call, so that rule does not explain the name (code-read). What an installed build shows is not checked. If Windows shows the raw identifier `com.localgenie.app` or another name, the fallback is to register the AppUserModelID `DisplayName` under `HKCU\Software\Classes\AppUserModelId\com.localgenie.app` at startup (not built; it would also change `tauri dev`).
 - **A failed periodic check hides the hint.** `runtimeStore.checkUpdate` removes the runtime's update entry when a check fails (existing behaviour), so Settings drops the "update available" hint until a later check succeeds. No notice is sent for that runtime in the meantime.
 
-## Download auto-retry (2026-11-06 working tree; code-read and unit tests written, not run in the app)
-- Known gap: a GGUF projector (sidecar) network failure is toasted and skipped, not retried (`downloadPipeline.ts`); the model imports without it.
-- Known gap: `DownloadStatusBadge` still reads "Error" while an automatic retry waits or counts down; only the status line under the card says so.
+## Download auto-retry (2026-11-06; code-read and unit tests written; Resume, the projector retry and the badge tested in the app by the user)
 - Not run: the reconnect toast, the one-second spacing between reconnect retries and the 5/15/45 s backoff in the app. Steps: `manual-checklist.md`.
 - A failure with a 404 or 403 is never retried, and a disk-full or other local error is not either (`isAutoRetryEligible`: offline and timeout only).
 
 ## Resolved (code-verified; runtime-unverified)
+- Download auto-retry gaps (2026-11-06; the user tested both in the app and says they work): a GGUF projector (sidecar) network failure (offline or timeout) was toasted and skipped, so the model imported without it. It now fails the entry, which retries by itself and resumes from `.part`; other projector failures are still skipped with the toast (`runGGUFDownload`, `downloadPipeline.ts`). The drawer badge read "Error" during a wait or a countdown; it reads "Retrying soon" (`DownloadStatusBadge` `retrying`, passed by `DownloadItemCard`).
 - Safari fetch failure "Load failed" was matched as a plain fragment, so "Download failed with status 404" (a Hugging Face or AI Hub HTTP error) read as offline and showed the offline text. It is now a word-start match (`LOAD_FAILED` in `utils/networkError.ts`), with unit tests `classifyFailureText` in `networkError.test.ts` (2026-11-06 working tree; code-verified by those tests, not run in the app).
 
 - `ResultPictureView` split the file name on `/` only, so a Windows path showed its folder in the title. It now uses `inputFileName` (`utils/imageToImage.ts`, which splits on both separators; code-verified 2026-11-05, not run).

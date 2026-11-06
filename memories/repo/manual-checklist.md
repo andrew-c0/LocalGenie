@@ -178,7 +178,7 @@ How: start the app online, then turn off the network adapter (Settings > Network
 - [ ] Hugging Face page link on a model detail opens in the system browser (through `openExternal`), not in the app window.
 - [ ] Slow link, not an offline test: a Hub request that takes longer than 30 s shows "took too long to answer. Try again." (needs a throttled connection; not tried).
 
-## Downloads: automatic retry, Models count and the Clean up and split label (2026-11-06 working tree; not run, Resume ticked)
+## Downloads: automatic retry, Models count and the Clean up and split label (2026-11-06; not run, Resume, projector retry and badge ticked)
 
 How: start a download online, then turn off the network adapter (as in "Offline mode") and turn it back on when the steps say so.
 
@@ -189,6 +189,8 @@ How: start a download online, then turn off the network adapter (as in "Offline 
 - [ ] Retry or Resume by hand after "used up": the retry budget starts again.
 - [ ] Playground image or speech model with the adapter off: the same wait, reconnect and countdown; the drawer entry shows no per-attempt start toast.
 - [x] Resume from `.part` (HTTP Range) after a cancel or failure: tested by the user in the app, 2026-11-06.
+- [x] GGUF projector (sidecar) download with the adapter off: the entry retries by itself and resumes from its `.part`; the network failure shows no "Projector not downloaded" toast (tested by the user in the app, 2026-11-06).
+- [x] While the entry waits for the connection or counts down, the badge reads "Retrying soon" (clock icon), not "Error" (tested by the user in the app, 2026-11-06).
 - [ ] Models landing (`/models`): the installed count is the GenieX models plus the Playground models except OCR (OCR models are already GenieX models, so they are counted once).
 - [ ] The Playground chip on the Local models page labels the audio group "Clean up and split" (not "Audio to audio").
 

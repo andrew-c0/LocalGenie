@@ -133,7 +133,11 @@ export function DownloadItemCard({
           </div>
         </div>
         <div className="download-card__status">
-          <DownloadStatusBadge status={d.status} isRuntime={isRuntime} />
+          <DownloadStatusBadge
+            status={d.status}
+            isRuntime={isRuntime}
+            retrying={retryNotice?.kind === "offline" || retryNotice?.kind === "scheduled"}
+          />
           {d.received > 0 && reportsBytes && (
             <Caption1>
               {formatBytes(d.received)}
