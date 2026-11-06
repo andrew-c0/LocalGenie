@@ -1,6 +1,7 @@
 import { useTauriEvent } from "../../../hooks";
 import * as playground from "../../../services/playground";
 import {
+  type DownloadItem,
   downloadSourceName,
   playgroundDownloadId,
   useDownloadStore,
@@ -18,6 +19,7 @@ import type {
   PlaygroundSpeechDone,
   PlaygroundSpeechProgress,
 } from "../../../types";
+import { willRetryAutomatically } from "../../../utils/downloadAutoRetry";
 import { errorMessage } from "../../../utils/errorMessage";
 import { formatDuration } from "../../../utils/format";
 import { networkErrorMessage, SERVICE_NAMES } from "../../../utils/networkError";
@@ -39,14 +41,17 @@ function modelName(modelId: string): string {
   return imageName ?? ocrName ?? speechName ?? modelId;
 }
 
+/** The drawer item of a model's Playground download, read from the store now. */
+function playgroundItemOf(modelId: string): DownloadItem | undefined {
+  return useDownloadStore.getState().downloads.find((d) => d.id === playgroundDownloadId(modelId));
+}
+
 /**
  * The service a model downloads from, named in a failure. The drawer item carries it (it is set when the
  * download starts). Hugging Face is only the fallback for an event with no item.
  */
 function downloadSourceOf(modelId: string): string {
-  const item = useDownloadStore
-    .getState()
-    .downloads.find((d) => d.id === playgroundDownloadId(modelId));
+  const item = playgroundItemOf(modelId);
   return item ? downloadSourceName(item) : SERVICE_NAMES.huggingFace;
 }
 
@@ -87,7 +92,10 @@ function handleDownloadDone(payload: PlaygroundDownloadDone) {
   if (payload.status === "error") {
     const message = errorMessage(payload.error, "The download failed.");
     drawer.failPlayground(modelId, message);
-    toast.error("Model download failed", networkErrorMessage(message, downloadSourceOf(modelId)));
+    // A failure that retries by itself shows on its card, not as a toast per attempt.
+    if (!willRetryAutomatically(playgroundItemOf(modelId))) {
+      toast.error("Model download failed", networkErrorMessage(message, downloadSourceOf(modelId)));
+    }
     return;
   }
 

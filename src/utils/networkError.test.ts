@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { classifyNetworkError, isBackOnline, networkErrorMessage } from "./networkError";
+import {
+  classifyFailureText,
+  classifyNetworkError,
+  isBackOnline,
+  networkErrorMessage,
+} from "./networkError";
 
 /** Pin the browser's connection state for a test; Node has no real navigator.onLine. */
 function setOnline(online: boolean) {
@@ -104,6 +109,26 @@ describe("networkErrorMessage", () => {
 
   it("falls back to the generic message for an empty error", () => {
     expect(networkErrorMessage("", "Hub")).toBe("Something went wrong.");
+  });
+});
+
+describe("classifyFailureText", () => {
+  it("classifies by the message even while the browser is offline", () => {
+    setOnline(false);
+    expect(classifyFailureText("Failed to create file: disk full")).toBe("other");
+    expect(classifyFailureText("connection reset by peer")).toBe("offline");
+    expect(classifyFailureText("Download failed with status 429")).toBe("rate-limited");
+    expect(classifyFailureText("operation timed out")).toBe("timeout");
+  });
+
+  it("does not read an HTTP error of a download as offline, though it says download failed", () => {
+    expect(classifyFailureText("Download failed with status 404 Not Found")).toBe("other");
+    expect(classifyFailureText("Download failed with status 403 Forbidden")).toBe("other");
+    expect(classifyNetworkError("Download failed with status 404 Not Found")).toBe("other");
+  });
+
+  it("still reads Safari's Load failed as offline", () => {
+    expect(classifyFailureText("Load failed")).toBe("offline");
   });
 });
 

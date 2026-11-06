@@ -436,3 +436,133 @@ describe("progressFractionOf", () => {
     expect(progressFractionOf(entry({ received: 30, total: null }))).toBeNull();
   });
 });
+
+describe("automatic retry bookkeeping", () => {
+  const variant = {
+    repoId: "owner/model",
+    main: { filename: "model.gguf", precision: "Q4_0", sizeLabel: null, shard: null },
+    sidecars: [],
+  };
+
+  /** A Hugging Face entry that failed on a network error. */
+  const failedHf = () => {
+    const store = useDownloadStore.getState();
+    store.enqueue(variant);
+    store.setStatus("owner/model", "error", "Download request failed: error sending request");
+  };
+
+  const hfItem = () => itemOf("owner/model");
+
+  beforeEach(() => {
+    useDownloadStore.setState({ downloads: [] });
+  });
+
+  it("counts each automatic retry, and a manual resume starts a fresh budget", () => {
+    failedHf();
+    useDownloadStore.getState().requeue("owner/model", "automatic");
+    expect(hfItem()?.autoRetries).toBe(1);
+    expect(hfItem()?.status).toBe("queued");
+
+    useDownloadStore
+      .getState()
+      .setStatus("owner/model", "error", "Download request failed: timed out");
+    useDownloadStore.getState().requeue("owner/model", "automatic");
+    expect(hfItem()?.autoRetries).toBe(2);
+
+    useDownloadStore.getState().setStatus("owner/model", "error", "connection reset by peer");
+    useDownloadStore.getState().requeue("owner/model");
+    expect(hfItem()?.autoRetries).toBe(0);
+    expect(hfItem()?.status).toBe("queued");
+  });
+
+  it("resets the budget when the download finishes", () => {
+    failedHf();
+    useDownloadStore.getState().requeue("owner/model", "automatic");
+    useDownloadStore.getState().requeue("owner/model", "automatic");
+    useDownloadStore.getState().setStatus("owner/model", "finished");
+    expect(hfItem()?.autoRetries).toBe(0);
+  });
+
+  it("starts a new request with a fresh budget, even after a failure that used retries", () => {
+    failedHf();
+    useDownloadStore.getState().requeue("owner/model", "automatic");
+    useDownloadStore.getState().requeue("owner/model", "automatic");
+    useDownloadStore.getState().setStatus("owner/model", "error", "connection reset by peer");
+    useDownloadStore.getState().enqueue(variant);
+    expect(hfItem()?.autoRetries).toBe(0);
+  });
+
+  it("keeps the count through a failure, so the next automatic retry sees the ones before", () => {
+    failedHf();
+    useDownloadStore.getState().requeue("owner/model", "automatic");
+    useDownloadStore.getState().setStatus("owner/model", "error", "connection reset by peer");
+    expect(hfItem()?.autoRetries).toBe(1);
+  });
+
+  it("counts a Playground automatic start, and a manual start begins again from zero", () => {
+    const store = useDownloadStore.getState();
+    const playground = {
+      kind: "image" as const,
+      modelId: "sd-turbo",
+      name: "SD Turbo",
+      source: "Hugging Face",
+    };
+    store.startPlayground(playground);
+    store.failPlayground("sd-turbo", "connection reset by peer");
+    store.startPlayground(playground, "automatic");
+    expect(itemOf("playground:sd-turbo")?.autoRetries).toBe(1);
+
+    store.failPlayground("sd-turbo", "connection reset by peer");
+    store.startPlayground(playground);
+    expect(itemOf("playground:sd-turbo")?.autoRetries).toBe(0);
+  });
+
+  it("resets a Playground budget when the download finishes", () => {
+    const store = useDownloadStore.getState();
+    store.startPlayground(
+      { kind: "image", modelId: "sd-turbo", name: "SD Turbo", source: "Hugging Face" },
+      "automatic",
+    );
+    store.finishPlayground("sd-turbo");
+    expect(itemOf("playground:sd-turbo")?.autoRetries).toBe(0);
+  });
+
+  it("sets and clears the time of the next automatic retry", () => {
+    failedHf();
+    useDownloadStore.getState().setAutoRetryAt("owner/model", 12_345);
+    expect(hfItem()?.autoRetryAt).toBe(12_345);
+    useDownloadStore.getState().setAutoRetryAt("owner/model", undefined);
+    expect(hfItem()?.autoRetryAt).toBeUndefined();
+  });
+
+  it("drops a scheduled retry when the download is cancelled", () => {
+    failedHf();
+    useDownloadStore.getState().setAutoRetryAt("owner/model", 12_345);
+    useDownloadStore.getState().setStatus("owner/model", "cancelled");
+    expect(hfItem()?.autoRetryAt).toBeUndefined();
+  });
+
+  it("drops a scheduled retry when the Playground download is cancelled", () => {
+    const store = useDownloadStore.getState();
+    store.startPlayground({
+      kind: "image",
+      modelId: "sd-turbo",
+      name: "SD Turbo",
+      source: "Hugging Face",
+    });
+    store.setAutoRetryAt("playground:sd-turbo", 12_345);
+    store.cancelPlayground("sd-turbo");
+    expect(itemOf("playground:sd-turbo")?.status).toBe("cancelled");
+    expect(itemOf("playground:sd-turbo")?.autoRetryAt).toBeUndefined();
+  });
+
+  it("gives an entry a fresh budget on reset, without touching its status", () => {
+    failedHf();
+    useDownloadStore.getState().requeue("owner/model", "automatic");
+    useDownloadStore.getState().requeue("owner/model", "automatic");
+    useDownloadStore.getState().setStatus("owner/model", "error", "connection reset by peer");
+    useDownloadStore.getState().resetAutoRetryBudget("owner/model");
+    expect(hfItem()?.autoRetries).toBe(0);
+    expect(hfItem()?.status).toBe("error");
+  });
+});

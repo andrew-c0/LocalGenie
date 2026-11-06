@@ -33,7 +33,7 @@ export const PLAYGROUND_GROUP_LABELS: Record<PlaygroundLocalGroup, string> = {
   upscale: "Upscaling",
   stt: "Speech to text",
   tts: "Text to speech",
-  audioToAudio: "Audio to audio",
+  audioToAudio: "Clean up and split",
   ocr: "OCR",
 };
 
@@ -54,6 +54,14 @@ export interface PlaygroundCatalogs {
   upscale: UpscaleModel[] | null;
   speech: SpeechModel[] | null;
   ocr: OcrModel[] | null;
+}
+
+/**
+ * How many installed Playground models the Models landing adds to the GenieX models. OCR models are GenieX models
+ * too, so the store's list already holds them and they are not counted twice.
+ */
+export function playgroundOnlyCount(models: readonly PlaygroundLocalModel[]): number {
+  return models.filter((model) => model.kind !== "ocr").length;
 }
 
 /** The group of a speech model: speech to text, text to speech, or one of the two audio to audio tasks. */

@@ -10,7 +10,7 @@ import {
 import { DismissRegular } from "@fluentui/react-icons";
 import { isDownloadActive } from "../../../stores/downloadStore";
 import { DownloadItemCard } from "./DownloadItemCard/DownloadItemCard";
-import { retryPlaygroundDownload } from "./playgroundDownloads";
+import { resumeDownload } from "./resumeDownload";
 import { useDownloadManager } from "./useDownloadManager";
 import "./DownloadDrawer.css";
 
@@ -24,7 +24,7 @@ interface Props {
  * pipeline (see `useDownloadManager`); other components only enqueue downloads in the store.
  */
 export default function DownloadDrawer({ open, onClose }: Props) {
-  const { downloads, cancelling, cancel, requeue, remove, clearFinished } = useDownloadManager();
+  const { downloads, cancelling, online, cancel, remove, clearFinished } = useDownloadManager();
 
   /** A queued entry has no backend download yet, so cancelling it just removes it. */
   const handleCancel = (id: string) => {
@@ -33,15 +33,10 @@ export default function DownloadDrawer({ open, onClose }: Props) {
     else void cancel(id);
   };
 
-  /**
-   * Resume or retry a cancelled or failed download. A queued entry's pipeline picks it up again, and the
-   * backend continues from the partial file. A Playground download starts again directly, since it is
-   * never queued.
-   */
+  /** Resume or retry a cancelled or failed download by hand. The same path as the automatic retry. */
   const handleResume = (id: string) => {
     const entry = downloads.find((d) => d.id === id);
-    if (entry?.playground) retryPlaygroundDownload(entry.playground);
-    else requeue(id);
+    if (entry) resumeDownload(entry);
   };
 
   const active = downloads.filter((d) => isDownloadActive(d.status));
@@ -92,6 +87,7 @@ export default function DownloadDrawer({ open, onClose }: Props) {
                 key={d.id}
                 download={d}
                 active
+                online={online}
                 busy={cancelling.has(d.id)}
                 onCancel={handleCancel}
                 onResume={handleResume}
@@ -109,6 +105,7 @@ export default function DownloadDrawer({ open, onClose }: Props) {
                 key={d.id}
                 download={d}
                 active={false}
+                online={online}
                 busy={cancelling.has(d.id)}
                 onCancel={handleCancel}
                 onResume={handleResume}

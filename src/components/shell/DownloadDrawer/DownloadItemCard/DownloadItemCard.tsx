@@ -13,10 +13,12 @@ import {
   downloadSourceName,
   progressFractionOf,
 } from "../../../../stores/downloadStore";
+import { autoRetryNoticeOf } from "../../../../utils/downloadAutoRetry";
 import { formatBytes, rateLabel } from "../../../../utils/format";
 import { networkErrorMessage } from "../../../../utils/networkError";
 import { downloadProgressLabel } from "../../../../utils/playground";
 import { DownloadStatusBadge } from "../DownloadStatusBadge";
+import { AutoRetryLine } from "./AutoRetryLine";
 import "./DownloadItemCard.css";
 
 /** Human-readable duration in seconds, minutes or hours. */
@@ -56,6 +58,8 @@ interface DownloadItemCardProps {
   download: DownloadItem;
   /** Active items show progress; history items show the error and resume/remove actions. */
   active: boolean;
+  /** The browser's connection state, which decides whether a failed download's retry is waiting for it. */
+  online: boolean;
   busy: boolean;
   onCancel: (id: string) => void;
   onResume: (id: string) => void;
@@ -66,6 +70,7 @@ interface DownloadItemCardProps {
 export function DownloadItemCard({
   download: d,
   active,
+  online,
   busy,
   onCancel,
   onResume,
@@ -77,6 +82,9 @@ export function DownloadItemCard({
   const fraction = progressFractionOf(d);
   const pct = fraction ?? 0;
   const isImporting = d.status === "importing";
+  const retryNotice = autoRetryNoticeOf(d, online);
+  // While the retry waits for the connection or its countdown, the status line replaces the error text.
+  const retryWaits = retryNotice?.kind === "offline" || retryNotice?.kind === "scheduled";
   // A runtime's size is known only while it downloads with a total; its import step has no byte count.
   // A Playground download reports its bytes in the detail line instead, per file.
   const reportsBytes = !isPlayground && (!isRuntime || (total !== null && !isImporting));
@@ -134,12 +142,13 @@ export function DownloadItemCard({
             </Caption1>
           )}
         </div>
-        {d.status === "error" && d.error && (
+        {d.status === "error" && d.error && !retryWaits && (
           // The friendly text shows; the raw error stays on hover for a bug report.
           <Caption1 className="download-card__error" title={d.error}>
             {networkErrorMessage(d.error, downloadSourceName(d))}
           </Caption1>
         )}
+        <AutoRetryLine notice={retryNotice} title={d.error} className="download-card__error" />
       </Card>
     );
   }
@@ -177,6 +186,7 @@ export function DownloadItemCard({
             </Caption1>
           )}
           <Caption1>{detailText(d, total, isImporting)}</Caption1>
+          <AutoRetryLine notice={retryNotice} />
         </div>
       </div>
     </Card>

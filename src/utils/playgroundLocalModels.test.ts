@@ -4,7 +4,9 @@ import {
   collectInstalledPlaygroundModels,
   groupPlaygroundLocalModels,
   type PlaygroundCatalogs,
+  type PlaygroundLocalGroup,
   type PlaygroundLocalModel,
+  playgroundOnlyCount,
   speechGroupOf,
 } from "./playgroundLocalModels";
 
@@ -159,5 +161,22 @@ describe("groupPlaygroundLocalModels", () => {
 
   it("drops every group when nothing matches the name", () => {
     expect(groupPlaygroundLocalModels(models, "nothing like this")).toEqual([]);
+  });
+});
+
+describe("playgroundOnlyCount", () => {
+  const model = (kind: PlaygroundLocalGroup): PlaygroundLocalModel => ({
+    id: kind,
+    kind,
+    label: kind,
+  });
+
+  it("counts every Playground model except OCR, which GenieX already lists", () => {
+    const list = [model("imageGeneration"), model("upscale"), model("tts"), model("ocr")];
+    expect(playgroundOnlyCount(list)).toBe(3);
+  });
+
+  it("is 0 for an empty list", () => {
+    expect(playgroundOnlyCount([])).toBe(0);
   });
 });

@@ -10,6 +10,7 @@ import {
   useDownloadStore,
 } from "../../../stores/downloadStore";
 import type { PlaygroundModelKind } from "../../../types";
+import type { RetryTrigger } from "../../../utils/downloadAutoRetry";
 import { errorMessage } from "../../../utils/errorMessage";
 import { playgroundSourceOf } from "../../../utils/playground";
 
@@ -34,18 +35,25 @@ export interface PlaygroundDownloadRequest {
  * Start a Playground model download. The drawer item shows it at once, and the model rows read it from
  * there; the backend's `playground-download-*` events then update the item. The backend request resolves
  * when the run ends, so a rejection here is a failure the events did not report (for example an unknown
- * model), and it is recorded on the drawer item. A download already running is not started again.
+ * model), and it is recorded on the drawer item. A download already running is not started again. `trigger` sets
+ * the retry budget the run gets: a manual start begins a fresh one, an automatic retry counts one more.
  */
-export function beginPlaygroundDownload(request: PlaygroundDownloadRequest): void {
+export function beginPlaygroundDownload(
+  request: PlaygroundDownloadRequest,
+  trigger: RetryTrigger = "manual",
+): void {
   const { kind, modelId, name } = request;
   if (isPlaygroundDownloadActive(useDownloadStore.getState().downloads, modelId)) return;
 
-  useDownloadStore.getState().startPlayground({
-    kind,
-    modelId,
-    name,
-    source: playgroundSourceOf(kind),
-  });
+  useDownloadStore.getState().startPlayground(
+    {
+      kind,
+      modelId,
+      name,
+      source: playgroundSourceOf(kind),
+    },
+    trigger,
+  );
 
   RUNNERS[kind](modelId).catch((err: unknown) => {
     useDownloadStore.getState().failPlayground(modelId, errorMessage(err, "The download failed."));
@@ -53,10 +61,16 @@ export function beginPlaygroundDownload(request: PlaygroundDownloadRequest): voi
 }
 
 /** Retry a failed or cancelled Playground download from the drawer, with the same kind and model. */
-export function retryPlaygroundDownload(download: PlaygroundDownload): void {
-  beginPlaygroundDownload({
-    kind: download.kind,
-    modelId: download.modelId,
-    name: download.name,
-  });
+export function retryPlaygroundDownload(
+  download: PlaygroundDownload,
+  trigger: RetryTrigger = "manual",
+): void {
+  beginPlaygroundDownload(
+    {
+      kind: download.kind,
+      modelId: download.modelId,
+      name: download.name,
+    },
+    trigger,
+  );
 }

@@ -5,6 +5,7 @@ import type {
   PlaygroundDownloadView,
   PlaygroundModelKind,
 } from "../types";
+import { nextAutoRetries, type RetryTrigger } from "../utils/downloadAutoRetry";
 import type { HubFacetSummary } from "../utils/hubModelInfo";
 import { SERVICE_NAMES } from "../utils/networkError";
 import { playgroundPercent } from "../utils/playground";
@@ -101,6 +102,14 @@ export interface DownloadItem {
   finishedAt?: number;
   /** Progress message during the import (or runtime install) phase. */
   importingProgress?: string;
+  /**
+   * Automatic retries used in this failure episode, 0 to `MAX_AUTO_RETRIES`. Undefined counts as 0. Reset when
+   * the download finishes, when the user starts it again (Retry, Resume or a new request), and on a reconnect
+   * once the budget ran out. Kept through a failure, so the next automatic retry sees how many went before.
+   */
+  autoRetries?: number;
+  /** When the next automatic retry starts (epoch ms). Set only while a retry is scheduled; the card counts it down. */
+  autoRetryAt?: number;
 }
 
 /** A drawer item that belongs to a Playground model download. */
@@ -114,10 +123,20 @@ interface DownloadState {
   enqueueAihub: (download: AihubDownload) => void;
   /** Queue a runtime install or update. Ignored while the same runtime's install is already active. */
   enqueueRuntime: (runtime: RuntimeDownload) => void;
-  /** Queue a cancelled or failed entry again; its fetch, import or install is kept on the entry. */
-  requeue: (id: string) => void;
-  /** Show a Playground model download as running. Ignored while the same model is already active. Also restarts a finished, failed or cancelled one. */
-  startPlayground: (download: PlaygroundStart) => void;
+  /**
+   * Queue a cancelled or failed entry again; its fetch, import or install is kept on the entry. A manual
+   * trigger starts a fresh retry budget; an automatic one counts one more automatic retry.
+   */
+  requeue: (id: string, trigger?: RetryTrigger) => void;
+  /**
+   * Show a Playground model download as running. Ignored while the same model is already active. Also restarts a
+   * finished, failed or cancelled one, with the same retry-budget rule as `requeue`.
+   */
+  startPlayground: (download: PlaygroundStart, trigger?: RetryTrigger) => void;
+  /** Set or clear when the next automatic retry of an entry starts. */
+  setAutoRetryAt: (id: string, at: number | undefined) => void;
+  /** Give an entry a fresh automatic retry budget (a reconnect after its budget ran out). */
+  resetAutoRetryBudget: (id: string) => void;
   /** Record the latest progress of a running Playground download; its speed and size follow. Ignored once it is no longer active. */
   setPlaygroundProgress: (modelId: string, progress: PlaygroundDownloadProgress) => void;
   /** Mark an active Playground download finished. */
@@ -248,6 +267,16 @@ function updateActivePlayground(
   });
 }
 
+/**
+ * Retry bookkeeping that follows a status change. A finished download starts a fresh budget; any status
+ * but a failure drops a scheduled retry, since the retry has either started or no longer applies.
+ */
+function retryFieldsFor(status: DownloadStatus): Partial<DownloadItem> {
+  if (status === "finished") return { autoRetries: 0, autoRetryAt: undefined };
+  if (status === "error") return {};
+  return { autoRetryAt: undefined };
+}
+
 export const useDownloadStore = create<DownloadState>((set, get) => ({
   downloads: [],
   enqueue: (variant) => {
@@ -261,6 +290,8 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
       status: "queued",
       error: undefined,
       finishedAt: undefined,
+      autoRetries: 0,
+      autoRetryAt: undefined,
       startedAt: Date.now(),
     });
   },
@@ -275,6 +306,8 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
       status: "queued",
       error: undefined,
       finishedAt: undefined,
+      autoRetries: 0,
+      autoRetryAt: undefined,
       startedAt: Date.now(),
     });
   },
@@ -294,10 +327,12 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
       status: "queued",
       error: undefined,
       finishedAt: undefined,
+      autoRetries: 0,
+      autoRetryAt: undefined,
       startedAt: Date.now(),
     });
   },
-  requeue: (id) => {
+  requeue: (id, trigger = "manual") => {
     const item = get().downloads.find((d) => d.id === id);
     if (!item || (!item.variant && !item.aihub && !item.runtime) || isDownloadActive(item.status)) {
       return;
@@ -307,12 +342,15 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
       status: "queued",
       error: undefined,
       finishedAt: undefined,
+      autoRetries: nextAutoRetries(item, trigger),
+      autoRetryAt: undefined,
       startedAt: Date.now(),
     });
   },
-  startPlayground: (download) => {
+  startPlayground: (download, trigger = "manual") => {
     const id = playgroundDownloadId(download.modelId);
-    if (isDownloadActive(get().downloads.find((d) => d.id === id)?.status)) return;
+    const existing = get().downloads.find((d) => d.id === id);
+    if (isDownloadActive(existing?.status)) return;
     get().upsert({
       id,
       label: download.name,
@@ -327,9 +365,19 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
       status: "downloading",
       error: undefined,
       finishedAt: undefined,
+      autoRetries: nextAutoRetries(existing, trigger),
+      autoRetryAt: undefined,
       startedAt: Date.now(),
     });
   },
+  setAutoRetryAt: (id, at) =>
+    set((state) => ({
+      downloads: state.downloads.map((d) => (d.id === id ? { ...d, autoRetryAt: at } : d)),
+    })),
+  resetAutoRetryBudget: (id) =>
+    set((state) => ({
+      downloads: state.downloads.map((d) => (d.id === id ? { ...d, autoRetries: 0 } : d)),
+    })),
   setPlaygroundProgress: (modelId, progress) =>
     set((state) => ({
       downloads: updateActivePlayground(state.downloads, modelId, (item) => {
@@ -349,6 +397,7 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
         error: undefined,
         importingProgress: undefined,
         finishedAt: Date.now(),
+        ...retryFieldsFor("finished"),
       })),
     })),
   failPlayground: (modelId, error) =>
@@ -367,6 +416,7 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
         error: undefined,
         importingProgress: undefined,
         finishedAt: Date.now(),
+        ...retryFieldsFor("cancelled"),
       })),
     })),
   upsert: (item) =>
@@ -408,7 +458,13 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
     set((state) => ({
       downloads: state.downloads.map((d) =>
         d.id === id
-          ? { ...d, status, error, finishedAt: isDownloadActive(status) ? undefined : Date.now() }
+          ? {
+              ...d,
+              status,
+              error,
+              finishedAt: isDownloadActive(status) ? undefined : Date.now(),
+              ...retryFieldsFor(status),
+            }
           : d,
       ),
     })),

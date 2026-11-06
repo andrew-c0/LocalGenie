@@ -109,12 +109,12 @@ Selector (header, on the Playground pages):
 Playground downloads (drawer):
 - [ ] A model download (image, then speech) shows a drawer entry with its file (file n of m), bytes, speed and time left once known; it also appears under the active downloads on Models > Local.
 - [ ] Cancel in the drawer: the entry reads "Paused" with Resume. Resume continues from the partial file (the byte count does not restart at zero) and finishes; the model shows Ready.
-- [ ] Offline start of a Playground download (image or speech): the entry shows the offline text; the toast reads "Model download failed"; a speech or upscaling model names GitHub, an image or OCR model names Hugging Face. Hovering shows the raw error. Retry after reconnecting finishes the download.
+- [ ] Offline start of a Playground download (image or speech): the entry shows the offline text and retries by itself (see "Downloads: automatic retry"); the "Model download failed" toast appears only when the automatic retries are used up; a speech or upscaling model names GitHub, an image or OCR model names Hugging Face. Hovering shows the raw error. Retry after reconnecting finishes the download.
 - [ ] Leave the Playground during a download and come back: the entry is still updating.
 - [ ] Delete of a model while it downloads is refused.
 
 Installed models (Models > Local):
-- [ ] The Playground chip is last in the chip row and shows only while a Playground model is installed. It lists the models grouped by tool (Image generation, Image to image, Upscaling, Speech to text, Text to speech, Audio to audio, OCR).
+- [ ] The Playground chip is last in the chip row and shows only while a Playground model is installed. It lists the models grouped by tool (Image generation, Image to image, Upscaling, Speech to text, Text to speech, Clean up and split, OCR).
 - [ ] The name filter applies to the Playground list; the Search button and Enter do not search Hugging Face there.
 - [ ] Delete from that list: the dialog shows the size; the model leaves the list and the tool's selector; a file shared with another downloaded model (the Qwen3-4B encoder) is kept while the other model is installed.
 - [ ] An OCR model listed here also appears under the GenieX models list after the import.
@@ -172,11 +172,25 @@ How: start the app online, then turn off the network adapter (Settings > Network
 - [ ] AI Hub model detail offline: the page retry block; reconnecting loads it. With the page loaded and the network then dropped, the README shows its own retry; the assets card's retry reloads the detail.
 - [ ] AI Hub download while offline: the drawer entry shows "You appear to be offline..." (or "Could not reach the Qualcomm AI Hub"); hovering the text shows the raw error; Resume after reconnecting imports the zip.
 - [ ] Hugging Face GGUF download while offline: the drawer entry fails with the same kind of text; a projector failure toast names Hugging Face.
-- [ ] Playground model download while offline (an image model, then a speech model): the card shows the friendly text; the toast reads "Model download failed"; a speech model names GitHub.
+- [ ] Playground model download while offline (an image model, then a speech model): the card shows the friendly text and waits for the connection; no toast until the automatic retries are used up (then "Model download failed"); a speech model names GitHub.
 - [ ] Settings > Runtimes offline: each card shows a placeholder where "Latest" appears while it checks, then "Could not check for updates." with Try again. Installed versions still show; Uninstall of an installed runtime is still enabled.
 - [ ] App start offline: no update toast appears; the failure shows only in Settings > Runtimes.
 - [ ] Hugging Face page link on a model detail opens in the system browser (through `openExternal`), not in the app window.
 - [ ] Slow link, not an offline test: a Hub request that takes longer than 30 s shows "took too long to answer. Try again." (needs a throttled connection; not tried).
+
+## Downloads: automatic retry, Models count and the Clean up and split label (2026-11-06 working tree; not run, Resume ticked)
+
+How: start a download online, then turn off the network adapter (as in "Offline mode") and turn it back on when the steps say so.
+
+- [ ] A GGUF download with the adapter off mid-transfer: the card reads "Waiting for the connection to come back"; no error toast.
+- [ ] Adapter back on: one info toast "Connection is back: resuming N downloads"; the download continues from its `.part` file without a click; no start toast per attempt.
+- [ ] Adapter off and the connection still failing while online: the card counts down "Retrying in N s (attempt k of 3)" at about 5, 15 and 45 s; after the third, "Automatic retries used up" shows with the friendly error, and one error toast appears at the end, not one per attempt.
+- [ ] An HTTP 404 or 403 download failure: no countdown and no retry; one error toast; the card shows the friendly text (not the offline text).
+- [ ] Retry or Resume by hand after "used up": the retry budget starts again.
+- [ ] Playground image or speech model with the adapter off: the same wait, reconnect and countdown; the drawer entry shows no per-attempt start toast.
+- [x] Resume from `.part` (HTTP Range) after a cancel or failure: tested by the user in the app, 2026-11-06.
+- [ ] Models landing (`/models`): the installed count is the GenieX models plus the Playground models except OCR (OCR models are already GenieX models, so they are counted once).
+- [ ] The Playground chip on the Local models page labels the audio group "Clean up and split" (not "Audio to audio").
 
 ## Settings > About (committed 1ab5267, 2026-11-04)
 

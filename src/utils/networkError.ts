@@ -17,7 +17,6 @@ export const SERVICE_NAMES = {
 const OFFLINE_MARKERS = [
   "failed to fetch",
   "networkerror",
-  "load failed",
   "error sending request",
   "dns error",
   "failed to lookup",
@@ -30,6 +29,12 @@ const OFFLINE_MARKERS = [
   "hf api request failed",
   "network is unreachable",
 ];
+
+/**
+ * Safari's fetch failure, "Load failed". A word-start match: as a plain fragment it also matches
+ * "download failed", which every failed transfer reports, so an HTTP error would read as offline.
+ */
+const LOAD_FAILED = /\bload failed\b/;
 
 const RATE_LIMIT_MARKERS = ["rate limit", "too many requests"];
 /** An HTTP 429 status, written as a whole number in fetch and Rust messages. */
@@ -60,15 +65,25 @@ function textOf(err: unknown): string {
 }
 
 /**
+ * Sort a failed request by its message alone, ignoring the browser's connection state. Use it where
+ * the failure must say what the request got back (such as a retry decision), since a failure
+ * recorded while offline is otherwise always "offline".
+ */
+export function classifyFailureText(err: unknown): NetworkErrorKind {
+  const text = textOf(err);
+  if (includesAny(text, OFFLINE_MARKERS) || LOAD_FAILED.test(text)) return "offline";
+  if (RATE_LIMIT_STATUS.test(text) || includesAny(text, RATE_LIMIT_MARKERS)) return "rate-limited";
+  if (includesAny(text, TIMEOUT_MARKERS)) return "timeout";
+  return "other";
+}
+
+/**
  * Sort a failed request into one of four kinds. Offline wins whenever the browser has no
  * connection, so a failure seen while offline is always reported as offline.
  */
 export function classifyNetworkError(err: unknown): NetworkErrorKind {
-  const text = textOf(err);
-  if (isBrowserOffline() || includesAny(text, OFFLINE_MARKERS)) return "offline";
-  if (RATE_LIMIT_STATUS.test(text) || includesAny(text, RATE_LIMIT_MARKERS)) return "rate-limited";
-  if (includesAny(text, TIMEOUT_MARKERS)) return "timeout";
-  return "other";
+  if (isBrowserOffline()) return "offline";
+  return classifyFailureText(err);
 }
 
 /**

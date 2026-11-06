@@ -1,9 +1,11 @@
 import { ArrowDownloadRegular, RamRegular, ServerRegular } from "@fluentui/react-icons";
+import { usePlaygroundLocalModels } from "../../components/models/usePlaygroundLocalModels";
 import {
   type SectionInfoCard,
   SectionLanding,
 } from "../../components/ui/SectionLanding/SectionLanding";
 import { useModelStore } from "../../stores/modelStore";
+import { playgroundOnlyCount } from "../../utils/playgroundLocalModels";
 
 const INFO_CARDS: SectionInfoCard[] = [
   {
@@ -23,9 +25,14 @@ const INFO_CARDS: SectionInfoCard[] = [
   },
 ];
 
-/** Models landing: where models come from and what runs where, then one row per library page. */
+/**
+ * Models landing: where models come from and what runs where, then one row per library page. The installed count
+ * is the GenieX models plus the Playground models that GenieX does not hold (image, upscaling and speech).
+ */
 export default function ModelsLandingPage() {
-  const installedCount = useModelStore((s) => s.models.length);
+  const genieCount = useModelStore((s) => s.models.length);
+  const playgroundCount = playgroundOnlyCount(usePlaygroundLocalModels().models);
+  const installedCount = genieCount + playgroundCount;
   return (
     <SectionLanding
       sectionId="models"

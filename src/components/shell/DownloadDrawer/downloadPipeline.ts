@@ -5,12 +5,14 @@ import { fetchContextLength } from "../../../services/hubApi";
 import { installRuntime } from "../../../services/runtimes";
 import {
   type AihubDownload,
+  type DownloadItem,
   type GGUFVariant,
   type RuntimeDownload,
   runtimeDownloadId,
   useDownloadStore,
 } from "../../../stores/downloadStore";
 import type { DownloadedModelMeta } from "../../../types";
+import { isAutomaticRetry, willRetryAutomatically } from "../../../utils/downloadAutoRetry";
 import { serializeFacets } from "../../../utils/hubModelInfo";
 import { networkErrorMessage, SERVICE_NAMES } from "../../../utils/networkError";
 import { refreshAfterRuntimeChange, refreshModelList } from "../../../utils/runtimeUsage";
@@ -39,10 +41,11 @@ function repoFolder(repoId: string): string {
 export async function runGGUFDownload(variant: GGUFVariant): Promise<void> {
   const { repoId, main, sidecars } = variant;
   const store = useDownloadStore.getState();
+  const entry = store.downloads.find((d) => d.id === repoId);
   // Only a queued entry starts. Anything else is already running, finished or cancelled.
-  if (store.downloads.find((d) => d.id === repoId)?.status !== "queued") return;
+  if (entry?.status !== "queued") return;
   store.setStatus(repoId, "downloading");
-  toast.info("Download started", repoId);
+  if (!isAutomaticRetry(entry)) toast.info("Download started", repoId);
 
   const folder = repoFolder(repoId);
   const fileName = baseName(main.filename);
@@ -85,9 +88,10 @@ export async function runGGUFDownload(variant: GGUFVariant): Promise<void> {
 export async function runAihubDownload(download: AihubDownload): Promise<void> {
   const { modelName, downloadUrl, folder, zipName, precision, facets } = download;
   const store = useDownloadStore.getState();
-  if (store.downloads.find((d) => d.id === modelName)?.status !== "queued") return;
+  const entry = store.downloads.find((d) => d.id === modelName);
+  if (entry?.status !== "queued") return;
   store.setStatus(modelName, "downloading");
-  toast.info("Download started", modelName);
+  if (!isAutomaticRetry(entry)) toast.info("Download started", modelName);
 
   try {
     await downloadFile(modelName, downloadUrl, folder, zipName);
@@ -110,9 +114,10 @@ export async function runAihubDownload(download: AihubDownload): Promise<void> {
 export async function runRuntimeInstall(runtime: RuntimeDownload): Promise<void> {
   const id = runtimeDownloadId(runtime.runtimeId);
   const store = useDownloadStore.getState();
-  if (store.downloads.find((d) => d.id === id)?.status !== "queued") return;
+  const entry = store.downloads.find((d) => d.id === id);
+  if (entry?.status !== "queued") return;
   store.setStatus(id, "downloading");
-  toast.info("Install started", runtime.displayName);
+  if (!isAutomaticRetry(entry)) toast.info("Install started", runtime.displayName);
 
   try {
     // `runtime_install` resolves to the installed version.
@@ -153,11 +158,19 @@ function recordFailure(id: string, err: unknown, context: FailureContext): void 
     toast.info(`${context.title} cancelled`, context.name);
   } else {
     store.setStatus(id, "error", message);
-    toast.error(
-      `${context.title} failed`,
-      `${context.name}: ${networkErrorMessage(err, context.subject)}`,
-    );
+    // A failure that retries by itself shows on its card, not as a toast per attempt.
+    if (!willRetryAutomatically(entryOf(id))) {
+      toast.error(
+        `${context.title} failed`,
+        `${context.name}: ${networkErrorMessage(err, context.subject)}`,
+      );
+    }
   }
+}
+
+/** The drawer entry with this id, read from the store now. */
+function entryOf(id: string): DownloadItem | undefined {
+  return useDownloadStore.getState().downloads.find((d) => d.id === id);
 }
 
 /**

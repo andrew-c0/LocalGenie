@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTauriEvent } from "../../../hooks";
+import { useOnlineStatus } from "../../../hooks/useOnlineStatus";
 import { cancelDownload } from "../../../services/download";
 import { RUNTIME_PROGRESS_EVENT } from "../../../services/runtimes";
 import {
@@ -19,6 +20,7 @@ import {
   runGGUFDownload,
   runRuntimeInstall,
 } from "./downloadPipeline";
+import { useDownloadAutoRetry } from "./useDownloadAutoRetry";
 
 /** Last speed sample per runtime entry, so each progress event gives a bytes-per-second figure. */
 const runtimeSpeeds = new Map<string, SpeedSample>();
@@ -26,7 +28,7 @@ const runtimeSpeeds = new Map<string, SpeedSample>();
 /**
  * Owns the download pipeline while the drawer is mounted (the header keeps it mounted for the
  * whole app session). It starts queued entries, maps backend events onto the download store,
- * and exposes cancel/remove actions for the drawer UI.
+ * retries failed downloads that hit a network error, and exposes cancel/remove actions for the drawer UI.
  */
 export function useDownloadManager() {
   const downloads = useDownloadStore((s) => s.downloads);
@@ -34,11 +36,13 @@ export function useDownloadManager() {
   const patchProgress = useDownloadStore((s) => s.patchProgress);
   const setStatus = useDownloadStore((s) => s.setStatus);
   const setImportingProgress = useDownloadStore((s) => s.setImportingProgress);
-  const requeue = useDownloadStore((s) => s.requeue);
   const remove = useDownloadStore((s) => s.remove);
   const clearFinished = useDownloadStore((s) => s.clearFinished);
+  const online = useOnlineStatus();
   /** Entries with a cancel request in flight. */
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
+
+  useDownloadAutoRetry(online);
 
   // Start every entry the app has queued. Runs on each store change; the pipeline's own status
   // check makes a repeat call for the same entry a no-op.
@@ -145,5 +149,5 @@ export function useDownloadManager() {
     }
   }, []);
 
-  return { downloads, cancelling, cancel, requeue, remove, clearFinished };
+  return { downloads, cancelling, online, cancel, remove, clearFinished };
 }
