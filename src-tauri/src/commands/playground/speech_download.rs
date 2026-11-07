@@ -1,7 +1,9 @@
 //! Downloads a speech model from its GitHub release, checks its size, and puts it in the model's
-//! folder: an archive is unpacked there, a single file is saved there as it is. Progress goes out as
-//! the same `playground-download-progress` events the image models use. A cancelled download keeps
-//! its partial file, so the next attempt resumes it. An archive is deleted once it is unpacked.
+//! folder: an archive is unpacked there, a single file is saved there as it is. A model with a
+//! companion file (a Matcha vocoder, from the vocoder release) fetches that file into its folder
+//! after the archive. Progress goes out as the same `playground-download-progress` events the image
+//! models use. A cancelled download keeps its partial file, so the next attempt resumes it. An
+//! archive is deleted once it is unpacked.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -13,6 +15,14 @@ use super::model_download::{emit_progress, DownloadEnd, DownloadProgressEvent};
 use super::speech_catalog::{self, Delivery, SpeechRecipe};
 use crate::commands::download::{stream_to_partial, Transfer, TransferProgress};
 use crate::commands::runtimes::archive::extract_tar_bz2;
+
+/// One release asset of a model: where it comes from, where it is saved and the size it must be.
+struct Asset {
+    url: String,
+    file_name: &'static str,
+    target: PathBuf,
+    size_bytes: u64,
+}
 
 /// Download `recipe` into `models_root`. Does nothing when the model is already on disk. Stops at
 /// once when `cancel` is set, and then returns `Cancelled`.
@@ -26,30 +36,42 @@ pub(super) async fn download_speech_model(
     if speech_catalog::is_downloaded(recipe, models_root) {
         return Ok(DownloadEnd::Finished);
     }
-    let url = speech_catalog::download_url(recipe);
-    if !speech_catalog::is_allowed_speech_url(&url) {
-        return Err(format!("{url} is not an allowed download."));
-    }
-    let target = speech_catalog::download_target(models_root, recipe);
-    let target_dir = target.parent().unwrap_or(models_root);
-    tokio::fs::create_dir_all(target_dir)
-        .await
-        .map_err(|e| format!("Failed to create {}: {e}", target_dir.display()))?;
-
-    let partial = partial_path(&target);
-    let on_progress = |progress: TransferProgress| {
-        emit_progress(app, &progress_event(recipe, progress));
+    let companion = recipe.companion();
+    let count = if companion.is_some() { 2 } else { 1 };
+    let main = Asset {
+        url: speech_catalog::download_url(recipe),
+        file_name: recipe.asset_name(),
+        target: speech_catalog::download_target(models_root, recipe),
+        size_bytes: recipe.size_bytes,
     };
-    let finished =
-        match stream_to_partial(client, &url, &partial, Some(cancel), on_progress).await? {
-            Transfer::Cancelled => return Ok(DownloadEnd::Cancelled),
-            Transfer::Finished(progress) => progress,
-        };
-    check_size_and_finish(&partial, &target, recipe, finished.received).await?;
+    if matches!(
+        fetch_asset(app, client, recipe, &main, cancel, (0, count)).await?,
+        DownloadEnd::Cancelled
+    ) {
+        return Ok(DownloadEnd::Cancelled);
+    }
 
     if let Delivery::Archive { .. } = recipe.delivery {
         let folder = speech_catalog::model_dir(models_root, recipe);
-        unpack_model(&target, &folder).await?;
+        unpack_model(&main.target, &folder).await?;
+    }
+    if let Some(companion) = companion {
+        let target = speech_catalog::model_dir(models_root, recipe).join(companion.file_name);
+        // A file on disk has passed its size check, so only a missing one is fetched.
+        if !target.exists() {
+            let asset = Asset {
+                url: speech_catalog::companion_url(companion),
+                file_name: companion.file_name,
+                target,
+                size_bytes: companion.size_bytes,
+            };
+            if matches!(
+                fetch_asset(app, client, recipe, &asset, cancel, (1, count)).await?,
+                DownloadEnd::Cancelled
+            ) {
+                return Ok(DownloadEnd::Cancelled);
+            }
+        }
     }
     if !speech_catalog::is_downloaded(recipe, models_root) {
         let _ = tokio::fs::remove_dir_all(speech_catalog::model_dir(models_root, recipe)).await;
@@ -61,26 +83,66 @@ pub(super) async fn download_speech_model(
     Ok(DownloadEnd::Finished)
 }
 
+/// Fetch one release asset through its partial file, then move it to its target once its size is
+/// the catalogue's. `position` is the file's place in the model's downloads, for the progress event.
+async fn fetch_asset(
+    app: &AppHandle,
+    client: &reqwest::Client,
+    recipe: &SpeechRecipe,
+    asset: &Asset,
+    cancel: &AtomicBool,
+    position: (usize, usize),
+) -> Result<DownloadEnd, String> {
+    if !speech_catalog::is_allowed_speech_url(&asset.url) {
+        return Err(format!("{} is not an allowed download.", asset.url));
+    }
+    if let Some(parent) = asset.target.parent() {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
+    }
+
+    let partial = partial_path(&asset.target);
+    let on_progress = |progress: TransferProgress| {
+        emit_progress(
+            app,
+            &progress_event(recipe, asset.file_name, position, progress),
+        );
+    };
+    let finished =
+        match stream_to_partial(client, &asset.url, &partial, Some(cancel), on_progress).await? {
+            Transfer::Cancelled => return Ok(DownloadEnd::Cancelled),
+            Transfer::Finished(progress) => progress,
+        };
+    check_size_and_finish(
+        &partial,
+        &asset.target,
+        asset.file_name,
+        asset.size_bytes,
+        finished.received,
+    )
+    .await?;
+    Ok(DownloadEnd::Finished)
+}
+
 /// Check the downloaded bytes against the catalogue's size, then move the partial file to the
 /// target's name. A file of the wrong size is deleted, so it is downloaded again next time.
 async fn check_size_and_finish(
     partial: &Path,
     target: &Path,
-    recipe: &SpeechRecipe,
+    file_name: &str,
+    expected_bytes: u64,
     received: u64,
 ) -> Result<(), String> {
-    if received != recipe.size_bytes {
+    if received != expected_bytes {
         let _ = tokio::fs::remove_file(partial).await;
         return Err(format!(
-            "{} is {} bytes, but the catalogue expects {}. The catalogue may be out of date.",
-            recipe.asset_name(),
-            received,
-            recipe.size_bytes
+            "{file_name} is {received} bytes, but the catalogue expects {expected_bytes}. The catalogue may be out of date."
         ));
     }
     tokio::fs::rename(partial, target)
         .await
-        .map_err(|e| format!("Failed to finish {}: {e}", recipe.asset_name()))
+        .map_err(|e| format!("Failed to finish {file_name}: {e}"))
 }
 
 /// Unpack `archive` into `folder` on a blocking thread, then delete the archive. A failed unpack
@@ -99,13 +161,18 @@ async fn unpack_model(archive: &Path, folder: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// The progress event for the download. A speech model is one download, so its position is 0 of 1.
-fn progress_event(recipe: &SpeechRecipe, progress: TransferProgress) -> DownloadProgressEvent {
+/// The progress event for one of the model's downloads: `position` is (file index, file count).
+fn progress_event(
+    recipe: &SpeechRecipe,
+    file_name: &str,
+    position: (usize, usize),
+    progress: TransferProgress,
+) -> DownloadProgressEvent {
     DownloadProgressEvent {
         model_id: recipe.id.to_string(),
-        file_name: recipe.asset_name().to_string(),
-        file_index: 0,
-        file_count: 1,
+        file_name: file_name.to_string(),
+        file_index: position.0,
+        file_count: position.1,
         received: progress.received,
         total: progress.total.unwrap_or(0),
     }
@@ -121,6 +188,8 @@ mod tests {
         let recipe = speech_catalog::find_recipe("whisper-tiny-en").expect("recipe");
         let event = progress_event(
             recipe,
+            recipe.asset_name(),
+            (0, 1),
             TransferProgress {
                 received: 10,
                 total: None,
@@ -138,6 +207,8 @@ mod tests {
         let recipe = speech_catalog::find_recipe("dpdfnet4").expect("recipe");
         let event = progress_event(
             recipe,
+            recipe.asset_name(),
+            (0, 1),
             TransferProgress {
                 received: 5,
                 total: Some(11_707_436),
@@ -149,6 +220,24 @@ mod tests {
         assert_eq!(event.total, 11_707_436);
     }
 
+    #[test]
+    fn a_matcha_model_reports_its_vocoder_as_the_second_of_two_files() {
+        let recipe = speech_catalog::find_recipe("matcha-ljspeech").expect("recipe");
+        let companion = recipe.companion().expect("vocoder");
+        let event = progress_event(
+            recipe,
+            companion.file_name,
+            (1, 2),
+            TransferProgress {
+                received: 1,
+                total: Some(companion.size_bytes),
+                speed_bps: 0,
+            },
+        );
+        assert_eq!(event.file_name, "vocos-22khz-univ.onnx");
+        assert_eq!((event.file_index, event.file_count), (1, 2));
+    }
+
     #[tokio::test]
     async fn a_single_file_is_renamed_into_place_when_its_size_matches() {
         let scratch = Scratch::new("speech-single-file");
@@ -157,9 +246,15 @@ mod tests {
         let partial = partial_path(&target);
         std::fs::write(&partial, vec![0u8; recipe.size_bytes as usize]).expect("partial");
 
-        check_size_and_finish(&partial, &target, recipe, recipe.size_bytes)
-            .await
-            .expect("right size");
+        check_size_and_finish(
+            &partial,
+            &target,
+            recipe.asset_name(),
+            recipe.size_bytes,
+            recipe.size_bytes,
+        )
+        .await
+        .expect("right size");
 
         assert!(target.is_file());
         assert!(!partial.exists());
@@ -173,9 +268,10 @@ mod tests {
         let partial = partial_path(&target);
         std::fs::write(&partial, b"short").expect("partial");
 
-        let error = check_size_and_finish(&partial, &target, recipe, 5)
-            .await
-            .expect_err("wrong size");
+        let error =
+            check_size_and_finish(&partial, &target, recipe.asset_name(), recipe.size_bytes, 5)
+                .await
+                .expect_err("wrong size");
 
         assert!(error.contains("gtcrn_simple.onnx is 5 bytes"), "{error}");
         assert!(!partial.exists());

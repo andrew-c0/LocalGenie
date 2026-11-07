@@ -1,0 +1,4 @@
+/* Long file names wrap inside the card instead of pushing the size and link off it. */
+.model-files-card__name {
+  overflow-wrap: anywhere;
+}

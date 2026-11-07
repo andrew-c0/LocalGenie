@@ -82,7 +82,10 @@ export function toggleToolModel(
 }
 
 /** Starts a catalog model's download. The drawer shows it, and Retry uses the same call. */
-export function downloadCatalogModel(catalog: PlaygroundModelKind, model: SelectorModel): void {
+export function downloadCatalogModel(
+  catalog: PlaygroundModelKind,
+  model: Pick<SelectorModel, "id" | "name">,
+): void {
   beginPlaygroundDownload({ kind: catalog, modelId: model.id, name: model.name });
 }
 

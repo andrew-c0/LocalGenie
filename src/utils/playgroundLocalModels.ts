@@ -1,11 +1,12 @@
 import type { ImageModel, OcrModel, SpeechKind, SpeechModel, UpscaleModel } from "../types";
 import { isEnhanceKind } from "./audioEnhance";
+import { formatBytes } from "./format";
 import { isImageToImageModel } from "./imageToImage";
+import { deleteModelMessage } from "./playgroundText";
 
 /**
- * The Playground tool a downloaded model is listed under on the Local models page. Image to image
- * and audio to audio are their own groups, although their models come from the image and speech
- * catalogs.
+ * The Playground tool a model is listed under on the Playground models page. Image to image and audio
+ * to audio are their own groups, although their models come from the image and speech catalogs.
  */
 export type PlaygroundLocalGroup =
   | "imageGeneration"
@@ -56,12 +57,11 @@ export interface PlaygroundCatalogs {
   ocr: OcrModel[] | null;
 }
 
-/**
- * How many installed Playground models the Models landing adds to the GenieX models. OCR models are GenieX models
- * too, so the store's list already holds them and they are not counted twice.
- */
-export function playgroundOnlyCount(models: readonly PlaygroundLocalModel[]): number {
-  return models.filter((model) => model.kind !== "ocr").length;
+/** The body of the delete dialog: the size is left out when the catalog does not list one. */
+export function deleteBodyOf(model: PlaygroundLocalModel): string {
+  return model.sizeBytes === undefined
+    ? "You can download it again later. Files shared with other downloaded models are kept."
+    : deleteModelMessage(formatBytes(model.sizeBytes));
 }
 
 /** The group of a speech model: speech to text, text to speech, or one of the two audio to audio tasks. */
@@ -119,29 +119,4 @@ export function collectInstalledPlaygroundModels(
       }),
     );
   return [...image, ...upscale, ...speech, ...ocr];
-}
-
-/** One heading of the list, with the models under it. */
-export interface PlaygroundLocalGroupView {
-  group: PlaygroundLocalGroup;
-  label: string;
-  models: PlaygroundLocalModel[];
-}
-
-/**
- * The models under each heading, in group order. Groups with no model that matches `query` are left out.
- * The query matches the model name, case-insensitively; a blank query matches everything.
- */
-export function groupPlaygroundLocalModels(
-  models: readonly PlaygroundLocalModel[],
-  query: string,
-): PlaygroundLocalGroupView[] {
-  const needle = query.trim().toLowerCase();
-  const matches = (model: PlaygroundLocalModel) =>
-    !needle || model.label.toLowerCase().includes(needle);
-  return PLAYGROUND_LOCAL_GROUPS.map((group) => ({
-    group,
-    label: PLAYGROUND_GROUP_LABELS[group],
-    models: models.filter((model) => model.kind === group && matches(model)),
-  })).filter((view) => view.models.length > 0);
 }

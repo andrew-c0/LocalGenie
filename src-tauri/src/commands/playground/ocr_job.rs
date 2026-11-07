@@ -143,7 +143,11 @@ async fn run_job(
 /// Send the picture and read the text out of the reply.
 async fn request_text(client: &reqwest::Client, job: &OcrJob) -> Outcome {
     match send_request(client, job).await {
-        Ok(reply) => Outcome::Text(ocr_request::finish_text(job.mode, &reply)),
+        Ok(reply) => Outcome::Text(ocr_request::finish_text(
+            job.mode,
+            job.recipe.table_format,
+            &reply,
+        )),
         Err(message) => Outcome::Failed(message),
     }
 }
@@ -158,6 +162,8 @@ async fn send_request(client: &reqwest::Client, job: &OcrJob) -> Result<String, 
         model: job.recipe.repo,
         prompt: job.prompt,
         image_url: &image_url,
+        max_tokens: job.recipe.max_tokens,
+        context_tokens: job.recipe.context_tokens,
         compute: job.compute,
         vision_compute: job.vision_compute,
     });

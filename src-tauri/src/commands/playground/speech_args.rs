@@ -142,8 +142,13 @@ pub(super) fn checked_reference_audio(raw: Option<&str>) -> Result<PathBuf, Stri
     Ok(path)
 }
 
-/// The arguments for `sherpa-onnx-offline` that transcribe `audio` with the Whisper or Moonshine
-/// model in `model_dir`. The audio path is last, as sherpa-onnx expects.
+/// The language SenseVoice is asked for. `auto` detects it from the audio.
+const SENSE_VOICE_LANGUAGE: &str = "auto";
+/// The `--model-type` of a NeMo transducer such as Parakeet, as the sherpa-onnx docs name it.
+const NEMO_TRANSDUCER_MODEL_TYPE: &str = "nemo_transducer";
+
+/// The arguments for `sherpa-onnx-offline` that transcribe `audio` with the model in `model_dir`.
+/// The audio path is last, as sherpa-onnx expects.
 pub(super) fn transcribe_args(engine: SttEngine, model_dir: &Path, audio: &Path) -> Vec<String> {
     let file = |name: &str| model_dir.join(name).display().to_string();
     let mut args = match engine {
@@ -164,6 +169,24 @@ pub(super) fn transcribe_args(engine: SttEngine, model_dir: &Path, audio: &Path)
             format!("--moonshine-encoder={}", file(encoder)),
             format!("--moonshine-merged-decoder={}", file(merged_decoder)),
             format!("--tokens={}", file(tokens)),
+        ],
+        SttEngine::SenseVoice { model, tokens } => vec![
+            format!("--sense-voice-model={}", file(model)),
+            format!("--tokens={}", file(tokens)),
+            format!("--sense-voice-language={SENSE_VOICE_LANGUAGE}"),
+            "--sense-voice-use-itn=1".to_string(),
+        ],
+        SttEngine::NemoTransducer {
+            encoder,
+            decoder,
+            joiner,
+            tokens,
+        } => vec![
+            format!("--encoder={}", file(encoder)),
+            format!("--decoder={}", file(decoder)),
+            format!("--joiner={}", file(joiner)),
+            format!("--tokens={}", file(tokens)),
+            format!("--model-type={NEMO_TRANSDUCER_MODEL_TYPE}"),
         ],
     };
     args.push(format!("--num-threads={NUM_THREADS}"));
@@ -193,11 +216,124 @@ pub(super) fn synthesize_args(
         (TtsEngine::Kokoro { .. }, VoiceChoice::Speaker { voice_id, speed }) => Ok(kokoro_args(
             engine, model_dir, text, voice_id, speed, output,
         )),
+        (TtsEngine::Supertonic { .. }, VoiceChoice::Speaker { voice_id, speed }) => Ok(
+            supertonic_args(engine, model_dir, text, voice_id, speed, output),
+        ),
+        (TtsEngine::Vits { .. }, VoiceChoice::Speaker { voice_id, speed }) => {
+            Ok(vits_args(engine, model_dir, text, voice_id, speed, output))
+        }
+        (TtsEngine::Kitten { .. }, VoiceChoice::Speaker { voice_id, speed }) => Ok(kitten_args(
+            engine, model_dir, text, voice_id, speed, output,
+        )),
+        (TtsEngine::Matcha { .. }, VoiceChoice::Speaker { speed, .. }) => {
+            Ok(matcha_args(engine, model_dir, text, speed, output))
+        }
         (TtsEngine::PocketTts { .. }, VoiceChoice::Reference(reference)) => {
             Ok(pocket_args(engine, model_dir, text, reference, output))
         }
         _ => Err("The voice choice does not fit this text to speech model.".to_string()),
     }
+}
+
+/// The speed as the length scale the sherpa-onnx flags take: the inverse of the speech rate, so a
+/// larger scale is slower. `checked_speed` keeps the speed above zero.
+fn length_scale(speed: f32) -> f32 {
+    1.0 / speed
+}
+
+/// The VITS argument list, for the Piper voices: one speaker, the length scale and the espeak-ng
+/// data folder.
+fn vits_args(
+    engine: TtsEngine,
+    model_dir: &Path,
+    text: &str,
+    voice_id: u32,
+    speed: f32,
+    output: &Path,
+) -> Vec<String> {
+    let file = |name: &str| model_dir.join(name).display().to_string();
+    let TtsEngine::Vits {
+        model,
+        tokens,
+        data_dir,
+    } = engine
+    else {
+        return Vec::new();
+    };
+    vec![
+        format!("--vits-model={}", file(model)),
+        format!("--vits-tokens={}", file(tokens)),
+        format!("--vits-data-dir={}", file(data_dir)),
+        format!("--num-threads={NUM_THREADS}"),
+        format!("--sid={voice_id}"),
+        format!("--vits-length-scale={}", length_scale(speed)),
+        format!("--output-filename={}", output.display()),
+        spoken_text_arg(text),
+    ]
+}
+
+/// The Matcha argument list: the acoustic model, the vocoder that is its own file, the tokens, the
+/// espeak-ng data folder and the length scale. Matcha has one voice, so no speaker id is passed.
+fn matcha_args(
+    engine: TtsEngine,
+    model_dir: &Path,
+    text: &str,
+    speed: f32,
+    output: &Path,
+) -> Vec<String> {
+    let file = |name: &str| model_dir.join(name).display().to_string();
+    let TtsEngine::Matcha {
+        acoustic_model,
+        vocoder,
+        tokens,
+        data_dir,
+    } = engine
+    else {
+        return Vec::new();
+    };
+    vec![
+        format!("--matcha-acoustic-model={}", file(acoustic_model)),
+        format!("--matcha-vocoder={}", file(vocoder.file_name)),
+        format!("--matcha-tokens={}", file(tokens)),
+        format!("--matcha-data-dir={}", file(data_dir)),
+        format!("--num-threads={NUM_THREADS}"),
+        format!("--matcha-length-scale={}", length_scale(speed)),
+        format!("--output-filename={}", output.display()),
+        spoken_text_arg(text),
+    ]
+}
+
+/// The Kitten argument list: the model, the voice table, the tokens and the espeak-ng data folder,
+/// with one speaker and the length scale.
+fn kitten_args(
+    engine: TtsEngine,
+    model_dir: &Path,
+    text: &str,
+    voice_id: u32,
+    speed: f32,
+    output: &Path,
+) -> Vec<String> {
+    let file = |name: &str| model_dir.join(name).display().to_string();
+    let TtsEngine::Kitten {
+        model,
+        voices,
+        tokens,
+        data_dir,
+    } = engine
+    else {
+        return Vec::new();
+    };
+    vec![
+        format!("--kitten-model={}", file(model)),
+        format!("--kitten-voices={}", file(voices)),
+        format!("--kitten-tokens={}", file(tokens)),
+        format!("--kitten-data-dir={}", file(data_dir)),
+        format!("--num-threads={NUM_THREADS}"),
+        format!("--sid={voice_id}"),
+        format!("--kitten-length-scale={}", length_scale(speed)),
+        format!("--output-filename={}", output.display()),
+        spoken_text_arg(text),
+    ]
 }
 
 /// The Pocket TTS argument list: the voice comes from `reference`, with no speaker id or speed.
@@ -262,6 +398,50 @@ fn kokoro_args(
         format!("--kokoro-tokens={}", file(tokens)),
         format!("--kokoro-lexicon={}", file(lexicon)),
         format!("--kokoro-dict-dir={}", file(dict_dir)),
+        format!("--num-threads={NUM_THREADS}"),
+        format!("--sid={voice_id}"),
+        format!("--speed={speed}"),
+        format!("--output-filename={}", output.display()),
+        spoken_text_arg(text),
+    ]
+}
+
+/// The Supertonic argument list: one speaker, the language and a speed. Each of the seven model files
+/// has its own flag.
+fn supertonic_args(
+    engine: TtsEngine,
+    model_dir: &Path,
+    text: &str,
+    voice_id: u32,
+    speed: f32,
+    output: &Path,
+) -> Vec<String> {
+    let file = |name: &str| model_dir.join(name).display().to_string();
+    let TtsEngine::Supertonic {
+        duration_predictor,
+        text_encoder,
+        vector_estimator,
+        vocoder,
+        tts_json,
+        unicode_indexer,
+        voice_style,
+        language,
+    } = engine
+    else {
+        return Vec::new();
+    };
+    vec![
+        format!(
+            "--supertonic-duration-predictor={}",
+            file(duration_predictor)
+        ),
+        format!("--supertonic-text-encoder={}", file(text_encoder)),
+        format!("--supertonic-vector-estimator={}", file(vector_estimator)),
+        format!("--supertonic-vocoder={}", file(vocoder)),
+        format!("--supertonic-tts-json={}", file(tts_json)),
+        format!("--supertonic-unicode-indexer={}", file(unicode_indexer)),
+        format!("--supertonic-voice-style={}", file(voice_style)),
+        format!("--lang={language}"),
         format!("--num-threads={NUM_THREADS}"),
         format!("--sid={voice_id}"),
         format!("--speed={speed}"),
@@ -349,6 +529,161 @@ mod tests {
     }
 
     #[test]
+    fn moonshine_tiny_arguments_are_the_exact_list_with_the_wav_last() {
+        let dir = Path::new(r"C:\models\moonshine-tiny-en");
+        let wav = Path::new(r"C:\clips\tiny.wav");
+        let args = transcribe_args(stt_engine("moonshine-tiny-en"), dir, wav);
+        assert_eq!(
+            args,
+            vec![
+                format!(
+                    "--moonshine-encoder={}",
+                    dir.join("encoder_model.ort").display()
+                ),
+                format!(
+                    "--moonshine-merged-decoder={}",
+                    dir.join("decoder_model_merged.ort").display()
+                ),
+                format!("--tokens={}", dir.join("tokens.txt").display()),
+                "--num-threads=4".to_string(),
+                r"C:\clips\tiny.wav".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn whisper_base_english_arguments_name_its_own_files_with_the_wav_last() {
+        let dir = Path::new(r"C:\models\whisper-base-en");
+        let wav = Path::new(r"C:\clips\base.wav");
+        let args = transcribe_args(stt_engine("whisper-base-en"), dir, wav);
+        assert_eq!(
+            args,
+            vec![
+                format!(
+                    "--whisper-encoder={}",
+                    dir.join("base.en-encoder.int8.onnx").display()
+                ),
+                format!(
+                    "--whisper-decoder={}",
+                    dir.join("base.en-decoder.int8.onnx").display()
+                ),
+                format!("--tokens={}", dir.join("base.en-tokens.txt").display()),
+                "--num-threads=4".to_string(),
+                r"C:\clips\base.wav".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn whisper_base_multilingual_arguments_name_its_own_files_with_the_wav_last() {
+        let dir = Path::new(r"C:\models\whisper-base");
+        let wav = Path::new(r"C:\clips\fr.wav");
+        let args = transcribe_args(stt_engine("whisper-base"), dir, wav);
+        assert_eq!(
+            args,
+            vec![
+                format!(
+                    "--whisper-encoder={}",
+                    dir.join("base-encoder.int8.onnx").display()
+                ),
+                format!(
+                    "--whisper-decoder={}",
+                    dir.join("base-decoder.int8.onnx").display()
+                ),
+                format!("--tokens={}", dir.join("base-tokens.txt").display()),
+                "--num-threads=4".to_string(),
+                r"C:\clips\fr.wav".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn whisper_small_english_arguments_name_its_own_files_with_the_wav_last() {
+        let dir = Path::new(r"C:\models\whisper-small-en");
+        let wav = Path::new(r"C:\clips\small.wav");
+        let args = transcribe_args(stt_engine("whisper-small-en"), dir, wav);
+        assert_eq!(
+            args,
+            vec![
+                format!(
+                    "--whisper-encoder={}",
+                    dir.join("small.en-encoder.int8.onnx").display()
+                ),
+                format!(
+                    "--whisper-decoder={}",
+                    dir.join("small.en-decoder.int8.onnx").display()
+                ),
+                format!("--tokens={}", dir.join("small.en-tokens.txt").display()),
+                "--num-threads=4".to_string(),
+                r"C:\clips\small.wav".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn whisper_turbo_arguments_name_its_own_files_with_the_wav_last() {
+        let dir = Path::new(r"C:\models\whisper-turbo");
+        let wav = Path::new(r"C:\clips\turbo.wav");
+        let args = transcribe_args(stt_engine("whisper-turbo"), dir, wav);
+        assert_eq!(
+            args,
+            vec![
+                format!(
+                    "--whisper-encoder={}",
+                    dir.join("turbo-encoder.int8.onnx").display()
+                ),
+                format!(
+                    "--whisper-decoder={}",
+                    dir.join("turbo-decoder.int8.onnx").display()
+                ),
+                format!("--tokens={}", dir.join("turbo-tokens.txt").display()),
+                "--num-threads=4".to_string(),
+                r"C:\clips\turbo.wav".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn sense_voice_arguments_detect_the_language_and_turn_itn_on() {
+        let dir = Path::new(r"C:\models\sense-voice-int8");
+        let wav = Path::new(r"C:\clips\yue.wav");
+        let args = transcribe_args(stt_engine("sense-voice-int8"), dir, wav);
+        assert_eq!(
+            args,
+            vec![
+                format!(
+                    "--sense-voice-model={}",
+                    dir.join("model.int8.onnx").display()
+                ),
+                format!("--tokens={}", dir.join("tokens.txt").display()),
+                "--sense-voice-language=auto".to_string(),
+                "--sense-voice-use-itn=1".to_string(),
+                "--num-threads=4".to_string(),
+                r"C:\clips\yue.wav".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn parakeet_arguments_name_the_four_transducer_files_and_the_model_type() {
+        let dir = Path::new(r"C:\models\parakeet-tdt-v3-int8");
+        let wav = Path::new(r"C:\clips\de.wav");
+        let args = transcribe_args(stt_engine("parakeet-tdt-v3-int8"), dir, wav);
+        assert_eq!(
+            args,
+            vec![
+                format!("--encoder={}", dir.join("encoder.int8.onnx").display()),
+                format!("--decoder={}", dir.join("decoder.int8.onnx").display()),
+                format!("--joiner={}", dir.join("joiner.int8.onnx").display()),
+                format!("--tokens={}", dir.join("tokens.txt").display()),
+                "--model-type=nemo_transducer".to_string(),
+                "--num-threads=4".to_string(),
+                r"C:\clips\de.wav".to_string(),
+            ]
+        );
+    }
+
+    #[test]
     fn kokoro_arguments_are_the_exact_list_with_the_text_last() {
         let dir = Path::new(r"C:\models\kokoro-int8-multi-v1");
         let output = Path::new(r"C:\Users\me\Music\LocalGenie\speech-hello-20261029-101112.wav");
@@ -419,6 +754,183 @@ mod tests {
     }
 
     #[test]
+    fn supertonic_arguments_pick_the_speaker_language_and_speed_with_the_text_last() {
+        let dir = Path::new(r"C:\models\supertonic-3-int8");
+        let output = Path::new(r"C:\Users\me\Music\LocalGenie\speech-hi-20261106-101112.wav");
+        let args = synthesize_args(
+            tts_engine("supertonic-3-int8"),
+            dir,
+            "Good morning.",
+            VoiceChoice::Speaker {
+                voice_id: 6,
+                speed: 1.25,
+            },
+            output,
+        )
+        .expect("supertonic args");
+        let file = |name: &str| dir.join(name).display().to_string();
+        assert_eq!(
+            args,
+            vec![
+                format!(
+                    "--supertonic-duration-predictor={}",
+                    file("duration_predictor.int8.onnx")
+                ),
+                format!(
+                    "--supertonic-text-encoder={}",
+                    file("text_encoder.int8.onnx")
+                ),
+                format!(
+                    "--supertonic-vector-estimator={}",
+                    file("vector_estimator.int8.onnx")
+                ),
+                format!("--supertonic-vocoder={}", file("vocoder.int8.onnx")),
+                format!("--supertonic-tts-json={}", file("tts.json")),
+                format!(
+                    "--supertonic-unicode-indexer={}",
+                    file("unicode_indexer.bin")
+                ),
+                format!("--supertonic-voice-style={}", file("voice.bin")),
+                "--lang=en".to_string(),
+                "--num-threads=4".to_string(),
+                "--sid=6".to_string(),
+                "--speed=1.25".to_string(),
+                format!("--output-filename={}", output.display()),
+                "Good morning.".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn vits_arguments_are_the_exact_list_with_the_text_last() {
+        let dir = Path::new(r"C:\models\piper-libritts-r-medium");
+        let output = Path::new(r"C:\Music\LocalGenie\speech-hi-20261106-101112.wav");
+        let args = synthesize_args(
+            tts_engine("piper-libritts-r-medium"),
+            dir,
+            "Hello there.",
+            VoiceChoice::Speaker {
+                voice_id: 7,
+                speed: 1.25,
+            },
+            output,
+        )
+        .expect("vits args");
+        let file = |name: &str| dir.join(name).display().to_string();
+        assert_eq!(
+            args,
+            vec![
+                format!("--vits-model={}", file("en_US-libritts_r-medium.onnx")),
+                format!("--vits-tokens={}", file("tokens.txt")),
+                format!("--vits-data-dir={}", file("espeak-ng-data")),
+                "--num-threads=4".to_string(),
+                "--sid=7".to_string(),
+                "--vits-length-scale=0.8".to_string(),
+                format!("--output-filename={}", output.display()),
+                "Hello there.".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn piper_single_voice_arguments_pass_the_speaker_zero_and_the_speed_as_length_scale() {
+        let dir = Path::new(r"C:\models\piper-glados");
+        let args = synthesize_args(
+            tts_engine("piper-glados"),
+            dir,
+            "Test subject.",
+            VoiceChoice::Speaker {
+                voice_id: 0,
+                speed: 0.5,
+            },
+            Path::new("o.wav"),
+        )
+        .expect("glados args");
+        assert!(args.contains(&"--vits-length-scale=2".to_string()));
+        assert!(args.contains(&"--sid=0".to_string()));
+        assert!(args[0].ends_with("en_US-glados.onnx"), "{}", args[0]);
+    }
+
+    #[test]
+    fn matcha_arguments_name_the_separate_vocoder_and_have_no_speaker_id() {
+        let dir = Path::new(r"C:\models\matcha-ljspeech");
+        let output = Path::new(r"C:\Music\LocalGenie\speech-hi-20261106-101112.wav");
+        let args = synthesize_args(
+            tts_engine("matcha-ljspeech"),
+            dir,
+            "Good morning.",
+            VoiceChoice::Speaker {
+                voice_id: 0,
+                speed: 1.0,
+            },
+            output,
+        )
+        .expect("matcha args");
+        let file = |name: &str| dir.join(name).display().to_string();
+        assert_eq!(
+            args,
+            vec![
+                format!("--matcha-acoustic-model={}", file("model-steps-3.onnx")),
+                format!("--matcha-vocoder={}", file("vocos-22khz-univ.onnx")),
+                format!("--matcha-tokens={}", file("tokens.txt")),
+                format!("--matcha-data-dir={}", file("espeak-ng-data")),
+                "--num-threads=4".to_string(),
+                "--matcha-length-scale=1".to_string(),
+                format!("--output-filename={}", output.display()),
+                "Good morning.".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn kitten_arguments_pick_the_speaker_and_the_length_scale() {
+        let dir = Path::new(r"C:\models\kitten-nano-en-v0-2-fp16");
+        let output = Path::new(r"C:\Music\LocalGenie\speech-hi-20261106-101112.wav");
+        let args = synthesize_args(
+            tts_engine("kitten-nano-en-v0-2-fp16"),
+            dir,
+            "Hello.",
+            VoiceChoice::Speaker {
+                voice_id: 3,
+                speed: 1.0,
+            },
+            output,
+        )
+        .expect("kitten args");
+        let file = |name: &str| dir.join(name).display().to_string();
+        assert_eq!(
+            args,
+            vec![
+                format!("--kitten-model={}", file("model.fp16.onnx")),
+                format!("--kitten-voices={}", file("voices.bin")),
+                format!("--kitten-tokens={}", file("tokens.txt")),
+                format!("--kitten-data-dir={}", file("espeak-ng-data")),
+                "--num-threads=4".to_string(),
+                "--sid=3".to_string(),
+                "--kitten-length-scale=1".to_string(),
+                format!("--output-filename={}", output.display()),
+                "Hello.".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_new_engines_refuse_a_reference_recording() {
+        let out = Path::new("o.wav");
+        let reference = VoiceChoice::Reference(Path::new("r.wav"));
+        for id in [
+            "piper-glados",
+            "matcha-ljspeech",
+            "kitten-nano-en-v0-2-fp16",
+        ] {
+            assert!(
+                synthesize_args(tts_engine(id), Path::new("m"), "a", reference, out).is_err(),
+                "{id}"
+            );
+        }
+    }
+
+    #[test]
     fn a_voice_choice_of_the_wrong_kind_is_refused() {
         let out = Path::new("o.wav");
         let speaker = VoiceChoice::Speaker {
@@ -430,6 +942,8 @@ mod tests {
         let kokoro = tts_engine("kokoro-int8-multi-v1");
         let reference = VoiceChoice::Reference(Path::new("r.wav"));
         assert!(synthesize_args(kokoro, Path::new("m"), "a", reference, out).is_err());
+        let supertonic = tts_engine("supertonic-3-int8");
+        assert!(synthesize_args(supertonic, Path::new("m"), "a", reference, out).is_err());
     }
 
     #[test]

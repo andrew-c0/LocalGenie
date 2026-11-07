@@ -177,6 +177,18 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Not run: the reconnect toast, the one-second spacing between reconnect retries and the 5/15/45 s backoff in the app. Steps: `manual-checklist.md`.
 - A failure with a 404 or 403 is never retried, and a disk-full or other local error is not either (`isAutoRetryEligible`: offline and timeout only).
 
+## Playground catalog growth (2026-11-07 working tree; code-read; the user ran and approved FLUX.2 klein 9B, Z-Image base, SenseVoice, Parakeet, Supertonic, DPDFNet and GLM-OCR; the rest not run)
+- Piper, Matcha and Kitten may not phonemise correctly: the installed sherpa-onnx 2.0.1 marks `--vits-data-dir`, `--matcha-data-dir` and `--kitten-data-dir` as ignored (espeak-ng is no longer used).
+- Moonshine tiny file names are inferred, not checked against the release. Multilingual Whisper gets no language flag.
+- SDXL base may need the sdxl-vae-fp16-fix VAE. sd-cli loading of the Turbo GGUFs and of the upscaler .pth files is unverified.
+- Voice licences are unclear (Lessac research dataset, GLaDOS Valve, Matcha weights). FLUX.2 klein 4B uses the FLUX.2-dev VAE; its licence is not checked.
+- No RAM warning for the 10 GB image models.
+- An OCR page cut at the output cap shows no notice (`finish_reason` is ignored).
+- The GLM-OCR HTML-to-Markdown table converter is built from hand-written HTML, not from captured GLM-OCR output.
+- The Matcha size on its row is the archive only, and a failed vocoder download redownloads the archive.
+- Models landing no longer needs the GenieX CLI; its needs moved to the three GenieX sub-pages.
+- `AihubModelDetail`'s README does not resolve relative image URLs yet.
+
 ## Resolved (code-verified; runtime-unverified)
 - Download auto-retry gaps (2026-11-06; the user tested both in the app and says they work): a GGUF projector (sidecar) network failure (offline or timeout) was toasted and skipped, so the model imported without it. It now fails the entry, which retries by itself and resumes from `.part`; other projector failures are still skipped with the toast (`runGGUFDownload`, `downloadPipeline.ts`). The drawer badge read "Error" during a wait or a countdown; it reads "Retrying soon" (`DownloadStatusBadge` `retrying`, passed by `DownloadItemCard`).
 - Safari fetch failure "Load failed" was matched as a plain fragment, so "Download failed with status 404" (a Hugging Face or AI Hub HTTP error) read as offline and showed the offline text. It is now a word-start match (`LOAD_FAILED` in `utils/networkError.ts`), with unit tests `classifyFailureText` in `networkError.test.ts` (2026-11-06 working tree; code-verified by those tests, not run in the app).

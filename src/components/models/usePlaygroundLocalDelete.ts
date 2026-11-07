@@ -20,7 +20,7 @@ const DELETE_BY_GROUP: Record<PlaygroundLocalGroup, (modelId: string) => Promise
 };
 
 /**
- * Delete for the installed Playground models listed on the Local models page. It reuses the delete of
+ * Delete for the installed Playground models listed on the Playground models page. It reuses the delete of
  * each tool's panel (its files, then its catalog re-read) through the shared confirm state. The
  * model's tool is found in `models`, which is the list the page shows.
  */

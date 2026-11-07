@@ -19,7 +19,7 @@ const INFO_CARDS: SectionInfoCard[] = [
   {
     icon: <ArrowDownloadRegular />,
     title: "Models and OCR",
-    body: "OCR runs on the GenieX server, so it needs the GenieX CLI. Each tool downloads its models from inside the tool, with no separate step.",
+    body: "OCR runs on the GenieX server, so it needs the GenieX CLI. Models are downloaded and deleted on Models > Playground models; the tools list the installed ones.",
   },
 ];
 

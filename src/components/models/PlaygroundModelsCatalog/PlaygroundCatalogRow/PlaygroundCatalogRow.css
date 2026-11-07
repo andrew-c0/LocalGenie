@@ -1,0 +1,6 @@
+/* The fact icons sit on the muted line, in the secondary text colour. */
+.playground-catalog-row__icon {
+  display: inline-flex;
+  color: var(--colorNeutralForeground3);
+  font-size: var(--fontSizeBase300);
+}

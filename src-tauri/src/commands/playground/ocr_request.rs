@@ -3,7 +3,7 @@
 
 use serde::Deserialize;
 
-use super::ocr_catalog::OcrMode;
+use super::ocr_catalog::{OcrMode, TableFormat};
 use super::ocr_table;
 use crate::commands::chat_helpers::{apply_load_params, strip_think, ModelLoadParams};
 use crate::commands::constants::DEFAULT_PORT;
@@ -11,8 +11,6 @@ use crate::commands::constants::DEFAULT_PORT;
 /// Longest side of the picture, in pixels. A larger picture makes the vision encoder run for
 /// minutes and exhaust memory.
 pub(super) const MAX_SIDE_PIXELS: u32 = 2500;
-/// Tokens the model may write. A page of text fits well within it.
-pub(super) const MAX_TOKENS: u32 = 2048;
 
 /// Where the language model runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -94,12 +92,16 @@ pub(super) struct BodyParts<'a> {
     pub prompt: &'a str,
     /// The picture as a `data:` URL.
     pub image_url: &'a str,
+    /// The most tokens the model may write (`max_tokens`).
+    pub max_tokens: u32,
+    /// The context window (`nctx`), the same for every request of the model.
+    pub context_tokens: u32,
     pub compute: Compute,
     pub vision_compute: VisionCompute,
 }
 
 /// The JSON body of the non-streamed chat completion: the picture, then the prompt, with greedy
-/// sampling and the compute choices the server reads per request.
+/// sampling, the output cap, and the context window and compute choices the server reads per request.
 pub(super) fn build_body(parts: BodyParts<'_>) -> serde_json::Value {
     let mut body = serde_json::json!({
         "model": parts.model,
@@ -111,12 +113,14 @@ pub(super) fn build_body(parts: BodyParts<'_>) -> serde_json::Value {
             ],
         }],
         "stream": false,
-        "max_tokens": MAX_TOKENS,
+        "max_tokens": parts.max_tokens,
         "temperature": 0,
     });
     apply_load_params(
         &mut body,
         &ModelLoadParams {
+            // A window over i32::MAX cannot be a real context; the recipes' values are far below it.
+            nctx: Some(i32::try_from(parts.context_tokens).unwrap_or(i32::MAX)),
             compute: parts.compute.server_value().map(str::to_string),
             ..ModelLoadParams::default()
         },
@@ -136,18 +140,22 @@ pub(super) fn reply_text(body: &serde_json::Value) -> Result<String, String> {
         .ok_or_else(|| "The server sent no text.".to_string())
 }
 
-/// The text the webview shows for a reply: thinking removed, trimmed, and a table converted to
-/// markdown.
-pub(super) fn finish_text(mode: OcrMode, reply: &str) -> String {
+/// The text the webview shows for a reply: thinking removed and trimmed. Tables become markdown
+/// tables: PaddleOCR's tags in Table mode, and HTML tables in either mode for the models that write
+/// HTML (GLM-OCR, Qwen3-VL, DeepSeek-OCR), which may write one in a text page. Everything else is
+/// shown as the model wrote it.
+pub(super) fn finish_text(mode: OcrMode, table_format: TableFormat, reply: &str) -> String {
     let text = strip_think(reply);
-    match mode {
-        OcrMode::Text => text.trim().to_string(),
-        OcrMode::Table => ocr_table::table_to_markdown(&text),
+    match (mode, table_format) {
+        (OcrMode::Table, TableFormat::PaddleTags) => ocr_table::table_to_markdown(&text),
+        (_, TableFormat::HtmlOrMarkdown) => ocr_table::html_tables_to_markdown(&text),
+        (OcrMode::Text, _) | (OcrMode::Table, TableFormat::AsIs) => text.trim().to_string(),
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::ocr_catalog::{find_recipe, RECIPES};
     use super::*;
 
     fn parts() -> BodyParts<'static> {
@@ -155,8 +163,24 @@ mod tests {
             model: "PaddlePaddle/PaddleOCR-VL-1.6-GGUF",
             prompt: "OCR:",
             image_url: "data:image/png;base64,AAAA",
+            max_tokens: 4096,
+            context_tokens: 8192,
             compute: Compute::Cpu,
             vision_compute: VisionCompute::Npu,
+        }
+    }
+
+    /// The body parts of a curated model, with its own output cap and window.
+    fn parts_of(id: &str) -> BodyParts<'static> {
+        let recipe = find_recipe(id).expect("recipe");
+        BodyParts {
+            model: recipe.repo,
+            prompt: "OCR:",
+            image_url: "data:image/png;base64,AAAA",
+            max_tokens: recipe.max_tokens,
+            context_tokens: recipe.context_tokens,
+            compute: Compute::Auto,
+            vision_compute: VisionCompute::Cpu,
         }
     }
 
@@ -165,7 +189,7 @@ mod tests {
         let body = build_body(parts());
         assert_eq!(body["model"], "PaddlePaddle/PaddleOCR-VL-1.6-GGUF");
         assert_eq!(body["stream"], false);
-        assert_eq!(body["max_tokens"], 2048);
+        assert_eq!(body["max_tokens"], 4096);
         assert_eq!(body["temperature"], 0);
         let content = &body["messages"][0]["content"];
         assert_eq!(body["messages"][0]["role"], "user");
@@ -175,6 +199,33 @@ mod tests {
             content[1],
             serde_json::json!({"type": "text", "text": "OCR:"})
         );
+    }
+
+    #[test]
+    fn the_body_carries_the_window_as_nctx_and_the_output_cap() {
+        let body = build_body(parts());
+        assert_eq!(body["nctx"], 8192);
+        assert_eq!(body["max_tokens"], 4096);
+
+        let glm = build_body(parts_of("glm-ocr"));
+        assert_eq!(glm["nctx"], 16384);
+        assert_eq!(glm["max_tokens"], 8192);
+        assert_eq!(glm["model"], "ggml-org/GLM-OCR-GGUF");
+    }
+
+    #[test]
+    fn every_request_of_a_model_sends_the_same_window() {
+        for recipe in RECIPES {
+            let first = build_body(parts_of(recipe.id));
+            let second = build_body(BodyParts {
+                compute: Compute::Npu,
+                vision_compute: VisionCompute::Npu,
+                prompt: "Table Recognition:",
+                ..parts_of(recipe.id)
+            });
+            assert_eq!(first["nctx"], second["nctx"], "{}", recipe.id);
+            assert_eq!(first["nctx"], recipe.context_tokens, "{}", recipe.id);
+        }
     }
 
     #[test]
@@ -274,13 +325,83 @@ mod tests {
     #[test]
     fn text_mode_trims_and_table_mode_converts() {
         assert_eq!(
-            finish_text(OcrMode::Text, "<think>x</think>\n Line one\nLine two \n"),
+            finish_text(
+                OcrMode::Text,
+                TableFormat::AsIs,
+                "<think>x</think>\n Line one\nLine two \n"
+            ),
             "Line one\nLine two"
         );
         assert_eq!(
-            finish_text(OcrMode::Table, "<fcel>A<fcel>B<nl><fcel>1<fcel>2<nl>"),
+            finish_text(
+                OcrMode::Table,
+                TableFormat::PaddleTags,
+                "<fcel>A<fcel>B<nl><fcel>1<fcel>2<nl>"
+            ),
             "| A | B |\n| --- | --- |\n| 1 | 2 |"
         );
-        assert_eq!(finish_text(OcrMode::Table, " plain "), "plain");
+        assert_eq!(
+            finish_text(OcrMode::Table, TableFormat::PaddleTags, " plain "),
+            "plain"
+        );
+    }
+
+    #[test]
+    fn a_table_from_a_model_without_tags_follows_its_format() {
+        let html = "<table>\n  <tr><td>A</td><td>B</td></tr>\n</table>\n";
+        assert_eq!(
+            finish_text(OcrMode::Table, TableFormat::AsIs, html),
+            html.trim()
+        );
+        assert_eq!(
+            finish_text(OcrMode::Table, TableFormat::HtmlOrMarkdown, html),
+            "| A | B |\n| --- | --- |"
+        );
+        let markdown = "| A | B |\n| --- | --- |\n| 1 | 2 |";
+        assert_eq!(
+            finish_text(OcrMode::Table, TableFormat::AsIs, markdown),
+            markdown
+        );
+        assert_eq!(
+            finish_text(OcrMode::Table, TableFormat::HtmlOrMarkdown, markdown),
+            markdown
+        );
+        let tags = "<fcel>A<fcel>B<nl>";
+        assert_eq!(finish_text(OcrMode::Table, TableFormat::AsIs, tags), tags);
+        assert_eq!(
+            finish_text(OcrMode::Table, TableFormat::HtmlOrMarkdown, tags),
+            tags
+        );
+    }
+
+    #[test]
+    fn html_tables_are_converted_in_text_mode_too() {
+        let reply =
+            "Invoice\n<table><tr><th>Item</th></tr><tr><td>Cable</td></tr></table>\nTotal: 9";
+        assert_eq!(
+            finish_text(OcrMode::Text, TableFormat::HtmlOrMarkdown, reply),
+            "Invoice\n\n| Item |\n| --- |\n| Cable |\n\nTotal: 9"
+        );
+        assert_eq!(
+            finish_text(OcrMode::Table, TableFormat::HtmlOrMarkdown, reply),
+            "Invoice\n\n| Item |\n| --- |\n| Cable |\n\nTotal: 9"
+        );
+        assert_eq!(finish_text(OcrMode::Text, TableFormat::AsIs, reply), reply);
+    }
+
+    #[test]
+    fn a_text_reply_is_trimmed_in_either_format() {
+        assert_eq!(
+            finish_text(OcrMode::Text, TableFormat::PaddleTags, " hi \n"),
+            "hi"
+        );
+        assert_eq!(
+            finish_text(OcrMode::Text, TableFormat::AsIs, " hi \n"),
+            "hi"
+        );
+        assert_eq!(
+            finish_text(OcrMode::Text, TableFormat::HtmlOrMarkdown, " hi \n"),
+            "hi"
+        );
     }
 }

@@ -1,17 +1,19 @@
 import { Button, Divider, PopoverSurface } from "@fluentui/react-components";
+import { useNavigate } from "react-router-dom";
+import { routeById } from "../../../../../navigation/routeUtils";
 import type { PlaygroundModelKind } from "../../../../../types";
-import { selectorSections, type ToolModels } from "../../../../../utils/playgroundSelector";
+import { installedGroups, type ToolModels } from "../../../../../utils/playgroundSelector";
 import type { PlaygroundCatalogs } from "../../../../playground/usePlaygroundCatalogs";
 import { Flex } from "../../../../ui/Flex/Flex";
 import { RetryBlock } from "../../../../ui/RetryBlock/RetryBlock";
 import { SkeletonRows } from "../../../../ui/Skeletons/SkeletonRows";
-import { Meta } from "../../../../ui/Typography/Typography";
 import type { PlaygroundSelectorData } from "../usePlaygroundSelectorData";
 import { ComputeRunOnRow } from "./ComputeRunOnRow/ComputeRunOnRow";
-import { SelectorSectionView } from "./SelectorSectionView/SelectorSectionView";
+import { InstalledModelsView } from "./InstalledModelsView/InstalledModelsView";
 import "./PlaygroundSelectorContent.css";
 
-const FIND_MORE_LABEL = "Find more on Hugging Face";
+/** The Playground models page, from the route table. */
+const PLAYGROUND_MODELS_PATH = routeById("models-playground")?.path ?? "/models";
 
 /** A catalog that failed to read, with its message and the call that reads it again. */
 interface CatalogFailure {
@@ -42,18 +44,27 @@ interface PlaygroundSelectorContentProps {
 }
 
 /**
- * The Playground selector's popover: the page's "Run on" rows, then the Installed and Recommended
- * sections of the listed tools, then a disabled "Find more" row. A failed catalog shows its retry
- * above the sections, and the models that did load stay listed. An empty section's note only shows
- * when nothing failed and nothing is still loading.
+ * The Playground selector's popover: the page's "Run on" rows, then the installed models of the listed
+ * tools, then a "More models" link to the Playground models page. A failed catalog shows its retry
+ * above the list, and the models that did load stay listed. The empty note only shows when nothing
+ * failed and nothing is still loading.
  */
 export function PlaygroundSelectorContent({ data, onPicked }: PlaygroundSelectorContentProps) {
-  const { tools, catalogs, computeRows, compute, isAnyDownloading } = data;
+  const { tools, currentTool, catalogs, computeRows, compute } = data;
+  const navigate = useNavigate();
   const failures = failuresOf(tools, catalogs);
   const isLoading = tools.some(
     (tool) => tool.models === null && catalogs[tool.catalog].loadError === null,
   );
   const isSettled = !isLoading && failures.length === 0;
+
+  /** Closes the popover and opens the Playground models page, on the page's tool when there is one. */
+  const openModelsPage = (search: string) => {
+    onPicked();
+    navigate(`${PLAYGROUND_MODELS_PATH}${search}`);
+  };
+  const getModels = () =>
+    openModelsPage(currentTool ? `?tool=${encodeURIComponent(currentTool.group)}` : "");
 
   return (
     <PopoverSurface className="playground-selector" aria-label="Switch Playground model">
@@ -83,20 +94,20 @@ export function PlaygroundSelectorContent({ data, onPicked }: PlaygroundSelector
 
       {isLoading && <SkeletonRows count={3} />}
 
-      <SelectorSectionView
-        sections={selectorSections(tools)}
-        showToolNames={data.currentTool === null}
+      <InstalledModelsView
+        groups={installedGroups(tools)}
+        currentTool={currentTool}
+        showToolNames={currentTool === null}
         isSettled={isSettled}
-        isAnyDownloading={isAnyDownloading}
         onPicked={onPicked}
+        onGetModels={getModels}
       />
 
       <Divider />
-      <Flex align="center" justify="between" gap="m">
-        <Button appearance="secondary" disabled>
-          {FIND_MORE_LABEL}
+      <Flex justify="end">
+        <Button appearance="subtle" onClick={() => openModelsPage("")}>
+          More models
         </Button>
-        <Meta>Coming soon</Meta>
       </Flex>
     </PopoverSurface>
   );

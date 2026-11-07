@@ -72,7 +72,8 @@ const MODELS_ROUTE: RouteMeta = {
   title: "Models",
   icon: createElement(CubeRegular),
   description: "Install, browse and manage the models GenieX runs.",
-  needs: "cli",
+  // No `needs` here: the Playground models page works without the GenieX CLI, so each GenieX
+  // sub-page carries its own need and the landing shows the locked rows.
   children: [
     {
       id: "models-local",
@@ -80,6 +81,7 @@ const MODELS_ROUTE: RouteMeta = {
       title: "Installed models",
       icon: createElement(HardDriveRegular),
       description: "Models installed on this device, ready to load into GenieX.",
+      needs: "cli",
       children: [
         {
           id: "models-local-detail",
@@ -87,6 +89,25 @@ const MODELS_ROUTE: RouteMeta = {
           title: "Model",
           icon: createElement(HardDriveRegular),
           description: "One installed model.",
+          needs: "cli",
+        },
+      ],
+    },
+    {
+      id: "models-playground",
+      path: "/models/playground",
+      title: "Playground models",
+      icon: createElement(BeakerRegular),
+      description: "Image, speech and OCR models for the Playground: installed and recommended.",
+      children: [
+        {
+          id: "models-playground-detail",
+          path: "/models/playground/:group/:modelId",
+          title: "Model",
+          icon: createElement(BeakerRegular),
+          description: "One Playground model: its files, starting settings and model card.",
+          // The page names the crumb with the model's name once the catalog has loaded.
+          titleCrumb: true,
         },
       ],
     },
@@ -96,6 +117,7 @@ const MODELS_ROUTE: RouteMeta = {
       title: "Hugging Face",
       icon: createElement(CloudArrowDownRegular),
       description: "Search Hugging Face and download GGUF models to this device.",
+      needs: "cli",
       children: [
         {
           id: "models-huggingface-detail",
@@ -103,6 +125,7 @@ const MODELS_ROUTE: RouteMeta = {
           title: "Model",
           icon: createElement(CloudArrowDownRegular),
           description: "One Hugging Face model.",
+          needs: "cli",
         },
       ],
     },
@@ -112,6 +135,7 @@ const MODELS_ROUTE: RouteMeta = {
       title: "Qualcomm AI Hub",
       icon: createElement(BookRegular),
       description: "Browse the Qualcomm AI Hub catalog and download its assets.",
+      needs: "cli",
       children: [
         {
           id: "models-aihub-detail",
@@ -119,6 +143,7 @@ const MODELS_ROUTE: RouteMeta = {
           title: "Model",
           icon: createElement(BookRegular),
           description: "One Qualcomm AI Hub model.",
+          needs: "cli",
         },
       ],
     },

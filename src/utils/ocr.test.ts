@@ -18,6 +18,7 @@ const model = (overrides: Partial<OcrModel> = {}): OcrModel => ({
   bestFor: "",
   license: "Apache-2.0",
   licenseUrl: "",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   sizeBytes: 1,
   downloaded: true,
   modes: [

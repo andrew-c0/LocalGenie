@@ -1,11 +1,5 @@
 import { Button, Card } from "@fluentui/react-components";
-import {
-  ChatRegular,
-  ChevronDownRegular,
-  ChevronRightRegular,
-  DeleteRegular,
-  OpenRegular,
-} from "@fluentui/react-icons";
+import { ChatRegular, DeleteRegular, OpenRegular } from "@fluentui/react-icons";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -13,6 +7,7 @@ import { CapabilitiesSection } from "../../../components/models/CapabilitiesSect
 import { GGUFVariantList } from "../../../components/models/GGUFVariantList";
 import { ModelCardPanel, ModelDetailLayout } from "../../../components/models/ModelDetailLayout";
 import { ModelFacetRow } from "../../../components/models/ModelFacetRow";
+import { ModelFilesCard } from "../../../components/models/ModelFilesCard/ModelFilesCard";
 import { ModelSpecSection } from "../../../components/models/ModelSpecSection/ModelSpecSection";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog/ConfirmDialog";
 import { Flex } from "../../../components/ui/Flex/Flex";
@@ -46,16 +41,20 @@ import { inferredCapabilities, inferredCapabilityBadges } from "../../../utils/h
 import { facetSummaryFromModel, parseFacets } from "../../../utils/hubModelInfo";
 import { fitCell, hubSpecCells, installedSpecCells } from "../../../utils/modelSpecs";
 import { useDownloadedPrecisions, useHubModelData, useStoredModelRow } from "../useHubModelDetail";
-import "./HubModelDetail.css";
 
 /** The README panel's body: the installed model's stored card, or the Hub README with its own loading and retry. */
 function readmeBody(
+  repoId: string,
   isLocal: boolean,
   localCard: string | null,
   readme: AsyncData<string | null>,
 ): ReactNode {
   if (isLocal) {
-    return localCard ? <MarkdownContent allowHtml>{localCard}</MarkdownContent> : undefined;
+    return localCard ? (
+      <MarkdownContent allowHtml repoId={repoId}>
+        {localCard}
+      </MarkdownContent>
+    ) : undefined;
   }
   if (readme.status === "loading") return <SkeletonLines lines={6} />;
   if (readme.status === "error") {
@@ -64,7 +63,11 @@ function readmeBody(
     );
   }
   // A repo with no README (404) is ready with no content: the panel says there is no card.
-  return readme.data ? <MarkdownContent allowHtml>{readme.data}</MarkdownContent> : undefined;
+  return readme.data ? (
+    <MarkdownContent allowHtml repoId={repoId}>
+      {readme.data}
+    </MarkdownContent>
+  ) : undefined;
 }
 
 interface Props {
@@ -93,7 +96,6 @@ export default function HubModelDetail({ isLocal }: Props) {
       s.downloads.find((d) => d.id === repoId && isDownloadActive(d.status))?.variant?.main
         .filename ?? null,
   );
-  const [filesOpen, setFilesOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -152,7 +154,11 @@ export default function HubModelDetail({ isLocal }: Props) {
     );
   }
 
-  const fileList = files.data ?? [];
+  const fileRows = (files.data ?? []).map((f) => ({
+    key: f.path,
+    name: `${f.type === "directory" ? "📁" : "📄"} ${f.path}`,
+    sizeLabel: formatBytes(f.size),
+  }));
 
   const paramsCount = model?.safetensors?.parameters ?? null;
   // GGUF files have actual size — compute RAM fit directly from file size (with overhead for KV cache/activations)
@@ -288,30 +294,9 @@ export default function HubModelDetail({ isLocal }: Props) {
         </Card>
       )}
 
-      {!isLocal && fileList.length > 0 && (
-        <Card size="small">
-          <Button
-            appearance="secondary"
-            className="hub-model-detail__align-start"
-            icon={filesOpen ? <ChevronDownRegular /> : <ChevronRightRegular />}
-            aria-expanded={filesOpen}
-            onClick={() => setFilesOpen((v) => !v)}
-          >
-            Files ({fileList.length})
-          </Button>
-          {filesOpen &&
-            fileList.map((f) => (
-              <div key={f.path} className="hub-model-detail__file-row">
-                <Meta className="hub-model-detail__file-name">
-                  {f.type === "directory" ? "📁" : "📄"} {f.path}
-                </Meta>
-                <Meta>{formatBytes(f.size)}</Meta>
-              </div>
-            ))}
-        </Card>
-      )}
+      {!isLocal && <ModelFilesCard rows={fileRows} />}
 
-      <ModelCardPanel>{readmeBody(isLocal, localCard, readme)}</ModelCardPanel>
+      <ModelCardPanel>{readmeBody(repoId, isLocal, localCard, readme)}</ModelCardPanel>
 
       {confirmDelete && (
         <ConfirmDialog

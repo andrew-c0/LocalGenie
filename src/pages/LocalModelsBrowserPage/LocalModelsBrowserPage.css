@@ -38,10 +38,3 @@
   max-width: none;
   min-width: 0;
 }
-
-/* Sets the Playground chip apart from the family chips before it. */
-.local-models-browser-page__chip-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--colorNeutralStroke2);
-}

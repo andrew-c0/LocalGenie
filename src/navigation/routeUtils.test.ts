@@ -46,6 +46,28 @@ describe("breadcrumbsFor", () => {
     expect(crumbs[2]).toEqual({ label: "some model", to: "/models/aihub/some%20model" });
   });
 
+  it("gives Models > Playground models > the model's name for a Playground model page", () => {
+    expect(breadcrumbsFor("/models/playground/imageGeneration/sdxl-turbo")).toEqual([
+      { label: "Models", to: "/models" },
+      { label: "Playground models", to: "/models/playground" },
+      { label: "Model", to: "/models/playground/imageGeneration/sdxl-turbo" },
+    ]);
+  });
+
+  it("keeps the encoded model id in the Playground model link", () => {
+    expect(breadcrumbsFor("/models/playground/ocr/some%20model")[2]).toEqual({
+      label: "Model",
+      to: "/models/playground/ocr/some%20model",
+    });
+  });
+
+  it("gives the Playground model page under the Playground models page only", () => {
+    expect(childrenOf("models-playground").map((route) => route.id)).toEqual([
+      "models-playground-detail",
+    ]);
+    expect(routeById("models-playground-detail")?.path).toBe("/models/playground/:group/:modelId");
+  });
+
   it("gives no crumbs for a path the table does not know", () => {
     expect(breadcrumbsFor("/models/unknown/a/b")).toEqual([]);
     expect(breadcrumbsFor("/chat/abc/extra")).toEqual([]);
@@ -168,6 +190,13 @@ describe("breadcrumbsFor", () => {
     expect(breadcrumbsFor("/playground/image-upscaling")[1]?.label).toBe(UPSCALE_TAB_LABEL);
   });
 
+  it("gives Models > Playground models for the Playground models page", () => {
+    expect(breadcrumbsFor("/models/playground")).toEqual([
+      { label: "Models", to: "/models" },
+      { label: "Playground models", to: "/models/playground" },
+    ]);
+  });
+
   it("gives Playground > Audio for the Audio tool", () => {
     expect(breadcrumbsFor("/playground/audio")).toEqual([
       { label: "Playground", to: "/playground" },
@@ -180,9 +209,20 @@ describe("childrenOf", () => {
   it("lists the sub-pages of Models in order", () => {
     expect(childrenOf("models").map((route) => route.id)).toEqual([
       "models-local",
+      "models-playground",
       "models-huggingface",
       "models-aihub",
     ]);
+  });
+
+  it("gives the Playground models page no runtime need, and the GenieX pages the CLI", () => {
+    const needs = Object.fromEntries(childrenOf("models").map((route) => [route.id, route.needs]));
+    expect(needs).toEqual({
+      "models-local": "cli",
+      "models-playground": undefined,
+      "models-huggingface": "cli",
+      "models-aihub": "cli",
+    });
   });
 
   it("gives an empty list for a route without children or an unknown id", () => {

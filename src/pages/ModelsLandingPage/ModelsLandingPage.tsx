@@ -1,11 +1,12 @@
 import { ArrowDownloadRegular, RamRegular, ServerRegular } from "@fluentui/react-icons";
-import { usePlaygroundLocalModels } from "../../components/models/usePlaygroundLocalModels";
+import { usePlaygroundStoredCatalogs } from "../../components/models/usePlaygroundStoredCatalogs";
+import { usePlaygroundCatalogs } from "../../components/playground/usePlaygroundCatalogs";
 import {
   type SectionInfoCard,
   SectionLanding,
 } from "../../components/ui/SectionLanding/SectionLanding";
 import { useModelStore } from "../../stores/modelStore";
-import { playgroundOnlyCount } from "../../utils/playgroundLocalModels";
+import { playgroundModelsFactOf } from "../../utils/playgroundModelsCatalog";
 
 const INFO_CARDS: SectionInfoCard[] = [
   {
@@ -26,20 +27,24 @@ const INFO_CARDS: SectionInfoCard[] = [
 ];
 
 /**
- * Models landing: where models come from and what runs where, then one row per library page. The installed count
- * is the GenieX models plus the Playground models that GenieX does not hold (image, upscaling and speech).
+ * Models landing: where models come from and what runs where, then one row per library page. The GenieX
+ * row counts the GenieX models; the Playground models row counts the installed Playground models out of
+ * every curated one. The Playground catalogs are read here so the count is known on arrival.
  */
 export default function ModelsLandingPage() {
   const genieCount = useModelStore((s) => s.models.length);
-  const playgroundCount = playgroundOnlyCount(usePlaygroundLocalModels().models);
-  const installedCount = genieCount + playgroundCount;
+  usePlaygroundCatalogs();
+  const playgroundFact = playgroundModelsFactOf(usePlaygroundStoredCatalogs());
   return (
     <SectionLanding
       sectionId="models"
       title="Models"
       subtitle="Find, download and manage the models GenieX runs on this device."
       infoCards={INFO_CARDS}
-      facts={{ "models-local": `${installedCount} installed` }}
+      facts={{
+        "models-local": `${genieCount} installed`,
+        "models-playground": playgroundFact,
+      }}
     />
   );
 }

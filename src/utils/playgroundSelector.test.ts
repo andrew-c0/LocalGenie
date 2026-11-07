@@ -3,11 +3,11 @@ import { childrenOf } from "../navigation/routeUtils";
 import type { ImageModel, OcrModel, SpeechKind, SpeechModel, UpscaleModel } from "../types";
 import {
   buildToolModels,
+  installedGroups,
   PLAYGROUND_TOOL_IDS,
   type PlaygroundSelectorInput,
   type PlaygroundToolId,
   selectorLabelOf,
-  selectorSections,
   type ToolModels,
   toolIdOf,
 } from "./playgroundSelector";
@@ -21,6 +21,7 @@ const image = (overrides: Partial<ImageModel> = {}): ImageModel => ({
   description: "",
   license: "",
   licenseUrl: "",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   totalBytes: 2 * MB,
   downloaded: false,
   files: [],
@@ -37,6 +38,7 @@ const upscale = (overrides: Partial<UpscaleModel> = {}): UpscaleModel => ({
   description: "",
   license: "",
   licenseUrl: "",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   sizeBytes: MB,
   downloaded: false,
   bestFor: "Photos",
@@ -50,6 +52,7 @@ const ocr = (overrides: Partial<OcrModel> = {}): OcrModel => ({
   bestFor: "Documents",
   license: "",
   licenseUrl: "",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   sizeBytes: MB,
   downloaded: false,
   modes: [{ id: "text", label: "Text" }],
@@ -63,6 +66,7 @@ const speech = (overrides: Partial<SpeechModel> = {}): SpeechModel => ({
   description: "",
   license: "",
   licenseUrl: "",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   sizeBytes: MB,
   languages: [],
   downloaded: false,
@@ -248,7 +252,7 @@ describe("buildToolModels", () => {
   });
 });
 
-describe("selectorSections", () => {
+describe("installedGroups", () => {
   const tools = (): ToolModels[] =>
     buildToolModels(
       input({
@@ -263,76 +267,55 @@ describe("selectorSections", () => {
       titleOf,
     );
 
-  it("lists Installed before Recommended", () => {
-    expect(selectorSections(tools()).map((section) => section.id)).toEqual([
-      "installed",
-      "recommended",
-    ]);
-  });
-
-  it("leaves Recommended out when every model is installed, and keeps Installed", () => {
-    const allInstalled = buildToolModels(
-      input({
-        image: [image({ id: "only", downloaded: true })],
-        imageSelectedId: "only",
-      }),
-      titleOf,
-    );
-    const sections = selectorSections(allInstalled);
-    expect(sections.map((section) => section.id)).toEqual(["installed"]);
-    expect(sections[0]?.groups[0]?.rows).toHaveLength(1);
-  });
-
-  it("keeps Installed, empty, when nothing is installed", () => {
-    const none = buildToolModels(input({ image: [image({ id: "a" })] }), titleOf);
-    const sections = selectorSections(none);
-    expect(sections.map((section) => section.id)).toEqual(["installed", "recommended"]);
-    expect(sections[0]?.groups).toEqual([]);
-  });
-
-  it("puts the downloaded models in Installed and the rest in Recommended", () => {
-    const [installed, recommended] = selectorSections(tools());
-    expect(installed?.groups.flatMap((g) => g.rows.map((r) => r.model.id))).toEqual([
+  it("lists only the downloaded models", () => {
+    expect(installedGroups(tools()).flatMap((g) => g.rows.map((r) => r.model.id))).toEqual([
       "installed-image",
       "installed-stt",
     ]);
-    expect(recommended?.groups.flatMap((g) => g.rows.map((r) => r.model.id))).toEqual([
-      "missing-image",
-      "missing-upscale",
-    ]);
   });
 
-  it("groups rows by tool in tool order and leaves out a tool with no row in a section", () => {
-    const [installed] = selectorSections(tools());
-    expect(installed?.groups.map((g) => g.title)).toEqual([
+  it("gives no groups when nothing is installed", () => {
+    const none = buildToolModels(input({ image: [image({ id: "a" })] }), titleOf);
+    expect(installedGroups(none)).toEqual([]);
+  });
+
+  it("groups rows by tool in tool order and leaves out a tool with no installed row", () => {
+    expect(installedGroups(tools()).map((g) => g.title)).toEqual([
       "Text to image",
       "Audio: Speech to text",
     ]);
   });
 
   it("marks the row of the model the tool uses", () => {
-    const [installed] = selectorSections(tools());
-    const row = installed?.groups[0]?.rows[0];
-    expect(row?.selected).toBe(true);
-    expect(installed?.groups[1]?.rows[0]?.selected).toBe(false);
+    const groups = installedGroups(tools());
+    expect(groups[0]?.rows[0]?.selected).toBe(true);
+    expect(groups[1]?.rows[0]?.selected).toBe(false);
   });
 
   it("keeps the catalog and tool of each row, for its actions", () => {
-    const [, recommended] = selectorSections(tools());
-    const upscaleRow = recommended?.groups.find((g) => g.toolId === "playground-image-upscaling")
-      ?.rows[0];
-    expect(upscaleRow?.catalog).toBe("upscale");
-    expect(upscaleRow?.toolId).toBe("playground-image-upscaling");
+    const row = installedGroups(tools())[1]?.rows[0];
+    expect(row?.catalog).toBe("speech");
+    expect(row?.toolId).toBe("playground-audio");
   });
 
   it("gives no rows for a tool whose catalog has not loaded", () => {
     const loading = buildToolModels(input({ image: null }), titleOf);
-    const sections = selectorSections(loading);
-    expect(
-      sections.every((section) =>
-        section.groups.every((g) => g.toolId !== "playground-text-to-image"),
-      ),
-    ).toBe(true);
+    expect(installedGroups(loading).every((g) => g.toolId !== "playground-text-to-image")).toBe(
+      true,
+    );
+  });
+});
+
+describe("ToolModels group", () => {
+  it("names the Playground models group of each tool, with the speech task for Audio", () => {
+    const tools = buildToolModels(input({}), titleOf);
+    expect(tools.map((tool) => tool.group)).toEqual([
+      "imageGeneration",
+      "imageToImage",
+      "upscale",
+      "ocr",
+      "stt",
+    ]);
   });
 });
 

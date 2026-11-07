@@ -50,6 +50,7 @@ const model = (overrides: Partial<ImageModel> = {}): ImageModel => ({
   description: "Fast text to image",
   license: "CreativeML Open RAIL++-M",
   licenseUrl: "https://example.com/license",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   totalBytes: 2 * 1_073_741_824,
   downloaded: false,
   files: [],

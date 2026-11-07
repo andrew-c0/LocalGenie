@@ -9,6 +9,7 @@ const gtcrn: SpeechModel = {
   description: "",
   license: "",
   licenseUrl: "",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   sizeBytes: 500_000,
   languages: [],
   downloaded: true,

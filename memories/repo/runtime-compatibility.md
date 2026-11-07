@@ -18,14 +18,14 @@ Legend: **yes** = works and is offered in the app. **works, not offered** = runs
 |---|---|---|---|---|---|
 | Chat LLM / VLM (GGUF) | GenieX, llama.cpp | Any GGUF the user downloads | yes | yes | yes (Q4_0 has the best support); `hybrid` also exists |
 | Chat LLM (Qualcomm AI Hub, QAIRT) | GenieX, QAIRT | AI Hub catalog downloads | no | no | yes (NPU only by design) |
-| OCR (VLM, GGUF + projector) | GenieX server, llama.cpp | PaddleOCR-VL 1.6, MiniCPM-OCR 1.0 | yes | works for PaddleOCR-VL, but the slowest; MiniCPM-OCR not tried | works for both; decodes slower than the CPU but starts sooner |
+| OCR (VLM, GGUF + projector) | GenieX server, llama.cpp | 6: PaddleOCR-VL 1.6, GLM-OCR, MiniCPM-OCR 1.0, Qwen3-VL-2B, dots.ocr, DeepSeek-OCR | yes | works for PaddleOCR-VL, but the slowest; MiniCPM-OCR not tried | works for both; decodes slower than the CPU but starts sooner |
 | OCR vision encoder (the picture-reading part) | GenieX server | same | yes (`CPU`) | no | yes (`HTP0`); about 3x faster than CPU |
-| Text to image | stable-diffusion.cpp | SD 1.5, FLUX.2 klein 4B, Z-Image Turbo (Q4) | yes (default) | works, not offered by default: slower than the CPU, blank images with CFG above 1 unless `--batched-cfg off` | no |
+| Text to image | stable-diffusion.cpp | 9: SD 1.5, SD-Turbo (Q4), FLUX.2 klein 4B and 9B, SDXL base (Q4), SDXL-Turbo (Q8), Z-Image Turbo (Q4), Z-Image base, FLUX.1 schnell | yes (default) | works, not offered by default: slower than the CPU, blank images with CFG above 1 unless `--batched-cfg off` | no |
 | Image to image | stable-diffusion.cpp | SD 1.5 (re-draw), FLUX.2 klein 4B (instruction edit) | yes | not tried here; needs `--batched-cfg off` (always applied) | no |
-| Image upscaling | stable-diffusion.cpp | Real-ESRGAN anime 6B, 4xNomos2 | yes (about 10 to 16 s for 256 px to 1024 px, newest build) | no: aborts with `GGML_ASSERT(dst->extra)` in the OpenCL add kernel | no |
-| Audio tool: speech to text | sherpa-onnx | Whisper tiny.en, Moonshine base | yes | no | not tried |
-| Audio tool: text to speech, voice cloning | sherpa-onnx | Kokoro multi-lang (voices), Pocket TTS (cloning) | yes | no | not tried |
-| Audio tool: clean up or split (denoise, split) | sherpa-onnx | GTCRN, DPDFNet4, Spleeter 2 stems | yes | no | not tried |
+| Image upscaling | stable-diffusion.cpp | 5: Real-ESRGAN anime 6B, 4xNomos2, Real-ESRGAN x4plus, 4xNomosWebPhoto, 4xNomos8kSC | yes (about 10 to 16 s for 256 px to 1024 px, newest build) | no: aborts with `GGML_ASSERT(dst->extra)` in the OpenCL add kernel | no |
+| Audio tool: speech to text | sherpa-onnx | 9: Whisper tiny.en, base.en, base, small.en, turbo; Moonshine tiny, base; SenseVoice; Parakeet v3 | yes | no | not tried |
+| Audio tool: text to speech, voice cloning | sherpa-onnx | 8: Kitten nano, Piper Lessac, GLaDOS, LibriTTS-R, Matcha LJSpeech, Supertonic 3 (English only), Kokoro multi-lang (voices), Pocket TTS (cloning) | yes | no | not tried |
+| Audio tool: clean up or split (denoise, split) | sherpa-onnx | 7: GTCRN, DPDFNet baseline, DPDFNet 2, DPDFNet 2 48 kHz, DPDFNet 4, DPDFNet 8, Spleeter 2 stems | yes | no | not tried |
 
 ## Why some cells are missing
 

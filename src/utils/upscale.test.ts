@@ -17,6 +17,7 @@ const model = (overrides: Partial<UpscaleModel> = {}): UpscaleModel => ({
   description: "",
   license: "BSD-3-Clause",
   licenseUrl: "",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   sizeBytes: 1,
   downloaded: true,
   bestFor: "Illustrations and anime",

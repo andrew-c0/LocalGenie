@@ -33,6 +33,18 @@ const CAPABILITY_MEANING: Record<CapabilityBadgeId, string> = {
   thinking: "Thinking: reasoning mode",
   vision: "Vision: reads images",
   audio: "Audio: takes audio input",
+  textToImage: "Text to image: draws from a prompt",
+  imageEdit: "Image edit: changes a picture from an instruction",
+  redraw: "Image to image: re-draws a picture",
+  negativePrompt: "Negative prompt: steers away from unwanted content",
+  upscale: "Upscale: enlarges pictures",
+  speechToText: "Speech to text: writes out audio",
+  textToSpeech: "Text to speech: speaks text",
+  voiceCloning: "Voice cloning: copies a voice from a clip",
+  denoise: "Noise removal: cleans audio",
+  stemSplit: "Stem split: separates the parts of a mix",
+  ocrText: "Reads text: from pictures",
+  ocrTables: "Reads tables: into rows and columns",
 };
 
 /** The capabilities as a short plain-text line, in the order of the badges. Empty when there are none. */

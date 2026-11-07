@@ -19,7 +19,8 @@ pub struct EnhanceRequest {
 }
 
 /// The arguments for `sherpa-onnx-offline-denoiser` that clean `input` with the denoiser in
-/// `model_dir`, writing a WAV to `output`. Each option is `--name=value`.
+/// `model_dir`, writing a WAV to `output`. Each option is `--name=value`. The program writes the
+/// output at the model's own sample rate, so a 48 kHz model writes 48 kHz.
 pub(super) fn denoise_args(
     engine: DenoiseEngine,
     model_dir: &Path,
@@ -133,6 +134,37 @@ mod tests {
             args.iter().all(|arg| !arg.contains("attenuation-limit")),
             "the attenuation limit is left to the program's default"
         );
+    }
+
+    #[test]
+    fn the_other_dpdfnet_models_use_the_dpdfnet_flag_like_dpdfnet4() {
+        for (id, file) in [
+            ("dpdfnet-baseline", "dpdfnet_baseline.onnx"),
+            ("dpdfnet2", "dpdfnet2.onnx"),
+            ("dpdfnet8", "dpdfnet8.onnx"),
+            ("dpdfnet2-48khz-hr", "dpdfnet2_48khz_hr.onnx"),
+        ] {
+            let dir = Path::new(r"C:\models\denoisers").join(id);
+            let args = denoise_args(
+                denoise_engine(id),
+                &dir,
+                Path::new(r"C:\clips\a.wav"),
+                Path::new(r"C:\out\b.wav"),
+            );
+            assert_eq!(
+                args,
+                vec![
+                    format!(
+                        "--speech-denoiser-dpdfnet-model={}",
+                        dir.join(file).display()
+                    ),
+                    "--num-threads=4".to_string(),
+                    r"--input-wav=C:\clips\a.wav".to_string(),
+                    r"--output-wav=C:\out\b.wav".to_string(),
+                ],
+                "{id}"
+            );
+        }
     }
 
     #[test]

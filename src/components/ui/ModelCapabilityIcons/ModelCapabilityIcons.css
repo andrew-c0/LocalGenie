@@ -39,3 +39,28 @@
 .model-capability-icons__icon--audio {
   color: var(--colorPaletteDarkOrangeForeground1);
 }
+
+/* Playground models: one colour per family (image, upscaling, speech, OCR). */
+.model-capability-icons__icon--textToImage,
+.model-capability-icons__icon--imageEdit,
+.model-capability-icons__icon--redraw,
+.model-capability-icons__icon--negativePrompt {
+  color: var(--colorPalettePinkForeground2);
+}
+
+.model-capability-icons__icon--upscale {
+  color: var(--colorPaletteTealForeground2);
+}
+
+.model-capability-icons__icon--speechToText,
+.model-capability-icons__icon--textToSpeech,
+.model-capability-icons__icon--voiceCloning,
+.model-capability-icons__icon--denoise,
+.model-capability-icons__icon--stemSplit {
+  color: var(--colorPaletteDarkOrangeForeground1);
+}
+
+.model-capability-icons__icon--ocrText,
+.model-capability-icons__icon--ocrTables {
+  color: var(--colorPaletteGreenForeground1);
+}

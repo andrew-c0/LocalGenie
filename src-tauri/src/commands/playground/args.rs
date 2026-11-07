@@ -363,6 +363,29 @@ mod tests {
     }
 
     #[test]
+    fn turbo_and_sdxl_checkpoints_pass_only_the_checkpoint() {
+        for (model_id, steps, cfg) in [
+            ("sd-turbo-q4", "2", "1"),
+            ("sdxl-turbo-q8", "2", "1"),
+            ("sdxl-base-q4", "20", "7"),
+        ] {
+            let args = args_for(model_id);
+            assert_eq!(
+                value_after(&args, "-m"),
+                Some(local(model_id, ModelRole::Model).as_str()),
+                "{model_id}"
+            );
+            assert!(
+                value_after(&args, "--diffusion-model").is_none(),
+                "{model_id}"
+            );
+            assert!(value_after(&args, "--vae").is_none(), "{model_id}");
+            assert_eq!(value_after(&args, "--steps"), Some(steps), "{model_id}");
+            assert_eq!(value_after(&args, "--cfg-scale"), Some(cfg), "{model_id}");
+        }
+    }
+
+    #[test]
     fn flux2_passes_diffusion_model_vae_and_llm() {
         let recipe = find_recipe("flux2-klein-4b-q4").expect("flux");
         let args = args_for(recipe.id);
@@ -461,7 +484,12 @@ mod tests {
 
     #[test]
     fn distilled_models_never_get_a_negative_prompt_or_their_own_cfg() {
-        for model_id in ["flux2-klein-4b-q4", "z-image-turbo-q4"] {
+        for model_id in [
+            "flux2-klein-4b-q4",
+            "flux2-klein-9b-q4",
+            "z-image-turbo-q4",
+            "flux1-schnell-q4",
+        ] {
             let recipe = find_recipe(model_id).expect("distilled");
             let mut request = request_for(model_id);
             request.negative_prompt = Some("blurry".to_string());
@@ -499,6 +527,27 @@ mod tests {
         );
         assert_eq!(value_after(&args, "-n"), Some("blurry"));
         assert_eq!(value_after(&args, "--cfg-scale"), Some("3.5"));
+    }
+
+    #[test]
+    fn z_image_base_passes_the_requested_cfg_and_negative_prompt() {
+        let recipe = find_recipe("z-image-q4").expect("z-image base");
+        let mut request = request_for(recipe.id);
+        request.negative_prompt = Some("blurry".to_string());
+        request.cfg_scale = 3.5;
+        let args = build_args(
+            recipe,
+            &paths_for(recipe.id),
+            &request,
+            &output(),
+            None,
+            None,
+        );
+        assert_eq!(value_after(&args, "-n"), Some("blurry"));
+        assert_eq!(value_after(&args, "--cfg-scale"), Some("3.5"));
+        assert_eq!(value_after(&args, "--steps"), Some("28"));
+        assert!(value_after(&args, "-i").is_none());
+        assert!(value_after(&args, "-r").is_none());
     }
 
     #[test]
@@ -767,12 +816,15 @@ mod tests {
             ])
         );
 
-        for model_id in ["flux2-klein-4b-q4", "z-image-turbo-q4"] {
-            let steps = find_recipe(model_id)
-                .expect("recipe")
-                .defaults
-                .steps
-                .to_string();
+        for model_id in [
+            "flux2-klein-4b-q4",
+            "flux2-klein-9b-q4",
+            "z-image-turbo-q4",
+            "z-image-q4",
+        ] {
+            let recipe = find_recipe(model_id).expect("recipe");
+            let steps = recipe.defaults.steps.to_string();
+            let cfg = recipe.defaults.cfg_scale.to_string();
             let diffusion = local(model_id, ModelRole::Model);
             let vae = local(model_id, ModelRole::Vae);
             let llm = local(model_id, ModelRole::Llm);
@@ -794,7 +846,7 @@ mod tests {
                     "--steps",
                     steps.as_str(),
                     "--cfg-scale",
-                    "1",
+                    cfg.as_str(),
                     "--seed",
                     "42",
                     "-o",
@@ -976,6 +1028,46 @@ mod tests {
                 out.as_str(),
             ])
         );
+    }
+
+    #[test]
+    fn flux1_schnell_vector_passes_the_two_text_encoders_in_flag_order() {
+        let recipe = find_recipe("flux1-schnell-q4").expect("schnell");
+        let args = without_threads(args_for(recipe.id));
+
+        let diffusion = local(recipe.id, ModelRole::Model);
+        let vae = local(recipe.id, ModelRole::Vae);
+        let clip_l = local(recipe.id, ModelRole::ClipL);
+        let t5xxl = local(recipe.id, ModelRole::T5xxl);
+        let out = output().to_string_lossy().into_owned();
+        assert_eq!(
+            args,
+            strings(&[
+                "--diffusion-model",
+                diffusion.as_str(),
+                "--vae",
+                vae.as_str(),
+                "--clip_l",
+                clip_l.as_str(),
+                "--t5xxl",
+                t5xxl.as_str(),
+                "-p",
+                "a red fox in the snow",
+                "-W",
+                "512",
+                "-H",
+                "512",
+                "--steps",
+                "4",
+                "--cfg-scale",
+                "1",
+                "--seed",
+                "42",
+                "-o",
+                out.as_str(),
+            ])
+        );
+        assert!(value_after(&args, "--llm").is_none());
     }
 
     #[test]

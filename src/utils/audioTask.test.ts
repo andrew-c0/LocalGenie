@@ -21,6 +21,7 @@ const model = (overrides: Partial<SpeechModel> = {}): SpeechModel => ({
   description: "",
   license: "",
   licenseUrl: "",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   sizeBytes: 1,
   languages: [],
   downloaded: true,

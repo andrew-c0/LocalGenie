@@ -21,6 +21,8 @@ import AihubModelDetail from "./pages/models/AihubModelDetail/AihubModelDetail";
 import HubModelDetail from "./pages/models/HubModelDetail/HubModelDetail";
 import OverviewPage from "./pages/OverviewPage/OverviewPage";
 import PlaygroundLandingPage from "./pages/PlaygroundLandingPage/PlaygroundLandingPage";
+import PlaygroundModelDetail from "./pages/PlaygroundModelDetail/PlaygroundModelDetail";
+import PlaygroundModelsPage from "./pages/PlaygroundModelsPage/PlaygroundModelsPage";
 import PlaygroundSectionPage from "./pages/PlaygroundSectionPage/PlaygroundSectionPage";
 import SettingsLandingPage from "./pages/SettingsLandingPage/SettingsLandingPage";
 import SettingsSectionPage from "./pages/SettingsSectionPage/SettingsSectionPage";
@@ -33,7 +35,8 @@ import { audioTaskUrl } from "./utils/audioTask";
  *
  * Each main section has a landing page at its own path; sub-pages sit below it and show breadcrumbs.
  * - `/` Overview
- * - `/models` landing, `/models/local` installed models, `/models/local/:repoId` one installed model
+ * - `/models` landing, `/models/playground` Playground models (no runtime needed), `/models/playground/:group/:modelId`
+ *   one Playground model, `/models/local` installed models, `/models/local/:repoId` one installed model
  * - `/models/huggingface` Hugging Face browser, `/models/huggingface/:repoId` its detail
  * - `/models/aihub` Qualcomm AI Hub catalog, `/models/aihub/:id` its detail
  * - `/chat` default content, `/chat/:sessionId` one conversation
@@ -51,9 +54,12 @@ export default function Navigation() {
     <Routes>
       <Route element={<MainLayout />}>
         <Route path="/" element={<OverviewPage />} />
-        {/* Models, Chat and Benchmarks need the GenieX CLI; RuntimeGuard redirects to Settings > Runtimes without it. */}
+        {/* Chat, Benchmarks and the GenieX Models pages need the GenieX CLI; RuntimeGuard redirects to Settings > Runtimes without it. */}
+        {/* The Models landing and the Playground models page need no runtime; the GenieX pages below need the CLI. */}
+        <Route path="/models" element={<ModelsLandingPage />} />
+        <Route path="/models/playground" element={<PlaygroundModelsPage />} />
+        <Route path="/models/playground/:group/:modelId" element={<PlaygroundModelDetail />} />
         <Route element={<RuntimeGuard needs="cli" />}>
-          <Route path="/models" element={<ModelsLandingPage />} />
           <Route path="/models/local" element={<LocalModelsBrowserPage />} />
           <Route path="/models/local/:repoId" element={<HubModelDetail isLocal />} />
           <Route path="/models/huggingface" element={<HubModelsPage />} />

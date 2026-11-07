@@ -23,6 +23,7 @@ const model = (overrides: Partial<ImageModel> = {}): ImageModel => ({
   description: "",
   license: "",
   licenseUrl: "",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   totalBytes: 0,
   downloaded: true,
   files: [],

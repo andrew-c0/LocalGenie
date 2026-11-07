@@ -1,4 +1,20 @@
-import { BrainCircuitRegular, EyeRegular, MicRegular, WrenchRegular } from "@fluentui/react-icons";
+import {
+  ArrowMaximizeRegular,
+  ArrowSplitRegular,
+  BrainCircuitRegular,
+  DismissCircleRegular,
+  DocumentTextRegular,
+  EyeRegular,
+  ImageEditRegular,
+  ImageRegular,
+  ImageSparkleRegular,
+  MicRegular,
+  PersonVoiceRegular,
+  Speaker2Regular,
+  SpeakerMuteRegular,
+  TableRegular,
+  WrenchRegular,
+} from "@fluentui/react-icons";
 import type { ReactElement } from "react";
 import type { CapabilityBadge, CapabilityBadgeId } from "../../../utils/modelCapabilities";
 import { Flex } from "../Flex/Flex";
@@ -9,6 +25,18 @@ const ICONS: Record<CapabilityBadgeId, ReactElement> = {
   thinking: <BrainCircuitRegular />,
   vision: <EyeRegular />,
   audio: <MicRegular />,
+  textToImage: <ImageRegular />,
+  imageEdit: <ImageEditRegular />,
+  redraw: <ImageSparkleRegular />,
+  negativePrompt: <DismissCircleRegular />,
+  upscale: <ArrowMaximizeRegular />,
+  speechToText: <MicRegular />,
+  textToSpeech: <Speaker2Regular />,
+  voiceCloning: <PersonVoiceRegular />,
+  denoise: <SpeakerMuteRegular />,
+  stemSplit: <ArrowSplitRegular />,
+  ocrText: <DocumentTextRegular />,
+  ocrTables: <TableRegular />,
 };
 
 interface ModelCapabilityIconsProps {

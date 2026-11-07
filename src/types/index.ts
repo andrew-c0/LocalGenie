@@ -372,11 +372,23 @@ export interface RuntimeInstallProgress {
   message: string;
 }
 
+/** The pages a curated Playground model links to, from its catalog entry. */
+export interface PlaygroundModelLinks {
+  /** The Hugging Face repo whose README is the model card, or null when none is published. */
+  cardRepo: string | null;
+  /** The page the model's files come from. */
+  sourceUrl: string;
+  /** The model's documentation page, or null when there is none. */
+  docsUrl: string | null;
+}
+
 /** One file of an image model, as listed by `playground_image_models`. */
-interface ImageModelFile {
+export interface ImageModelFile {
   fileName: string;
   sizeBytes: number;
   present: boolean;
+  /** The Hugging Face repo id the file comes from. */
+  source: string;
 }
 
 /** A width and height in pixels. */
@@ -404,6 +416,7 @@ export interface ImageModel {
   description: string;
   license: string;
   licenseUrl: string;
+  links: PlaygroundModelLinks;
   /** Size of all the model's files, in bytes. */
   totalBytes: number;
   downloaded: boolean;
@@ -536,6 +549,7 @@ export interface UpscaleModel {
   description: string;
   license: string;
   licenseUrl: string;
+  links: PlaygroundModelLinks;
   sizeBytes: number;
   downloaded: boolean;
   /** What the model suits, e.g. "Illustrations and anime". */
@@ -567,6 +581,7 @@ export interface OcrModel {
   bestFor: string;
   license: string;
   licenseUrl: string;
+  links: PlaygroundModelLinks;
   sizeBytes: number;
   downloaded: boolean;
   modes: OcrModeOption[];
@@ -684,6 +699,7 @@ export interface SpeechModel {
   description: string;
   license: string;
   licenseUrl: string;
+  links: PlaygroundModelLinks;
   /** Size of all the model's files, in bytes. */
   sizeBytes: number;
   languages: string[];

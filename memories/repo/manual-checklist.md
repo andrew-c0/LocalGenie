@@ -194,6 +194,43 @@ How: start a download online, then turn off the network adapter (as in "Offline 
 - [ ] Models landing (`/models`): the installed count is the GenieX models plus the Playground models except OCR (OCR models are already GenieX models, so they are counted once).
 - [ ] The Playground chip on the Local models page labels the audio group "Clean up and split" (not "Audio to audio").
 
+## Playground: more models, the Playground models page and model cards (2026-11-07 working tree; ticked = approved by the user, "all good")
+
+Not run: download each model and run it once.
+- [ ] SD-Turbo (Q4)
+- [ ] SDXL base (Q4)
+- [ ] SDXL-Turbo (Q8)
+- [ ] FLUX.1 schnell
+- [ ] Real-ESRGAN x4plus
+- [ ] 4xNomosWebPhoto
+- [ ] 4xNomos8kSC
+- [ ] Qwen3-VL-2B (OCR)
+- [ ] dots.ocr (OCR)
+- [ ] DeepSeek-OCR (OCR)
+- [ ] Whisper base.en, base, small.en and turbo
+- [ ] Moonshine tiny
+- [ ] Piper voices (Lessac, GLaDOS, LibriTTS-R)
+- [ ] Matcha LJSpeech
+- [ ] Kitten nano
+
+Approved by the user (run in the app):
+- [x] FLUX.2 klein 9B
+- [x] Z-Image base
+- [x] SenseVoice
+- [x] Parakeet v3
+- [x] Supertonic 3 (English)
+- [x] DPDFNet (clean up)
+- [x] GLM-OCR
+
+Pages and cards (approved):
+- [x] Models > Playground models page and its per-model detail pages (facts, capabilities, specifications, files)
+- [x] Header Playground dropdown lists installed models only
+- [x] Model card: Hugging Face README as Model Card, and its images
+
+Not run:
+- [ ] Offline, with the adapter off: the Model Card README shows a skeleton while it loads, a Try again block on failure, and the images stay hidden when they fail.
+- [ ] Dropdown empty state, then "Get models" and "More models" open the right pages.
+
 ## Settings > About (committed 1ab5267, 2026-11-04)
 
 The user looked at the page in the app on 2026-11-04 and said it looked good. The items below were not run; none is ticked.

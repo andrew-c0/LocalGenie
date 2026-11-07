@@ -2,6 +2,7 @@
 //! sherpa-onnx runtime as the speech models and sit in the same model list, under the same
 //! `k2-fsa--sherpa-onnx` folder. Each one is a single `.onnx` file or the `.tar.bz2` of a folder.
 
+use super::model_links::ModelLinks;
 use super::speech_catalog::{Delivery, Engine, SpeechRecipe};
 
 /// Release tag of the single-file speech enhancement models.
@@ -68,6 +69,11 @@ const GTCRN_SIMPLE: SpeechRecipe = SpeechRecipe {
         model: "gtcrn_simple.onnx",
     }),
     speakers: &[],
+    links: ModelLinks {
+        card_repo: None,
+        source_url: "https://github.com/k2-fsa/sherpa-onnx/releases/tag/speech-enhancement-models",
+        docs_url: Some("https://k2-fsa.github.io/sherpa/onnx/speech-enhancement/models.html"),
+    },
 };
 
 const DPDFNET4: SpeechRecipe = SpeechRecipe {
@@ -86,6 +92,103 @@ const DPDFNET4: SpeechRecipe = SpeechRecipe {
         model: "dpdfnet4.onnx",
     }),
     speakers: &[],
+    links: ModelLinks {
+        card_repo: Some("ceva-ip/DPDFNet"),
+        source_url: "https://github.com/k2-fsa/sherpa-onnx/releases/tag/speech-enhancement-models",
+        docs_url: Some("https://k2-fsa.github.io/sherpa/onnx/speech-enhancement/models.html"),
+    },
+};
+
+const DPDFNET8: SpeechRecipe = SpeechRecipe {
+    id: "dpdfnet8",
+    name: "DPDFNet8 (denoise)",
+    description: "The best quality of the 16 kHz DPDFNet denoisers, 14.6 MB. Larger and slower than DPDFNet4. Output is 16 kHz mono.",
+    license: "Apache-2.0",
+    license_url: DPDFNET_LICENSE_URL,
+    delivery: Delivery::SingleFile {
+        file_name: "dpdfnet8.onnx",
+    },
+    release_tag: SPEECH_ENHANCEMENT_TAG,
+    size_bytes: 14_623_619,
+    languages: &["any"],
+    engine: Engine::Denoise(DenoiseEngine::DpdfNet {
+        model: "dpdfnet8.onnx",
+    }),
+    speakers: &[],
+    links: ModelLinks {
+        card_repo: Some("ceva-ip/DPDFNet"),
+        source_url: "https://github.com/k2-fsa/sherpa-onnx/releases/tag/speech-enhancement-models",
+        docs_url: Some("https://k2-fsa.github.io/sherpa/onnx/speech-enhancement/models.html"),
+    },
+};
+
+const DPDFNET2_48KHZ_HR: SpeechRecipe = SpeechRecipe {
+    id: "dpdfnet2-48khz-hr",
+    name: "DPDFNet2 48 kHz (denoise)",
+    description: "A DPDFNet denoiser for 48 kHz audio, 10.6 MB. A 16 kHz input is resampled up, and the output is 48 kHz mono.",
+    license: "Apache-2.0",
+    license_url: DPDFNET_LICENSE_URL,
+    delivery: Delivery::SingleFile {
+        file_name: "dpdfnet2_48khz_hr.onnx",
+    },
+    release_tag: SPEECH_ENHANCEMENT_TAG,
+    size_bytes: 10_596_848,
+    languages: &["any"],
+    engine: Engine::Denoise(DenoiseEngine::DpdfNet {
+        model: "dpdfnet2_48khz_hr.onnx",
+    }),
+    speakers: &[],
+    links: ModelLinks {
+        card_repo: Some("ceva-ip/DPDFNet"),
+        source_url: "https://github.com/k2-fsa/sherpa-onnx/releases/tag/speech-enhancement-models",
+        docs_url: Some("https://k2-fsa.github.io/sherpa/onnx/speech-enhancement/models.html"),
+    },
+};
+
+const DPDFNET_BASELINE: SpeechRecipe = SpeechRecipe {
+    id: "dpdfnet-baseline",
+    name: "DPDFNet baseline (denoise)",
+    description: "Fast, the smallest DPDFNet denoiser, 8.8 MB. Output is 16 kHz mono.",
+    license: "Apache-2.0",
+    license_url: DPDFNET_LICENSE_URL,
+    delivery: Delivery::SingleFile {
+        file_name: "dpdfnet_baseline.onnx",
+    },
+    release_tag: SPEECH_ENHANCEMENT_TAG,
+    size_bytes: 8_791_035,
+    languages: &["any"],
+    engine: Engine::Denoise(DenoiseEngine::DpdfNet {
+        model: "dpdfnet_baseline.onnx",
+    }),
+    speakers: &[],
+    links: ModelLinks {
+        card_repo: Some("ceva-ip/DPDFNet"),
+        source_url: "https://github.com/k2-fsa/sherpa-onnx/releases/tag/speech-enhancement-models",
+        docs_url: Some("https://k2-fsa.github.io/sherpa/onnx/speech-enhancement/models.html"),
+    },
+};
+
+const DPDFNET2: SpeechRecipe = SpeechRecipe {
+    id: "dpdfnet2",
+    name: "DPDFNet2 (denoise)",
+    description: "Fast, a DPDFNet denoiser for real-time use, 10.2 MB. Output is 16 kHz mono.",
+    license: "Apache-2.0",
+    license_url: DPDFNET_LICENSE_URL,
+    delivery: Delivery::SingleFile {
+        file_name: "dpdfnet2.onnx",
+    },
+    release_tag: SPEECH_ENHANCEMENT_TAG,
+    size_bytes: 10_249_356,
+    languages: &["any"],
+    engine: Engine::Denoise(DenoiseEngine::DpdfNet {
+        model: "dpdfnet2.onnx",
+    }),
+    speakers: &[],
+    links: ModelLinks {
+        card_repo: Some("ceva-ip/DPDFNet"),
+        source_url: "https://github.com/k2-fsa/sherpa-onnx/releases/tag/speech-enhancement-models",
+        docs_url: Some("https://k2-fsa.github.io/sherpa/onnx/speech-enhancement/models.html"),
+    },
 };
 
 const SPLEETER_2STEMS_INT8: SpeechRecipe = SpeechRecipe {
@@ -105,10 +208,23 @@ const SPLEETER_2STEMS_INT8: SpeechRecipe = SpeechRecipe {
         accompaniment: "accompaniment.int8.onnx",
     }),
     speakers: &[],
+    links: ModelLinks {
+        card_repo: None,
+        source_url: "https://github.com/k2-fsa/sherpa-onnx/releases/tag/source-separation-models",
+        docs_url: Some("https://k2-fsa.github.io/sherpa/onnx/source-separation/models.html"),
+    },
 };
 
 /// Every curated audio model, in the order the Playground lists them.
-pub(super) const RECIPES: &[SpeechRecipe] = &[GTCRN_SIMPLE, DPDFNET4, SPLEETER_2STEMS_INT8];
+pub(super) const RECIPES: &[SpeechRecipe] = &[
+    GTCRN_SIMPLE,
+    DPDFNET_BASELINE,
+    DPDFNET2,
+    DPDFNET2_48KHZ_HR,
+    DPDFNET4,
+    DPDFNET8,
+    SPLEETER_2STEMS_INT8,
+];
 
 #[cfg(test)]
 mod tests {
@@ -127,6 +243,8 @@ mod tests {
         }
         assert_eq!(GTCRN_SIMPLE.kind(), SpeechKind::Denoise);
         assert_eq!(DPDFNET4.kind(), SpeechKind::Denoise);
+        assert_eq!(DPDFNET8.kind(), SpeechKind::Denoise);
+        assert_eq!(DPDFNET2_48KHZ_HR.kind(), SpeechKind::Denoise);
         assert_eq!(SPLEETER_2STEMS_INT8.kind(), SpeechKind::Separate);
     }
 
@@ -141,6 +259,39 @@ mod tests {
     fn denoisers_name_their_one_model_file() {
         assert_eq!(GTCRN_SIMPLE.engine.entries(), vec!["gtcrn_simple.onnx"]);
         assert_eq!(DPDFNET4.engine.entries(), vec!["dpdfnet4.onnx"]);
+        assert_eq!(DPDFNET8.engine.entries(), vec!["dpdfnet8.onnx"]);
+        assert_eq!(
+            DPDFNET_BASELINE.engine.entries(),
+            vec!["dpdfnet_baseline.onnx"]
+        );
+        assert_eq!(DPDFNET2.engine.entries(), vec!["dpdfnet2.onnx"]);
+        assert_eq!(
+            DPDFNET2_48KHZ_HR.engine.entries(),
+            vec!["dpdfnet2_48khz_hr.onnx"]
+        );
+    }
+
+    #[test]
+    fn the_dpdfnet_models_share_the_dpdfnet_engine_and_the_apache_licence() {
+        for recipe in [
+            &DPDFNET_BASELINE,
+            &DPDFNET2,
+            &DPDFNET4,
+            &DPDFNET8,
+            &DPDFNET2_48KHZ_HR,
+        ] {
+            assert!(
+                matches!(
+                    recipe.engine,
+                    Engine::Denoise(DenoiseEngine::DpdfNet { .. })
+                ),
+                "{} should use the DPDFNet engine",
+                recipe.id
+            );
+            assert_eq!(recipe.license, "Apache-2.0", "{}", recipe.id);
+            assert_eq!(recipe.license_url, DPDFNET_LICENSE_URL, "{}", recipe.id);
+            assert_eq!(recipe.release_tag, SPEECH_ENHANCEMENT_TAG, "{}", recipe.id);
+        }
     }
 
     #[test]
@@ -153,7 +304,14 @@ mod tests {
 
     #[test]
     fn a_single_file_model_keeps_its_file_under_the_asset_name() {
-        for recipe in [&GTCRN_SIMPLE, &DPDFNET4] {
+        for recipe in [
+            &GTCRN_SIMPLE,
+            &DPDFNET_BASELINE,
+            &DPDFNET2,
+            &DPDFNET4,
+            &DPDFNET8,
+            &DPDFNET2_48KHZ_HR,
+        ] {
             let Delivery::SingleFile { file_name } = recipe.delivery else {
                 panic!("{} should be a single file", recipe.id);
             };
@@ -161,6 +319,14 @@ mod tests {
             assert_eq!(recipe.engine.entries(), vec![file_name]);
             assert!(file_name.ends_with(".onnx"), "{file_name}");
         }
+    }
+
+    #[test]
+    fn the_48_khz_denoiser_is_listed_as_48_khz_and_the_others_as_16_khz() {
+        assert!(DPDFNET2_48KHZ_HR.description.contains("48 kHz"));
+        assert!(!DPDFNET2_48KHZ_HR.description.contains("16 kHz mono"));
+        assert!(DPDFNET8.description.contains("16 kHz mono"));
+        assert!(DPDFNET4.description.contains("16 kHz mono"));
     }
 
     #[test]
@@ -177,7 +343,37 @@ mod tests {
     fn the_sizes_are_the_github_sizes() {
         assert_eq!(GTCRN_SIMPLE.size_bytes, 535_638);
         assert_eq!(DPDFNET4.size_bytes, 11_707_436);
+        assert_eq!(DPDFNET8.size_bytes, 14_623_619);
+        assert_eq!(DPDFNET2_48KHZ_HR.size_bytes, 10_596_848);
+        assert_eq!(DPDFNET_BASELINE.size_bytes, 8_791_035);
+        assert_eq!(DPDFNET2.size_bytes, 10_249_356);
         assert_eq!(SPLEETER_2STEMS_INT8.size_bytes, 48_623_481);
+    }
+
+    #[test]
+    fn the_two_new_denoisers_are_fast_16_khz_dpdfnet_files_on_the_release() {
+        for recipe in [&DPDFNET_BASELINE, &DPDFNET2] {
+            assert!(recipe.description.starts_with("Fast"), "{}", recipe.id);
+            assert!(recipe.description.contains("16 kHz mono"), "{}", recipe.id);
+            assert_eq!(recipe.release_tag, SPEECH_ENHANCEMENT_TAG, "{}", recipe.id);
+            assert_eq!(recipe.license, "Apache-2.0", "{}", recipe.id);
+        }
+        assert_eq!(
+            speech_catalog::download_url(&DPDFNET2),
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/dpdfnet2.onnx"
+        );
+        assert_eq!(
+            speech_catalog::download_url(&DPDFNET_BASELINE),
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/dpdfnet_baseline.onnx"
+        );
+    }
+
+    #[test]
+    fn the_denoisers_are_sorted_small_to_large_then_the_separator() {
+        let sizes: Vec<u64> = RECIPES.iter().map(|recipe| recipe.size_bytes).collect();
+        assert!(sizes.windows(2).all(|pair| pair[0] <= pair[1]), "{sizes:?}");
+        assert_eq!(RECIPES[0].id, "gtcrn-simple");
+        assert_eq!(RECIPES[RECIPES.len() - 1].id, "spleeter-2stems-int8");
     }
 
     #[test]

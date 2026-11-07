@@ -108,7 +108,27 @@ export function capabilityRows(
   ];
 }
 
-export type CapabilityBadgeId = "tools" | "thinking" | "vision" | "audio";
+/**
+ * The capability icons. The first four are the Hugging Face scan's; the rest are what a Playground model
+ * does (image, upscaling, speech and OCR), read from its catalog entry.
+ */
+export type CapabilityBadgeId =
+  | "tools"
+  | "thinking"
+  | "vision"
+  | "audio"
+  | "textToImage"
+  | "imageEdit"
+  | "redraw"
+  | "negativePrompt"
+  | "upscale"
+  | "speechToText"
+  | "textToSpeech"
+  | "voiceCloning"
+  | "denoise"
+  | "stemSplit"
+  | "ocrText"
+  | "ocrTables";
 
 /** A confirmed capability shown as an icon. `label` is the tooltip and the accessible label. */
 export interface CapabilityBadge {

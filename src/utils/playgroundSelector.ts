@@ -14,6 +14,7 @@ import { formatBytes } from "./format";
 import { imageToImageModels, inputBadgeLabel } from "./imageToImage";
 import { recommendationDetail } from "./modelRecommendations";
 import { OCR_BEST_FOR_LABEL } from "./ocrText";
+import { type PlaygroundLocalGroup, speechGroupOf } from "./playgroundLocalModels";
 import { type SpeechSelection, speechModelsOfKind } from "./speech";
 import { UPSCALE_BEST_FOR_LABEL } from "./upscaleText";
 
@@ -57,6 +58,8 @@ export interface ToolModels {
   toolId: PlaygroundToolId;
   /** The tool's name in the selector, e.g. "Text to image" or "Audio: Speech to text". */
   title: string;
+  /** The Playground models page group of the tool's models, e.g. the speech task for the Audio tool. */
+  group: PlaygroundLocalGroup;
   catalog: PlaygroundModelKind;
   /** The models this tool lists, in catalog order. Null while its catalog loads. */
   models: SelectorModel[] | null;
@@ -141,12 +144,14 @@ function selectedIn(models: SelectorModel[] | null, id: string | null): Selector
 function toolEntry(
   toolId: PlaygroundToolId,
   title: string,
+  group: PlaygroundLocalGroup,
   models: SelectorModel[] | null,
   selectedId: string | null,
 ): ToolModels {
   return {
     toolId,
     title,
+    group,
     catalog: CATALOG_OF_TOOL[toolId],
     models,
     selected: selectedIn(models, selectedId),
@@ -174,23 +179,32 @@ export function buildToolModels(
     toolEntry(
       "playground-text-to-image",
       titleOf("playground-text-to-image"),
+      "imageGeneration",
       image,
       input.imageSelectedId,
     ),
     toolEntry(
       "playground-image-to-image",
       titleOf("playground-image-to-image"),
+      "imageToImage",
       editImage,
       input.imageSelectedId,
     ),
     toolEntry(
       "playground-image-upscaling",
       titleOf("playground-image-upscaling"),
+      "upscale",
       upscale,
       input.upscaleSelectedId,
     ),
-    toolEntry("playground-ocr", titleOf("playground-ocr"), ocr, input.ocrSelectedId),
-    toolEntry("playground-audio", audioTitle, audio, input.speechSelectedIds[audioKind]),
+    toolEntry("playground-ocr", titleOf("playground-ocr"), "ocr", ocr, input.ocrSelectedId),
+    toolEntry(
+      "playground-audio",
+      audioTitle,
+      speechGroupOf(audioKind),
+      audio,
+      input.speechSelectedIds[audioKind],
+    ),
   ];
 }
 
@@ -210,16 +224,6 @@ export interface SelectorGroup {
   rows: SelectorRow[];
 }
 
-export type SelectorSectionId = "installed" | "recommended";
-
-/** One section of the selector popover. */
-export interface SelectorSection {
-  id: SelectorSectionId;
-  title: string;
-  /** The tools with at least one row in this section, in tool order. */
-  groups: SelectorGroup[];
-}
-
 function groupsOf(tools: ToolModels[], keep: (model: SelectorModel) => boolean): SelectorGroup[] {
   return tools
     .map((tool) => ({
@@ -236,23 +240,12 @@ function groupsOf(tools: ToolModels[], keep: (model: SelectorModel) => boolean):
 }
 
 /**
- * The popover's sections in their order: Installed (the downloaded models, click to use) and then
- * Recommended (the catalog entries still to download). Each section lists the tools in tool order,
- * and a tool with no row in a section is left out of it. Installed is always there, so it can show
- * its empty note; Recommended is left out when nothing is left to download.
+ * The popover's installed models: the downloaded models of the listed tools, grouped by tool in tool
+ * order. A tool with no installed model is left out, so the list is empty when nothing is installed.
+ * The catalog models still to download are not listed here; they are on the Playground models page.
  */
-export function selectorSections(tools: ToolModels[]): SelectorSection[] {
-  const installed: SelectorSection = {
-    id: "installed",
-    title: "Installed",
-    groups: groupsOf(tools, (model) => model.downloaded),
-  };
-  const recommended: SelectorSection = {
-    id: "recommended",
-    title: "Recommended",
-    groups: groupsOf(tools, (model) => !model.downloaded),
-  };
-  return recommended.groups.length > 0 ? [installed, recommended] : [installed];
+export function installedGroups(tools: ToolModels[]): SelectorGroup[] {
+  return groupsOf(tools, (model) => model.downloaded);
 }
 
 /** The trigger's label: the current tool's selected model, or "Select a model". */

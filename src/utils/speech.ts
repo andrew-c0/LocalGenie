@@ -97,7 +97,8 @@ export function voiceGroup(label: string): string {
 export function sortVoices(voices: SpeechVoice[]): SpeechVoice[] {
   return [...voices].sort(
     (a, b) =>
-      voiceGroup(a.label).localeCompare(voiceGroup(b.label)) || a.name.localeCompare(b.name),
+      voiceGroup(a.label).localeCompare(voiceGroup(b.label)) ||
+      a.name.localeCompare(b.name, undefined, { numeric: true }),
   );
 }
 

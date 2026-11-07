@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ImageModel, OcrModel, SpeechModel, UpscaleModel } from "../types";
+import { formatBytes } from "./format";
 import {
   collectInstalledPlaygroundModels,
-  groupPlaygroundLocalModels,
+  deleteBodyOf,
   type PlaygroundCatalogs,
-  type PlaygroundLocalGroup,
-  type PlaygroundLocalModel,
-  playgroundOnlyCount,
   speechGroupOf,
 } from "./playgroundLocalModels";
 
@@ -16,6 +14,7 @@ const image = (overrides: Partial<ImageModel>): ImageModel => ({
   description: "",
   license: "",
   licenseUrl: "",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   totalBytes: 1_000,
   downloaded: true,
   files: [],
@@ -32,6 +31,7 @@ const upscale = (overrides: Partial<UpscaleModel>): UpscaleModel => ({
   description: "",
   license: "",
   licenseUrl: "",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   sizeBytes: 2_000,
   downloaded: true,
   bestFor: "",
@@ -45,6 +45,7 @@ const speech = (overrides: Partial<SpeechModel>): SpeechModel => ({
   description: "",
   license: "",
   licenseUrl: "",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   sizeBytes: 3_000,
   languages: [],
   downloaded: true,
@@ -60,6 +61,7 @@ const ocr = (overrides: Partial<OcrModel>): OcrModel => ({
   bestFor: "",
   license: "",
   licenseUrl: "",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   sizeBytes: 4_000,
   downloaded: true,
   modes: [],
@@ -129,54 +131,16 @@ describe("collectInstalledPlaygroundModels", () => {
   });
 });
 
-describe("groupPlaygroundLocalModels", () => {
-  const models: PlaygroundLocalModel[] = [
-    { id: "ocr", kind: "ocr", label: "Qwen OCR" },
-    { id: "up", kind: "upscale", label: "Real-ESRGAN" },
-    { id: "i2i", kind: "imageToImage", label: "Edit Qwen" },
-    { id: "t2i", kind: "imageGeneration", label: "FLUX schnell" },
-    { id: "tts", kind: "tts", label: "Kokoro" },
-  ];
-
-  it("orders the groups by tool and skips empty ones", () => {
-    const groups = groupPlaygroundLocalModels(models, "");
-    expect(groups.map((g) => g.label)).toEqual([
-      "Image generation",
-      "Image to image",
-      "Upscaling",
-      "Text to speech",
-      "OCR",
-    ]);
-    expect(groups[0].models.map((m) => m.id)).toEqual(["t2i"]);
+describe("deleteBodyOf", () => {
+  it("says the size when the catalog lists one", () => {
+    const body = deleteBodyOf({ id: "a", kind: "upscale", label: "A", sizeBytes: 2_000_000 });
+    expect(body).toContain(formatBytes(2_000_000));
   });
 
-  it("returns no groups for an empty list", () => {
-    expect(groupPlaygroundLocalModels([], "")).toEqual([]);
-  });
-
-  it("filters by name, case-insensitively and ignoring surrounding spaces", () => {
-    const groups = groupPlaygroundLocalModels(models, "  qwen ");
-    expect(groups.map((g) => g.models.map((m) => m.id))).toEqual([["i2i"], ["ocr"]]);
-  });
-
-  it("drops every group when nothing matches the name", () => {
-    expect(groupPlaygroundLocalModels(models, "nothing like this")).toEqual([]);
-  });
-});
-
-describe("playgroundOnlyCount", () => {
-  const model = (kind: PlaygroundLocalGroup): PlaygroundLocalModel => ({
-    id: kind,
-    kind,
-    label: kind,
-  });
-
-  it("counts every Playground model except OCR, which GenieX already lists", () => {
-    const list = [model("imageGeneration"), model("upscale"), model("tts"), model("ocr")];
-    expect(playgroundOnlyCount(list)).toBe(3);
-  });
-
-  it("is 0 for an empty list", () => {
-    expect(playgroundOnlyCount([])).toBe(0);
+  it("leaves the size out when the catalog lists none", () => {
+    const body = deleteBodyOf({ id: "a", kind: "upscale", label: "A" });
+    expect(body).toBe(
+      "You can download it again later. Files shared with other downloaded models are kept.",
+    );
   });
 });

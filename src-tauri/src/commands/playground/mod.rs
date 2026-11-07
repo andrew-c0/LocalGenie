@@ -17,6 +17,7 @@ mod image_job;
 mod input_image;
 mod model_delete;
 mod model_download;
+mod model_links;
 mod ocr_catalog;
 pub(crate) mod ocr_commands;
 mod ocr_download;

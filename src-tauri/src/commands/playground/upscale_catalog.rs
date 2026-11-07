@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
+use super::model_links::ModelLinks;
 use crate::commands::download::validate_file_name;
 
 /// The folder under the models root that holds the upscaler files.
@@ -30,6 +31,7 @@ pub(super) struct UpscaleRecipe {
     pub size_bytes: u64,
     /// What kind of picture the model suits, in a short phrase.
     pub best_for: &'static str,
+    pub links: ModelLinks,
 }
 
 impl UpscaleRecipe {
@@ -48,6 +50,11 @@ const REALESRGAN_ANIME_6B: UpscaleRecipe = UpscaleRecipe {
     url: "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
     size_bytes: 17_938_799,
     best_for: "Illustrations and anime",
+    links: ModelLinks {
+        card_repo: None,
+        source_url: "https://github.com/xinntao/Real-ESRGAN/releases/tag/v0.2.2.4",
+        docs_url: Some("https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/esrgan.md"),
+    },
 };
 
 const NOMOS2_HQ_MOSR: UpscaleRecipe = UpscaleRecipe {
@@ -59,10 +66,70 @@ const NOMOS2_HQ_MOSR: UpscaleRecipe = UpscaleRecipe {
     url: "https://github.com/Phhofm/models/releases/download/4xNomos2_hq_mosr/4xNomos2_hq_mosr.pth",
     size_bytes: 17_213_494,
     best_for: "Photographs of non-degraded input",
+    links: ModelLinks {
+        card_repo: None,
+        source_url: "https://github.com/Phhofm/models/releases/tag/4xNomos2_hq_mosr",
+        docs_url: Some("https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/esrgan.md"),
+    },
+};
+
+const REALESRGAN_X4PLUS: UpscaleRecipe = UpscaleRecipe {
+    id: "realesrgan-x4plus",
+    name: "Real-ESRGAN x4plus",
+    description:
+        "Best quality: a general 4x photo upscaler that suits most pictures, download about 67 MB.",
+    license: "BSD-3-Clause",
+    license_url: "https://github.com/xinntao/Real-ESRGAN/blob/master/LICENSE",
+    url: "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
+    size_bytes: 67_040_989,
+    best_for: "General photographs",
+    links: ModelLinks {
+        card_repo: None,
+        source_url: "https://github.com/xinntao/Real-ESRGAN/releases/tag/v0.1.0",
+        docs_url: Some("https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/esrgan.md"),
+    },
+};
+
+const NOMOS_WEBPHOTO_ESRGAN: UpscaleRecipe = UpscaleRecipe {
+    id: "nomos-webphoto-esrgan-x4",
+    name: "4xNomosWebPhoto ESRGAN",
+    description: "Fast: a 4x photo upscaler for web photos with noise, blur and JPEG or WebP compression, download about 34 MB.",
+    license: "CC-BY (attribution; author writes CC-BY-0.4)",
+    license_url: "https://github.com/Phhofm/models/releases/tag/4xNomosWebPhoto_esrgan",
+    url: "https://github.com/Phhofm/models/releases/download/4xNomosWebPhoto_esrgan/4xNomosWebPhoto_esrgan.pth",
+    size_bytes: 33_688_212,
+    best_for: "Compressed or noisy web photographs",
+    links: ModelLinks {
+        card_repo: None,
+        source_url: "https://github.com/Phhofm/models/releases/tag/4xNomosWebPhoto_esrgan",
+        docs_url: Some("https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/esrgan.md"),
+    },
+};
+
+const NOMOS8K_SC_ESRGAN: UpscaleRecipe = UpscaleRecipe {
+    id: "nomos8k-sc-esrgan-x4",
+    name: "4xNomos8kSC",
+    description: "Balanced: a 4x photo upscaler for JPEG-compressed photographs with slight blur, download about 67 MB.",
+    license: "CC-BY-4.0",
+    license_url: "https://github.com/Phhofm/models/releases/tag/4xNomos8kSC",
+    url: "https://github.com/Phhofm/models/releases/download/4xNomos8kSC/4xNomos8kSC.pth",
+    size_bytes: 67_076_350,
+    best_for: "JPEG-compressed photographs with slight blur",
+    links: ModelLinks {
+        card_repo: None,
+        source_url: "https://github.com/Phhofm/models/releases/tag/4xNomos8kSC",
+        docs_url: Some("https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/esrgan.md"),
+    },
 };
 
 /// Every curated upscaler, in the order the Playground lists them.
-pub(super) const RECIPES: &[UpscaleRecipe] = &[REALESRGAN_ANIME_6B, NOMOS2_HQ_MOSR];
+pub(super) const RECIPES: &[UpscaleRecipe] = &[
+    REALESRGAN_ANIME_6B,
+    NOMOS2_HQ_MOSR,
+    REALESRGAN_X4PLUS,
+    NOMOS_WEBPHOTO_ESRGAN,
+    NOMOS8K_SC_ESRGAN,
+];
 
 /// The recipe with this id, or an error for an id that is not in the catalogue.
 pub(super) fn find_recipe(id: &str) -> Result<&'static UpscaleRecipe, String> {
@@ -84,6 +151,7 @@ pub struct UpscaleModel {
     pub size_bytes: u64,
     pub downloaded: bool,
     pub best_for: &'static str,
+    pub links: ModelLinks,
 }
 
 /// The listing entry for `recipe`, checking its file under `models_root`.
@@ -97,6 +165,7 @@ pub(super) fn describe(recipe: &'static UpscaleRecipe, models_root: &Path) -> Up
         size_bytes: recipe.size_bytes,
         downloaded: is_downloaded(recipe, models_root),
         best_for: recipe.best_for,
+        links: recipe.links,
     }
 }
 
@@ -171,6 +240,30 @@ mod tests {
         let nomos = find_recipe("nomos2-hq-mosr-x4").expect("nomos");
         assert_eq!(nomos.size_bytes, 17_213_494);
         assert_eq!(nomos.file_name(), "4xNomos2_hq_mosr.pth");
+        let x4plus = find_recipe("realesrgan-x4plus").expect("x4plus");
+        assert_eq!(x4plus.size_bytes, 67_040_989);
+        assert_eq!(x4plus.file_name(), "RealESRGAN_x4plus.pth");
+        let webphoto = find_recipe("nomos-webphoto-esrgan-x4").expect("webphoto");
+        assert_eq!(webphoto.size_bytes, 33_688_212);
+        assert_eq!(webphoto.file_name(), "4xNomosWebPhoto_esrgan.pth");
+        let nomos8k = find_recipe("nomos8k-sc-esrgan-x4").expect("nomos8k");
+        assert_eq!(nomos8k.size_bytes, 67_076_350);
+        assert_eq!(nomos8k.file_name(), "4xNomos8kSC.pth");
+    }
+
+    #[test]
+    fn the_added_recipes_describe_their_speed_first() {
+        for id in [
+            "realesrgan-x4plus",
+            "nomos-webphoto-esrgan-x4",
+            "nomos8k-sc-esrgan-x4",
+        ] {
+            let recipe = find_recipe(id).expect("added recipe");
+            let starts = ["Fast:", "Balanced:", "Best quality:"]
+                .iter()
+                .any(|label| recipe.description.starts_with(label));
+            assert!(starts, "{id} description");
+        }
     }
 
     #[test]
@@ -220,11 +313,35 @@ mod tests {
             "sizeBytes",
             "downloaded",
             "bestFor",
+            "links",
         ] {
             assert!(json.get(key).is_some(), "missing {key}");
         }
         assert_eq!(json["sizeBytes"], 17_938_799u64);
         assert_eq!(json["downloaded"], false);
-        assert_eq!(json.as_object().expect("object").len(), 8);
+        assert_eq!(json.as_object().expect("object").len(), 9);
+    }
+
+    #[test]
+    fn every_recipe_links_to_its_release_and_docs_and_has_no_card() {
+        for recipe in RECIPES {
+            super::super::model_links::assert_well_formed(recipe.id, &recipe.links);
+            assert_eq!(
+                recipe.links.card_repo, None,
+                "{} is a GitHub model",
+                recipe.id
+            );
+        }
+    }
+
+    #[test]
+    fn the_listing_carries_the_links() {
+        let scratch = Scratch::new("upscale-links");
+        let recipe = find_recipe("realesrgan-x4plus").expect("x4plus");
+        let listed = describe(recipe, scratch.path());
+        assert_eq!(listed.links, recipe.links);
+        let json = serde_json::to_value(&listed).expect("json");
+        assert_eq!(json["links"]["sourceUrl"], recipe.links.source_url);
+        assert!(json["links"]["cardRepo"].is_null());
     }
 }

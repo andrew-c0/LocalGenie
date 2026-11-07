@@ -10,6 +10,7 @@ const model = (id: string, overrides: Partial<SpeechModel> = {}): SpeechModel =>
   description: "",
   license: "",
   licenseUrl: "",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   sizeBytes: 0,
   languages: [],
   downloaded: false,

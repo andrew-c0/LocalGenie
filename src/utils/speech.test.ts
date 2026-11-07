@@ -34,6 +34,7 @@ const model = (overrides: Partial<SpeechModel> = {}): SpeechModel => ({
   description: "Small English recogniser",
   license: "MIT",
   licenseUrl: "https://example.com/license",
+  links: { cardRepo: null, sourceUrl: "", docsUrl: null },
   sizeBytes: 40_000_000,
   languages: ["en"],
   downloaded: true,
@@ -185,6 +186,12 @@ describe("voices", () => {
     const names = sortVoices(VOICES).map((v) => v.name);
     // Groups: "Other", "UK female", "US female", "US male".
     expect(names).toEqual(["Narrator", "Emma", "Heart", "Adam"]);
+  });
+
+  it("sorts numbered voices by number, not by text", () => {
+    const voice = (id: number): SpeechVoice => ({ id, name: `Voice ${id}`, label: `Voice ${id}` });
+    const names = sortVoices([voice(10), voice(2), voice(1), voice(0)]).map((v) => v.name);
+    expect(names).toEqual(["Voice 0", "Voice 1", "Voice 2", "Voice 10"]);
   });
 
   it("builds dropdown options with the id as value and the group as description", () => {

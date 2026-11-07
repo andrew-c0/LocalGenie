@@ -1,4 +1,3 @@
-import { usePlaygroundDownloadBusy } from "../../../../hooks/usePlaygroundDownload";
 import { playgroundToolOf, routeById } from "../../../../navigation/routeUtils";
 import { useOcrStore } from "../../../../stores/ocrStore";
 import { usePlaygroundStore } from "../../../../stores/playgroundStore";
@@ -33,8 +32,6 @@ export interface PlaygroundSelectorData {
   computeRows: ComputeRowView[];
   /** The compute devices, for the image tools' refresh and error. */
   compute: ComputeControls;
-  /** A Playground download is queued or running. Other Download buttons wait for it. */
-  isAnyDownloading: boolean;
 }
 
 function titleOf(routeId: string): string {
@@ -84,7 +81,6 @@ export function usePlaygroundSelectorData(pathname: string): PlaygroundSelectorD
 
   const runtime = useRuntimeCheck(SD_CPP_RUNTIME_ID);
   const compute = useComputeDevices(runtime.status);
-  const isAnyDownloading = usePlaygroundDownloadBusy();
 
   const allTools = buildToolModels(input, titleOf);
   const currentTool = allTools.find((tool) => tool.toolId === toolId) ?? null;
@@ -95,6 +91,5 @@ export function usePlaygroundSelectorData(pathname: string): PlaygroundSelectorD
     catalogs,
     computeRows: computeRowsOf(toolId, { devices, device, ocr: ocrSettings }),
     compute,
-    isAnyDownloading,
   };
 }
