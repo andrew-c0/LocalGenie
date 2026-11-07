@@ -7,7 +7,7 @@ pub(crate) mod archive;
 pub mod release;
 pub(crate) mod sherpa_cli;
 
-mod geniex;
+pub(crate) mod geniex;
 mod install;
 mod spec;
 mod store;
@@ -39,7 +39,7 @@ pub(crate) use spec::SD_CPP;
 /// Event carrying `InstallProgress` while a runtime installs.
 const INSTALL_PROGRESS_EVENT: &str = "runtime-install-progress";
 /// Folder under the app data dir that holds the archive runtimes.
-const RUNTIMES_DIR: &str = "runtimes";
+pub(crate) const RUNTIMES_DIR: &str = "runtimes";
 
 /// One runtime for the Settings list.
 #[derive(Debug, Clone, Serialize)]

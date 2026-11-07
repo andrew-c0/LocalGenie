@@ -189,6 +189,14 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Models landing no longer needs the GenieX CLI; its needs moved to the three GenieX sub-pages.
 - `AihubModelDetail`'s README does not resolve relative image URLs yet.
 
+## Installer and uninstall (phase 1; the user tested a debug installer on 2026-11-07, see `manual-checklist.md`)
+- Not tested: the NSIS uninstaller's checkbox label, silent uninstall (`/S`), an update-mode install (`/UPDATE` skips cleanup), the GenieX setup-file sweep (no real update run), the Storage "Open folder" button, the rename of an existing `geniex.db` on real data, and a release (non-debug) installer after the nonce fix.
+- `English.nsh` was copied from Tauri's dev branch and may drift from the bundler's pinned version.
+- The GenieX Inno silent flags are assumed; the uninstall worked on the user's machine, the install path was not tested again.
+- GenieX CLI config outside its install and model cache folders is not checked by the cleanup.
+- Authenticode signing is skipped, so Windows SmartScreen warns on the installer.
+- Updater and release pipeline (phases 2 and 3 of `research/install-update-plan.md`) not started.
+
 ## Resolved (code-verified; runtime-unverified)
 - Download auto-retry gaps (2026-11-06; the user tested both in the app and says they work): a GGUF projector (sidecar) network failure (offline or timeout) was toasted and skipped, so the model imported without it. It now fails the entry, which retries by itself and resumes from `.part`; other projector failures are still skipped with the toast (`runGGUFDownload`, `downloadPipeline.ts`). The drawer badge read "Error" during a wait or a countdown; it reads "Retrying soon" (`DownloadStatusBadge` `retrying`, passed by `DownloadItemCard`).
 - Safari fetch failure "Load failed" was matched as a plain fragment, so "Download failed with status 404" (a Hugging Face or AI Hub HTTP error) read as offline and showed the offline text. It is now a word-start match (`LOAD_FAILED` in `utils/networkError.ts`), with unit tests `classifyFailureText` in `networkError.test.ts` (2026-11-06 working tree; code-verified by those tests, not run in the app).

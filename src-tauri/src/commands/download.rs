@@ -315,7 +315,7 @@ async fn run_download(
 }
 
 /// Known-folder lookup for the user's Downloads directory (Windows).
-pub(super) fn download_dir() -> Option<PathBuf> {
+pub(crate) fn download_dir() -> Option<PathBuf> {
     let home = std::env::var_os("USERPROFILE")
         .or_else(|| std::env::var_os("HOME"))
         .map(PathBuf::from)?;

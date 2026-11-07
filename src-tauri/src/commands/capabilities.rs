@@ -68,7 +68,7 @@ pub(super) async fn summary_for(model_name: &str) -> Result<ModelCapabilities, S
 }
 
 /// GenieX model cache root: `<GENIEX_DATADIR>/models` when set, else `~/.cache/geniex/models`.
-fn models_root() -> Option<PathBuf> {
+pub(crate) fn models_root() -> Option<PathBuf> {
     if let Some(dir) = std::env::var_os("GENIEX_DATADIR").filter(|v| !v.is_empty()) {
         return Some(PathBuf::from(dir).join("models"));
     }

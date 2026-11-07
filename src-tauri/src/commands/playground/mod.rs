@@ -24,7 +24,7 @@ mod ocr_download;
 mod ocr_job;
 mod ocr_request;
 mod ocr_table;
-mod paths;
+pub(crate) mod paths;
 mod program;
 mod progress;
 mod recordings;

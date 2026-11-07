@@ -22,13 +22,13 @@ const FALLBACK_AUDIO_SLUG: &str = "audio";
 const MAX_NAME_SUFFIX: u32 = 1000;
 
 /// Where the curated model files are kept: `<app data>/playground-models`.
-pub(super) fn models_root(data_dir: &Path) -> PathBuf {
+pub(crate) fn models_root(data_dir: &Path) -> PathBuf {
     data_dir.join(MODELS_DIR)
 }
 
 /// Where images were written before they moved to Pictures: `<app data>/playground/images`. Kept so
 /// earlier images still open.
-pub(super) fn legacy_images_root(data_dir: &Path) -> PathBuf {
+pub(crate) fn legacy_images_root(data_dir: &Path) -> PathBuf {
     data_dir.join(PLAYGROUND_DIR).join(IMAGES_DIR)
 }
 

@@ -34,15 +34,26 @@ use commands::system;
 use commands::system_usage;
 use tauri::Manager;
 pub fn run() {
+    // The NSIS uninstaller runs `LocalGenie.exe --uninstall-cleanup [--delete-data]` once, before
+    // it removes the app files. That path needs no window, so it exits before the Tauri builder.
+    if let Some(args) = commands::uninstall_cleanup::parse_args(std::env::args().skip(1)) {
+        std::process::exit(commands::uninstall_cleanup::run(args));
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
-            // Resolve DB path in the app data directory.
+            // Resolve DB path in the app data directory. A database under its legacy name is renamed first.
             let db_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&db_dir)?;
-            let db_path = db_dir.join("geniex.db");
+            // Finished GenieX setup programs from earlier runs are removed in the background, so the
+            // window is not delayed. Nothing installs at startup, so no install is in flight.
+            let setup_dir = db_dir.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                commands::runtimes::geniex::sweep_stale_setup_files(&setup_dir);
+            });
+            let db_path = commands::storage::startup_database_path(&db_dir);
             let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
             let db = tauri::async_runtime::block_on(database::init_database(&db_url))?;
@@ -108,6 +119,9 @@ pub fn run() {
             commands::ram_store::backfill_model_ram,
             system::get_platform_info,
             system_usage::get_system_usage,
+            // Settings Storage card (folder sizes, open a folder in Explorer)
+            commands::storage::storage_usage,
+            commands::storage::storage_open_folder,
             // Chat attachments (image, audio, text picked for a message)
             attachments::pick_attachment,
             attachments::read_attachment,

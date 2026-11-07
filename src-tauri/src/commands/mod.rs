@@ -25,8 +25,10 @@ pub mod power;
 pub mod ram_store;
 pub mod runtimes;
 pub mod server;
+pub mod storage;
 pub mod system;
 pub mod system_usage;
+pub mod uninstall_cleanup;
 
 use std::sync::Mutex;
 

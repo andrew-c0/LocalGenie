@@ -250,6 +250,21 @@ The user looked at the landings, the breadcrumbs, Recent conversations, the item
 - [ ] Runs table: 10 rows a page; sorting covers all pages; ticked runs stay ticked across pages; Compare and Export use the ticked runs.
 - [ ] Breadcrumbs on a narrow window: the trail and the actions (chat's context ring and menus) wrap without overlapping.
 
+## Installer, uninstall and Storage (phase 1, 2026-11-07; ticked = the user tested on own machine with a debug installer)
+- [x] The installer runs per user, with no admin prompt.
+- [x] The app runs from the installed copy with styles applied (nonce fix).
+- [x] Settings > Application & Runtime > Storage shows its rows (database 1.1 MB, Playground models, GenieX models); rows for missing folders are hidden.
+- [x] The database file is named `localGenie.db`.
+- [x] Uninstall cleanup without `--delete-data`: GenieX CLI uninstalled, runtimes removed, 0 failed steps.
+- [x] Uninstall cleanup with `--delete-data`: database, Playground models, GenieX model cache and legacy images removed, 0 failed steps. (The user reports three runs; only these two variants were recorded.)
+- [ ] Uninstaller checkbox for the application data: its label reads correctly; ticked and unticked behave as described.
+- [ ] Silent uninstall (`/S`) of LocalGenie runs without a window.
+- [ ] Update-mode install (`/UPDATE`) keeps the data and skips the cleanup.
+- [ ] GenieX setup sweep: after a real GenieX update the `geniex-cli-setup-*.exe` is gone; a startup sweep keeps a `.part` file.
+- [ ] Storage: "Open folder" opens each listed folder.
+- [ ] Upgrade: an existing `geniex.db` is renamed to `localGenie.db` at the first start on real data.
+- [ ] Release (non-debug) installer: installs per user and shows styles.
+
 ## GenieX CLI as a runtime: install, update, uninstall (not yet run in the app)
 
 - [ ] Settings > Runtimes lists GenieX CLI first, with its logo, installed version or "Not installed", latest version and repo. The "…" menu has Release notes, Uninstall (disabled when not installed) and, when not installed, Check again.

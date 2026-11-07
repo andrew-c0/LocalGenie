@@ -1018,3 +1018,20 @@ export interface BenchmarkRunSummary {
   finishedAt: number | null;
   metrics: BenchmarkRunMetrics;
 }
+
+/** When the uninstaller removes a storage location: always, only if the user ticks Delete the application data, or never. The card hides "never" rows. */
+export type StorageUninstallPolicy = "always" | "optional" | "never";
+
+/** One place LocalGenie keeps data on this device. `bytes` is 0 when the location is empty or was not measured. */
+export interface StorageItem {
+  id: string;
+  path: string;
+  bytes: number;
+  exists: boolean;
+  uninstall: StorageUninstallPolicy;
+}
+
+/** Every storage location the app knows about, measured by the backend. */
+export interface StorageUsage {
+  items: StorageItem[];
+}

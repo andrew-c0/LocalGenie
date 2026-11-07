@@ -1,0 +1,10 @@
+/* Each row keeps its size in a fixed column so the buttons line up across groups. */
+.storage-card__size {
+  min-width: 6em;
+  text-align: right;
+}
+
+.storage-card__total {
+  border-top: 1px solid var(--colorNeutralStroke2);
+  padding-top: var(--spacingVerticalS);
+}

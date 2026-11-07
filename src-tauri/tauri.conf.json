@@ -23,19 +23,35 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* ws://127.0.0.1:*; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'"
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
+    "publisher": "LocalGenie",
+    "shortDescription": "Local LLM chat and tools for GenieX",
+    "longDescription": "LocalGenie is a desktop app for running local large language models on Qualcomm hardware (CPU, GPU and NPU) through the GenieX CLI.",
+    "copyright": "Copyright (c) LocalGenie contributors",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "windows/hooks.nsh",
+        "displayLanguageSelector": false,
+        "languages": ["English"],
+        "customLanguageFiles": {
+          "English": "windows/English.nsh"
+        },
+        "startMenuFolder": "LocalGenie"
+      }
+    }
   },
   "plugins": {
     "shell": {
