@@ -37,6 +37,8 @@ Desktop.ini
 
 # Logs
 *.log
+# Captured sd-cli output used by a unit test (include_str!)
+!src-tauri/src/commands/playground/testdata/*.log
 npm-debug.log*
 
 # TypeScript

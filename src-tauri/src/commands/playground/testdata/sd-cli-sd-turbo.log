@@ -1,0 +1,39 @@
+[I] loading model from 'models/sd_turbo-f16-q8_0.gguf' --- diffusion_engine.cpp:685
+[I] load models/sd_turbo-f16-q8_0.gguf using gguf format --- model_loader.cpp:216
+[I] Version: SD 2.x  --- diffusion_engine.cpp:975
+[W] auto-fit: no GPU devices; using the default backend --- backend_fit.cpp:444
+[I] Weight type stat:                      f32: 614  |     f16: 170  |    q8_0: 539   --- diffusion_engine.cpp:1548
+[I] Conditioner weight type stat:          f32: 193  |    q8_0: 196   --- diffusion_engine.cpp:1549
+[I] Diffusion model weight type stat:      f32: 297  |     f16: 98   |    q8_0: 291   --- diffusion_engine.cpp:1550
+[I] VAE weight type stat:                  f32: 124  |     f16: 72   |    q8_0: 52    --- diffusion_engine.cpp:1551
+[I] using VAE for encoding / decoding --- model_builders.cpp:210
+[I] vae decoder: ch = 128 --- auto_encoder_kl.hpp:529
+[I] flash attention auto: CPU -> on (CPU) --- flash_attn.cpp:66
+[I] conv2d direct auto: CPU -> off (no implicit GEMM path) --- conv_direct.cpp:90
+[I] conv3d direct auto: CPU -> off (no implicit GEMM path) --- conv_direct.cpp:90
+[I] total params memory size = 1929.50MB (VRAM 0.00MB, RAM 1929.50MB): text_encoders 358.79MB(RAM), diffusion_model 1411.02MB(RAM), vae 159.68MB(RAM), controlnet 0.00MB(N/A), extensions 0.00MB(N/A) --- diffusion_engine.cpp:1438
+[I] unet build cached graph cut plan done (taking 2 ms) --- ggml_graph_cut.cpp:1034
+  |######################                            | 290/686 -   1.88GB/s[K  |#################################                 | 452/686 -   2.02GB/s[K  |##################################################| 686/686 -   2.23GB/s[K
+[I] loading tensors completed, taking 0.62s (read: 0.60s, memcpy: 0.00s, convert: 0.00s, copy_to_backend: 0.00s) --- model_loader.cpp:1412
+[I] running in eps-prediction mode --- diffusion_engine.cpp:1467
+[I] generate_image 128x128 --- image.cpp:869
+[I] get_sigmas with discrete scheduler --- denoiser.hpp:1129
+[I] sampling using Euler A method --- request.cpp:477
+[I] clip build cached graph cut plan done (taking 2 ms) --- ggml_graph_cut.cpp:1034
+  |##################################################| 372/372 -   1.63GB/s[K
+[I] loading tensors completed, taking 0.21s (read: 0.17s, memcpy: 0.00s, convert: 0.00s, copy_to_backend: 0.00s) --- model_loader.cpp:1412
+[I] get_learned_condition completed, taking 1.86s --- image.cpp:580
+[I] generating image: 1/1 - seed 42 --- image.cpp:920
+[I] unet build cached graph cut plan done (taking 3 ms) --- ggml_graph_cut.cpp:1034
+  |==================================================| 1/1 -   2.45s/it[K
+[I] sampling completed, taking 2.45s --- image.cpp:953
+[I] generating 1 latent images completed, taking 2.45s --- image.cpp:967
+[I] decoding 1 latents --- image.cpp:605
+[I] vae build cached graph cut plan done (taking 0 ms) --- ggml_graph_cut.cpp:1034
+  |##################################################| 140/140 - 465.20MB/s[K
+[I] loading tensors completed, taking 0.20s (read: 0.04s, memcpy: 0.00s, convert: 0.00s, copy_to_backend: 0.00s) --- model_loader.cpp:1412
+[I] latent 1 decoded, taking 12.45s --- image.cpp:671
+[I] decode_first_stage completed, taking 12.45s --- image.cpp:675
+[I] generate_image completed in 16.77s --- image.cpp:1140
+[I] save result image 0 to 'out/t.png' (success) --- main.cpp:495
+[I] 1/1 images saved --- main.cpp:571
