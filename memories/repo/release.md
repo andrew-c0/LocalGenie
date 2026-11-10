@@ -3,6 +3,7 @@
 Windows ARM64 only, NSIS installer. Workflows: `.github/workflows/ci.yml` (every PR and push to main) and `.github/workflows/release.yml` (tag `v*`). Version files: `scripts/` (`npm run version:bump -- <x.y.z|patch|minor|major>`, `npm run version:check [-- vX.Y.Z]`).
 
 ## Cut a release
+Shortcut: `npm run release -- <patch|minor|major|x.y.z>` (add `--dry-run` to only check) or the `/release` skill; both do steps 1 to 3 and push the tag. The steps below are the manual version.
 1. `npm run version:bump -- patch` (or `minor`, `major`, or an exact `x.y.z`). This sets `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`.
 2. Run `cargo check` in `src-tauri/` so `Cargo.lock` picks up the new version, then commit the four files.
 3. `git tag vX.Y.Z` on that commit, push the commit and the tag.
