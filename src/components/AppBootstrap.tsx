@@ -2,6 +2,7 @@ import { type ReactNode, useEffect } from "react";
 import * as db from "../services/database";
 import * as geniex from "../services/geniex";
 import { backfillModelRam } from "../services/modelRam";
+import { useAppUpdateStore } from "../stores/appUpdateStore";
 import { useChatStore } from "../stores/chatStore";
 import { useModelStore } from "../stores/modelStore";
 import { useRamEstimateStore } from "../stores/ramEstimateStore";
@@ -11,7 +12,8 @@ import { useSidebarStore } from "../stores/sidebarStore";
 
 /**
  * Startup only: loads the runtime list (which also sets the CLI state), saved sessions, installed
- * models, server status, the sidebar's saved state, the runtime update checks and the saved runtime notice state once. Everything that runs afterwards is owned by
+ * models, server status, the sidebar's saved state, the runtime update checks, the saved runtime notice state and the
+ * saved app update notified version once. Everything that runs afterwards is owned by
  * the component that uses it (model loading in the header, downloads in the drawer, streaming in `ChatRuntime`).
  */
 export default function AppBootstrap({ children }: { children: ReactNode }) {
@@ -33,6 +35,7 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
     // The sidebar's saved collapsed state, so it opens as the user left it.
     void useSidebarStore.getState().loadCollapsed();
     void useRuntimeNoticeStore.getState().load();
+    void useAppUpdateStore.getState().loadNotifiedVersion();
 
     (async () => {
       // The release checks call GitHub and can be slow, so they start once the list is read and do not

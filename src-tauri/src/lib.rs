@@ -39,10 +39,17 @@ pub fn run() {
     if let Some(args) = commands::uninstall_cleanup::parse_args(std::env::args().skip(1)) {
         std::process::exit(commands::uninstall_cleanup::run(args));
     }
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_notification::init());
+    // Updater and process (restart) are desktop-only. The updater reads `plugins.updater` from
+    // tauri.conf.json when it is initialised, so the app will not start until that block exists.
+    #[cfg(desktop)]
+    let builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+    builder
         .setup(|app| {
             // Resolve DB path in the app data directory. A database under its legacy name is renamed first.
             let db_dir = app.path().app_data_dir()?;

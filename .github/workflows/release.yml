@@ -1,0 +1,109 @@
+name: Release
+
+# Push a tag vX.Y.Z to build the Windows ARM64 NSIS installer and create a DRAFT
+# GitHub release with the installer, its .sig and latest.json. Publishing the
+# draft is manual; the updater feed is the latest published release.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and draft release (Windows ARM64)
+    runs-on: windows-11-arm
+    timeout-minutes: 90
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Check updater signing secrets
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          missing=()
+          [ -z "$TAURI_SIGNING_PRIVATE_KEY" ] && missing+=("TAURI_SIGNING_PRIVATE_KEY")
+          [ -z "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ] && missing+=("TAURI_SIGNING_PRIVATE_KEY_PASSWORD")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error title=Missing secrets::Add these repository secrets (Settings > Secrets and variables > Actions): ${missing[*]}. See memories/repo/release.md."
+            exit 1
+          fi
+          echo "Updater signing secrets are present."
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Check version files match the tag
+        run: node scripts/check-version.mjs "$TAG"
+
+      - run: npm ci
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-msvc
+          components: clippy
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: TypeScript
+        run: npm run check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Frontend tests
+        run: npm test -- --run
+
+      # tauri::generate_context! reads frontendDist (../dist), so build it before cargo.
+      - name: Build frontend for Tauri
+        run: npm run build:frontend
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets
+
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test
+
+      # Authenticode code signing is SKIPPED for now (SmartScreen will warn).
+      # When a certificate exists, do not add a separate step here: the updater .sig
+      # is made by tauri-action from the finished installer, so the .exe and the NSIS
+      # installer must be signed during the bundle step. Wire it with
+      # bundle.windows.signCommand in src-tauri/tauri.conf.json, then remove this note.
+      # - name: Authenticode sign installer (disabled)
+      #   shell: pwsh
+      #   env:
+      #     CODE_SIGN_CERT: ${{ secrets.WINDOWS_CODE_SIGN_CERT }}
+      #     CODE_SIGN_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGN_PASSWORD }}
+      #   run: signtool sign /fd SHA256 /tr <timestamp-url> /td SHA256 /f cert.pfx ...
+
+      - name: Build installer and draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: LocalGenie ${{ github.ref_name }}
+          # PLACEHOLDER: replace with the real notes before publishing the draft.
+          releaseBody: "Release notes: TODO (placeholder). Replace this text before publishing."
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          args: --bundles nsis

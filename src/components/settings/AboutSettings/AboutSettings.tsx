@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useAppInfo } from "../../../hooks/useAppInfo";
+import { useAppUpdateStore } from "../../../stores/appUpdateStore";
 import { useRuntimeStore } from "../../../stores/runtimeStore";
 import {
   ABOUT_NOTE,
@@ -19,6 +20,7 @@ import { Body, Secondary, SectionTitle } from "../../ui/Typography/Typography";
 export default function AboutSettings() {
   const info = useAppInfo();
   const runtimes = useRuntimeStore((s) => s.runtimes);
+  const update = useAppUpdateStore((s) => s.update);
   const summary = appSummary(info, import.meta.env.MODE);
 
   // The runtime list is loaded at startup; read it here only when the store is still empty.
@@ -32,6 +34,12 @@ export default function AboutSettings() {
         <SectionTitle>LocalGenie</SectionTitle>
         <Body>{ABOUT_NOTE}</Body>
         {summary && <Secondary>{summary}</Secondary>}
+        {update && (
+          <Body>
+            Version {update.version} is available. Open Settings &gt; Application &amp; Runtime to
+            download and restart.
+          </Body>
+        )}
       </Flex>
 
       <Flex direction="column" gap="xs">

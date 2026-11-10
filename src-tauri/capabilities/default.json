@@ -8,6 +8,8 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "notification:default",
+    "updater:default",
+    "process:allow-restart",
     "core:window:allow-close",
     "core:window:allow-destroy",
     "core:window:allow-minimize",

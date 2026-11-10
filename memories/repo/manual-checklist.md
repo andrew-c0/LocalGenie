@@ -265,6 +265,23 @@ The user looked at the landings, the breadcrumbs, Recent conversations, the item
 - [ ] Upgrade: an existing `geniex.db` is renamed to `localGenie.db` at the first start on real data.
 - [ ] Release (non-debug) installer: installs per user and shows styles.
 
+## App updater and release (2026-11-10; ticked = the user tested; the rest not run)
+- [x] A debug build starts with the updater (no startup error).
+- [x] Settings > Application & Runtime shows the App updates card with the running version (0.1.0).
+- [x] A failed check shows the Try again block.
+- [x] Update from the local feed (`scripts/updater-test/`): 0.1.0 downloads 0.1.1, installs and restarts as 0.1.1.
+- [ ] Going online after a failed check retries the check without a click.
+- [ ] Install with work running (a chat reply, a download, a Playground or OCR job, a benchmark): the confirm lists each item; Cancel installs nothing.
+- [ ] Install with nothing running: no confirm; progress shows; the app restarts into the new version.
+- [ ] A newer published version sends one desktop notice for that version; a restart with the same version sends none.
+- [ ] Runtime update switch off with an app update known: no app notice; switch on: the pending notice is sent without a restart.
+- [ ] The Settings sidebar item shows a dot while an update is known; Settings > About shows the version line and the update note.
+- [ ] CI on a pull request: the job starts on `windows-11-arm`, and the checks pass.
+- [ ] Repository secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` are set; the private key and its password are backed up outside GitHub.
+- [ ] Release workflow on a test tag: the draft has the installer, its `.sig` and `latest.json`; a tag that does not match the version files fails at the first step.
+- [ ] Non-debug installer: its update check reads the published latest release.
+- [ ] Publish a draft: an installed older build offers it, installs, and restarts into the new version.
+
 ## GenieX CLI as a runtime: install, update, uninstall (not yet run in the app)
 
 - [ ] Settings > Runtimes lists GenieX CLI first, with its logo, installed version or "Not installed", latest version and repo. The "…" menu has Release notes, Uninstall (disabled when not installed) and, when not installed, Check again.

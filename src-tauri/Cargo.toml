@@ -39,6 +39,9 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 # Runtime archives: tar.bz2 (sherpa-onnx). Default backend is the pure-Rust libbz2-rs-sys: no C toolchain.
 bzip2 = "0.6"
 tauri-plugin-notification = "~2.4.0"
+# Native TLS (schannel) like the rest of the app: the default rustls feature pulls in `ring`, which needs clang to build on Windows ARM64.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "system-proxy", "zip"] }
+tauri-plugin-process = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [

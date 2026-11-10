@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Checks (Windows ARM64)
+    # GitHub-hosted ARM64 Windows runner (free for public repositories).
+    runs-on: windows-11-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-msvc
+          components: clippy
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: TypeScript
+        run: npm run check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Frontend tests
+        run: npm test -- --run
+
+      # tauri::generate_context! reads frontendDist (../dist), so build it before cargo.
+      - name: Build frontend for Tauri
+        run: npm run build:frontend
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets
+
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test

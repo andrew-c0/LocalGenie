@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useRuntimeLocks } from "../../../hooks/useRuntimeLocks";
 import { ROUTES } from "../../../navigation/routes";
 import { sectionOf } from "../../../navigation/routeUtils";
+import { useAppUpdateStore } from "../../../stores/appUpdateStore";
 import { useModelStore } from "../../../stores/modelStore";
 import { useSidebarStore } from "../../../stores/sidebarStore";
 import { Flex } from "../../ui/Flex/Flex";
@@ -26,6 +27,7 @@ export default function Sidebar() {
   const lockedReason = useRuntimeLocks();
   const collapsed = useSidebarStore((s) => s.collapsed);
   const setCollapsed = useSidebarStore((s) => s.setCollapsed);
+  const appUpdateAvailable = useAppUpdateStore((s) => s.update !== null);
 
   const handleTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
     navigate(String(data.value));
@@ -71,6 +73,8 @@ export default function Sidebar() {
             route,
             lockedReason: route.needs ? lockedReason(route.needs) : null,
             badgeCount: route.id === "models" ? models.length : 0,
+            // Settings carries the dot while an app update is known.
+            dot: route.id === "settings" && appUpdateAvailable,
           };
           return collapsed ? (
             <SidebarRailItem key={route.id} {...navItem} />

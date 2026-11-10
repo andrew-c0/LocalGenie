@@ -1035,3 +1035,27 @@ export interface StorageItem {
 export interface StorageUsage {
   items: StorageItem[];
 }
+
+/** An app version the update feed announced. */
+export interface AppUpdateInfo {
+  version: string;
+  /** The version running now. */
+  currentVersion: string;
+  /** Release notes as the feed gave them (markdown), or null. */
+  notes: string | null;
+  /** RFC 3339 publish date, or null. */
+  date: string | null;
+}
+
+/** One step of an app update download, as the service maps the plugin's events. */
+export type AppUpdateDownloadEvent =
+  | { kind: "started"; contentLength: number | null }
+  | { kind: "progress"; chunkLength: number }
+  | { kind: "finished" };
+
+/** Bytes of an app update download so far. `fraction` runs from 0 to 1, or is null while the total is unknown. */
+export interface AppUpdateProgress {
+  downloadedBytes: number;
+  totalBytes: number | null;
+  fraction: number | null;
+}

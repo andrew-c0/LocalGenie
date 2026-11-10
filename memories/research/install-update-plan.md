@@ -1,8 +1,8 @@
 # Install, update and uninstall pipeline: plan
 
-Status: phase 1 built and partly tested by the user (2026-11-07, debug installer); phases 2 to 4 planned, not started. Facts below marked "verify" come from memory of the Tauri 2 docs and must be checked against the current docs before building.
+Status: phase 1 built and partly tested by the user (2026-11-07, debug installer); phases 2 and 3 built and tested locally (2026-11-10): a debug build starts with the updater, the Settings card shows the version and a failed check, and an update 0.1.0 -> 0.1.1 from a local feed installed and restarted; the GitHub workflows have not run. Phase 4 partly built: the About version line and update note, and `release.md`; the About check button and the release-notes link are not built. Facts below marked "verify" come from memory of the Tauri 2 docs and must be checked against the current docs before building.
 
-## Where things are today
+## Where things are today (as of 2026-11-07, before phase 2)
 - `src-tauri/tauri.conf.json`: `bundle.targets` is `all`, no `createUpdaterArtifacts`, no `windows` block, version `0.1.0` (also in `package.json` and `Cargo.toml`: three places to keep in step). Plugins: shell, dialog, notification. No updater plugin, no CI workflow, no release process (only a git remote on GitHub, `andrew-c0/LocalGenie`).
 - Data the app creates, by owner:
   - App data dir `%APPDATA%\com.localgenie.app` (Tauri `app_data_dir`): the SQLite database (chats, settings, benchmarks), `playground-models` (curated image, upscale and speech models, tens of GB), `runtimes` (sd-cli, sherpa-onnx), legacy `playground/images`, benchmark files.
@@ -39,17 +39,17 @@ Built (2026-11-07). User-tested: per-user install, app from the installed copy, 
 - Rust side (small): a command that reports the sizes of the data folders, used by a new Settings > Application & Runtime card "Storage" with a link to open each folder (helps the user before uninstalling and answers "where did my disk space go").
 - Manual test on a clean Windows ARM64 VM or the dev machine: install, run, download a model, uninstall without and with the checkbox, reinstall, check nothing is left in each case.
 
-### Phase 2: in-app updates
+### Phase 2: in-app updates (built 2026-11-10; local test only)
 - Add `tauri-plugin-updater` (Rust and JS), register it, add the `updater:default` capability, `plugins.updater` with `pubkey`, `endpoints` and `windows.installMode` (`passive` shows progress; verify), set `bundle.createUpdaterArtifacts: true`.
 - Frontend service `src/services/appUpdate.ts` (only place that calls the plugin): `checkForAppUpdate`, `downloadAndInstall` with progress events. A hook (`useAppUpdate`) checks at start and every 6 hours, stores the result in a small store and sends the native notification once per version (reuse the runtime-update notification code). UI: a banner or a card in Settings > About and Settings > Application & Runtime ("Version 0.1.0, update 0.2.0 available", release notes from the feed, Download and restart), with the offline pattern (skeleton, Try again, automatic retry when the connection returns). A download in progress must not be lost: the updater download is its own flow, but quitting the app during a model download should warn (the close guard exists in `CloseGuard.tsx`).
 - Never update while a generation, benchmark or download runs without asking; the install restarts the app.
 - Database migrations run at start and are forward-only: an update after a downgrade is not supported; say so in the release notes.
 
-### Phase 3: release pipeline
+### Phase 3: release pipeline (built 2026-11-10; the GitHub run is untested)
 - GitHub Actions workflow on a version tag: build on `windows-11-arm` (verify availability) and `windows-latest` for x64, run the checks (`npm run check`, `lint`, `test`, `cargo clippy`, `cargo test`), `tauri build` with `TAURI_SIGNING_PRIVATE_KEY` and its password from secrets, upload the installer, its `.sig` and `latest.json` (tauri-action can generate it) to a draft release; publishing the draft is a manual step. Keep the version in one place (script that bumps `package.json`, `Cargo.toml`, `tauri.conf.json` together, with a test that they agree).
 - Optional: Authenticode signing step once a certificate exists.
 
-### Phase 4: polish and docs
+### Phase 4: polish and docs (partly built 2026-11-10)
 - Settings > About: current version, "Check for updates", link to the release notes. Docs: a short `memories/repo/release.md` (how to cut a release, where the keys are, how to test an update locally with a second feed URL), update `codebase-map.md`, `manual-checklist.md` and `known-issues.md`.
 
 ## Risks

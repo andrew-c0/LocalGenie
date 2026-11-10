@@ -195,7 +195,16 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - The GenieX Inno silent flags are assumed; the uninstall worked on the user's machine, the install path was not tested again.
 - GenieX CLI config outside its install and model cache folders is not checked by the cleanup.
 - Authenticode signing is skipped, so Windows SmartScreen warns on the installer.
-- Updater and release pipeline (phases 2 and 3 of `research/install-update-plan.md`) not started.
+- Updater and release pipeline: see the next section.
+
+## App updater and release pipeline (2026-11-10; the local update test passed, the rest not run)
+- The two GitHub workflows (`ci.yml`, `release.yml`) have never run. Unconfirmed: the `windows-11-arm` runner label, the `tauri-apps/tauri-action@v0` inputs and the two repository secrets (see `release.md`). The first tag push is the test.
+- The release notes are a placeholder (`releaseBody` in `release.yml`); the draft must be edited before it is published.
+- Only the local feed was tested. The GitHub feed (`latest.json` of the latest published release) and an update from a published release are not run.
+- Not run in the app: the running-work list in the Install confirm (`AppUpdateCard`, `useRunningWork`; the line text is unit-tested) and the desktop notice for a new app version (`useAppUpdate`). The notice has no click action, the same limit as the runtime notice.
+- The updater cannot be switched off: the plugin is registered and `plugins.updater` is set in every desktop build (code-read). A Microsoft Store build would need a config change.
+- Relaunch after install is best effort: on Windows the installer closes the app when it starts (`services/appUpdate.ts`).
+- Migrations are forward-only, so an older build cannot be restored over a newer database. Plan decision; the release notes must say so. Not built.
 
 ## Resolved (code-verified; runtime-unverified)
 - Download auto-retry gaps (2026-11-06; the user tested both in the app and says they work): a GGUF projector (sidecar) network failure (offline or timeout) was toasted and skipped, so the model imported without it. It now fails the entry, which retries by itself and resumes from `.part`; other projector failures are still skipped with the toast (`runGGUFDownload`, `downloadPipeline.ts`). The drawer badge read "Error" during a wait or a countdown; it reads "Retrying soon" (`DownloadStatusBadge` `retrying`, passed by `DownloadItemCard`).

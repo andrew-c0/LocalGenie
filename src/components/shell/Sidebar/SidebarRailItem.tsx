@@ -1,4 +1,4 @@
-import { CounterBadge, Tab, Tooltip } from "@fluentui/react-components";
+import { Badge, CounterBadge, Tab, Tooltip } from "@fluentui/react-components";
 import type { RouteMeta } from "../../../navigation/routes";
 
 interface SidebarRailItemProps {
@@ -7,20 +7,26 @@ interface SidebarRailItemProps {
   lockedReason: string | null;
   /** Count shown on the icon (the installed models). 0 shows no badge. */
   badgeCount: number;
+  /** A dot on the icon: something on this page wants attention (an app update). */
+  dot: boolean;
 }
 
 /**
  * One page tab in the collapsed icon rail. The icon is the whole tab; its label is the tooltip (or the
- * lock reason) and the tab's accessible name. The count sits on the icon as a small badge.
+ * lock reason) and the tab's accessible name. The count, or the attention dot, sits on the icon.
  */
-export function SidebarRailItem({ route, lockedReason, badgeCount }: SidebarRailItemProps) {
-  const icon =
+export function SidebarRailItem({ route, lockedReason, badgeCount, dot }: SidebarRailItemProps) {
+  const marker =
     badgeCount > 0 ? (
+      <CounterBadge count={badgeCount} size="tiny" appearance="filled" color="brand" />
+    ) : (
+      <Badge size="tiny" shape="circular" color="brand" aria-label="Update available" />
+    );
+  const icon =
+    badgeCount > 0 || dot ? (
       <span className="sidebar__rail-icon">
         {route.icon}
-        <span className="sidebar__rail-badge">
-          <CounterBadge count={badgeCount} size="tiny" appearance="filled" color="brand" />
-        </span>
+        <span className="sidebar__rail-badge">{marker}</span>
       </span>
     ) : (
       route.icon
