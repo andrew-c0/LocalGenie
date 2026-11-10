@@ -46,6 +46,7 @@ jobs:
           cache: npm
 
       - name: Check version files match the tag
+        shell: bash
         run: node scripts/check-version.mjs "$TAG"
 
       - run: npm ci

@@ -1,0 +1,2 @@
+# Keep LF in the repository and in every checkout, so Biome (LF) passes on the Windows runners too.
+* text=auto eol=lf
