@@ -27,7 +27,15 @@ Source: the official GenieX repo (github.com/qualcomm/GenieX, read-only), checke
 - A text-only model rejects `image_url` and audio parts with HTTP 400 `not support content part type` (`cli/server/handler/chat_messages.go`; reported live). The scan's vision and audio probes rely on this.
 - A streamed client disconnect stops generation (reported live).
 - llama.cpp keeps special tokens in the output: Gemma 4 thinking markers (`<|channel>thought` ... `<channel|>`) reach the reply content (reported live). The thinking parser in `shared/thinking-patterns.json` relies on this.
-- `enable_think` and `tools` behaviour was tested live; the settings scan's `thinking` and `toolCalls` probes (`capability_scan/`) are the test code. Specific findings are not recorded here.
+- `enable_think` and `tools` behaviour was tested live; the settings scan's `thinking` and `toolCalls` probes (`capability_scan/`) are the test code. Specific findings are not recorded here. That was the scan probes only; the full tool loop (see "Tool calls") has not been run against the real server.
+
+## Tool calls (native tools; from the GenieX source and LocalGenie's unit tests, not yet confirmed against a real server run)
+- Source: the GenieX checkout (`C:\Work\GenieX`, `cli/server/handler/`) as read on 2026-11-11 (`chat.go` `parseTools`, `chat_stream.go` `streamToolCall`, `chat_messages.go` `buildToolCalls`), and LocalGenie's tests for the same shapes. The plan's spike (phase 0) has not run, so the model-level reliability is unknown.
+- `tools` is accepted on `/v1/chat/completions`; the server renders them through the model's chat template and parses the reply into calls. A model whose template has no tool support cannot call tools.
+- Streaming: each call arrives whole in one `delta.tool_calls` chunk, then `finish_reason` `tool_calls`. Text before the call streams as normal content. LocalGenie still folds argument fragments by `index`, in case a call is split.
+- History: an assistant message with `tool_calls` must be followed by `role: "tool"` replies that answer each call id. The server renders a tool reply only from the `tool_calls` of the turn before it, so the pairing must stay exact.
+- No `tool_choice` handling (not found in the server): a request cannot force or forbid a call. "No tools" means the `tools` field is not sent.
+- `parallel_tool_calls` defaults to true on the server; LocalGenie does not send it.
 
 ## Runtimes in the AI Hub catalog (what the tab lists)
 - `src-tauri/proto/shared/runtime.proto` values: 2 `QNN_DLC`, 3 `QNN_CONTEXT_BINARY`, 6 `GENIE`, 11 `GENIEX_QAIRT`, 12 `GENIEX_LLAMACPP`.

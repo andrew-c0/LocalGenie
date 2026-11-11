@@ -1,11 +1,114 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// A single message in the chat. `content` is a plain string, or an array of content parts
 /// (`text`, `image_url`, `input_audio`) for a message with attachments.
+/// `tool_calls` (on an assistant turn) and `tool_call_id` / `name` (on a `tool` reply) keep the
+/// OpenAI wire names, so the history can be sent back to the server unchanged.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String,
     pub content: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+/// The request JSON for one message. Tool fields are added only when they are set, so a plain
+/// message is sent exactly as before.
+pub(super) fn message_json(message: &ChatMessage) -> serde_json::Value {
+    let mut json = serde_json::json!({
+        "role": message.role,
+        "content": message.content.clone(),
+    });
+    if let Some(ref calls) = message.tool_calls {
+        json["tool_calls"] = calls.clone();
+    }
+    if let Some(ref id) = message.tool_call_id {
+        json["tool_call_id"] = serde_json::json!(id);
+    }
+    if let Some(ref name) = message.name {
+        json["name"] = serde_json::json!(name);
+    }
+    json
+}
+
+/// Offer `tools` to the model. An empty list leaves the body untouched, so no tools are sent.
+/// `tool_choice` and `parallel_tool_calls` are never sent: the server does not force or forbid calls.
+pub(super) fn apply_tools(body: &mut serde_json::Value, tools: &[serde_json::Value]) {
+    if !tools.is_empty() {
+        body["tools"] = serde_json::json!(tools);
+    }
+}
+
+/// One tool call while its stream is still arriving. Arguments are concatenated as they come.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct PartialToolCall {
+    id: Option<String>,
+    name: String,
+    arguments: String,
+}
+
+/// Folds the `delta.tool_calls` entries of streamed chunks into whole calls, keyed by `index`.
+/// The server sends each call in one chunk, but the fold also handles a call split across chunks.
+#[derive(Debug, Default)]
+pub(super) struct ToolCallAccumulator {
+    calls: BTreeMap<u64, PartialToolCall>,
+}
+
+impl ToolCallAccumulator {
+    /// Add the tool-call deltas of one parsed SSE chunk. A name replaces the earlier one; argument
+    /// strings are appended in order.
+    pub(super) fn absorb_chunk(&mut self, parsed: &serde_json::Value) {
+        let Some(choices) = parsed["choices"].as_array() else {
+            return;
+        };
+        for entry in choices
+            .iter()
+            .filter_map(|choice| choice["delta"]["tool_calls"].as_array())
+            .flatten()
+        {
+            let index = entry["index"].as_u64().unwrap_or(0);
+            let call = self.calls.entry(index).or_default();
+            if let Some(id) = entry["id"].as_str().filter(|id| !id.is_empty()) {
+                call.id = Some(id.to_string());
+            }
+            if let Some(name) = entry["function"]["name"].as_str().filter(|n| !n.is_empty()) {
+                call.name = name.to_string();
+            }
+            match &entry["function"]["arguments"] {
+                serde_json::Value::String(text) => call.arguments.push_str(text),
+                serde_json::Value::Null => {}
+                other => call.arguments = other.to_string(),
+            }
+        }
+    }
+
+    /// Payload for the `chat-tool-calls` event, or `None` when no call was streamed. A call
+    /// without an id gets `call_<index>`.
+    pub(super) fn event_payload(&self, stream_id: &str) -> Option<serde_json::Value> {
+        if self.calls.is_empty() {
+            return None;
+        }
+        let tool_calls: Vec<serde_json::Value> = self
+            .calls
+            .iter()
+            .map(|(index, call)| {
+                serde_json::json!({
+                    "id": call.id.clone().unwrap_or_else(|| format!("call_{index}")),
+                    "name": call.name,
+                    "arguments": call.arguments,
+                })
+            })
+            .collect();
+        Some(serde_json::json!({
+            "streamId": stream_id,
+            "toolCalls": tool_calls,
+        }))
+    }
 }
 
 /// Sampler / generation settings.
@@ -300,13 +403,16 @@ pub(super) fn chat_done_payload(
 }
 
 /// True when a streamed SSE chunk is the first real output: it carries non-empty
-/// `content` or a `finish_reason`. Role-only and empty chunks do not count.
+/// `content`, a non-empty `tool_calls` delta or a `finish_reason`. Role-only and empty chunks do not count.
 pub(super) fn is_first_output(parsed: &serde_json::Value) -> bool {
     parsed["choices"].as_array().is_some_and(|choices| {
         choices.iter().any(|choice| {
             choice["delta"]["content"]
                 .as_str()
                 .is_some_and(|content| !content.is_empty())
+                || choice["delta"]["tool_calls"]
+                    .as_array()
+                    .is_some_and(|calls| !calls.is_empty())
                 || choice["finish_reason"].is_string()
         })
     })
@@ -320,10 +426,159 @@ pub(super) fn no_output_error(url: &str, limit_secs: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_chat_body, chat_done_payload, finish_reason_from_chunk, is_first_output,
-        no_output_error, strip_precision, strip_think, usage_from_chunk, GenerationSettings,
-        ModelLoadParams, ReplyUsage,
+        apply_tools, build_chat_body, chat_done_payload, finish_reason_from_chunk, is_first_output,
+        message_json, no_output_error, strip_precision, strip_think, usage_from_chunk, ChatMessage,
+        GenerationSettings, ModelLoadParams, ReplyUsage, ToolCallAccumulator,
     };
+
+    fn plain_message(role: &str, content: serde_json::Value) -> ChatMessage {
+        ChatMessage {
+            role: role.into(),
+            content,
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+        }
+    }
+
+    #[test]
+    fn chat_message_without_tool_fields_serializes_as_before() {
+        let message = plain_message("user", serde_json::json!("hi"));
+        let json = serde_json::to_value(&message).expect("serialize");
+        assert_eq!(json, serde_json::json!({"role": "user", "content": "hi"}));
+        assert_eq!(
+            message_json(&message),
+            serde_json::json!({"role": "user", "content": "hi"})
+        );
+    }
+
+    #[test]
+    fn chat_message_reads_and_writes_tool_fields() {
+        let raw = serde_json::json!({
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "f", "arguments": "{}"}}]
+        });
+        let message: ChatMessage = serde_json::from_value(raw.clone()).expect("parse");
+        assert_eq!(message.tool_calls, raw.get("tool_calls").cloned());
+        assert!(message.tool_call_id.is_none());
+        assert_eq!(message_json(&message)["tool_calls"], raw["tool_calls"]);
+
+        let reply: ChatMessage = serde_json::from_value(serde_json::json!({
+            "role": "tool",
+            "content": "file list",
+            "tool_call_id": "c1",
+            "name": "list_directory"
+        }))
+        .expect("parse reply");
+        let json = message_json(&reply);
+        assert_eq!(json["tool_call_id"], "c1");
+        assert_eq!(json["name"], "list_directory");
+        assert!(json.get("tool_calls").is_none());
+    }
+
+    #[test]
+    fn apply_tools_sets_tools_only_when_some_are_given() {
+        let tool = serde_json::json!({"type": "function", "function": {"name": "f"}});
+        let mut body = serde_json::json!({"stream": true});
+        apply_tools(&mut body, std::slice::from_ref(&tool));
+        assert_eq!(body["tools"], serde_json::json!([tool]));
+        assert!(body.get("tool_choice").is_none());
+        assert!(body.get("parallel_tool_calls").is_none());
+
+        let mut empty = serde_json::json!({"stream": true});
+        apply_tools(&mut empty, &[]);
+        assert!(empty.get("tools").is_none());
+    }
+
+    #[test]
+    fn tool_calls_arriving_whole_in_one_chunk_are_one_call() {
+        let chunk = serde_json::json!({"choices": [{"delta": {"tool_calls": [{
+            "index": 0,
+            "id": "call_a",
+            "type": "function",
+            "function": {"name": "read_text_file", "arguments": "{\"path\":\"C:\\\\notes.txt\"}"}
+        }]}}]});
+        let mut calls = ToolCallAccumulator::default();
+        calls.absorb_chunk(&chunk);
+        let payload = calls.event_payload("s1").expect("one call");
+        assert_eq!(payload["streamId"], "s1");
+        assert_eq!(payload["toolCalls"][0]["id"], "call_a");
+        assert_eq!(payload["toolCalls"][0]["name"], "read_text_file");
+        assert_eq!(
+            payload["toolCalls"][0]["arguments"],
+            "{\"path\":\"C:\\\\notes.txt\"}"
+        );
+        assert_eq!(payload["toolCalls"].as_array().map(Vec::len), Some(1));
+    }
+
+    #[test]
+    fn arguments_split_across_chunks_are_joined() {
+        let first = serde_json::json!({"choices": [{"delta": {"tool_calls": [{
+            "index": 0, "id": "c1", "function": {"name": "list_directory", "arguments": "{\"pa"}
+        }]}}]});
+        let second = serde_json::json!({"choices": [{"delta": {"tool_calls": [{
+            "index": 0, "function": {"arguments": "th\": \"C:\\\\\"}"}
+        }]}, "finish_reason": "tool_calls"}]});
+        let mut calls = ToolCallAccumulator::default();
+        calls.absorb_chunk(&first);
+        calls.absorb_chunk(&second);
+        let payload = calls.event_payload("s1").expect("one call");
+        assert_eq!(payload["toolCalls"].as_array().map(Vec::len), Some(1));
+        assert_eq!(payload["toolCalls"][0]["id"], "c1");
+        assert_eq!(payload["toolCalls"][0]["name"], "list_directory");
+        assert_eq!(
+            payload["toolCalls"][0]["arguments"],
+            "{\"path\": \"C:\\\\\"}"
+        );
+    }
+
+    #[test]
+    fn two_calls_with_different_indexes_stay_apart_in_index_order() {
+        let chunk = serde_json::json!({"choices": [{"delta": {"tool_calls": [
+            {"index": 1, "id": "c2", "function": {"name": "read_text_file", "arguments": "{\"path\":\"b\"}"}},
+            {"index": 0, "id": "c1", "function": {"name": "list_directory", "arguments": "{\"path\":\"a\"}"}}
+        ]}}]});
+        let mut calls = ToolCallAccumulator::default();
+        calls.absorb_chunk(&chunk);
+        let payload = calls.event_payload("s1").expect("two calls");
+        let list = payload["toolCalls"].as_array().expect("array");
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0]["id"], "c1");
+        assert_eq!(list[0]["name"], "list_directory");
+        assert_eq!(list[1]["id"], "c2");
+        assert_eq!(list[1]["arguments"], "{\"path\":\"b\"}");
+    }
+
+    #[test]
+    fn call_without_id_gets_a_generated_one() {
+        let chunk = serde_json::json!({"choices": [{"delta": {"tool_calls": [
+            {"index": 3, "function": {"name": "list_directory", "arguments": "{}"}}
+        ]}}]});
+        let mut calls = ToolCallAccumulator::default();
+        calls.absorb_chunk(&chunk);
+        let payload = calls.event_payload("s1").expect("one call");
+        assert_eq!(payload["toolCalls"][0]["id"], "call_3");
+    }
+
+    #[test]
+    fn stream_without_tool_calls_has_no_payload() {
+        let content = serde_json::json!({"choices": [{"delta": {"content": "hi"}}]});
+        let mut calls = ToolCallAccumulator::default();
+        calls.absorb_chunk(&content);
+        assert!(calls.event_payload("s1").is_none());
+    }
+
+    #[test]
+    fn first_output_counts_a_tool_calls_chunk() {
+        let tool_chunk = serde_json::json!({"choices": [{"delta": {"tool_calls": [
+            {"index": 0, "id": "c1", "function": {"name": "f", "arguments": "{}"}}
+        ]}}]});
+        assert!(is_first_output(&tool_chunk));
+
+        let empty_tool_chunk = serde_json::json!({"choices": [{"delta": {"tool_calls": []}}]});
+        assert!(!is_first_output(&empty_tool_chunk));
+    }
 
     #[test]
     fn first_output_is_content_or_finish_reason() {

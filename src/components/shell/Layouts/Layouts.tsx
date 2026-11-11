@@ -3,6 +3,7 @@ import { useModelStore } from "../../../stores/modelStore";
 import { BenchmarkRuntime } from "../../benchmark/BenchmarkRuntime/BenchmarkRuntime";
 import { ChatRuntime } from "../../chat/ChatRuntime/ChatRuntime";
 import { PlaygroundRuntime } from "../../playground/PlaygroundRuntime/PlaygroundRuntime";
+import { ToolApprovalDialog } from "../../ToolApprovalDialog/ToolApprovalDialog";
 import { Breadcrumbs } from "../../ui/Breadcrumbs/Breadcrumbs";
 import { AppUpdateRuntime } from "../AppUpdateRuntime/AppUpdateRuntime";
 import CloseGuard from "../CloseGuard";
@@ -15,8 +16,9 @@ import "./Layouts.css";
 /**
  * Main application layout: custom title bar, sidebar navigation, header
  * and the routed page content. Rendered inside the router so pages appear via <Outlet />.
- * `CloseGuard` sits here too, so the close confirmation works on every page. `ChatRuntime`
- * sits here too, so a reply keeps streaming and saving while the user is on another page.
+ * `CloseGuard` sits here too, so the close confirmation works on every page. `ToolApprovalDialog`
+ * does the same for a tool call that waits for the user. `ChatRuntime` sits here too, so a reply
+ * keeps streaming and saving while the user is on another page.
  * `PlaygroundRuntime` sits here for the same reason: a download or image keeps updating.
  * `BenchmarkRuntime` does the same for a benchmark run's progress and end.
  * `RuntimeUpdateRuntime` runs the periodic runtime update check and its desktop notice.
@@ -39,6 +41,7 @@ export function MainLayout() {
         </div>
       </div>
       <CloseGuard />
+      <ToolApprovalDialog />
       <ChatRuntime />
       <PlaygroundRuntime />
       <BenchmarkRuntime />

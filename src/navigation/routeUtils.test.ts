@@ -239,6 +239,7 @@ describe("childrenOf", () => {
       "settings-app",
       "settings-runtimes",
       "settings-inference",
+      "settings-tools",
       "settings-logs",
       "settings-about",
     ]);

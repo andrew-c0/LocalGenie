@@ -14,9 +14,28 @@ export interface SearchModel {
   pipeline_tag?: string;
 }
 
+/** How a tool call ended. `error` ran and failed; `denied` and `cancelled` never ran. */
+export type ToolStatus = "ok" | "error" | "denied" | "cancelled";
+
+/** How a tool call was approved: `auto` (no prompt), `once` (this call) or `chat` (for this chat). */
+export type ToolApproval = "auto" | "once" | "chat";
+
+/** The record a `tool` row keeps: the call, its outcome and how it was approved. Stored as JSON. */
+export interface ToolRecord {
+  callId: string;
+  name: string;
+  /** The raw JSON string the model sent. */
+  arguments: string;
+  status: ToolStatus;
+  durationMs?: number;
+  approval: ToolApproval;
+  /** True when the result was cut to the size limit. */
+  truncated?: boolean;
+}
+
 export interface Message {
   id: string;
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "tool";
   content: string;
   timestamp: number;
   modelId?: string;
@@ -25,8 +44,12 @@ export interface Message {
   finishReason?: string;
   /** True for an error shown in the chat. Stored in `chat_errors`, not in `messages`. */
   isError?: boolean;
-  /** `system` for a line the app adds, such as a model change. Those are never sent to the model. */
-  kind?: "text" | "system";
+  /** `system` for a line the app adds, such as a model change. Those are never sent to the model. `tool` for a tool call's result. */
+  kind?: "text" | "system" | "tool";
+  /** Tool calls an assistant reply made. Their results are the `tool` rows right after it. Stored as JSON. */
+  toolCalls?: ChatToolCall[];
+  /** On a `tool` row: the call, its outcome and how it was approved. Stored as JSON. */
+  toolRecord?: ToolRecord;
   /** The type of a system line, such as `model_changed`. Sets how the line is drawn. */
   systemType?: string;
   /** The compute target (`npu`, `gpu` or `cpu`) an assistant reply was generated on. */
@@ -114,6 +137,19 @@ export type ChatContentPart =
 
 /** Content of a chat message sent to the server: plain text, or parts when media is attached. */
 export type ChatMessageContent = string | ChatContentPart[];
+
+/** A tool call the model made, as the `chat-tool-calls` event carries it. `arguments` is the raw JSON string. */
+export interface ChatToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+/** Payload of the `chat-tool-calls` event, emitted just before `chat-done` when the model calls tools. */
+export interface ChatToolCallsEvent {
+  streamId: string;
+  toolCalls: ChatToolCall[];
+}
 
 export interface GenerationStats {
   /** ms from send to first token */
@@ -1058,4 +1094,55 @@ export interface AppUpdateProgress {
   downloadedBytes: number;
   totalBytes: number | null;
   fraction: number | null;
+}
+
+/** A tool the registry offers, as `tool_list` returns it. Only `read` risk exists in v1. */
+/** `read` touches files the user allowed; `network` reaches the internet. */
+export type ToolRisk = "read" | "network";
+
+export interface ToolSpec {
+  id: string;
+  name: string;
+  description: string;
+  /** JSON schema of the arguments. */
+  parameters: Record<string, unknown>;
+  risk: ToolRisk;
+  source: "native";
+}
+
+/** One web search source the backend offers (`web_search_sources`). */
+export interface SearchSourceInfo {
+  id: string;
+  label: string;
+  /** The host a search sends the query to. */
+  host: string;
+  /** What the source is good for, one short line. */
+  description: string;
+}
+
+/** A file a tool read for the model to see, such as an image. The path is read again when the chat sends it. */
+export interface ToolResultAttachment {
+  path: string;
+  name: string;
+  mime: string;
+}
+
+/** Outcome of one `tool_execute` call. A failure is a normal result the model can read (`ok: false`). */
+export interface ToolResult {
+  ok: boolean;
+  content: string;
+  truncated: boolean;
+  durationMs: number;
+  /** Set when the tool read a file the model may be shown. Absent otherwise. */
+  attachment?: ToolResultAttachment;
+}
+
+/** An OpenAI-style tool object, the shape the `tools` argument of `chat_completion` takes. */
+export interface ToolDefinition {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
 }

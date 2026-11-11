@@ -11,12 +11,24 @@ import type {
 import { chatErrorContent } from "../utils/chatError";
 import { cleanOverrides, parseStoredOverrides } from "../utils/chatOverrides";
 import { DEFAULT_SERVER_SETTINGS } from "../utils/modelSettings";
+import {
+  parseToolCalls,
+  parseToolRecord,
+  serialiseToolCalls,
+  serialiseToolRecord,
+} from "../utils/toolRecords";
 
 /** Valid message roles — used to validate DB values at runtime. */
-const VALID_ROLES = new Set<Message["role"]>(["user", "assistant", "system"]);
+const VALID_ROLES = new Set<Message["role"]>(["user", "assistant", "system", "tool"]);
 
 function toValidRole(raw: string): Message["role"] {
   return VALID_ROLES.has(raw as Message["role"]) ? (raw as Message["role"]) : "assistant";
+}
+
+/** The kind of a stored row. Anything but a system line or a tool result is plain text. */
+function toKind(raw: string): NonNullable<Message["kind"]> {
+  if (raw === "system" || raw === "tool") return raw;
+  return "text";
 }
 
 // ─── Sessions ────────────────────────────────────────────────────
@@ -54,6 +66,10 @@ interface DbMessageRow {
   system_type: string | null;
   compute: string | null;
   covers_through_id: string | null;
+  /** The reply's tool calls as JSON text, or null. Parse with `parseToolCalls`. */
+  toolCalls: string | null;
+  /** A tool row's record as JSON text, or null. Parse with `parseToolRecord`. */
+  toolRecord: string | null;
 }
 
 /** Exact usage of a reply, when both counts are stored. */
@@ -114,10 +130,12 @@ export async function loadSessions(): Promise<ChatSession[]> {
       stats: toGenerationStats(m),
       attachments: toAttachments(m.attachments),
       usage: toUsage(m),
-      kind: m.kind === "system" ? "system" : "text",
+      kind: toKind(m.kind),
       systemType: m.system_type ?? undefined,
       compute: m.compute ?? undefined,
       coversThroughId: m.covers_through_id ?? undefined,
+      toolCalls: parseToolCalls(m.toolCalls),
+      toolRecord: parseToolRecord(m.toolRecord),
     }));
     // Errors come back as their own rows; show them in time order, after the reply they belong to.
     const errors: Message[] = row.errors.map((e) => ({
@@ -191,6 +209,8 @@ export async function saveMessage(sessionId: string, message: Message): Promise<
       system_type: message.systemType ?? null,
       compute: message.compute ?? null,
       covers_through_id: message.coversThroughId ?? null,
+      toolCalls: serialiseToolCalls(message.toolCalls),
+      toolRecord: serialiseToolRecord(message.toolRecord),
     },
   });
 }

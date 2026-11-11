@@ -64,4 +64,9 @@ describe("messageCountLabel", () => {
   it("does not count system lines", () => {
     expect(messageCountLabel([message("text"), message("system"), message()])).toBe("2 messages");
   });
+
+  it("does not count tool results", () => {
+    const toolRow: Message = { ...message(), role: "tool", kind: "tool" };
+    expect(messageCountLabel([message(), toolRow, message("tool")])).toBe("1 message");
+  });
 });

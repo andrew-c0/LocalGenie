@@ -1,13 +1,14 @@
 use tauri::{AppHandle, Emitter, State};
 
-use tauri::Manager;
 use super::chat_helpers::{
-    apply_load_params, build_chat_body, chat_done_payload, finish_reason_from_chunk,
-    is_first_output, no_output_error, resolve_model_for_server, strip_precision, usage_from_chunk,
-    ChatMessage, GenerationSettings, ModelLoadParams, ReplyUsage,
+    apply_load_params, apply_tools, build_chat_body, chat_done_payload, finish_reason_from_chunk,
+    is_first_output, message_json, no_output_error, resolve_model_for_server, strip_precision,
+    usage_from_chunk, ChatMessage, GenerationSettings, ModelLoadParams, ReplyUsage,
+    ToolCallAccumulator,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
+use tauri::Manager;
 
 /// Cancel flag shared between the cancel command and a streaming loop.
 type CancelFlag = Arc<AtomicBool>;
@@ -145,7 +146,11 @@ pub async fn unload_all_models(
 }
 
 /// Stream a chat completion from the GenieX OpenAI-compatible API.
-/// Emits `chat-chunk` events for each streamed token, and `chat-done` when finished.
+/// Emits `chat-chunk` events for each streamed token, `chat-tool-calls` when the model calls
+/// tools (before `chat-done`), and `chat-done` when finished. `tools` are OpenAI tool objects;
+/// when none are given the request carries no `tools`.
+// Each argument is a separate Tauri IPC field; bundling them would change the frontend contract.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn chat_completion(
     app: AppHandle,
@@ -155,27 +160,21 @@ pub async fn chat_completion(
     model: Option<String>,
     base_url: Option<String>,
     stream_id: String,
+    tools: Option<Vec<serde_json::Value>>,
 ) -> Result<(), String> {
     super::benchmark_runner::ensure_no_active_run(&app.state())?;
     let resolved_base = base_url.unwrap_or_else(|| super::constants::DEFAULT_BASE_URL.into());
     let url = format!("{}/v1/chat/completions", resolved_base);
 
     eprintln!(
-        "[chat] called: model={:?}, messages={}, url={}",
+        "[chat] called: model={:?}, messages={}, tools={}, url={}",
         model,
         messages.len(),
+        tools.as_ref().map_or(0, Vec::len),
         url
     );
 
-    let mut messages_json: Vec<serde_json::Value> = messages
-        .iter()
-        .map(|m| {
-            serde_json::json!({
-                "role": m.role,
-                "content": m.content.clone()
-            })
-        })
-        .collect();
+    let mut messages_json: Vec<serde_json::Value> = messages.iter().map(message_json).collect();
 
     // Prepend system prompt if provided
     if let Some(sp) = &settings.system_prompt {
@@ -218,7 +217,8 @@ pub async fn chat_completion(
         super::chat_helpers::set_think_token(&mut messages_json, settings.think == Some(true));
     }
 
-    let body = build_chat_body(messages_json, model_name, &settings);
+    let mut body = build_chat_body(messages_json, model_name, &settings);
+    apply_tools(&mut body, tools.as_deref().unwrap_or_default());
 
     // Time-to-first-output limit. It covers the wait for response headers and the
     // wait for the first chunk with content or a finish_reason. Once output has
@@ -269,7 +269,9 @@ pub async fn chat_completion(
     let mut finish_reason: Option<String> = None;
     // Exact token counts from the usage chunk, sent just before `[DONE]`.
     let mut reply_usage: Option<ReplyUsage> = None;
-    // False until the first content or finish_reason chunk; only then is the limit lifted.
+    // Tool calls folded from the `delta.tool_calls` of every chunk.
+    let mut tool_calls = ToolCallAccumulator::default();
+    // False until the first content, tool-call or finish_reason chunk; only then is the limit lifted.
     let mut answered = false;
 
     loop {
@@ -307,6 +309,7 @@ pub async fn chat_completion(
                 let data = data.trim();
                 if data == "[DONE]" {
                     eprintln!("[chat] stream complete: {chunk_count} chunks");
+                    emit_tool_calls(&app, &stream_id, &tool_calls);
                     let _ = app.emit(
                         "chat-done",
                         chat_done_payload(&stream_id, finish_reason.as_deref(), reply_usage),
@@ -319,6 +322,7 @@ pub async fn chat_completion(
                     if is_first_output(&parsed) {
                         answered = true;
                     }
+                    tool_calls.absorb_chunk(&parsed);
                     if let Some(reason) = finish_reason_from_chunk(&parsed) {
                         finish_reason = Some(reason);
                     }
@@ -356,12 +360,20 @@ pub async fn chat_completion(
     }
 
     // Stream ended without `[DONE]`; report whatever finish reason was seen.
+    emit_tool_calls(&app, &stream_id, &tool_calls);
     let _ = app.emit(
         "chat-done",
         chat_done_payload(&stream_id, finish_reason.as_deref(), reply_usage),
     );
 
     Ok(())
+}
+
+/// Emit `chat-tool-calls` for the calls streamed so far, if there are any.
+fn emit_tool_calls(app: &AppHandle, stream_id: &str, tool_calls: &ToolCallAccumulator) {
+    if let Some(payload) = tool_calls.event_payload(stream_id) {
+        let _ = app.emit("chat-tool-calls", payload);
+    }
 }
 
 /// Tell the frontend a stream was stopped by the user.

@@ -6,6 +6,7 @@ import type {
   ModelLoadParams,
   StoredModelSettings,
   SystemPromptBlock,
+  ToolDefinition,
 } from "../types";
 import { chatErrorContent } from "../utils/chatError";
 import { applyChatOverrides } from "../utils/chatOverrides";
@@ -24,6 +25,7 @@ import {
   withSystemBlocks,
 } from "../utils/systemPrompt";
 import { toast } from "../utils/toast";
+import { isReplyMessage } from "../utils/toolRecords";
 import * as db from "./database";
 import * as geniex from "./geniex";
 import * as systemService from "./system";
@@ -124,13 +126,46 @@ async function requestSettingsFor(sessionId: string, run: ModelRun): Promise<Cha
 }
 
 /**
- * Sends one request and streams its reply into the conversation. Resolves with null on success, or
- * with the failure (the partial reply is saved first).
+ * Longest wait for a stream's `chat-done` after its request resolved. The event normally arrives first;
+ * this only keeps a missing event from holding the send open.
+ */
+const STREAM_END_WAIT_MS = 5000;
+
+/**
+ * Resolves once the stream is no longer the active one, which `chat-done` causes. The request's result
+ * and the stream's events travel separately, so the reply is only complete after this.
+ */
+function waitForStreamEnd(streamId: string): Promise<void> {
+  return new Promise((resolve) => {
+    const isActive = () => useChatStore.getState().activeStream?.streamId === streamId;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let unsubscribe: (() => void) | undefined;
+    const finish = () => {
+      unsubscribe?.();
+      clearTimeout(timer);
+      resolve();
+    };
+    if (!isActive()) {
+      finish();
+      return;
+    }
+    unsubscribe = useChatStore.subscribe(() => {
+      if (!isActive()) finish();
+    });
+    timer = setTimeout(finish, STREAM_END_WAIT_MS);
+  });
+}
+
+/**
+ * Sends one request and streams its reply into the conversation. `tools` (optional) offers tool
+ * definitions to the model. Resolves with null on success, or with the failure (the partial reply is
+ * saved first).
  */
 export async function streamReply(
   sessionId: string,
   history: geniex.ChatMessage[],
   run: ModelRun,
+  tools?: ToolDefinition[],
 ): Promise<SendFailure | null> {
   const chat = useChatStore.getState();
   chat.setStreaming(true);
@@ -150,17 +185,16 @@ export async function streamReply(
       streamId,
       run.modelId ?? undefined,
       geniex.serverBaseUrl(useModelStore.getState().serverPort),
+      tools,
     );
+    await waitForStreamEnd(streamId);
     return null;
   } catch (err) {
     console.error("Chat completion failed:", err);
     const error = String(err);
     // The reply in progress, if this send produced one. Its partial text is saved so the error has a stored parent.
     const last = lastMessageOf(sessionId);
-    const reply =
-      last && last.role === "assistant" && last.id !== priorLastId && !last.isError
-        ? last
-        : undefined;
+    const reply = last && isReplyMessage(last) && last.id !== priorLastId ? last : undefined;
     if (reply) db.saveMessage(sessionId, reply).catch(() => {});
     useChatStore.getState().setActiveStream(null);
     useChatStore.getState().setStreaming(false);

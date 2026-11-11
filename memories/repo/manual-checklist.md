@@ -2,6 +2,18 @@
 
 Run through these checks manually after building or deploying the app. Automated checks cannot fully verify installer behavior, filesystem permissions, or OS-level interactions.
 
+## Native tools for chat models (2026-11-11 working tree, phases 1-3; the user tested the approval dialog and the Tools list; the items are not ticked one by one)
+- [ ] A tool call with a real tool-capable model: turn one tool On in Settings > Tools, ask for something it can answer, and check the call line appears before the answer.
+- [ ] Approval dialog with Request approval: Approve once, Allow for this chat (the next call runs without asking) and Deny (the model gets the denied result and carries on).
+- [ ] Stop while an approval prompt is open: the prompt closes, the call is recorded as cancelled and no request follows.
+- [ ] Reload a chat whose reply only made tool calls (no text): the chat and its tool lines come back.
+- [ ] Offline `web_fetch` shows Failed on its line, and the reply goes on.
+- [ ] Settings > Tools: the states, the allowed folders and the search sources survive a restart; the folder picker adds a folder.
+- [ ] Plain chat with no tools on, after the change to how a send waits for the end of a reply: the reply is saved and the next send works.
+- [ ] `read_image` with a model that has vision confirmed; with a model that does not (the result says so); after a restart (the saved picture still opens); after deleting the picture file (a failed result, no crash).
+- [ ] `list_directory` without a path lists the allowed folders.
+- [ ] Real `web_fetch` and `web_search` against live sites, one check for each enabled source.
+
 ## Playground: Image upscaling redesign (2026-11-05; not run, none ticked)
 
 Limits are in `known-issues.md` ("Image upscaling and Image to image redesign").
@@ -265,7 +277,7 @@ The user looked at the landings, the breadcrumbs, Recent conversations, the item
 - [ ] Upgrade: an existing `geniex.db` is renamed to `localGenie.db` at the first start on real data.
 - [ ] Release (non-debug) installer: installs per user and shows styles.
 
-## App updater and release (2026-11-10; ticked = the user tested; the rest not run)
+## App updater and release (2026-11-10 to 11; ticked = the user tested; the rest not run)
 - [x] A debug build starts with the updater (no startup error).
 - [x] Settings > Application & Runtime shows the App updates card with the running version (0.1.0).
 - [x] A failed check shows the Try again block.
@@ -276,10 +288,12 @@ The user looked at the landings, the breadcrumbs, Recent conversations, the item
 - [ ] A newer published version sends one desktop notice for that version; a restart with the same version sends none.
 - [ ] Runtime update switch off with an app update known: no app notice; switch on: the pending notice is sent without a restart.
 - [ ] The Settings sidebar item shows a dot while an update is known; Settings > About shows the version line and the update note.
-- [ ] CI on a pull request: the job starts on `windows-11-arm`, and the checks pass.
-- [ ] Repository secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` are set; the private key and its password are backed up outside GitHub.
-- [ ] Release workflow on a test tag: the draft has the installer, its `.sig` and `latest.json`; a tag that does not match the version files fails at the first step.
-- [ ] Non-debug installer: its update check reads the published latest release.
+- [x] CI: the job runs on `windows-11-arm` and the checks pass (2026-11-10/11).
+- [x] Repository secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` are set (2026-11-11).
+- [ ] The private key and its password are backed up outside GitHub.
+- [x] Release workflow on tag `v0.1.1`: the draft had the installer, its `.sig` and `latest.json`; it was published and is Latest (2026-11-11).
+- [ ] A tag that does not match the version files fails at the first step (not run).
+- [ ] Non-debug installer: its update check reads the published latest release. (The installed 0.1.1 app reads the real feed over TLS, 2026-11-11; which installer it is was not recorded, so this stays open.)
 - [ ] Publish a draft: an installed older build offers it, installs, and restarts into the new version.
 
 ## GenieX CLI as a runtime: install, update, uninstall (not yet run in the app)

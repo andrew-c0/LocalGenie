@@ -30,6 +30,10 @@ tar = "0.4"
 futures-util = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
 urlencoding = "2"
+# Web tools: URL parsing and query encoding (already in the lockfile through reqwest).
+url = "2"
+# Web tools: gzip bodies from Stack Overflow, unpacked by hand so the other clients keep their behaviour.
+flate2 = "1"
 sysinfo = "0.33"
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }

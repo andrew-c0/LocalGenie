@@ -1,6 +1,7 @@
 import type { CompactMessage, Message } from "../types";
 import { isSystemEvent } from "./systemEvents";
 import { parseThinking } from "./thinking";
+import { isToolMessage, toolCallText, toolResultText } from "./toolRecords";
 
 /** The `systemType` of the summary row that stands for the messages before it. */
 export const SUMMARY_SYSTEM_TYPE = "summary";
@@ -76,11 +77,17 @@ export function isCoveredBySummary(messages: Message[], id: string): boolean {
 
 /**
  * True when the messages from `index` on can be removed. None of them may be covered by a summary or
- * be a summary row. The store and the delete path both check this, so no button can bypass it.
+ * be a summary row, and the range cannot start at a tool row: that would split a call from its result.
+ * Removing from an assistant reply takes its tool rows, which come after it. The store and the delete
+ * path both check this, so no button can bypass it.
  */
 export function canRemoveFrom(messages: Message[], index: number): boolean {
+  const first = messages[index];
   return (
-    index >= 0 && index > coveredThroughIndex(messages) && latestSummaryIndex(messages) < index
+    first !== undefined &&
+    !isToolMessage(first) &&
+    index > coveredThroughIndex(messages) &&
+    latestSummaryIndex(messages) < index
   );
 }
 
@@ -93,17 +100,44 @@ export interface SummaryInput {
 }
 
 /**
- * The text a message contributes to a summary. A reply loses its thinking; a user message keeps its
- * text and gets a short line naming its attachments. Empty when there is nothing left to send.
+ * The text a user or assistant message contributes to a summary. A reply loses its thinking and keeps
+ * the calls it made as text; a user message keeps its text and gets a short line naming its
+ * attachments. Null when there is nothing left to send.
  */
 function summaryItemOf(m: Message): CompactMessage | null {
-  // An error shown in the chat is not part of the conversation, so it stays out of the summary.
-  if (m.isError || (m.role !== "user" && m.role !== "assistant")) return null;
+  if (m.role !== "user" && m.role !== "assistant") return null;
   const text = m.role === "assistant" ? parseThinking(m.content).answer : m.content.trim();
+  const calls = (m.toolCalls ?? []).map(toolCallText);
   const names = (m.attachments ?? []).map((file) => file.name);
   const attached = names.length > 0 ? `User attached: ${names.join(", ")}` : "";
-  const content = [text, attached].filter(Boolean).join("\n").trim();
+  const content = [text, ...calls, attached].filter(Boolean).join("\n").trim();
   return content ? { role: m.role, content } : null;
+}
+
+/**
+ * The summary transcript of a run of messages, as plain text. Errors stay out. A tool result is text
+ * in the transcript, never a `tool` role: it joins the reply that made the call, or starts an
+ * assistant item when no reply precedes it.
+ */
+export function summaryItemsOf(messages: Message[]): CompactMessage[] {
+  const items: CompactMessage[] = [];
+  for (const m of messages) {
+    // An error shown in the chat is not part of the conversation, so it stays out of the summary.
+    if (m.isError) continue;
+    if (!isToolMessage(m)) {
+      const item = summaryItemOf(m);
+      if (item) items.push(item);
+      continue;
+    }
+    const text = toolResultText(m.toolRecord, m.content);
+    const last = items[items.length - 1];
+    if (last?.role === "assistant") {
+      items[items.length - 1] = { role: "assistant", content: `${last.content}\n${text}` };
+    } else {
+      items.push({ role: "assistant", content: text });
+    }
+  }
+  return items;
 }
 
 /**
@@ -114,9 +148,7 @@ function summaryItemOf(m: Message): CompactMessage | null {
 export function summaryInputFor(messages: Message[], newPromptId: string): SummaryInput {
   const before = messagesBefore(messages, newPromptId);
   const summary = latestSummary(before);
-  const items = messagesAfterSummary(before)
-    .map(summaryItemOf)
-    .filter((item): item is CompactMessage => item !== null);
+  const items = summaryItemsOf(messagesAfterSummary(before));
   return {
     previousSummary: summary ? summary.content : null,
     items,

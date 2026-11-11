@@ -42,7 +42,7 @@ import { audioTaskUrl } from "./utils/audioTask";
  * - `/chat` default content, `/chat/:sessionId` one conversation
  * - `/playground` landing, `/playground/text-to-image|image-to-image|image-upscaling|ocr|audio` one tool each; the old
  *   `speech-to-text|text-to-speech|audio-to-audio` paths redirect to `audio` with `?task=`
- * - `/settings` landing, `/settings/app|runtimes|inference|logs|about` one page each
+ * - `/settings` landing, `/settings/app|runtimes|inference|tools|logs|about` one page each
  * - `/benchmarks` landing, `/benchmarks/prompts|suites|run|runs|compare` (benchmark sub-pages share one frame),
  *   `/benchmarks/prompts/new|:promptId`, `/benchmarks/suites/new|:suiteId`, `/benchmarks/run/:suiteId`,
  *   `/benchmarks/runs/:runId` (one item each)
@@ -133,6 +133,7 @@ export default function Navigation() {
           path="/settings/inference"
           element={<SettingsSectionPage routeId="settings-inference" />}
         />
+        <Route path="/settings/tools" element={<SettingsSectionPage routeId="settings-tools" />} />
         <Route path="/settings/logs" element={<SettingsSectionPage routeId="settings-logs" />} />
         <Route path="/settings/about" element={<SettingsSectionPage routeId="settings-about" />} />
         <Route path="*" element={<Navigate to="/" replace />} />

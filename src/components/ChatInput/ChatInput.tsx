@@ -18,6 +18,7 @@ import {
   sendPrompt,
 } from "../../services/chatSend";
 import * as geniex from "../../services/geniex";
+import { abortToolLoop } from "../../services/toolLoop";
 import { useChatStore } from "../../stores/chatStore";
 import { useModelStore } from "../../stores/modelStore";
 import type { AttachmentKind, Message } from "../../types";
@@ -104,15 +105,24 @@ export default function ChatInput() {
     await sendPrompt(activeSessionId, prompt, history, files);
   }, [text, pending, activeSessionId, busy, serverStatus.running]);
 
-  /** Stop the reply being streamed, or the summary being written, whichever is running. */
+  /**
+   * Stop the reply being streamed, or the summary being written, whichever is running. A reply's tool
+   * loop stops too, so no further request or tool call runs. The stream's session is used when it has
+   * one; between requests (while a tool runs) the open chat is the loop's chat.
+   */
   const handleStop = useCallback(async () => {
     try {
-      if (compacting) await stopSummary();
-      else await geniex.cancelChatCompletion();
+      if (compacting) {
+        await stopSummary();
+        return;
+      }
+      const loopSessionId = useChatStore.getState().activeStream?.sessionId ?? activeSessionId;
+      if (loopSessionId) abortToolLoop(loopSessionId);
+      await geniex.cancelChatCompletion();
     } catch (err) {
       console.error("Failed to stop generation:", err);
     }
-  }, [compacting]);
+  }, [compacting, activeSessionId]);
 
   /** Handle retry. The request is cleared at once, so it runs once. */
   useEffect(() => {

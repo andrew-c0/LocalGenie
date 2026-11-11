@@ -28,6 +28,7 @@ pub mod server;
 pub mod storage;
 pub mod system;
 pub mod system_usage;
+pub mod tools;
 pub mod uninstall_cleanup;
 
 use std::sync::Mutex;

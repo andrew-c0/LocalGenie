@@ -52,6 +52,11 @@ export async function pickTextFile(): Promise<string | null> {
   return invoke("pick_text_file");
 }
 
+/** Open a folder dialog. Resolves to the folder's absolute path, or null when cancelled. */
+export async function pickFolder(): Promise<string | null> {
+  return invoke("pick_folder");
+}
+
 /** Read a `.txt` or `.md` file as text. Rejects when the file cannot be used. */
 export async function readTextFile(path: string): Promise<string> {
   return invoke("read_text_file", { path });

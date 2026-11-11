@@ -33,6 +33,13 @@ pub struct Model {
     /// For a compaction summary (`system_type = "summary"`): the id of the last message it covers.
     /// Null for every other message.
     pub covers_through_id: Option<String>,
+    /// JSON array of the tool calls an assistant reply made: `[{id, name, arguments}]`. Null otherwise.
+    #[serde(rename = "toolCalls", default)]
+    pub tool_calls: Option<String>,
+    /// JSON of a tool message (`kind = "tool"`): `callId`, `name`, `arguments`, `status`, `durationMs`,
+    /// `approval` and `truncated`. Its result text is in `content`. Null for every other message.
+    #[serde(rename = "toolRecord", default)]
+    pub tool_record: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

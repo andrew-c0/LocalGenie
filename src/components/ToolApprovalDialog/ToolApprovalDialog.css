@@ -1,0 +1,19 @@
+/* The arguments exactly as the model sent them. Long arguments scroll inside the box. */
+.tool-approval__arguments {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: var(--spacingVerticalS) var(--spacingHorizontalM);
+  border-radius: var(--borderRadiusMedium);
+  background: var(--colorNeutralBackground3);
+  font-family: var(--fontFamilyMonospace);
+  font-size: var(--fontSizeBase200);
+  line-height: var(--lineHeightBase200);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A long URL or path breaks onto the next line instead of pushing the buttons out of the dialog. */
+.tool-approval__target {
+  overflow-wrap: anywhere;
+}

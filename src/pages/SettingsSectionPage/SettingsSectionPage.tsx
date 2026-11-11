@@ -4,6 +4,7 @@ import ModelSettings from "../../components/ModelSettings/ModelSettings";
 import AboutSettings from "../../components/settings/AboutSettings/AboutSettings";
 import RuntimesCard from "../../components/settings/RuntimesCard/RuntimesCard";
 import ServerLogsCard from "../../components/settings/ServerLogsCard/ServerLogsCard";
+import ToolsSettings from "../../components/settings/ToolsSettings/ToolsSettings";
 import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
 import { Meta } from "../../components/ui/Typography/Typography";
 import { routeById } from "../../navigation/routeUtils";
@@ -14,6 +15,7 @@ export type SettingsRouteId =
   | "settings-app"
   | "settings-runtimes"
   | "settings-inference"
+  | "settings-tools"
   | "settings-logs"
   | "settings-about";
 
@@ -29,6 +31,11 @@ const PANELS: Record<SettingsRouteId, { subtitle: string; panel: ReactElement }>
   "settings-inference": {
     subtitle: "Default sampling parameters and system prompt applied to every chat and benchmark.",
     panel: <ModelSettings />,
+  },
+  "settings-tools": {
+    subtitle:
+      "Tools a chat model may call, and the folders the file tools may read. All are off to start.",
+    panel: <ToolsSettings />,
   },
   "settings-logs": {
     subtitle:

@@ -32,6 +32,7 @@ use commands::runtimes;
 use commands::server;
 use commands::system;
 use commands::system_usage;
+use commands::tools;
 use tauri::Manager;
 pub fn run() {
     // The NSIS uninstaller runs `LocalGenie.exe --uninstall-cleanup [--delete-data]` once, before
@@ -110,6 +111,10 @@ pub fn run() {
             // Conversation compaction
             compaction::compact_conversation,
             compaction::cancel_compaction,
+            // Tools
+            tools::tool_list,
+            tools::tool_execute,
+            tools::web_search_sources,
             // CLI utilities
             cli::get_runtime_versions,
             commands::download::download_file,
@@ -193,6 +198,7 @@ pub fn run() {
             benchmark_runs::open_benchmark_export,
             // Files (system prompt attachments)
             files::pick_text_file,
+            files::pick_folder,
             files::read_text_file,
             files::file_exists,
             // Database

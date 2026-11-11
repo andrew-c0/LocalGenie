@@ -1,4 +1,5 @@
 import type { ChatSession, Message } from "../types";
+import { isToolMessage } from "./toolRecords";
 
 /**
  * Pinned conversations first, then the most recently updated first inside each group. The sort is
@@ -11,8 +12,13 @@ export function pinnedFirst(sessions: readonly ChatSession[]): ChatSession[] {
   );
 }
 
-/** `1 message` or `12 messages`. System lines (model changes, summaries) are not chat messages, so they are not counted. */
+/**
+ * `1 message` or `12 messages`. System lines (model changes, summaries) and tool results are not chat
+ * messages, so they are not counted.
+ */
 export function messageCountLabel(messages: readonly Message[]): string {
-  const count = messages.filter((message) => message.kind !== "system").length;
+  const count = messages.filter(
+    (message) => message.kind !== "system" && !isToolMessage(message),
+  ).length;
   return `${count} message${count === 1 ? "" : "s"}`;
 }

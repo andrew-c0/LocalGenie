@@ -1,0 +1,73 @@
+/* A tool line sits in the thread like a system line: muted, on one row, with a rule on each side. */
+.tool-call__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacingHorizontalS);
+  width: 100%;
+  margin: var(--spacingVerticalXS) 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--colorNeutralForeground3);
+  font: inherit;
+  cursor: pointer;
+}
+
+.tool-call__toggle::before,
+.tool-call__toggle::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--colorNeutralStroke2);
+}
+
+.tool-call__toggle:focus-visible {
+  outline: 2px solid var(--colorStrokeFocus2);
+  outline-offset: 2px;
+  border-radius: var(--borderRadiusSmall);
+}
+
+.tool-call__icon {
+  flex: 0 0 auto;
+}
+
+/* The argument summary is the one part that can be long, so it shortens before the line does. */
+.tool-call__target {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--fontFamilyMonospace);
+}
+
+/* A call that did not complete: the same muted line, in the warning colour. */
+.tool-call__status--warning {
+  color: var(--colorPaletteDarkOrangeForeground1);
+}
+
+/* The details open under the line. They scroll when long, so a big result cannot push the thread. */
+.tool-call__details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalXS);
+  max-width: 80%;
+  margin: 0 auto var(--spacingVerticalS);
+  padding: var(--spacingVerticalS) var(--spacingHorizontalM);
+  border-radius: var(--borderRadiusMedium);
+  background: var(--colorNeutralBackground3);
+}
+
+.tool-call__code {
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--spacingVerticalXS) var(--spacingHorizontalS);
+  border-radius: var(--borderRadiusSmall);
+  background: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground1);
+  font-family: var(--fontFamilyMonospace);
+  font-size: var(--fontSizeBase200);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

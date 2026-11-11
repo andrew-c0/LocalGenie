@@ -126,4 +126,55 @@ describe("contextUsageOf", () => {
     const usage = contextUsageOf(messages);
     expect(usage.fileTokens).toBe(usage.total);
   });
+
+  describe("tool calls and results", () => {
+    const call = (id: string, args: string) => ({ id, name: "read_text_file", arguments: args });
+
+    it("counts a tool result's text", () => {
+      const result: Message = {
+        id: "t1",
+        role: "tool",
+        kind: "tool",
+        content: "z".repeat(120),
+        timestamp: 2,
+      };
+      expect(contextUsageOf([result]).total).toBe(30);
+    });
+
+    it("counts a tool result's text, not the image it carries (no image estimate exists)", () => {
+      const result: Message = {
+        id: "t1",
+        role: "tool",
+        kind: "tool",
+        content: "z".repeat(120),
+        timestamp: 2,
+        attachments: [{ id: "ref", kind: "image", name: "a.png", size: 0, path: "C:\\a.png" }],
+      };
+      expect(contextUsageOf([result])).toEqual({ total: 30, fileTokens: 0 });
+    });
+
+    it("counts the arguments of a reply's calls when the reply has no reported counts", () => {
+      const reply: Message = {
+        id: "r1",
+        role: "assistant",
+        content: "x".repeat(40),
+        timestamp: 2,
+        toolCalls: [call("c1", "y".repeat(40)), call("c2", "y".repeat(40))],
+      };
+      // 40 characters of text and 80 of arguments, at four per token.
+      expect(contextUsageOf([reply]).total).toBe(30);
+    });
+
+    it("does not count call arguments twice when the reply reported its completion tokens", () => {
+      const reply: Message = {
+        id: "r1",
+        role: "assistant",
+        content: "",
+        timestamp: 2,
+        usage: { promptTokens: 10, completionTokens: 50 },
+        toolCalls: [call("c1", "y".repeat(400))],
+      };
+      expect(contextUsageOf([reply]).total).toBe(50);
+    });
+  });
 });

@@ -89,3 +89,17 @@ describe("setCompacting", () => {
     expect(useChatStore.getState().compactionJobId).toBeNull();
   });
 });
+
+describe("updateMessageToolCalls", () => {
+  it("sets the calls of the given reply and leaves the other messages alone", () => {
+    useChatStore.setState({ sessions: [sessionWith([msg("u", "user"), msg("r", "assistant")])] });
+    const calls = [{ id: "c1", name: "list_directory", arguments: "{}" }];
+
+    useChatStore.getState().updateMessageToolCalls("chat", "r", calls);
+
+    const messages = messagesOf("chat");
+    expect(messages[1].toolCalls).toEqual(calls);
+    expect(messages[0].toolCalls).toBeUndefined();
+    expect(messages[1].content).toBe("r");
+  });
+});

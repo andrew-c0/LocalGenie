@@ -176,4 +176,119 @@ describe("loadSessions", () => {
     });
     expect(s.messages.filter((m) => m.id === "m2")).toHaveLength(1);
   });
+
+  it("restores a tool row and the calls of its reply", async () => {
+    const record = {
+      callId: "c1",
+      name: "read_text_file",
+      arguments: '{"path":"a.txt"}',
+      status: "ok",
+      approval: "once",
+      durationMs: 9,
+    };
+    const calls = [{ id: "c1", name: "read_text_file", arguments: '{"path":"a.txt"}' }];
+    invokeMock.mockResolvedValue([
+      {
+        ...session,
+        messages: [
+          {
+            id: "m1",
+            session_id: "s1",
+            role: "assistant",
+            content: "",
+            created_at: 1,
+            kind: "text",
+            toolCalls: JSON.stringify(calls),
+            toolRecord: null,
+          },
+          {
+            id: "t1",
+            session_id: "s1",
+            role: "tool",
+            content: "hi",
+            created_at: 2,
+            kind: "tool",
+            toolCalls: null,
+            toolRecord: JSON.stringify(record),
+          },
+        ],
+        errors: [],
+      },
+    ]);
+    const [s] = await loadSessions();
+    expect(s.messages[0]).toMatchObject({ role: "assistant", kind: "text", toolCalls: calls });
+    expect(s.messages[1]).toMatchObject({ role: "tool", kind: "tool", toolRecord: record });
+  });
+
+  it("reads damaged tool JSON as absent instead of throwing", async () => {
+    invokeMock.mockResolvedValue([
+      {
+        ...session,
+        messages: [
+          {
+            id: "t1",
+            session_id: "s1",
+            role: "tool",
+            content: "hi",
+            created_at: 2,
+            kind: "tool",
+            toolCalls: "{oops",
+            toolRecord: "{oops",
+          },
+        ],
+        errors: [],
+      },
+    ]);
+    const [s] = await loadSessions();
+    expect(s.messages[0].toolCalls).toBeUndefined();
+    expect(s.messages[0].toolRecord).toBeUndefined();
+  });
+});
+
+describe("saveMessage tool fields", () => {
+  beforeEach(() => invokeMock.mockReset());
+
+  it("sends toolCalls and toolRecord as JSON text, or null when absent", async () => {
+    const record = {
+      callId: "c1",
+      name: "web_search",
+      arguments: "{}",
+      status: "denied" as const,
+      approval: "auto" as const,
+    };
+    await saveMessage("s1", {
+      id: "t1",
+      role: "tool",
+      kind: "tool",
+      content: "",
+      timestamp: 3,
+      toolRecord: record,
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith(
+      "save_message",
+      expect.objectContaining({
+        message: expect.objectContaining({
+          toolCalls: null,
+          toolRecord: JSON.stringify(record),
+        }),
+      }),
+    );
+
+    await saveMessage("s1", {
+      id: "a1",
+      role: "assistant",
+      content: "",
+      timestamp: 2,
+      toolCalls: [{ id: "c1", name: "web_search", arguments: "{}" }],
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith(
+      "save_message",
+      expect.objectContaining({
+        message: expect.objectContaining({
+          toolCalls: JSON.stringify([{ id: "c1", name: "web_search", arguments: "{}" }]),
+          toolRecord: null,
+        }),
+      }),
+    );
+  });
 });

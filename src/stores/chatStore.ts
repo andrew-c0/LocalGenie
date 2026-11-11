@@ -3,10 +3,12 @@ import type {
   ActiveStream,
   ChatSession,
   ChatSettingsOverrides,
+  ChatToolCall,
   Message,
   ReplyUsage,
 } from "../types";
 import { canRemoveFrom } from "../utils/compaction";
+import { isReplyMessage } from "../utils/toolRecords";
 
 /** Max characters used for auto-generated session titles from the first message. */
 const AUTO_TITLE_MAX_LENGTH = 50;
@@ -45,6 +47,8 @@ interface ChatState {
   updateMessageStats: (sessionId: string, messageId: string, stats: Message["stats"]) => void;
   updateMessageUsage: (sessionId: string, messageId: string, usage: ReplyUsage) => void;
   updateMessageFinishReason: (sessionId: string, messageId: string, finishReason: string) => void;
+  /** Sets the tool calls an assistant reply made. Replaces any calls it had. */
+  updateMessageToolCalls: (sessionId: string, messageId: string, toolCalls: ChatToolCall[]) => void;
   /** Removes the message and every message after it. */
   removeMessagesFrom: (sessionId: string, messageId: string) => void;
   removeMessagesAfter: (sessionId: string, messageId: string) => void;
@@ -156,7 +160,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (s.id !== sessionId) return s;
         const msgs = [...s.messages];
         const last = msgs[msgs.length - 1];
-        if (last && last.role === "assistant") {
+        // Only the last message, and only when it is a reply: a trailing tool row is never overwritten.
+        if (last && isReplyMessage(last)) {
           msgs[msgs.length - 1] = { ...last, content };
         }
         return {
@@ -200,6 +205,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return {
           ...s,
           messages: s.messages.map((m) => (m.id === messageId ? { ...m, finishReason } : m)),
+        };
+      }),
+    }));
+  },
+
+  updateMessageToolCalls: (sessionId: string, messageId: string, toolCalls: ChatToolCall[]) => {
+    set((state) => ({
+      sessions: state.sessions.map((s) => {
+        if (s.id !== sessionId) return s;
+        return {
+          ...s,
+          messages: s.messages.map((m) => (m.id === messageId ? { ...m, toolCalls } : m)),
         };
       }),
     }));

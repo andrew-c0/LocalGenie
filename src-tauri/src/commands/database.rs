@@ -188,14 +188,17 @@ fn is_system_type(kind: &str) -> bool {
     !kind.is_empty() && kind.chars().all(|c| c.is_ascii_lowercase() || c == '_')
 }
 
-/// A chat message is `text` with no system type. A system line is `system` and needs a type made of
-/// lowercase letters and underscores. A summary needs the id of the last message it covers, and no
-/// other message may name one. Anything else is refused, so a bad row never reaches the history.
+/// A chat message is `text` with no system type. A tool message is `tool`, with no system type, and holds
+/// the result of one call. A system line is `system` and needs a type made of lowercase letters and
+/// underscores. A summary needs the id of the last message it covers, and no other message may name one.
+/// Anything else is refused, so a bad row never reaches the history.
 fn check_message_kind(message: &message::Model) -> Result<(), String> {
     let covers = message.covers_through_id.as_deref();
     match (message.kind.as_str(), message.system_type.as_deref()) {
         ("text", None) => refuse_covers(covers),
         ("text", Some(_)) => Err("a chat message cannot have a system type".to_owned()),
+        ("tool", None) => refuse_covers(covers),
+        ("tool", Some(_)) => Err("a tool message cannot have a system type".to_owned()),
         ("system", Some(SYSTEM_TYPE_SUMMARY)) => match covers {
             Some(id) if !id.is_empty() => Ok(()),
             _ => Err("a summary needs the id of the last message it covers".to_owned()),
@@ -245,6 +248,8 @@ pub async fn save_message(
         system_type: Set(message.system_type),
         compute: Set(message.compute),
         covers_through_id: Set(message.covers_through_id),
+        tool_calls: Set(message.tool_calls),
+        tool_record: Set(message.tool_record),
     })
     .on_conflict(
         OnConflict::column(message::Column::Id)
@@ -266,6 +271,8 @@ pub async fn save_message(
                 message::Column::SystemType,
                 message::Column::Compute,
                 message::Column::CoversThroughId,
+                message::Column::ToolCalls,
+                message::Column::ToolRecord,
             ])
             .to_owned(),
     )
@@ -694,6 +701,8 @@ mod message_kind_tests {
             system_type: system_type.map(str::to_owned),
             compute: None,
             covers_through_id: None,
+            tool_calls: None,
+            tool_record: None,
         }
     }
 
@@ -722,6 +731,33 @@ mod message_kind_tests {
         assert!(check_message_kind(&covering(summary.clone(), None)).is_err());
         assert!(check_message_kind(&covering(summary.clone(), Some(""))).is_err());
         assert!(check_message_kind(&covering(summary, Some("m9"))).is_ok());
+    }
+
+    #[test]
+    fn accepts_a_tool_message_without_system_type_or_covers() {
+        assert!(check_message_kind(&message("tool", None)).is_ok());
+        assert!(check_message_kind(&message("tool", Some("model_changed"))).is_err());
+        assert!(check_message_kind(&covering(message("tool", None), Some("m9"))).is_err());
+    }
+
+    #[test]
+    fn tool_fields_use_camel_case_on_the_wire() {
+        let mut tool = message("tool", None);
+        tool.tool_record = Some(r#"{"callId":"c1"}"#.into());
+        tool.tool_calls = Some(r#"[{"id":"c1"}]"#.into());
+        let json = serde_json::to_value(&tool).expect("serialize");
+        assert_eq!(json["toolRecord"], r#"{"callId":"c1"}"#);
+        assert_eq!(json["toolCalls"], r#"[{"id":"c1"}]"#);
+        assert!(json.get("tool_record").is_none());
+
+        // A message from before the fields, sent without them, reads as None.
+        let mut without = serde_json::to_value(message("text", None)).expect("serialize");
+        let object = without.as_object_mut().expect("object");
+        object.remove("toolCalls");
+        object.remove("toolRecord");
+        let read: message::Model = serde_json::from_value(without).expect("deserialize");
+        assert_eq!(read.tool_calls, None);
+        assert_eq!(read.tool_record, None);
     }
 
     #[test]

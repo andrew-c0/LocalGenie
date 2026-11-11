@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import * as db from "../services/database";
+import { abortToolLoop } from "../services/toolLoop";
 import { useChatStore } from "../stores/chatStore";
 import type { ChatSession } from "../types";
 
@@ -25,6 +26,8 @@ export function useSessionActions() {
   const remove = (sessionId: string) => {
     // Read before the store moves the active id on.
     const wasOpen = useChatStore.getState().activeSessionId === sessionId;
+    // Stops the chat's tool loop and cancels its approval prompts, so none waits for a deleted chat.
+    abortToolLoop(sessionId);
     deleteSession(sessionId);
     if (wasOpen) navigate("/chat");
     db.deleteSession(sessionId).catch(() => {});

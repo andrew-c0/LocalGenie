@@ -357,3 +357,78 @@ describe("summaryRowFor", () => {
     vi.restoreAllMocks();
   });
 });
+
+describe("tool rows", () => {
+  const call = { id: "c1", name: "read_text_file", arguments: '{"path":"a.txt"}' };
+  const reply: Message = {
+    id: "a1",
+    role: "assistant",
+    content: "",
+    timestamp: 1,
+    toolCalls: [call],
+  };
+  const result: Message = {
+    id: "t1",
+    role: "tool",
+    kind: "tool",
+    content: "file text",
+    timestamp: 1,
+    toolRecord: {
+      callId: "c1",
+      name: "read_text_file",
+      arguments: '{"path":"a.txt"}',
+      status: "ok",
+      approval: "auto",
+    },
+  };
+
+  it("does not allow removing from a tool row, which would split its call", () => {
+    const messages = [msg("u1", "user", "q"), reply, result, msg("u2", "user", "next")];
+    expect(canRemoveFrom(messages, 2)).toBe(false);
+  });
+
+  it("allows removing from the reply that made the calls, which takes its tool rows", () => {
+    const messages = [msg("u1", "user", "q"), reply, result, msg("u2", "user", "next")];
+    expect(canRemoveFrom(messages, 1)).toBe(true);
+  });
+
+  it("refuses an index past the end", () => {
+    expect(canRemoveFrom([msg("u1", "user", "q")], 3)).toBe(false);
+  });
+
+  it("writes the calls and the results of a turn as plain text in the summary transcript", () => {
+    const messages = [
+      msg("u1", "user", "read a.txt"),
+      reply,
+      result,
+      msg("a2", "assistant", "It says hi."),
+      msg("u2", "user", "thanks"),
+    ];
+    const input = summaryInputFor(messages, "u2");
+    expect(input.items).toEqual([
+      { role: "user", content: "read a.txt" },
+      {
+        role: "assistant",
+        content:
+          'Called read_text_file with {"path":"a.txt"}\nTool read_text_file result: file text',
+      },
+      { role: "assistant", content: "It says hi." },
+    ]);
+  });
+
+  it("never gives a tool result a role of its own in the transcript", () => {
+    const orphan: Message = { ...result, id: "t9" };
+    const input = summaryInputFor(
+      [msg("u1", "user", "q"), orphan, msg("u2", "user", "next")],
+      "u2",
+    );
+    expect(input.items.map((item) => item.role)).toEqual(["user", "assistant"]);
+    expect(input.items[1].content).toBe("Tool read_text_file result: file text");
+  });
+
+  it("leaves a tool result with empty content as a marked line", () => {
+    const empty: Message = { ...result, id: "t2", content: "  " };
+    const input = summaryInputFor([reply, empty, msg("u2", "user", "next")], "u2");
+    expect(input.items[0].content).toContain("Tool read_text_file result: (no output)");
+  });
+});

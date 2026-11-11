@@ -9,11 +9,12 @@ import { useRamEstimateStore } from "../stores/ramEstimateStore";
 import { useRuntimeNoticeStore } from "../stores/runtimeNoticeStore";
 import { useRuntimeStore } from "../stores/runtimeStore";
 import { useSidebarStore } from "../stores/sidebarStore";
+import { useToolStore } from "../stores/toolStore";
 
 /**
  * Startup only: loads the runtime list (which also sets the CLI state), saved sessions, installed
  * models, server status, the sidebar's saved state, the runtime update checks, the saved runtime notice state and the
- * saved app update notified version once. Everything that runs afterwards is owned by
+ * saved app update notified version and the tool settings (states, allowed folders) once. Everything that runs afterwards is owned by
  * the component that uses it (model loading in the header, downloads in the drawer, streaming in `ChatRuntime`).
  */
 export default function AppBootstrap({ children }: { children: ReactNode }) {
@@ -36,6 +37,7 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
     void useSidebarStore.getState().loadCollapsed();
     void useRuntimeNoticeStore.getState().load();
     void useAppUpdateStore.getState().loadNotifiedVersion();
+    void useToolStore.getState().load();
 
     (async () => {
       // The release checks call GitHub and can be slow, so they start once the list is read and do not

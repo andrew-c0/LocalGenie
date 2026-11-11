@@ -1,8 +1,18 @@
 import { useRef } from "react";
 import { useTauriEvent } from "../../../hooks";
 import * as db from "../../../services/database";
+import { CHAT_TOOL_CALLS_EVENT } from "../../../services/geniex";
 import { useChatStore } from "../../../stores/chatStore";
-import type { GenerationStats, Message } from "../../../types";
+import type {
+  ActiveStream,
+  ChatToolCall,
+  ChatToolCallsEvent,
+  GenerationStats,
+  Message,
+  ReplyUsage,
+} from "../../../types";
+import { replyWithToolCalls } from "../../../utils/replyToolCalls";
+import { isReplyMessage } from "../../../utils/toolRecords";
 
 /** Text received for one stream and not yet written to the chat. */
 interface PendingText {
@@ -10,13 +20,65 @@ interface PendingText {
   text: string;
 }
 
+/** Tool calls a stream made, from `chat-tool-calls`. Kept until that stream's `chat-done`. */
+interface PendingToolCalls {
+  streamId: string;
+  calls: ChatToolCall[];
+}
+
+interface ChatDonePayload {
+  streamId: string;
+  finishReason: string | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+}
+
+/** Characters of the user message that triggered the reply: the last user message before the final one. */
+function promptCharsBefore(messages: Message[]): number {
+  for (let i = messages.length - 2; i >= 0; i--) {
+    if (messages[i].role === "user") return messages[i].content.length;
+  }
+  return 0;
+}
+
+/** The server's exact token counts for a reply, when it reported both. */
+function usageOf(payload: ChatDonePayload): ReplyUsage | undefined {
+  if (payload.promptTokens === null || payload.completionTokens === null) return undefined;
+  return { promptTokens: payload.promptTokens, completionTokens: payload.completionTokens };
+}
+
 /**
- * Applies `chat-chunk` and `chat-done` events to the session that started the stream. Stream
- * events are matched by id, so tokens still land in the right session if the user switched chats.
+ * Puts a stream's tool calls on its reply: the reply it wrote, or a new empty reply when it wrote no
+ * text. The reply is stored with its calls by the `chat-done` handler's save.
+ */
+function attachToolCalls(sessionId: string, stream: ActiveStream, calls: ChatToolCall[]): void {
+  const store = useChatStore.getState();
+  const session = store.sessions.find((s) => s.id === sessionId);
+  const messages = session?.messages ?? [];
+  const last = messages[messages.length - 1];
+  const fresh: Message = {
+    id: crypto.randomUUID(),
+    role: "assistant",
+    content: "",
+    timestamp: Date.now(),
+    modelId: session?.modelId ?? undefined,
+    compute: stream.compute,
+  };
+  const { message, isNew } = replyWithToolCalls(last, calls, fresh);
+  if (isNew) store.addMessage(sessionId, message);
+  else store.updateMessageToolCalls(sessionId, message.id, calls);
+}
+
+/**
+ * Applies `chat-chunk`, `chat-tool-calls` and `chat-done` events to the session that started the stream.
+ * Stream events are matched by id, so tokens still land in the right session if the user switched chats.
  * Stream state (`isStreaming`, `activeStream`) lives in the chat store; components read it from there.
  *
  * Chunks are buffered and written once per animation frame. Writing every token re-rendered the
  * whole thread per token, so the webview fell behind the stream and a stop or finish showed late.
+ *
+ * A stream that made tool calls keeps `isStreaming` at its `chat-done`: the tool loop
+ * (`services/toolLoop.ts`) owns that flag and clears it when the whole run ends.
  */
 export function useChatStream() {
   // Per-response counters for generation stats.
@@ -25,6 +87,7 @@ export function useChatStream() {
   const responseStreamRef = useRef<string | null>(null);
   const pendingRef = useRef<PendingText | null>(null);
   const frameRef = useRef<number | null>(null);
+  const toolCallsRef = useRef<PendingToolCalls | null>(null);
 
   /** Writes the buffered text into the stream's message now. */
   const flush = () => {
@@ -43,8 +106,9 @@ export function useChatStream() {
     const session = store.sessions.find((s) => s.id === activeId);
     if (!session) return;
 
+    // A tool row or an error after the reply means the next text is a new reply, not more of this one.
     const lastMsg = session.messages[session.messages.length - 1];
-    if (lastMsg && lastMsg.role === "assistant") {
+    if (lastMsg && isReplyMessage(lastMsg)) {
       store.updateLastAssistantMessage(activeId, lastMsg.content + pending.text);
       return;
     }
@@ -60,6 +124,14 @@ export function useChatStream() {
     store.addMessage(activeId, assistantMsg);
     // Persist immediately so the message survives app restarts mid-stream.
     db.saveMessage(activeId, assistantMsg).catch(() => undefined);
+  };
+
+  /** The calls of a stream, once. Null when the stream made none. */
+  const takeToolCalls = (streamId: string): ChatToolCall[] | null => {
+    const pending = toolCallsRef.current;
+    if (pending?.streamId !== streamId || pending.calls.length === 0) return null;
+    toolCallsRef.current = null;
+    return pending.calls;
   };
 
   useTauriEvent<{ streamId: string; content: string }>("chat-chunk", (payload) => {
@@ -82,23 +154,26 @@ export function useChatStream() {
     if (frameRef.current === null) frameRef.current = requestAnimationFrame(flush);
   });
 
-  useTauriEvent<{
-    streamId: string;
-    finishReason: string | null;
-    promptTokens: number | null;
-    completionTokens: number | null;
-  }>("chat-done", (payload) => {
+  useTauriEvent<ChatToolCallsEvent>(CHAT_TOOL_CALLS_EVENT, (payload) => {
+    const stream = useChatStore.getState().activeStream;
+    if (!stream || stream.streamId !== payload.streamId) return;
+    toolCallsRef.current = { streamId: payload.streamId, calls: payload.toolCalls };
+  });
+
+  useTauriEvent<ChatDonePayload>("chat-done", (payload) => {
     // Write everything received so far, so the final message holds the whole reply.
     flush();
+    const calls = takeToolCalls(payload.streamId);
 
     const store = useChatStore.getState();
     const stream = store.activeStream;
     if (!stream || stream.streamId !== payload.streamId) return;
-    store.setStreaming(false);
+    if (!calls) store.setStreaming(false);
     store.setActiveStream(null);
 
     const activeId = stream.sessionId;
-    const session = store.sessions.find((s) => s.id === activeId);
+    if (calls) attachToolCalls(activeId, stream, calls);
+    const session = useChatStore.getState().sessions.find((s) => s.id === activeId);
     if (!session) return;
 
     const lastMsg = session.messages[session.messages.length - 1];
@@ -114,28 +189,22 @@ export function useChatStream() {
     tokenCountRef.current = 0;
     responseStreamRef.current = null;
 
-    let promptChars = 0;
-    for (let i = session.messages.length - 2; i >= 0; i--) {
-      if (session.messages[i].role === "user") {
-        promptChars = session.messages[i].content.length;
-        break;
-      }
-    }
+    const promptChars = promptCharsBefore(session.messages);
 
-    if (lastMsg.role === "assistant" && payload.finishReason) {
+    // The finish is for the reply only. A tool row at the end (a reply that only made calls) has none.
+    const reply = isReplyMessage(lastMsg);
+    if (reply && payload.finishReason) {
       store.updateMessageFinishReason(activeId, lastMsg.id, payload.finishReason);
     }
 
-    // The server's exact counts for this reply, when it reported them.
-    const usage =
-      payload.promptTokens !== null && payload.completionTokens !== null
-        ? { promptTokens: payload.promptTokens, completionTokens: payload.completionTokens }
-        : undefined;
-    if (lastMsg.role === "assistant" && usage) {
+    const usage = usageOf(payload);
+    if (reply && usage) {
       store.updateMessageUsage(activeId, lastMsg.id, usage);
     }
 
-    if (lastMsg.role === "assistant" && lastMsg.content) {
+    // A reply with no text but with calls is still stored, so its calls survive a reload.
+    const hasCalls = (lastMsg.toolCalls?.length ?? 0) > 0;
+    if (reply && (lastMsg.content || hasCalls)) {
       const stats: GenerationStats = { timeToFirstToken, totalTime, tokenCount, promptChars };
       store.updateMessageStats(activeId, lastMsg.id, stats);
       // `lastMsg` was read before the finish reason and stats were set, so build the saved copy

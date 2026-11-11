@@ -28,6 +28,7 @@ import {
   Speaker2Regular,
   TableRegular,
   TasksAppRegular,
+  WrenchRegular,
 } from "@fluentui/react-icons";
 import { createElement, type ReactElement } from "react";
 import { OCR_TAB_LABEL } from "../utils/ocrText";
@@ -255,7 +256,7 @@ const SETTINGS_ROUTE: RouteMeta = {
   path: "/settings",
   title: "Settings",
   icon: createElement(SettingsRegular),
-  description: "Runtimes, the server, RAM headroom and app preferences.",
+  description: "Runtimes, the server, RAM headroom, tools and app preferences.",
   children: [
     {
       id: "settings-app",
@@ -277,6 +278,13 @@ const SETTINGS_ROUTE: RouteMeta = {
       title: "Inference & Sampling",
       icon: createElement(BrainCircuitRegular),
       description: "Model parameters, system prompt",
+    },
+    {
+      id: "settings-tools",
+      path: "/settings/tools",
+      title: "Tools",
+      icon: createElement(WrenchRegular),
+      description: "Tools models may use, and the folders the file tools may read",
     },
     {
       id: "settings-logs",

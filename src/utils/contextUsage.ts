@@ -6,6 +6,20 @@ import { isSystemEvent } from "./systemEvents";
 const CHARS_PER_TOKEN = 4;
 
 /**
+ * Tokens one sent message adds to the context. A reply with a reported usage counts its completion
+ * tokens, which already include any tool call it made. Any other message is estimated from its text,
+ * plus the arguments of its tool calls (a tool row's text is its result).
+ */
+function sentTokensOf(message: Message): number {
+  if (message.role === "assistant" && message.usage) return message.usage.completionTokens;
+  const argumentChars = (message.toolCalls ?? []).reduce(
+    (sum, call) => sum + call.arguments.length,
+    0,
+  );
+  return Math.round((message.content.length + argumentChars) / CHARS_PER_TOKEN);
+}
+
+/**
  * Tokens that the text files of the sent messages add to the context. Estimated from the characters
  * each file sent, the same ratio as the message text. Refs saved before `chars` was kept fall back to
  * the file size in bytes, which is close for text.
@@ -51,10 +65,7 @@ export function contextUsageOf(messages: Message[]): ContextUsage {
 
   let tokens = summary ? Math.round(summary.content.length / CHARS_PER_TOKEN) : 0;
   for (const message of sent) {
-    tokens +=
-      message.role === "assistant" && message.usage
-        ? message.usage.completionTokens
-        : Math.round(message.content.length / CHARS_PER_TOKEN);
+    tokens += sentTokensOf(message);
   }
   const fileTokens = fileTokensOf(sent);
   const total = tokens + fileTokens;

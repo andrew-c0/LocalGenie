@@ -197,14 +197,27 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Authenticode signing is skipped, so Windows SmartScreen warns on the installer.
 - Updater and release pipeline: see the next section.
 
-## App updater and release pipeline (2026-11-10; the local update test passed, the rest not run)
-- The two GitHub workflows (`ci.yml`, `release.yml`) have never run. Unconfirmed: the `windows-11-arm` runner label, the `tauri-apps/tauri-action@v0` inputs and the two repository secrets (see `release.md`). The first tag push is the test.
+## App updater and release pipeline (2026-11-11; the local update test passed; CI and the Release workflow ran on GitHub for v0.1.1)
 - The release notes are a placeholder (`releaseBody` in `release.yml`); the draft must be edited before it is published.
-- Only the local feed was tested. The GitHub feed (`latest.json` of the latest published release) and an update from a published release are not run.
+- The installed app reads the published `latest.json` over TLS (2026-11-11), but no update from a published release has been downloaded and installed yet (needs a newer release than the installed app). Not run.
+- `scripts/release.mjs` and the `/release` skill are not run end to end; only the dry run's clean-tree refusal was seen.
 - Not run in the app: the running-work list in the Install confirm (`AppUpdateCard`, `useRunningWork`; the line text is unit-tested) and the desktop notice for a new app version (`useAppUpdate`). The notice has no click action, the same limit as the runtime notice.
 - The updater cannot be switched off: the plugin is registered and `plugins.updater` is set in every desktop build (code-read). A Microsoft Store build would need a config change.
 - Relaunch after install is best effort: on Windows the installer closes the app when it starts (`services/appUpdate.ts`).
 - Migrations are forward-only, so an older build cannot be restored over a newer database. Plan decision; the release notes must say so. Not built.
+
+## Native tools (2026-11-11 working tree, phases 1-3; code-read and unit tests written, not run with a model or a real site)
+- Nothing ran with a real tool-capable model or the real GenieX server. The request shape, the streamed call and the tool-reply pairing come from the GenieX source and LocalGenie's tests (`geniex-server-behaviour.md`, "Tool calls").
+- No request was sent to a real site: `web_fetch` and each `web_search` source are unrun against live sites. The source adapters are tested on saved responses only.
+- The UI was not rendered by the sync agent. The user tested the approval dialog and the Tools list (reported 2026-11-11); the other items are unticked in `manual-checklist.md`.
+- A system or environment proxy bypasses the address filter (the private-address refusal in `commands/tools/web/client.rs` does not hold through a proxy).
+- No charset conversion for non-UTF-8 pages.
+- A tool call without an `index` merges with every other such call at index 0 (`ToolCallAccumulator`, code-read).
+- Switching chats during a tool run and then pressing Stop aborts the chat that is open, not the one whose run it was.
+- The allowed folders come from the webview with each call. Rust canonicalises the paths it is given and does not check them against the saved list.
+- Approval is per tool, not per folder: "Allow for this chat" covers the tool for any folder.
+- After a chat holds a tool image, switching to a model without confirmed vision blocks sends until that tool message is deleted.
+- Not built: reading PDF, Word or audio files, and an image preview on the tool line. Tool results are plain text by design.
 
 ## Resolved (code-verified; runtime-unverified)
 - Download auto-retry gaps (2026-11-06; the user tested both in the app and says they work): a GGUF projector (sidecar) network failure (offline or timeout) was toasted and skipped, so the model imported without it. It now fails the entry, which retries by itself and resumes from `.part`; other projector failures are still skipped with the toast (`runGGUFDownload`, `downloadPipeline.ts`). The drawer badge read "Error" during a wait or a countdown; it reads "Retrying soon" (`DownloadStatusBadge` `retrying`, passed by `DownloadItemCard`).

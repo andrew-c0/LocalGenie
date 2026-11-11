@@ -21,6 +21,7 @@ import { getCompactionSettings } from "./compaction";
 import * as db from "./database";
 import type { ChatMessage } from "./geniex";
 import { loadModelCapabilities } from "./models";
+import { beginToolRun, runToolRounds, toolsForRun } from "./toolLoop";
 
 /**
  * True when the active model may take these files. The model may have changed since the files were
@@ -120,6 +121,21 @@ async function summaryForThreshold(
 }
 
 /**
+ * One reply and the tool rounds it starts. The request offers the tools that are on; when it succeeds,
+ * the calls it made are run and answered. Resolves with the failure to show, or null.
+ */
+async function replyWithTools(
+  sessionId: string,
+  history: ChatMessage[],
+  run: ModelRun,
+): Promise<SendFailure | null> {
+  beginToolRun(sessionId);
+  const failure = await streamReply(sessionId, history, run, await toolsForRun(run));
+  if (failure) return failure;
+  return runToolRounds(sessionId, run);
+}
+
+/**
  * After the server refused the prompt as too long: summarises the history before it and sends the
  * prompt once more. Resolves with the failure to show, or null when the retry went through.
  */
@@ -132,7 +148,7 @@ async function retryAfterOverflow(
 ): Promise<SendFailure | null> {
   const outcome = await summariseBeforePrompt(sessionId, prompt, run);
   if (outcome.status === "done") {
-    return streamReply(sessionId, await promptOnlyHistory(prompt, freshFiles), run);
+    return replyWithTools(sessionId, await promptOnlyHistory(prompt, freshFiles), run);
   }
   if (outcome.status === "cancelled") {
     toast.info("Summary stopped", "The message was not sent again.");
@@ -144,7 +160,7 @@ async function retryAfterOverflow(
 /**
  * Sends a prompt that is already stored in the conversation, with its history. With compaction on, the
  * conversation is summarised first when the context reaches the threshold, and once more if the server
- * refuses the prompt as too long. With compaction off, a send is exactly one request.
+ * refuses the prompt as too long. With compaction off, a send is one request and the tool rounds it starts.
  */
 export async function sendPrompt(
   sessionId: string,
@@ -170,7 +186,7 @@ export async function sendPrompt(
       if (toSend === null) return;
     }
 
-    const failure = await streamReply(sessionId, toSend, run);
+    const failure = await replyWithTools(sessionId, toSend, run);
     if (!failure) return;
     if (compaction.enabled && isContextOverflow(failure.error)) {
       const remaining = await retryAfterOverflow(sessionId, prompt, freshFiles, run, failure);

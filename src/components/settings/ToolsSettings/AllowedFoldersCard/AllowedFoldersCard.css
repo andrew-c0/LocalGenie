@@ -1,0 +1,10 @@
+/* Long folder paths wrap instead of pushing the Remove button out of the card. */
+.allowed-folders__path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Fluent sizes an Input to its content. The folder field fills the row instead, so the Add button sits at its end. */
+.allowed-folders__input .fui-Input {
+  width: 100%;
+}

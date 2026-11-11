@@ -33,6 +33,29 @@ pub async fn pick_text_file(app: AppHandle) -> Result<Option<String>, String> {
     }
 }
 
+/// Open a native folder dialog. Returns the chosen folder's absolute path, or `None` when the user
+/// cancels.
+#[tauri::command]
+pub async fn pick_folder(app: AppHandle) -> Result<Option<String>, String> {
+    let (tx, rx) = oneshot::channel();
+    app.dialog()
+        .file()
+        .set_title("Choose a folder")
+        .pick_folder(move |picked| {
+            let _ = tx.send(picked);
+        });
+    let picked = rx
+        .await
+        .map_err(|e| format!("folder dialog closed unexpectedly: {e}"))?;
+    match picked {
+        None => Ok(None),
+        Some(folder) => folder
+            .into_path()
+            .map(|p| Some(p.to_string_lossy().into_owned()))
+            .map_err(|e| format!("selected folder has no local path: {e}")),
+    }
+}
+
 /// Read a `.txt` or `.md` file as UTF-8 text, for a system prompt attachment.
 #[tauri::command]
 pub async fn read_text_file(path: String) -> Result<String, String> {

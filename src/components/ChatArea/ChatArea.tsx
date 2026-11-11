@@ -6,8 +6,10 @@ import { coveredMessageIds } from "../../utils/compaction";
 import { isNearBottom } from "../../utils/scroll";
 import { isSystemEvent } from "../../utils/systemEvents";
 import { parseThinking } from "../../utils/thinking";
+import { isToolMessage } from "../../utils/toolRecords";
 import MessageBubble from "../MessageBubble/MessageBubble";
 import SystemEventLine from "../SystemEventLine/SystemEventLine";
+import ToolCallLine from "../ToolCallLine/ToolCallLine";
 import "./ChatArea.css";
 
 /**
@@ -72,7 +74,7 @@ export default function ChatArea() {
     }
   }
 
-  /** Build the message list. System lines (such as a model change) are drawn as lines, not bubbles. */
+  /** Build the message list. System lines (such as a model change) and tool calls are drawn as lines, not bubbles. */
   const renderedMessages: React.ReactNode[] = [];
 
   const lastMsgId = session.messages[session.messages.length - 1]?.id;
@@ -80,6 +82,10 @@ export default function ChatArea() {
   for (const msg of session.messages) {
     if (isSystemEvent(msg)) {
       renderedMessages.push(<SystemEventLine key={msg.id} message={msg} />);
+      continue;
+    }
+    if (isToolMessage(msg)) {
+      renderedMessages.push(<ToolCallLine key={msg.id} message={msg} />);
       continue;
     }
 

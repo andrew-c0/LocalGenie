@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   ChatMessageContent,
   ChatSettings,
+  ChatToolCallsEvent,
   ConfigEntry,
   ModelInfo,
   ModelLoadParams,
@@ -10,12 +11,26 @@ import type {
   ServerLogLine,
   ServerStartOptions,
   ServerStatus,
+  ToolDefinition,
 } from "../types";
+import { listenEvent } from "./events";
 
-/** Shape sent to the OpenAI-compatible chat completions endpoint. */
+/** A tool call inside an assistant message sent to the server (OpenAI wire shape). */
+export interface ToolCallWire {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
+/** Shape sent to the OpenAI-compatible chat completions endpoint. Snake_case on the wire, as OpenAI names them. */
 export interface ChatMessage {
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "tool";
   content: ChatMessageContent;
+  /** Set on an assistant message that made tool calls. */
+  tool_calls?: ToolCallWire[];
+  /** Set on a `tool` message: the id of the call it answers. */
+  tool_call_id?: string;
+  name?: string;
 }
 
 // ─── Model Management ────────────────────────────────────────────
@@ -88,6 +103,9 @@ export async function unloadAllModels(port?: number): Promise<ServerStatus> {
  * session that started the stream. `chat-done` also carries `finishReason`
  * (the server's value, `"cancelled"` on user stop, or null). The stream runs
  * until it finishes; there is no app-side token cap or total timeout.
+ *
+ * `tools` (optional) offers OpenAI tool objects to the model. When the model calls
+ * them, `chat-tool-calls` arrives just before `chat-done` (finishReason `"tool_calls"`).
  */
 export async function chatCompletion(
   messages: ChatMessage[],
@@ -95,8 +113,19 @@ export async function chatCompletion(
   streamId: string,
   model?: string,
   baseUrl?: string,
+  tools?: ToolDefinition[],
 ): Promise<void> {
-  return invoke("chat_completion", { messages, settings, streamId, model, baseUrl });
+  return invoke("chat_completion", { messages, settings, streamId, model, baseUrl, tools });
+}
+
+/** Event carrying `ChatToolCallsEvent` when the model calls tools in a streamed reply. */
+export const CHAT_TOOL_CALLS_EVENT = "chat-tool-calls";
+
+/** Subscribe to `chat-tool-calls`. Resolves to a function that removes the listener. */
+export function listenChatToolCalls(
+  handler: (payload: ChatToolCallsEvent) => void,
+): Promise<() => void> {
+  return listenEvent<ChatToolCallsEvent>(CHAT_TOOL_CALLS_EVENT, handler);
 }
 
 // ─── CLI Utilities ──────────────────────────────────────────────

@@ -22,6 +22,7 @@ mod m20261034_000001_create_installed_runtimes;
 mod m20261035_000001_message_covers_through;
 mod m20261036_000001_downloaded_model_ram;
 mod m20261037_000001_drop_model_compute_setting;
+mod m20261038_000001_message_tool_fields;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -50,6 +51,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261035_000001_message_covers_through::Migration),
             Box::new(m20261036_000001_downloaded_model_ram::Migration),
             Box::new(m20261037_000001_drop_model_compute_setting::Migration),
+            Box::new(m20261038_000001_message_tool_fields::Migration),
         ]
     }
 }
@@ -212,6 +214,8 @@ mod tests {
             system_type: Set(None),
             compute: Set(None),
             covers_through_id: Set(None),
+            tool_calls: Set(None),
+            tool_record: Set(None),
         }
         .insert(&db)
         .await
@@ -227,8 +231,8 @@ mod tests {
         assert_eq!(msg.token_count, Some(42));
         assert_eq!(msg.prompt_chars, Some(7));
 
-        // Eighteen steps: the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM and dropped compute setting migrations come after this one.
-        Migrator::down(&db, Some(18))
+        // Nineteen steps: this one, then the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM, dropped compute setting and message tool fields migrations.
+        Migrator::down(&db, Some(19))
             .await
             .expect("revert stats migration");
         let after_down = columns(db.clone()).await;
@@ -258,8 +262,8 @@ mod tests {
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
         // Put back the old JSON row, then apply the migrations again so it copies it.
-        // Seventeen steps: the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM and dropped compute setting migrations come after the settings one.
-        Migrator::down(&db, Some(17))
+        // Eighteen steps: the settings one, then the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM, dropped compute setting and message tool fields migrations.
+        Migrator::down(&db, Some(18))
             .await
             .expect("revert settings migration");
         db.execute(Statement::from_string(
@@ -368,6 +372,8 @@ mod tests {
             system_type: Set(None),
             compute: Set(None),
             covers_through_id: Set(None),
+            tool_calls: Set(None),
+            tool_record: Set(None),
         }
         .insert(&db)
         .await
@@ -585,8 +591,8 @@ mod tests {
         assert_eq!(row.facets.as_deref(), Some(facets));
 
         // Reverting drops the column; reapplying brings it back as null for old rows.
-        // Five steps: this one, then the installed runtimes, message covers-through, downloaded model RAM and dropped compute setting migrations.
-        Migrator::down(&db, Some(5)).await.expect("revert facets");
+        // Six steps: this one, then the installed runtimes, message covers-through, downloaded model RAM, dropped compute setting and message tool fields migrations.
+        Migrator::down(&db, Some(6)).await.expect("revert facets");
         assert!(!columns(db.clone()).await.iter().any(|c| c == "facets"));
         Migrator::up(&db, None).await.expect("reapply facets");
         let row = downloaded_model::Entity::find_by_id("org/model")
@@ -741,8 +747,8 @@ mod tests {
         assert_eq!(row.context_ram_bytes, Some(512));
         assert_eq!(row.ram_approximate, Some(true));
 
-        // Reverting drops the three columns; reapplying brings them back as null.
-        Migrator::down(&db, Some(2)).await.expect("revert RAM columns");
+        // Reverting drops the three columns (and the later tool fields migration); reapplying brings them back as null.
+        Migrator::down(&db, Some(3)).await.expect("revert RAM columns");
         let after_down = columns(db.clone()).await;
         for col in ram_cols {
             assert!(!after_down.iter().any(|c| c == col), "{col} left after down");
@@ -756,6 +762,129 @@ mod tests {
         assert_eq!(row.base_ram_bytes, None);
         assert_eq!(row.context_ram_bytes, None);
         assert_eq!(row.ram_approximate, None);
+    }
+
+    #[tokio::test]
+    async fn tool_fields_are_added_and_round_trip_on_messages() {
+        let tmp = TempDb::new("migrate-tool-fields");
+        let db = init_database(&tmp.url()).await.expect("migrations apply");
+
+        let rows = db
+            .query_all(Statement::from_string(
+                DatabaseBackend::Sqlite,
+                "PRAGMA table_info(messages)".to_owned(),
+            ))
+            .await
+            .expect("table_info");
+        let names: Vec<String> = rows
+            .iter()
+            .map(|r| r.try_get::<String>("", "name").expect("name"))
+            .collect();
+        assert!(names.iter().any(|c| c == "tool_calls"), "tool_calls missing");
+        assert!(names.iter().any(|c| c == "tool_record"), "tool_record missing");
+
+        chat_session::ActiveModel {
+            id: Set("s1".into()),
+            title: Set("t".into()),
+            model_id: Set(None),
+            context_chars: Set(0),
+            created_at: Set(1),
+            updated_at: Set(1),
+            pinned: Set(false),
+            settings_overrides: Set(None),
+        }
+        .insert(&db)
+        .await
+        .expect("insert session");
+
+        let calls = r#"[{"id":"call_1","name":"clock","arguments":"{}"}]"#;
+        let record = r#"{"callId":"call_1","name":"clock","arguments":"{}","status":"ok","durationMs":4,"approval":"auto","truncated":false}"#;
+        message::ActiveModel {
+            id: Set("a1".into()),
+            session_id: Set("s1".into()),
+            role: Set("assistant".into()),
+            content: Set(String::new()),
+            created_at: Set(2),
+            tool_calls: Set(Some(calls.into())),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await
+        .expect("insert assistant message with tool calls");
+        message::ActiveModel {
+            id: Set("t1".into()),
+            session_id: Set("s1".into()),
+            role: Set("tool".into()),
+            content: Set("12:00".into()),
+            created_at: Set(3),
+            kind: Set("tool".into()),
+            tool_record: Set(Some(record.into())),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await
+        .expect("insert tool message");
+
+        let assistant = message::Entity::find_by_id("a1")
+            .one(&db)
+            .await
+            .expect("query")
+            .expect("row exists");
+        assert_eq!(assistant.tool_calls.as_deref(), Some(calls));
+        assert_eq!(assistant.tool_record, None);
+        let tool = message::Entity::find_by_id("t1")
+            .one(&db)
+            .await
+            .expect("query")
+            .expect("row exists");
+        assert_eq!(tool.kind, "tool");
+        assert_eq!(tool.content, "12:00");
+        assert_eq!(tool.tool_record.as_deref(), Some(record));
+        assert_eq!(tool.tool_calls, None);
+    }
+
+    #[tokio::test]
+    async fn message_rows_from_before_tool_fields_load_with_none() {
+        let tmp = TempDb::new("migrate-tool-old");
+        let db = init_database(&tmp.url()).await.expect("migrations apply");
+
+        // Drop the tool fields, write a row the way an older build did, then apply the migration again.
+        Migrator::down(&db, Some(1))
+            .await
+            .expect("revert tool fields");
+        chat_session::ActiveModel {
+            id: Set("s1".into()),
+            title: Set("t".into()),
+            model_id: Set(None),
+            context_chars: Set(0),
+            created_at: Set(1),
+            updated_at: Set(1),
+            pinned: Set(false),
+            settings_overrides: Set(None),
+        }
+        .insert(&db)
+        .await
+        .expect("insert session");
+        db.execute(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            "INSERT INTO messages (id, session_id, role, content, created_at, kind) \
+             VALUES ('old1', 's1', 'assistant', 'hi', 2, 'text')"
+                .to_owned(),
+        ))
+        .await
+        .expect("insert legacy row");
+        Migrator::up(&db, None)
+            .await
+            .expect("reapply tool fields");
+
+        let old = message::Entity::find_by_id("old1")
+            .one(&db)
+            .await
+            .expect("query")
+            .expect("row exists");
+        assert_eq!(old.content, "hi");
+        assert_eq!(old.tool_calls, None);
+        assert_eq!(old.tool_record, None);
     }
 
     #[tokio::test]
