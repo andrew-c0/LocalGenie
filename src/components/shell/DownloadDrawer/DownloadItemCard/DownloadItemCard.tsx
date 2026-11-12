@@ -102,6 +102,12 @@ export function DownloadItemCard({
     (d.status === "cancelled" || d.status === "error") &&
     (!!d.variant || !!d.aihub || isRuntime || isPlayground);
   const retryVerb = d.status === "error" ? "Retry" : "Resume";
+  // A skipped projector and other non-fatal problems show while the download runs and after it ends.
+  const warningLines = d.warnings?.map((warning) => (
+    <Caption1 key={warning} className="download-card__warning">
+      {warning}
+    </Caption1>
+  ));
 
   if (!active) {
     return (
@@ -146,6 +152,7 @@ export function DownloadItemCard({
             </Caption1>
           )}
         </div>
+        {warningLines}
         {d.status === "error" && d.error && !retryWaits && (
           // The friendly text shows; the raw error stays on hover for a bug report.
           <Caption1 className="download-card__error" title={d.error}>
@@ -193,6 +200,7 @@ export function DownloadItemCard({
           <AutoRetryLine notice={retryNotice} />
         </div>
       </div>
+      {warningLines}
     </Card>
   );
 }

@@ -66,10 +66,12 @@ export async function runGGUFDownload(variant: GGUFVariant): Promise<void> {
           if (String(err).includes("cancelled")) throw err;
           const kind = classifyNetworkError(err);
           if (kind === "offline" || kind === "timeout") throw err;
-          toast.error(
-            "Projector not downloaded",
-            `${name}: ${networkErrorMessage(err, SERVICE_NAMES.huggingFace)}`,
+          const friendly = networkErrorMessage(err, SERVICE_NAMES.huggingFace);
+          store.addWarning(
+            repoId,
+            `Projector not downloaded: ${name}. Vision will not work for this model. ${friendly}`,
           );
+          toast.error("Projector not downloaded", `${name}: ${friendly}`);
         },
       );
     }

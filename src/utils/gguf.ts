@@ -15,8 +15,8 @@
 export interface GGUFParseResult {
   sidecar: "mmproj" | "mtp" | "dflash" | null;
   /**
-   * Model name without the sidecar, precision and shard tokens lowercased, e.g.
-   * `gemma-4-e4b-it`. Files with the same stem belong to the same model.
+   * Model name without the sidecar, precision, Unsloth `UD` and shard tokens, lowercased, e.g.
+   * `gemma-4-e4b-it`. Files with the same stem belong to the same model. Empty for a generic projector.
    */
   stem: string;
   baseName: string | null;
@@ -37,6 +37,13 @@ const SIZE_LABEL =
  */
 const PRECISION_TOKEN =
   /(?<![A-Za-z0-9])([A-Za-z]{0,2}I?Q\d+(?:_[A-Za-z0-9]+)*|MXFP\d+(?:_[A-Za-z0-9]+)*|W\d+A\d+|W\d+|INT\d+|B?FP?(?:16|32))(?![A-Za-z0-9])/gi;
+/**
+ * Unsloth's `UD` (Dynamic) marker just before the precision, as in `Qwen3.5-4B-UD-Q4_K_XL`. It names the
+ * quantization, so it is left out of the stem: `UD-` and `UD` at the start of the name count too.
+ */
+const UD_MARKER = /(?<=^|[-_])UD[-_]?$/i;
+/** Words that name a projector, not a model. A name made only of them has the empty stem. */
+const GENERIC_WORDS = new Set(["model", "vision", "projector", "proj"]);
 
 /**
  * True when `filename` is a `.gguf` file at the top level of its repo.
@@ -59,23 +66,33 @@ export function parseGGUFFilename(filename: string): GGUFParseResult | null {
   const precision = precisions.length > 0 ? precisions[precisions.length - 1] : null;
   const encoding = precision?.[1] ?? null;
 
-  const size = SIZE_LABEL.exec(core);
-  const cut = size?.index ?? precision?.index ?? core.length;
-  const baseName = trimSeparators(core.slice(0, cut)) || null;
+  // The text before and after the precision. A `UD` marker before the precision names the quantization.
+  const before = precision ? core.slice(0, precision.index).replace(UD_MARKER, "") : core;
+  const after = precision ? core.slice(precision.index + precision[0].length) : "";
 
-  const withoutPrecision = precision
-    ? `${core.slice(0, precision.index)}-${core.slice(precision.index + precision[0].length)}`
-    : core;
-  const stem = trimSeparators(withoutPrecision.replace(/[-_]+/g, "-")).toLowerCase();
+  const size = SIZE_LABEL.exec(core);
+  const cut = size?.index ?? before.length;
+  const baseName = trimSeparators(core.slice(0, cut)) || null;
 
   return {
     sidecar,
-    stem,
+    stem: stemOf(`${before}-${after}`),
     baseName,
     sizeLabel: size?.[1] ?? null,
     encoding,
     shard,
   };
+}
+
+/**
+ * The model name of a file: the name with the precision removed, lowercased. A name made only of
+ * generic projector words (`mmproj-model-f16` → `model`) has the empty stem, as a bare `mmproj` does.
+ */
+function stemOf(raw: string): string {
+  const stem = trimSeparators(raw.replace(/[-_]+/g, "-")).toLowerCase();
+  const words = stem.split("-").filter(Boolean);
+  const onlyGeneric = words.length > 0 && words.every((word) => GENERIC_WORDS.has(word));
+  return onlyGeneric ? "" : stem;
 }
 
 /**

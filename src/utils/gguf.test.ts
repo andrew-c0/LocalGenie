@@ -27,7 +27,40 @@ describe("parseGGUFFilename", () => {
     expect(parseGGUFFilename("Qwen3.6-35B-A3B-UD-IQ1_M.gguf")?.encoding).toBe("IQ1_M");
     expect(parseGGUFFilename("Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf")?.encoding).toBe("Q4_K_XL");
     expect(parseGGUFFilename("Qwen3.6-35B-A3B-MXFP4_MOE.gguf")?.encoding).toBe("MXFP4_MOE");
-    expect(parseGGUFFilename("Qwen3.6-35B-A3B-UD-IQ1_M.gguf")?.stem).toBe("qwen3.6-35b-a3b-ud");
+    // Intended change: the standalone UD marker names the quantization, so it is no longer in the stem.
+    expect(parseGGUFFilename("Qwen3.6-35B-A3B-UD-IQ1_M.gguf")?.stem).toBe("qwen3.6-35b-a3b");
+  });
+
+  it("leaves a standalone UD marker out of the stem, so plain and UD files of one model match", () => {
+    const plain = parseGGUFFilename("Qwen3.5-4B-Q4_K_M.gguf");
+    const ud = parseGGUFFilename("Qwen3.5-4B-UD-Q4_K_XL.gguf");
+    expect(ud?.stem).toBe("qwen3.5-4b");
+    expect(ud?.stem).toBe(plain?.stem);
+    expect(ud?.encoding).toBe("Q4_K_XL");
+    expect(ud?.baseName).toBe("Qwen3.5");
+    expect(ud?.sizeLabel).toBe("4B");
+  });
+
+  it("leaves a UD marker out of the stem for a UD-IQ quantization, in any case", () => {
+    expect(parseGGUFFilename("gemma-4-E4B-it-UD-IQ2_M.gguf")?.stem).toBe("gemma-4-e4b-it");
+    expect(parseGGUFFilename("gemma-4-E4B-it-ud-IQ1_S.gguf")?.stem).toBe("gemma-4-e4b-it");
+    expect(parseGGUFFilename("gemma-4-E4B-it-UD-IQ1_S.gguf")?.encoding).toBe("IQ1_S");
+  });
+
+  it("keeps a UD-like token that is part of a word in the stem", () => {
+    expect(parseGGUFFilename("Model-XUD-Q4_K_M.gguf")?.stem).toBe("model-xud");
+  });
+
+  it("gives a generic projector name the empty stem, even with a word left after the marker", () => {
+    expect(parseGGUFFilename("mmproj-model-f16.gguf")?.stem).toBe("");
+    expect(parseGGUFFilename("mmproj-vision-projector-F16.gguf")?.stem).toBe("");
+    expect(parseGGUFFilename("mmproj-model-f16.gguf")?.sidecar).toBe("mmproj");
+  });
+
+  it("keeps a generic word that sits beside a model name in the stem", () => {
+    expect(parseGGUFFilename("gemma-3-4b-it-Q4_K_M.gguf")?.stem).toBe("gemma-3-4b-it");
+    expect(parseGGUFFilename("Model-7B-Q4_K_M.gguf")?.stem).toBe("model-7b");
+    expect(parseGGUFFilename("Qwen-Model-Q4_K_M.gguf")?.stem).toBe("qwen-model");
   });
 
   it("reads a quantization that follows an underscored model name", () => {
@@ -103,7 +136,7 @@ describe("groupGGUFFiles", () => {
     ]);
 
     expect(groups.map((g) => g.main.precision)).toEqual(["Q4_K_M", "Q8_0"]);
-    // No quant matches a projector precision, so each variant gets the smallest one.
+    // No quant matches a projector precision, so each variant gets F16, the preferred one.
     for (const g of groups) {
       expect(g.sidecars.map((s) => s.filename)).toEqual(["mmproj-F16.gguf"]);
     }
@@ -139,9 +172,9 @@ describe("groupGGUFFiles", () => {
     ]);
 
     expect(groups.map((g) => g.main.precision)).toEqual(["PTQ1_0", "PQ2_0", "F16"]);
-    // No quant matches either projector, so each gets the smaller Q8_0 one.
+    // Intended change: no quant matches either projector, so each gets BF16 (preferred over the smaller Q8_0).
     for (const g of groups) {
-      expect(g.sidecars.map((s) => s.filename)).toEqual(["Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf"]);
+      expect(g.sidecars.map((s) => s.filename)).toEqual(["Ternary-Bonsai-2-27B-mmproj-BF16.gguf"]);
     }
   });
 
@@ -175,5 +208,65 @@ describe("groupGGUFFiles", () => {
     ]);
     expect(groups[0].sidecars.map((s) => s.filename)).toEqual(["mmproj-Qwen3-4B-Q4_K_M.gguf"]);
     expect(groups[1].sidecars.map((s) => s.filename)).toEqual(["mmproj-Qwen3-4B-Q4_K_M.gguf"]);
+  });
+
+  it("attaches the generic projector to both the plain and the UD variant of an Unsloth repo", () => {
+    const groups = groupGGUFFiles([
+      file("Qwen3.5-4B-Q4_K_M.gguf", 2_800_000_000),
+      file("Qwen3.5-4B-UD-Q4_K_XL.gguf", 3_100_000_000),
+      file("mmproj-BF16.gguf", 986_833_728),
+      file("mmproj-F16.gguf", 985_654_080),
+      file("mmproj-F32.gguf", 1_903_027_008),
+    ]);
+
+    expect(groups.map((g) => g.main.filename)).toEqual([
+      "Qwen3.5-4B-Q4_K_M.gguf",
+      "Qwen3.5-4B-UD-Q4_K_XL.gguf",
+    ]);
+    for (const g of groups) {
+      expect(g.sidecars.map((s) => s.filename)).toEqual(["mmproj-F16.gguf"]);
+    }
+  });
+
+  it("attaches a generic projector with a word left in its name, as in the gemma-3 repos", () => {
+    const groups = groupGGUFFiles([
+      file("gemma-3-4b-it-Q4_K_M.gguf", 2_500_000_000),
+      file("mmproj-model-f16.gguf", 851_000_000),
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].sidecars.map((s) => s.filename)).toEqual(["mmproj-model-f16.gguf"]);
+  });
+
+  it("gives a Q4_K_M variant the F16 projector when BF16, F16 and F32 are offered", () => {
+    const groups = groupGGUFFiles([
+      file("gemma-3-4b-it-Q4_K_M.gguf", 2_500_000_000),
+      file("mmproj-BF16.gguf", 851_000_000),
+      file("mmproj-F16.gguf", 851_000_000),
+      file("mmproj-F32.gguf", 1_700_000_000),
+    ]);
+
+    expect(groups[0].sidecars.map((s) => s.filename)).toEqual(["mmproj-F16.gguf"]);
+  });
+
+  it("gives a BF16 variant the BF16 projector when several are offered", () => {
+    const groups = groupGGUFFiles([
+      file("gemma-3-4b-it-BF16.gguf", 8_000_000_000),
+      file("mmproj-BF16.gguf", 851_000_000),
+      file("mmproj-F16.gguf", 851_000_000),
+      file("mmproj-F32.gguf", 1_700_000_000),
+    ]);
+
+    expect(groups[0].sidecars.map((s) => s.filename)).toEqual(["mmproj-BF16.gguf"]);
+  });
+
+  it("falls back to the smallest projector when neither F16 nor BF16 is offered", () => {
+    const groups = groupGGUFFiles([
+      file("gemma-3-4b-it-Q4_K_M.gguf", 2_500_000_000),
+      file("mmproj-Q8_0.gguf", 600_000_000),
+      file("mmproj-F32.gguf", 1_700_000_000),
+    ]);
+
+    expect(groups[0].sidecars.map((s) => s.filename)).toEqual(["mmproj-Q8_0.gguf"]);
   });
 });

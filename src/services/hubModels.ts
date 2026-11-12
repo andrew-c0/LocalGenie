@@ -76,19 +76,29 @@ export function groupGGUFFiles(files: GGUFFile[]): GGUFGroup[] {
   });
 }
 
+/** Projector precisions preferred when none matches the variant, best first. */
+const PREFERRED_PROJECTOR_PRECISIONS = ["f16", "bf16"];
+
 /**
  * The projector for a variant: one file, the one whose precision matches the variant, else the
- * smallest. A variant gets one projector, so GenieX never sees several to choose from. A projector
- * named for the model wins over a generic one.
+ * preferred one (see `preferredProjector`). A variant gets one projector, so GenieX never sees several
+ * to choose from. A projector named for the model wins over a generic one.
  */
 function pickSidecars(main: GGUFFile, own: GGUFFile[], generic: GGUFFile[]): GGUFFile[] {
   const candidates = own.length > 0 ? own : generic;
   if (candidates.length === 0) return [];
   const exact = candidates.find((s) => s.precision.toLowerCase() === main.precision.toLowerCase());
-  const smallest = [...candidates].sort(
-    (a, b) => (a.size ?? Number.MAX_SAFE_INTEGER) - (b.size ?? Number.MAX_SAFE_INTEGER),
-  )[0];
-  return [exact ?? smallest];
+  return [exact ?? preferredProjector(candidates)];
+}
+
+/** The projector to use when none matches the variant's precision: F16, then BF16, then the smallest. */
+function preferredProjector(candidates: GGUFFile[]): GGUFFile {
+  const rank = (s: GGUFFile) => {
+    const index = PREFERRED_PROJECTOR_PRECISIONS.indexOf(s.precision.toLowerCase());
+    return index === -1 ? PREFERRED_PROJECTOR_PRECISIONS.length : index;
+  };
+  const size = (s: GGUFFile) => s.size ?? Number.MAX_SAFE_INTEGER;
+  return [...candidates].sort((a, b) => rank(a) - rank(b) || size(a) - size(b))[0];
 }
 
 /** Human label for a grouped GGUF variant, e.g. "Q4_0 — 4.2B". */

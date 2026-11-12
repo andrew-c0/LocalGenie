@@ -40,6 +40,14 @@
   overflow-wrap: anywhere;
 }
 
+/* Non-fatal warnings, such as a projector that was skipped: the error line's layout in the warning colour. */
+.download-card__warning {
+  display: block;
+  margin-top: var(--spacingVerticalXS);
+  color: var(--colorStatusWarningForeground1);
+  overflow-wrap: anywhere;
+}
+
 .download-card__progress {
   display: flex;
   flex-direction: column;

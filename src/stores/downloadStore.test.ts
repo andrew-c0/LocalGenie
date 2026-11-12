@@ -437,6 +437,63 @@ describe("progressFractionOf", () => {
   });
 });
 
+describe("download warnings", () => {
+  const variant = {
+    repoId: "owner/model",
+    main: { filename: "model.gguf", precision: "Q4_0", sizeLabel: null, shard: null },
+    sidecars: [],
+  };
+
+  beforeEach(() => {
+    useDownloadStore.setState({ downloads: [] });
+  });
+
+  it("adds a warning to the entry and keeps the ones before it", () => {
+    useDownloadStore.getState().enqueue(variant);
+    useDownloadStore.getState().addWarning("owner/model", "first");
+    useDownloadStore.getState().addWarning("owner/model", "second");
+    expect(itemOf("owner/model")?.warnings).toEqual(["first", "second"]);
+  });
+
+  it("adds the same warning once", () => {
+    useDownloadStore.getState().enqueue(variant);
+    useDownloadStore.getState().addWarning("owner/model", "projector skipped");
+    useDownloadStore.getState().addWarning("owner/model", "projector skipped");
+    expect(itemOf("owner/model")?.warnings).toEqual(["projector skipped"]);
+  });
+
+  it("keeps the warnings on a finished entry", () => {
+    useDownloadStore.getState().enqueue(variant);
+    useDownloadStore.getState().addWarning("owner/model", "projector skipped");
+    useDownloadStore.getState().setStatus("owner/model", "finished");
+    expect(itemOf("owner/model")?.warnings).toEqual(["projector skipped"]);
+  });
+
+  it("clears the warnings when the entry is queued again, so the projector is checked afresh", () => {
+    useDownloadStore.getState().enqueue(variant);
+    useDownloadStore.getState().addWarning("owner/model", "projector skipped");
+    useDownloadStore.getState().setStatus("owner/model", "error", "connection reset by peer");
+    useDownloadStore.getState().requeue("owner/model");
+    expect(itemOf("owner/model")?.warnings).toBeUndefined();
+  });
+
+  it("clears the warnings when a new request replaces the entry", () => {
+    useDownloadStore.getState().enqueue(variant);
+    useDownloadStore.getState().addWarning("owner/model", "projector skipped");
+    useDownloadStore.getState().setStatus("owner/model", "finished");
+    useDownloadStore.getState().enqueue(variant);
+    expect(itemOf("owner/model")?.warnings).toBeUndefined();
+  });
+
+  it("leaves another entry's warnings alone", () => {
+    useDownloadStore.getState().enqueue(variant);
+    useDownloadStore.getState().enqueue({ ...variant, repoId: "owner/other" });
+    useDownloadStore.getState().addWarning("owner/other", "projector skipped");
+    expect(itemOf("owner/model")?.warnings).toBeUndefined();
+    expect(itemOf("owner/other")?.warnings).toEqual(["projector skipped"]);
+  });
+});
+
 describe("automatic retry bookkeeping", () => {
   const variant = {
     repoId: "owner/model",

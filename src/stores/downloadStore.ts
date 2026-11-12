@@ -98,6 +98,8 @@ export interface DownloadItem {
   speed: number;
   status: DownloadStatus;
   error?: string;
+  /** Problems that did not stop the download, such as a skipped projector. Cleared when the entry is queued again. */
+  warnings?: string[];
   startedAt: number;
   finishedAt?: number;
   /** Progress message during the import (or runtime install) phase. */
@@ -151,6 +153,8 @@ interface DownloadState {
   patchProgress: (id: string, received: number, total: number | null, speed: number) => void;
   /** Set import progress message during the import phase. */
   setImportingProgress: (id: string, progress: string) => void;
+  /** Add a warning to an entry, once; the card shows it. */
+  addWarning: (id: string, warning: string) => void;
   setStatus: (id: string, status: DownloadStatus, error?: string) => void;
   remove: (id: string) => void;
   clearFinished: () => void;
@@ -289,6 +293,7 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
       aihub: undefined,
       status: "queued",
       error: undefined,
+      warnings: undefined,
       finishedAt: undefined,
       autoRetries: 0,
       autoRetryAt: undefined,
@@ -341,6 +346,8 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
       id,
       status: "queued",
       error: undefined,
+      // A queued run checks the projector again, so the old warnings no longer hold.
+      warnings: undefined,
       finishedAt: undefined,
       autoRetries: nextAutoRetries(item, trigger),
       autoRetryAt: undefined,
@@ -452,6 +459,14 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
     set((state) => ({
       downloads: state.downloads.map((d) =>
         d.id === id && d.status === "importing" ? { ...d, importingProgress: progress } : d,
+      ),
+    })),
+  addWarning: (id, warning) =>
+    set((state) => ({
+      downloads: state.downloads.map((d) =>
+        d.id === id && !d.warnings?.includes(warning)
+          ? { ...d, warnings: [...(d.warnings ?? []), warning] }
+          : d,
       ),
     })),
   setStatus: (id, status, error) =>

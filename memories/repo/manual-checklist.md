@@ -2,6 +2,14 @@
 
 Run through these checks manually after building or deploying the app. Automated checks cannot fully verify installer behavior, filesystem permissions, or OS-level interactions.
 
+## GGUF projector matching and the drawer warning (2026-11-12 working tree; ticked = the user tested)
+- [x] A download of a UD repo (for example `unsloth/Qwen3.5-4B-GGUF`) gets its projector: the projector is downloaded and imported (tested by the user, 2026-11-12).
+- [ ] After that import the model's settings scan confirms vision (the chat Image attach is then enabled).
+- [ ] A repo with only BF16 and Q8_0 projectors downloads the BF16 file (check the Downloads folder).
+- [ ] A projector that fails with a 404 (not a network error): the card shows "Projector not downloaded: <name>. Vision will not work for this model." in the warning colour, in the active state and after the download ends (history state); the model still imports and the toast appears. Not run.
+- [ ] The warning line wraps without overlapping the buttons in a narrow window. Not run.
+- [ ] A model imported from an affected repo before the fix has no projector (expected); a re-download gives it one.
+
 ## Native tools for chat models (2026-11-11 working tree, phases 1-3; the user tested the approval dialog and the Tools list; the items are not ticked one by one)
 - [ ] A tool call with a real tool-capable model: turn one tool On in Settings > Tools, ask for something it can answer, and check the call line appears before the answer.
 - [ ] Approval dialog with Request approval: Approve once, Allow for this chat (the next call runs without asking) and Deny (the model gets the denied result and carries on).
@@ -10,7 +18,8 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] Offline `web_fetch` shows Failed on its line, and the reply goes on.
 - [ ] Settings > Tools: the states, the allowed folders and the search sources survive a restart; the folder picker adds a folder.
 - [ ] Plain chat with no tools on, after the change to how a send waits for the end of a reply: the reply is saved and the next send works.
-- [ ] `read_image` with a model that has vision confirmed; with a model that does not (the result says so); after a restart (the saved picture still opens); after deleting the picture file (a failed result, no crash).
+- [x] `read_image` with a model that has vision confirmed (tested by the user, 2026-11-12).
+- [ ] `read_image` with a model that does not have vision (the result says so); after a restart (the saved picture still opens); after deleting the picture file (a failed result, no crash).
 - [ ] `list_directory` without a path lists the allowed folders.
 - [ ] Real `web_fetch` and `web_search` against live sites, one check for each enabled source.
 
