@@ -130,7 +130,7 @@ async function replyWithTools(
   run: ModelRun,
 ): Promise<SendFailure | null> {
   beginToolRun(sessionId);
-  const failure = await streamReply(sessionId, history, run, await toolsForRun(run));
+  const failure = await streamReply(sessionId, history, run, await toolsForRun(sessionId, run));
   if (failure) return failure;
   return runToolRounds(sessionId, run);
 }

@@ -37,8 +37,18 @@
     max-width: 80%;
     margin-inline: auto;
   }
-  .chat-input__attachments {
+  .chat-input__attachments,
+  .chat-input__toolbar {
     max-width: 80%;
     margin-inline: auto;
   }
+}
+
+/* The row under the field holds the tools chip. It takes no space when the chip renders nothing. */
+.chat-input__toolbar {
+  margin-top: var(--spacingVerticalXS);
+}
+
+.chat-input__toolbar:empty {
+  display: none;
 }

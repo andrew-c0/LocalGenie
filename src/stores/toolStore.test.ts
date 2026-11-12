@@ -63,6 +63,7 @@ const initialState = {
   loaded: false,
   loadError: null,
   chatGrants: {},
+  chatDisabled: {},
 };
 
 /** A store that has loaded: one folder allowed, one tool on. */
@@ -368,6 +369,53 @@ describe("toolStore", () => {
       expect(saveToolState).toHaveBeenCalledTimes(1);
       expect(saveToolState).toHaveBeenCalledWith("list_directory", "on");
       expect(saveAllowedFolders).not.toHaveBeenCalled();
+    });
+  });
+  describe("per-chat tool settings", () => {
+    it("is on for every tool until a chat switches it off", () => {
+      expect(useToolStore.getState().isToolEnabledInChat("chat-1", "read_text_file")).toBe(true);
+    });
+
+    it("switches a tool off for one chat only, and leaves the global state alone", () => {
+      useToolStore.setState({ states: { list_directory: "on" } });
+      useToolStore.getState().setChatToolEnabled("chat-1", "list_directory", false);
+
+      expect(useToolStore.getState().isToolEnabledInChat("chat-1", "list_directory")).toBe(false);
+      expect(useToolStore.getState().isToolEnabledInChat("chat-2", "list_directory")).toBe(true);
+      expect(useToolStore.getState().states.list_directory).toBe("on");
+      expect(saveToolState).not.toHaveBeenCalled();
+    });
+
+    it("does not repeat a switched-off tool", () => {
+      const store = useToolStore.getState();
+      store.setChatToolEnabled("chat-1", "list_directory", false);
+      store.setChatToolEnabled("chat-1", "list_directory", false);
+
+      expect(useToolStore.getState().chatDisabled).toEqual({ "chat-1": ["list_directory"] });
+    });
+
+    it("turns a tool back on for the chat and drops the entry when none is off", () => {
+      const store = useToolStore.getState();
+      store.setChatToolEnabled("chat-1", "list_directory", false);
+      store.setChatToolEnabled("chat-1", "read_text_file", false);
+      store.setChatToolEnabled("chat-1", "list_directory", true);
+
+      expect(useToolStore.getState().chatDisabled).toEqual({ "chat-1": ["read_text_file"] });
+
+      store.setChatToolEnabled("chat-1", "read_text_file", true);
+
+      expect(useToolStore.getState().chatDisabled).toEqual({});
+    });
+
+    it("clears only the given chat's per-chat settings", () => {
+      const store = useToolStore.getState();
+      store.setChatToolEnabled("chat-1", "list_directory", false);
+      store.setChatToolEnabled("chat-2", "list_directory", false);
+
+      store.clearChatToolSettings("chat-1");
+
+      expect(useToolStore.getState().chatDisabled).toEqual({ "chat-2": ["list_directory"] });
+      expect(useToolStore.getState().isToolEnabledInChat("chat-1", "list_directory")).toBe(true);
     });
   });
 });

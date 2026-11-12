@@ -1,6 +1,7 @@
 import { ChevronDownRegular, ChevronUpRegular, WrenchRegular } from "@fluentui/react-icons";
 import { useId, useState } from "react";
 import type { Message } from "../../types";
+import { toolRowImage } from "../../utils/toolImage";
 import {
   approvalText,
   prettyArguments,
@@ -9,6 +10,7 @@ import {
   toolTargetSummary,
 } from "../../utils/toolLines";
 import { Meta } from "../ui/Typography/Typography";
+import { ToolImagePreview } from "./ToolImagePreview/ToolImagePreview";
 import "./ToolCallLine.css";
 
 interface ToolCallLineProps {
@@ -32,6 +34,7 @@ export default function ToolCallLine({ message }: ToolCallLineProps) {
   const label = record ? toolLabel(record.name) : UNKNOWN_TOOL;
   const target = record ? toolTargetSummary(record.arguments) : null;
   const status = record ? toolStatusText(record.status, record.durationMs) : null;
+  const image = toolRowImage(message);
 
   return (
     <div className="tool-call">
@@ -59,6 +62,7 @@ export default function ToolCallLine({ message }: ToolCallLineProps) {
 
       {expanded && (
         <div id={detailId} className="tool-call__details">
+          {image && <ToolImagePreview image={image} />}
           {record && (
             <>
               <Meta>Arguments</Meta>

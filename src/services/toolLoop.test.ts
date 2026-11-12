@@ -173,6 +173,7 @@ beforeEach(() => {
     searchSources: [],
     enabledSearchSources: [],
     chatGrants: {},
+    chatDisabled: {},
   });
   useToolApprovalStore.setState({ pending: [] });
 });
@@ -256,6 +257,37 @@ describe("runToolRounds", () => {
       toolRecord: { status: "denied", approval: "once" },
     });
     expect(streamReply.mock.calls[0][3]).toBeUndefined();
+  });
+
+  it("answers a tool switched off for this chat with the off text, and never runs it", async () => {
+    useToolStore.setState({
+      states: { list_directory: "on" },
+      chatDisabled: { [CHAT]: ["list_directory"] },
+    });
+    seedChat([call("c1", "list_directory")]);
+    queueReplies({ text: "That tool is off here." });
+
+    await expect(runToolRounds(CHAT, run)).resolves.toBeNull();
+
+    expect(executeTool).not.toHaveBeenCalled();
+    expect(toolRows()[0]).toMatchObject({
+      content: TOOL_TEXT.off,
+      toolRecord: { status: "denied", approval: "once" },
+    });
+  });
+
+  it("still runs a tool that is switched off in another chat", async () => {
+    useToolStore.setState({
+      states: { list_directory: "on" },
+      chatDisabled: { "other-chat": ["list_directory"] },
+    });
+    seedChat([call("c1", "list_directory")]);
+    queueReplies({ text: "Listed." });
+
+    await runToolRounds(CHAT, run);
+
+    expect(executeTool).toHaveBeenCalledTimes(1);
+    expect(toolRows()[0]).toMatchObject({ toolRecord: { status: "ok" } });
   });
 
   it("answers an unknown tool with an error row and runs nothing", async () => {
@@ -380,16 +412,35 @@ describe("runToolRounds", () => {
 describe("toolsForRun", () => {
   it("offers nothing when every tool is off", async () => {
     useToolStore.setState({ states: { list_directory: "off" } });
-    await expect(toolsForRun(run)).resolves.toBeUndefined();
+    await expect(toolsForRun(CHAT, run)).resolves.toBeUndefined();
   });
 
   it("offers the tools that are not off", async () => {
     useToolStore.setState({ states: { list_directory: "on", read_text_file: "ask" } });
-    const offered = await toolsForRun(run);
+    const offered = await toolsForRun(CHAT, run);
     expect(offered?.map((tool) => tool.function.name)).toEqual([
       "list_directory",
       "read_text_file",
     ]);
+  });
+
+  it("omits a tool switched off for this chat, and keeps it for other chats", async () => {
+    useToolStore.setState({
+      states: { list_directory: "on", read_text_file: "ask" },
+      chatDisabled: { [CHAT]: ["list_directory"] },
+    });
+    const offered = await toolsForRun(CHAT, run);
+    expect(offered?.map((tool) => tool.function.name)).toEqual(["read_text_file"]);
+    const other = await toolsForRun("other-chat", run);
+    expect(other?.map((tool) => tool.function.name)).toEqual(["list_directory", "read_text_file"]);
+  });
+
+  it("offers nothing when every tool is switched off for this chat", async () => {
+    useToolStore.setState({
+      states: { list_directory: "on" },
+      chatDisabled: { [CHAT]: ["list_directory"] },
+    });
+    await expect(toolsForRun(CHAT, run)).resolves.toBeUndefined();
   });
 
   it("offers nothing when the model's scan says it does not call tools", async () => {
@@ -398,18 +449,18 @@ describe("toolsForRun", () => {
       { key: "toolCalls", status: "rejected", detail: null, probedAt: 1, stale: false },
     ];
     loadModelCapabilities.mockResolvedValue(scan);
-    await expect(toolsForRun(run)).resolves.toBeUndefined();
+    await expect(toolsForRun(CHAT, run)).resolves.toBeUndefined();
   });
 
   it("offers tools when the scan is unknown or cannot be read", async () => {
     useToolStore.setState({ states: { list_directory: "on" } });
     loadModelCapabilities.mockRejectedValue(new Error("no scan"));
-    await expect(toolsForRun(run)).resolves.toHaveLength(1);
+    await expect(toolsForRun(CHAT, run)).resolves.toHaveLength(1);
   });
 
   it("tells the file tools the allowed folders", async () => {
     useToolStore.setState({ states: { list_directory: "on" }, allowedFolders: ["C:\\notes"] });
-    const offered = await toolsForRun(run);
+    const offered = await toolsForRun(CHAT, run);
     expect(offered?.[0].function.description).toBe(
       "List a folder. Allowed folders: C:\\notes. Always use full paths inside these folders.",
     );
@@ -537,7 +588,7 @@ describe("web_search sources", () => {
 
   it("offers web_search narrowed to the turned-on sources", async () => {
     searchOn(["hacker_news"]);
-    const offered = await toolsForRun(run);
+    const offered = await toolsForRun(CHAT, run);
     const tool = offered?.find((item) => item.function.name === "web_search");
     expect(tool?.function.parameters).toMatchObject({
       properties: { source: { enum: ["hacker_news"] } },
@@ -546,7 +597,7 @@ describe("web_search sources", () => {
 
   it("does not offer web_search when no source is turned on, even when it is on", async () => {
     searchOn([]);
-    await expect(toolsForRun(run)).resolves.toBeUndefined();
+    await expect(toolsForRun(CHAT, run)).resolves.toBeUndefined();
   });
 
   it("passes the turned-on sources to every call, dropping ids the list no longer has", async () => {

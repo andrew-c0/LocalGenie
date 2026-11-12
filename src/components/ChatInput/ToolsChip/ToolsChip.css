@@ -1,0 +1,5 @@
+/* A narrow panel: one block per tool, with the settings link at the foot. */
+.tools-chip__surface {
+  width: min(320px, 80vw);
+  box-sizing: border-box;
+}

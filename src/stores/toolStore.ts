@@ -32,6 +32,11 @@ interface ToolStoreState {
   loadError: unknown;
   /** Tools a chat was granted under "Request approval". In memory only: a restart forgets them. */
   chatGrants: Record<string, string[]>;
+  /**
+   * Tools switched off for one chat, by session id. A chat's tools are on unless listed here. In memory
+   * only, like `chatGrants`: a restart turns them back on.
+   */
+  chatDisabled: Record<string, string[]>;
   /** Reads the tool list, the saved states, the folders and the search sources. Safe to call again to retry. */
   load: () => Promise<void>;
   /** Saves one tool's state, then shows it. A failed save keeps the old state and shows a toast. */
@@ -47,6 +52,12 @@ interface ToolStoreState {
   hasChatGrant: (sessionId: string, toolName: string) => boolean;
   /** Forgets a chat's grants, for example when the chat is deleted or its conversation is reset. */
   clearChatGrants: (sessionId: string) => void;
+  /** Turns a tool on or off for one chat. Other chats and the global state are not changed. */
+  setChatToolEnabled: (sessionId: string, toolName: string, enabled: boolean) => void;
+  /** True unless the tool is switched off for this chat. */
+  isToolEnabledInChat: (sessionId: string, toolName: string) => boolean;
+  /** Forgets a chat's per-chat tool settings, when the chat is deleted. */
+  clearChatToolSettings: (sessionId: string) => void;
 }
 
 /** Tool settings: each tool's state, the folders the file tools may read, the search sources and per-chat grants. */
@@ -59,6 +70,7 @@ export const useToolStore = create<ToolStoreState>((set, get) => ({
   loaded: false,
   loadError: null,
   chatGrants: {},
+  chatDisabled: {},
 
   load: async () => {
     set({ loadError: null });
@@ -139,6 +151,25 @@ export const useToolStore = create<ToolStoreState>((set, get) => ({
     set((current) => {
       const { [sessionId]: _cleared, ...rest } = current.chatGrants;
       return { chatGrants: rest };
+    });
+  },
+
+  setChatToolEnabled: (sessionId, toolName, enabled) => {
+    set((current) => {
+      const others = (current.chatDisabled[sessionId] ?? []).filter((name) => name !== toolName);
+      const disabled = enabled ? others : [...others, toolName];
+      const { [sessionId]: _previous, ...rest } = current.chatDisabled;
+      return { chatDisabled: disabled.length > 0 ? { ...rest, [sessionId]: disabled } : rest };
+    });
+  },
+
+  isToolEnabledInChat: (sessionId, toolName) =>
+    !(get().chatDisabled[sessionId] ?? []).includes(toolName),
+
+  clearChatToolSettings: (sessionId) => {
+    set((current) => {
+      const { [sessionId]: _cleared, ...rest } = current.chatDisabled;
+      return { chatDisabled: rest };
     });
   },
 }));

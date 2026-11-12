@@ -23,6 +23,17 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] `list_directory` without a path lists the allowed folders.
 - [ ] Real `web_fetch` and `web_search` against live sites, one check for each enabled source.
 
+## Native tools: per-chat tools chip and image preview (2026-11-12 working tree, phase 5; ticked = the user tested)
+- [x] `read_image` row: expanding the line shows the thumbnail with the file name; clicking it opens the picture (tested by the user, 2026-11-12).
+- [ ] A deleted picture file on an expanded `read_image` row shows "File no longer on this device"; re-expanding after the file returns shows it again (no cache).
+- [ ] The "Tools N" chip sits under the field when a chat is open and some tool is On or Request approval; it is hidden with no chat open and when every tool is Off.
+- [ ] The popover lists only the tools that are not Off, each with its global state text; placement and width are right in a narrow window.
+- [ ] "Use in this chat" off for a tool: the count drops, and a send in that chat does not offer the tool; another chat still has it.
+- [ ] A model that calls a tool switched off for the chat gets "This tool is turned off." on that line.
+- [ ] "Tool settings" opens Settings > Tools.
+- [ ] Switch a tool off in a chat, delete the chat, open a new chat: the new chat's switches are all on.
+- [ ] After a restart the per-chat switches are on again (expected: memory only).
+
 ## Playground: Image upscaling redesign (2026-11-05; not run, none ticked)
 
 Limits are in `known-issues.md` ("Image upscaling and Image to image redesign").

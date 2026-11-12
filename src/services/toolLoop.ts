@@ -120,7 +120,7 @@ async function outcomeForCall(
   const state: ToolState = tools.states[call.name] ?? "off";
   const granted = tools.hasChatGrant(sessionId, call.name);
   const access = toolAccess(state, granted);
-  if (access === "skip") return offOutcome();
+  if (access === "skip" || !tools.isToolEnabledInChat(sessionId, call.name)) return offOutcome();
   if (!isOfferable(spec, tools.enabledSearchSources, tools.searchSources)) {
     return noSourceOutcome();
   }
@@ -216,7 +216,7 @@ async function requestAfterRound(
       `The model used tools ${MAX_ROUNDS} times in this reply. It must answer without them now.`,
     );
   }
-  const tools = toolsAllowedAfter(rounds) ? await toolsForRun(run) : undefined;
+  const tools = toolsAllowedAfter(rounds) ? await toolsForRun(sessionId, run) : undefined;
   let history: ChatMessage[];
   try {
     history = await historyNow(sessionId);
@@ -234,13 +234,24 @@ async function historyNow(sessionId: string): Promise<ChatMessage[]> {
 }
 
 /**
- * The tool definitions a request offers: every tool whose state is not off. Undefined when none is on,
- * or when the model's scan says it does not call tools. An unknown or untested scan allows tools.
+ * The tool definitions a request offers: every tool whose state is not off and that is not switched
+ * off for this chat. Undefined when none is on, or when the model's scan says it does not call tools.
+ * An unknown or untested scan allows tools.
  */
-export async function toolsForRun(run: ModelRun): Promise<ToolDefinition[] | undefined> {
-  const { tools, states, enabledSearchSources, searchSources, allowedFolders } =
-    useToolStore.getState();
-  const offered = offeredTools(tools, states, enabledSearchSources, searchSources, allowedFolders);
+export async function toolsForRun(
+  sessionId: string,
+  run: ModelRun,
+): Promise<ToolDefinition[] | undefined> {
+  const store = useToolStore.getState();
+  const { states, enabledSearchSources, searchSources, allowedFolders } = store;
+  const chatTools = store.tools.filter((spec) => store.isToolEnabledInChat(sessionId, spec.name));
+  const offered = offeredTools(
+    chatTools,
+    states,
+    enabledSearchSources,
+    searchSources,
+    allowedFolders,
+  );
   if (offered.length === 0) return undefined;
   if (run.modelId && (await modelRefusesTools(run.modelId))) return undefined;
   return offered;

@@ -31,6 +31,8 @@ import {
 } from "../../utils/attachments";
 import { toast } from "../../utils/toast";
 import { AttachmentList, KIND_ICON } from "../chat/AttachmentList/AttachmentList";
+import { Flex } from "../ui/Flex/Flex";
+import { ToolsChip } from "./ToolsChip/ToolsChip";
 import { useActiveModelEntries } from "./useActiveModelEntries";
 import "./ChatInput.css";
 
@@ -241,6 +243,11 @@ export default function ChatInput() {
           </Button>
         )}
       </div>
+      {activeSessionId && (
+        <Flex className="chat-input__toolbar" align="center" gap="s">
+          <ToolsChip sessionId={activeSessionId} />
+        </Flex>
+      )}
     </div>
   );
 }
