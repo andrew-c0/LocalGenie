@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// A single message in the chat. `content` is a plain string, or an array of content parts
 /// (`text`, `image_url`, `input_audio`) for a message with attachments.
@@ -52,11 +52,35 @@ struct PartialToolCall {
     arguments: String,
 }
 
-/// Folds the `delta.tool_calls` entries of streamed chunks into whole calls, keyed by `index`.
-/// The server sends each call in one chunk, but the fold also handles a call split across chunks.
+/// Where a streamed call is kept. A call with an `index` is keyed by it. A call without one is keyed
+/// by its place in the stream, so calls without an index keep their first-seen order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum CallKey {
+    Index(u64),
+    Sequence(usize),
+}
+
+impl CallKey {
+    /// The id of a call that streamed none: `call_<index>`, or `call_seq_<n>` for a call without one.
+    fn fallback_id(self) -> String {
+        match self {
+            Self::Index(index) => format!("call_{index}"),
+            Self::Sequence(number) => format!("call_seq_{number}"),
+        }
+    }
+}
+
+/// Folds the `delta.tool_calls` entries of streamed chunks into whole calls. A call with an `index`
+/// is keyed by it. A call without one is keyed by its `id`, and one without either continues the
+/// most recent call. The server sends each call in one chunk, but the fold also handles a call
+/// split across chunks.
 #[derive(Debug, Default)]
 pub(super) struct ToolCallAccumulator {
-    calls: BTreeMap<u64, PartialToolCall>,
+    calls: BTreeMap<CallKey, PartialToolCall>,
+    /// The key of each call that streamed an id but no index.
+    ids: HashMap<String, CallKey>,
+    /// The call the most recent entry belonged to.
+    last: Option<CallKey>,
 }
 
 impl ToolCallAccumulator {
@@ -71,8 +95,9 @@ impl ToolCallAccumulator {
             .filter_map(|choice| choice["delta"]["tool_calls"].as_array())
             .flatten()
         {
-            let index = entry["index"].as_u64().unwrap_or(0);
-            let call = self.calls.entry(index).or_default();
+            let key = self.key_for(entry);
+            self.last = Some(key);
+            let call = self.calls.entry(key).or_default();
             if let Some(id) = entry["id"].as_str().filter(|id| !id.is_empty()) {
                 call.id = Some(id.to_string());
             }
@@ -87,8 +112,22 @@ impl ToolCallAccumulator {
         }
     }
 
+    /// The call an entry belongs to: its `index`; else its `id` (a new id starts a new call); else
+    /// the most recent call, or a new one when there is none.
+    fn key_for(&mut self, entry: &serde_json::Value) -> CallKey {
+        if let Some(index) = entry["index"].as_u64() {
+            return CallKey::Index(index);
+        }
+        // Calls are never removed, so the next sequence number is the current count.
+        let next = CallKey::Sequence(self.calls.len());
+        match entry["id"].as_str().filter(|id| !id.is_empty()) {
+            Some(id) => *self.ids.entry(id.to_string()).or_insert(next),
+            None => self.last.unwrap_or(next),
+        }
+    }
+
     /// Payload for the `chat-tool-calls` event, or `None` when no call was streamed. A call
-    /// without an id gets `call_<index>`.
+    /// without an id gets a generated one (see `CallKey::fallback_id`).
     pub(super) fn event_payload(&self, stream_id: &str) -> Option<serde_json::Value> {
         if self.calls.is_empty() {
             return None;
@@ -96,9 +135,9 @@ impl ToolCallAccumulator {
         let tool_calls: Vec<serde_json::Value> = self
             .calls
             .iter()
-            .map(|(index, call)| {
+            .map(|(key, call)| {
                 serde_json::json!({
-                    "id": call.id.clone().unwrap_or_else(|| format!("call_{index}")),
+                    "id": call.id.clone().unwrap_or_else(|| key.fallback_id()),
                     "name": call.name,
                     "arguments": call.arguments,
                 })
@@ -559,6 +598,89 @@ mod tests {
         calls.absorb_chunk(&chunk);
         let payload = calls.event_payload("s1").expect("one call");
         assert_eq!(payload["toolCalls"][0]["id"], "call_3");
+    }
+
+    #[test]
+    fn calls_without_index_but_with_distinct_ids_stay_two() {
+        let chunk = serde_json::json!({"choices": [{"delta": {"tool_calls": [
+            {"id": "c1", "function": {"name": "list_directory", "arguments": "{\"path\":\"a\"}"}},
+            {"id": "c2", "function": {"name": "read_text_file", "arguments": "{\"path\":\"b\"}"}}
+        ]}}]});
+        let mut calls = ToolCallAccumulator::default();
+        calls.absorb_chunk(&chunk);
+        let payload = calls.event_payload("s1").expect("two calls");
+        let list = payload["toolCalls"].as_array().expect("array");
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0]["id"], "c1");
+        assert_eq!(list[0]["name"], "list_directory");
+        assert_eq!(list[0]["arguments"], "{\"path\":\"a\"}");
+        assert_eq!(list[1]["id"], "c2");
+        assert_eq!(list[1]["name"], "read_text_file");
+        assert_eq!(list[1]["arguments"], "{\"path\":\"b\"}");
+    }
+
+    #[test]
+    fn a_repeated_id_without_index_continues_its_own_call() {
+        let first = serde_json::json!({"choices": [{"delta": {"tool_calls": [
+            {"id": "c1", "function": {"name": "list_directory", "arguments": "{\"pa"}}
+        ]}}]});
+        let other = serde_json::json!({"choices": [{"delta": {"tool_calls": [
+            {"id": "c2", "function": {"name": "read_text_file", "arguments": "{\"path\":\"b\"}"}}
+        ]}}]});
+        let rest = serde_json::json!({"choices": [{"delta": {"tool_calls": [
+            {"id": "c1", "function": {"arguments": "th\":\"a\"}"}}
+        ]}}]});
+        let mut calls = ToolCallAccumulator::default();
+        calls.absorb_chunk(&first);
+        calls.absorb_chunk(&other);
+        calls.absorb_chunk(&rest);
+        let payload = calls.event_payload("s1").expect("two calls");
+        let list = payload["toolCalls"].as_array().expect("array");
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0]["id"], "c1");
+        assert_eq!(list[0]["arguments"], "{\"path\":\"a\"}");
+        assert_eq!(list[1]["id"], "c2");
+        assert_eq!(list[1]["arguments"], "{\"path\":\"b\"}");
+    }
+
+    #[test]
+    fn arguments_without_index_or_id_join_the_last_call() {
+        let first = serde_json::json!({"choices": [{"delta": {"tool_calls": [
+            {"function": {"name": "list_directory", "arguments": "{\"pa"}}
+        ]}}]});
+        let second = serde_json::json!({"choices": [{"delta": {"tool_calls": [
+            {"function": {"arguments": "th\": \"C:\\\\\"}"}}
+        ]}, "finish_reason": "tool_calls"}]});
+        let mut calls = ToolCallAccumulator::default();
+        calls.absorb_chunk(&first);
+        calls.absorb_chunk(&second);
+        let payload = calls.event_payload("s1").expect("one call");
+        assert_eq!(payload["toolCalls"].as_array().map(Vec::len), Some(1));
+        assert_eq!(payload["toolCalls"][0]["id"], "call_seq_0");
+        assert_eq!(payload["toolCalls"][0]["name"], "list_directory");
+        assert_eq!(
+            payload["toolCalls"][0]["arguments"],
+            "{\"path\": \"C:\\\\\"}"
+        );
+    }
+
+    #[test]
+    fn an_indexed_call_is_not_merged_with_an_id_only_call() {
+        let indexed = serde_json::json!({"choices": [{"delta": {"tool_calls": [
+            {"index": 0, "id": "c1", "function": {"name": "list_directory", "arguments": "{}"}}
+        ]}}]});
+        let id_only = serde_json::json!({"choices": [{"delta": {"tool_calls": [
+            {"id": "c2", "function": {"name": "read_text_file", "arguments": "{\"path\":\"b\"}"}}
+        ]}}]});
+        let mut calls = ToolCallAccumulator::default();
+        calls.absorb_chunk(&indexed);
+        calls.absorb_chunk(&id_only);
+        let payload = calls.event_payload("s1").expect("two calls");
+        let list = payload["toolCalls"].as_array().expect("array");
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0]["id"], "c1");
+        assert_eq!(list[0]["arguments"], "{}");
+        assert_eq!(list[1]["id"], "c2");
     }
 
     #[test]

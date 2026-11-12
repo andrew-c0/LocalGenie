@@ -1,6 +1,7 @@
 //! The web tools. `web_fetch` reads one page or text file; `web_search` asks the public sources. This
 //! module checks the arguments; the work is in `fetch` (pages) and `search` (sources), over the shared
 //! client of `client` and the robots.txt cache of `robots`.
+mod charset;
 mod client;
 mod fetch;
 mod html_text;

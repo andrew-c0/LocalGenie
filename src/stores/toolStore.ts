@@ -50,13 +50,13 @@ interface ToolStoreState {
   /** Records that the chat may run this tool without asking again. */
   grantForChat: (sessionId: string, toolName: string) => void;
   hasChatGrant: (sessionId: string, toolName: string) => boolean;
-  /** Forgets a chat's grants, for example when the chat is deleted or its conversation is reset. */
+  /** Forgets a chat's grants. Called by `clearChatToolSettings` when the chat is deleted. */
   clearChatGrants: (sessionId: string) => void;
   /** Turns a tool on or off for one chat. Other chats and the global state are not changed. */
   setChatToolEnabled: (sessionId: string, toolName: string, enabled: boolean) => void;
   /** True unless the tool is switched off for this chat. */
   isToolEnabledInChat: (sessionId: string, toolName: string) => boolean;
-  /** Forgets a chat's per-chat tool settings, when the chat is deleted. */
+  /** Forgets a chat's per-chat tool settings and its grants, when the chat is deleted. */
   clearChatToolSettings: (sessionId: string) => void;
 }
 
@@ -167,6 +167,7 @@ export const useToolStore = create<ToolStoreState>((set, get) => ({
     !(get().chatDisabled[sessionId] ?? []).includes(toolName),
 
   clearChatToolSettings: (sessionId) => {
+    get().clearChatGrants(sessionId);
     set((current) => {
       const { [sessionId]: _cleared, ...rest } = current.chatDisabled;
       return { chatDisabled: rest };

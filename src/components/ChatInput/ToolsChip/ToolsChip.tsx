@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { routeById } from "../../../navigation/routeUtils";
 import { useToolStore } from "../../../stores/toolStore";
 import { activeChatToolCount, chatToolRows, chatToolsLabel } from "../../../utils/chatTools";
+import { isOfferable } from "../../../utils/webSearchSources";
 import { Flex } from "../../ui/Flex/Flex";
 import { BodyStrong } from "../../ui/Typography/Typography";
 import { ChatToolRow } from "./ChatToolRow/ChatToolRow";
@@ -25,12 +26,14 @@ export function ToolsChip({ sessionId }: ToolsChipProps) {
   const tools = useToolStore((s) => s.tools);
   const states = useToolStore((s) => s.states);
   const chatDisabled = useToolStore((s) => s.chatDisabled);
+  const enabledSearchSources = useToolStore((s) => s.enabledSearchSources);
+  const searchSources = useToolStore((s) => s.searchSources);
 
   const rows = chatToolRows(tools, states);
   if (rows.length === 0) return null;
 
   const disabled = chatDisabled[sessionId] ?? [];
-  const active = activeChatToolCount(rows, disabled);
+  const active = activeChatToolCount(rows, disabled, enabledSearchSources, searchSources);
 
   return (
     <Popover positioning="above-start">
@@ -56,6 +59,7 @@ export function ToolsChip({ sessionId }: ToolsChipProps) {
               tool={tool}
               state={states[tool.name] ?? "off"}
               enabled={!disabled.includes(tool.name)}
+              offerable={isOfferable(tool, enabledSearchSources, searchSources)}
             />
           ))}
           <Button appearance="subtle" onClick={() => navigate(TOOL_SETTINGS_PATH)}>

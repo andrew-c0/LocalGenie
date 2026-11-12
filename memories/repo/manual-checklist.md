@@ -16,14 +16,16 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] Stop while an approval prompt is open: the prompt closes, the call is recorded as cancelled and no request follows.
 - [ ] Reload a chat whose reply only made tool calls (no text): the chat and its tool lines come back.
 - [ ] Offline `web_fetch` shows Failed on its line, and the reply goes on.
+- [ ] `web_fetch` of a non-UTF-8 page (for example windows-1252 or Shift_JIS): the text reads correctly, with no replacement marks.
 - [ ] Settings > Tools: the states, the allowed folders and the search sources survive a restart; the folder picker adds a folder.
 - [ ] Plain chat with no tools on, after the change to how a send waits for the end of a reply: the reply is saved and the next send works.
 - [x] `read_image` with a model that has vision confirmed (tested by the user, 2026-11-12).
 - [ ] `read_image` with a model that does not have vision (the result says so); after a restart (the saved picture still opens); after deleting the picture file (a failed result, no crash).
 - [ ] `list_directory` without a path lists the allowed folders.
+- [x] `web_search` with Wikipedia on returns results (tested by the user, 2026-11-12).
 - [ ] Real `web_fetch` and `web_search` against live sites, one check for each enabled source.
 
-## Native tools: per-chat tools chip and image preview (2026-11-12 working tree, phase 5; ticked = the user tested)
+## Native tools: per-chat tools chip and image preview (2026-11-12, phase 5; ticked = the user tested)
 - [x] `read_image` row: expanding the line shows the thumbnail with the file name; clicking it opens the picture (tested by the user, 2026-11-12).
 - [ ] A deleted picture file on an expanded `read_image` row shows "File no longer on this device"; re-expanding after the file returns shows it again (no cache).
 - [ ] The "Tools N" chip sits under the field when a chat is open and some tool is On or Request approval; it is hidden with no chat open and when every tool is Off.
@@ -32,6 +34,8 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] A model that calls a tool switched off for the chat gets "This tool is turned off." on that line.
 - [ ] "Tool settings" opens Settings > Tools.
 - [ ] Switch a tool off in a chat, delete the chat, open a new chat: the new chat's switches are all on.
+- [ ] Allow for this chat on a call, then delete that chat: a new chat asks for that tool again.
+- [ ] `web_search` On with no search source on: the chip count leaves it out, and its row reads "No search source on" with its switch disabled. Turning a source on brings the count and the switch back.
 - [ ] After a restart the per-chat switches are on again (expected: memory only).
 
 ## Playground: Image upscaling redesign (2026-11-05; not run, none ticked)

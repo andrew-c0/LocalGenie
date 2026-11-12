@@ -1,6 +1,7 @@
 //! `web_fetch`: read one page or text file. Every hop is checked before it is requested (scheme,
 //! credentials, public address, robots.txt); the body is capped; the text is read in windows by
 //! `start`, so a long page reads in parts.
+use super::charset::decode_text;
 use super::client::{self, check_destination};
 use super::html_text::html_to_text;
 use super::robots::RobotsCache;
@@ -70,9 +71,10 @@ async fn read_page(url: &Url, response: Response, start: usize) -> Result<ToolOu
     if !status.is_success() {
         return Err(format!("The page returned HTTP {status}."));
     }
-    let kind = kind_for(content_type(&response).as_deref())?;
+    let content_type = content_type(&response);
+    let kind = kind_for(content_type.as_deref())?;
     let body = client::read_body(response, FETCH_MAX_BYTES).await?;
-    let raw = String::from_utf8_lossy(&body.bytes);
+    let raw = decode_text(&body.bytes, content_type.as_deref());
     let text = match kind {
         BodyKind::Html => html_to_text(&raw),
         BodyKind::Text => plain_text(&raw),

@@ -34,6 +34,8 @@ urlencoding = "2"
 url = "2"
 # Web tools: gzip bodies from Stack Overflow, unpacked by hand so the other clients keep their behaviour.
 flate2 = "1"
+# Web tools: page text in the charset the page declares (already in the lockfile through reqwest).
+encoding_rs = "0.8"
 sysinfo = "0.33"
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }

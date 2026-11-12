@@ -1,13 +1,7 @@
 import { messagesOf, useChatStore } from "../stores/chatStore";
 import { type ApprovalDecision, useToolApprovalStore } from "../stores/toolApprovalStore";
 import { useToolStore } from "../stores/toolStore";
-import type {
-  ChatToolCall,
-  SearchSourceInfo,
-  ToolApproval,
-  ToolDefinition,
-  ToolSpec,
-} from "../types";
+import type { ChatToolCall, ToolApproval, ToolDefinition } from "../types";
 import { attachmentGate } from "../utils/attachments";
 import { errorMessage } from "../utils/errorMessage";
 import { toast } from "../utils/toast";
@@ -32,7 +26,7 @@ import {
   toolsAllowedAfter,
   unknownToolOutcome,
 } from "../utils/toolLoop";
-import { activeSourceIds, withEnabledSources } from "../utils/webSearchSources";
+import { activeSourceIds, isOfferable } from "../utils/webSearchSources";
 import { historyFor, warnUnavailable } from "./chatHistory";
 import { type ModelRun, type SendFailure, streamReply } from "./chatRun";
 import * as db from "./database";
@@ -260,9 +254,4 @@ export async function toolsForRun(
 async function modelRefusesTools(modelId: string): Promise<boolean> {
   const entries = await loadModelCapabilities(modelId).catch(() => []);
   return toolCallsRefused(entries);
-}
-
-/** True when the tool can be offered now: web_search needs at least one turned-on source. */
-function isOfferable(spec: ToolSpec, enabledIds: string[], sources: SearchSourceInfo[]): boolean {
-  return withEnabledSources(spec, enabledIds, sources) !== null;
 }

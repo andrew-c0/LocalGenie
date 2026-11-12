@@ -75,6 +75,15 @@ function recordOf(value: unknown): Record<string, unknown> | undefined {
   return isRecord(value) ? value : undefined;
 }
 
+/** True when the tool can be offered now: `web_search` needs at least one turned-on source. Other tools always can. */
+export function isOfferable(
+  spec: ToolSpec,
+  enabledIds: string[],
+  sources: SearchSourceInfo[],
+): boolean {
+  return withEnabledSources(spec, enabledIds, sources) !== null;
+}
+
 /**
  * The spec to offer a model. For `web_search` the `source` property is narrowed to the turned-on
  * sources, and their ids and descriptions are added to its description. With no source on it returns

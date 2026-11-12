@@ -417,5 +417,19 @@ describe("toolStore", () => {
       expect(useToolStore.getState().chatDisabled).toEqual({ "chat-2": ["list_directory"] });
       expect(useToolStore.getState().isToolEnabledInChat("chat-1", "list_directory")).toBe(true);
     });
+
+    it("clears the deleted chat's grants and switched-off tools, and keeps another chat's", () => {
+      const store = useToolStore.getState();
+      store.grantForChat("chat-1", "read_text_file");
+      store.grantForChat("chat-2", "read_text_file");
+      store.setChatToolEnabled("chat-1", "list_directory", false);
+      store.setChatToolEnabled("chat-2", "list_directory", false);
+
+      store.clearChatToolSettings("chat-1");
+
+      expect(useToolStore.getState().chatGrants).toEqual({ "chat-2": ["read_text_file"] });
+      expect(useToolStore.getState().chatDisabled).toEqual({ "chat-2": ["list_directory"] });
+      expect(useToolStore.getState().hasChatGrant("chat-1", "read_text_file")).toBe(false);
+    });
   });
 });

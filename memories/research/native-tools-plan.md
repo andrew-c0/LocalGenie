@@ -1,6 +1,6 @@
 # Native tools for models: plan
 
-Status: phases 1-3 built (2026-11-11); phase 5 partly built in the working tree (2026-11-12: the per-chat tools chip and the image preview on the tool line); phase 0 spike skipped; phase 4 MCP and the rest of phase 5 pending. Code and unit tests only: not run with a real tool-capable model, the GenieX server or a live site (see `memories/repo/known-issues.md`, "Native tools"). Facts marked "verified" were read in the GenieX checkout (`C:\Work\GenieX`, `cli/server/handler/`, commit 7904e6dc) or in this repo; everything else is a design choice or an assumption to test in phase 0.
+Status: phases 1-3 built (2026-11-11); phase 5 partly built (2026-11-12: the per-chat tools chip and the image preview on the tool line; the chip's count and grant cleanup and the page charset in phase 3 followed); phase 0 spike skipped; phase 4 MCP and the rest of phase 5 pending. Code and unit tests only: not run with a real tool-capable model, the GenieX server or a live site (see `memories/repo/known-issues.md`, "Native tools"). Facts marked "verified" were read in the GenieX checkout (`C:\Work\GenieX`, `cli/server/handler/`, commit 7904e6dc) or in this repo; everything else is a design choice or an assumption to test in phase 0.
 
 ## Decisions taken (2026-11-11, user)
 - Native tools first; MCP is a v2.
@@ -85,7 +85,7 @@ Design:
 2. **Frontend loop and tracking:** the send loop, approval dialog, tool messages and their lines, the migration, history/delete/retry/compaction/context rules, `Settings > Tools` with the master switch and the file tools. (`react-expert`, with `repo-default` for the IPC change)
 3. **Web tools:** `web_fetch`, then `web_search` with the source trait, the Wikipedia adapter and the source toggles card; more sources one at a time afterwards. Offline handling: a failed tool call is a normal error result, plus a Try again where a settings card loads data. No credential store needed until a key-based source exists.
 4. **MCP client:** servers added in `Settings > Tools`, tools merged into the registry; check the Rust MCP SDK (`rmcp`) and its licence first.
-5. **Polish:** done (working tree 2026-11-12): per-chat tools chip, image preview on the tool line. Remaining: Tool activity list, more search sources (such as arXiv), PDF, Word and audio reading, a download-projector-only action, docs (`codebase-map.md`, `known-issues`, `manual-checklist.md`), the agentic-mode research builds on this.
+5. **Polish:** done (2026-11-12): per-chat tools chip (its count leaves out a `web_search` with no source on), image preview on the tool line. Skipped for now, future ideas (user decision, 2026-11-12): reading PDF and Office (Word) files; a repair button that downloads only the missing vision projector for a model imported without it. Remaining: Tool activity list, more search sources (such as arXiv), audio reading, docs (`codebase-map.md`, `known-issues`, `manual-checklist.md`), the agentic-mode research builds on this.
 
 ## Risks and open points
 - Reliability: small models call tools badly or loop; the caps and the "unknown/unsupported" labelling limit the damage, the spike measures it.

@@ -3,6 +3,7 @@ import type { SearchSourceInfo, ToolSpec } from "../types";
 import {
   activeSourceIds,
   enabledSources,
+  isOfferable,
   parseSourceIds,
   serializeSourceIds,
   toggleSource,
@@ -130,6 +131,21 @@ describe("enabledSources and activeSourceIds", () => {
 
   it("is empty when nothing is turned on", () => {
     expect(activeSourceIds([], sources)).toEqual([]);
+  });
+});
+
+describe("isOfferable", () => {
+  it("is false for web_search with no source turned on", () => {
+    expect(isOfferable(webSearch, [], sources)).toBe(false);
+    expect(isOfferable(webSearch, ["gone"], sources)).toBe(false);
+  });
+
+  it("is true for web_search once a source is turned on", () => {
+    expect(isOfferable(webSearch, ["wikipedia"], sources)).toBe(true);
+  });
+
+  it("is always true for other tools", () => {
+    expect(isOfferable(webFetch, [], sources)).toBe(true);
   });
 });
 

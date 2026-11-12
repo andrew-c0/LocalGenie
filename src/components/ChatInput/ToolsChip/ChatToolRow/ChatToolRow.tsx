@@ -14,10 +14,12 @@ interface ChatToolRowProps {
   state: ToolState;
   /** Whether the tool is used in this chat. */
   enabled: boolean;
+  /** False when the model cannot be offered the tool now (no search source on). The switch is then disabled. */
+  offerable: boolean;
 }
 
 /** One tool in the chips popover: its name, its global state and the switch that uses it in this chat. */
-export function ChatToolRow({ sessionId, tool, state, enabled }: ChatToolRowProps) {
+export function ChatToolRow({ sessionId, tool, state, enabled, offerable }: ChatToolRowProps) {
   const setChatToolEnabled = useToolStore((s) => s.setChatToolEnabled);
   const label = toolLabel(tool.name);
 
@@ -25,11 +27,12 @@ export function ChatToolRow({ sessionId, tool, state, enabled }: ChatToolRowProp
     <Flex direction="column" gap="xxs" role="group" aria-label={label}>
       <Flex align="center" justify="between" gap="s">
         <BodyStrong>{label}</BodyStrong>
-        <Meta>{chatToolStateText(state)}</Meta>
+        <Meta>{chatToolStateText(state, offerable)}</Meta>
       </Flex>
       <Switch
         label="Use in this chat"
         checked={enabled}
+        disabled={!offerable}
         onChange={(_, data) => setChatToolEnabled(sessionId, tool.name, data.checked)}
       />
     </Flex>

@@ -212,12 +212,9 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Nothing ran with a real tool-capable model or the real GenieX server. The request shape, the streamed call and the tool-reply pairing come from the GenieX source and LocalGenie's tests (`geniex-server-behaviour.md`, "Tool calls").
 - No request was sent to a real site: `web_fetch` and each `web_search` source are unrun against live sites. The source adapters are tested on saved responses only.
 - The UI was not rendered by the sync agent. The user tested the approval dialog and the Tools list (reported 2026-11-11) and the image preview on the tool line (reported 2026-11-12). The per-chat tools chip is not confirmed yet (popover, switch, "Tool settings", delete, the off message); the other items are unticked in `manual-checklist.md`.
-- The per-chat tools chip's count includes `web_search` even when no search source is on, so it counts a tool the model is not offered (code-read).
 - The per-chat tool switches (`chatDisabled`) are in memory only: a restart turns them back on.
-- `chatGrants` ("Allow for this chat") are not cleared when a chat is deleted: `clearChatGrants` has no caller outside the tests (code-verified). Harmless, since session ids do not repeat.
 - A system or environment proxy bypasses the address filter (the private-address refusal in `commands/tools/web/client.rs` does not hold through a proxy).
-- No charset conversion for non-UTF-8 pages.
-- A tool call without an `index` merges with every other such call at index 0 (`ToolCallAccumulator`, code-read).
+- `robots.txt` is read as lossy UTF-8 (`robots.rs`), so a non-UTF-8 robots file is not decoded by the page charset rules.
 - Switching chats during a tool run and then pressing Stop aborts the chat that is open, not the one whose run it was.
 - The allowed folders come from the webview with each call. Rust canonicalises the paths it is given and does not check them against the saved list.
 - Approval is per tool, not per folder: "Allow for this chat" covers the tool for any folder.
@@ -225,6 +222,9 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Not built: reading PDF, Word or audio files. Tool results are plain text by design.
 
 ## Resolved (code-verified; runtime-unverified)
+- Native tools chip count and chat grants (2026-11-12, follow-up to 64ee9f5; code-read and unit tests in `utils/chatTools.test.ts`, `utils/webSearchSources.test.ts`, `stores/toolStore.test.ts`; not run in the app): the chip's count leaves out a `web_search` with no source on (`isOfferable`); deleting a chat clears its "Allow for this chat" grants (`clearChatToolSettings` calls `clearChatGrants`).
+- Native tools call without an `index` (2026-11-12, follow-up to 64ee9f5; `chat_helpers.rs` tests; not run with a real server): calls are keyed by `index`, else `id`, else the last call, so calls without an index no longer merge at index 0.
+- Native tools non-UTF-8 pages (2026-11-12, follow-up to 64ee9f5; `web/charset.rs` tests; not run on live pages): `web_fetch` decodes by BOM, Content-Type charset, `<meta>` charset, else UTF-8 lossy (`encoding_rs`).
 - GGUF vision projector missing for some repos (2026-11-12 working tree; unit tests in `utils/gguf.test.ts` and `downloadStore.test.ts`; the user confirmed a download of a UD repo got its projector, vision after the import not yet confirmed): a standalone `UD` token (Unsloth Dynamic) kept a second stem, so generic projectors such as `mmproj-F16.gguf` were dropped for every variant; `mmproj-model-f16.gguf` parsed to stem `model` and was not generic; BF16 and F16 were picked by size alone. Fixed in `utils/gguf.ts` and `services/hubModels.ts` (see `codebase-map.md`, "Sidecar choice").
 - Download auto-retry gaps (2026-11-06; the user tested both in the app and says they work): a GGUF projector (sidecar) network failure (offline or timeout) was toasted and skipped, so the model imported without it. It now fails the entry, which retries by itself and resumes from `.part`; other projector failures are skipped with a toast and, since 2026-11-12, a warning on the drawer card (`runGGUFDownload`, `downloadPipeline.ts`). The drawer badge read "Error" during a wait or a countdown; it reads "Retrying soon" (`DownloadStatusBadge` `retrying`, passed by `DownloadItemCard`).
 - Safari fetch failure "Load failed" was matched as a plain fragment, so "Download failed with status 404" (a Hugging Face or AI Hub HTTP error) read as offline and showed the offline text. It is now a word-start match (`LOAD_FAILED` in `utils/networkError.ts`), with unit tests `classifyFailureText` in `networkError.test.ts` (2026-11-06 working tree; code-verified by those tests, not run in the app).
