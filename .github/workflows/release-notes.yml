@@ -1,0 +1,28 @@
+name: Release notes
+
+# The app's update dialog shows the "notes" of latest.json, not the release page, and the Release
+# workflow writes a placeholder there. When a draft is published, copy the release page text into
+# latest.json. Fails (visibly) if the notes are empty or still the placeholder.
+# GitHub sends no release events for drafts, so this runs only on publish.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    name: Copy release notes into latest.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Sync notes
+        run: node scripts/release-notes.mjs "${{ github.event.release.tag_name }}"

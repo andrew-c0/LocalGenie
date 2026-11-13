@@ -65,5 +65,5 @@ run("git", ["tag", tag]);
 run("git", ["push", "origin", tag]);
 
 console.log(
-  `\nrelease: ${tag} pushed. Follow the Release run in the Actions tab, then edit the notes of the draft release and publish it.`,
+  `\nrelease: ${tag} pushed. Follow the Release run in the Actions tab, edit the notes of the draft release, then publish it (the Release notes workflow copies them into latest.json).`,
 );

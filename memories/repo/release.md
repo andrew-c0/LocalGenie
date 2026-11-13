@@ -12,7 +12,7 @@ Manual version:
 2. Run `cargo check` in `src-tauri/` so `Cargo.lock` picks up the new version, then commit the four files.
 3. `git tag vX.Y.Z` on that commit, push the commit and the tag.
 4. The Release workflow checks the tag matches the files, runs the checks, builds the installer and creates a **draft** release with the installer, its `.sig` and `latest.json`.
-5. Open the draft on GitHub. Replace the placeholder release notes, check the files, then **publish**. Publishing makes it the latest release, which is what the updater reads.
+5. Open the draft on GitHub, replace the placeholder release notes, check the files, then **publish**. Publishing makes it the latest release, which is what the updater reads, and starts the Release notes workflow (`release-notes.yml`): the update dialog shows the `notes` of `latest.json`, not the release page, and the build writes a placeholder there, so the workflow copies your text in (a minute or so after publishing). It fails if the notes are still the placeholder. `npm run release:notes -- X.Y.Z` does the same by hand (fallback; works on a draft too).
 
 Drafts are not visible to the updater, so a broken build can be deleted before anyone gets it.
 
