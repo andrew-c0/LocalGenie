@@ -21,7 +21,7 @@ interface ChatToolRowProps {
 /** One tool in the chips popover: its name, its global state and the switch that uses it in this chat. */
 export function ChatToolRow({ sessionId, tool, state, enabled, offerable }: ChatToolRowProps) {
   const setChatToolEnabled = useToolStore((s) => s.setChatToolEnabled);
-  const label = toolLabel(tool.name);
+  const label = toolLabel(tool.name, tool.serverName);
 
   return (
     <Flex direction="column" gap="xxs" role="group" aria-label={label}>

@@ -142,6 +142,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Header Downloads button still uses `appearance="subtle"` (`Header/Header.tsx`), against the agreed visual rule (secondary/primary).
 - Syntax highlighting: `rehype-highlight` runs only with `allowHtml`, and no highlight.js theme is imported.
 - Page padding choice is undecided.
+- Styling of the Settings area and some other areas is to be adjusted later (user request, 2026-11-13). A known follow-up, not a bug.
 - The UI has not been run since the Fluent migration, the frontend changes since 1b5d554, or the chat attachment and delete-message work (runtime-unverified).
 
 ## Open follow-ups (migrated from the 2026-10-22 repo scan; verify before fixing)
@@ -207,6 +208,20 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - The updater cannot be switched off: the plugin is registered and `plugins.updater` is set in every desktop build (code-read). A Microsoft Store build would need a config change.
 - Relaunch after install is best effort: on Windows the installer closes the app when it starts (`services/appUpdate.ts`).
 - Migrations are forward-only, so an older build cannot be restored over a newer database. Plan decision; the release notes must say so. Not built.
+
+## MCP servers (phase 4, 2026-11-13; code-read and unit tests written; the remote HTTP and the stdio demo paths were tested by the user on 2026-11-13, the rest not run)
+- Secrets are plain text: env values and headers (often API tokens) sit in the `mcp_server` JSON columns. There is no credential store. The form says so (`PLAIN_TEXT_NOTE`).
+- No per-server Refresh. The UI has no button that re-lists a running server's tools. Ways to get a fresh list: Edit and Save (an enabled server restarts), or Stop then Start. The backend's `mcp_server_start` on a running server does re-list, but no UI calls it. Stop then Start is code-read only.
+- No `tools/list_changed` handling: a server that adds or removes tools keeps its old list until it is restarted (see above).
+- Not built: MCP resources and prompts, sampling, images from tools (a note replaces them), OAuth. An HTTP server that needs OAuth fails at start with its error text.
+- A stdio server has no working-folder field, so the child inherits the app's working folder. The program and any script path in the arguments must be absolute. Names such as `npx` are looked up on PATH.
+- The stderr of a stdio server is discarded (`Stdio::null()` in `connect.rs`). A server that writes its reason to stderr shows only the protocol error ("The server did not start: ...").
+- Tool names carry the server name. `mcp__<server slug>__<tool>` changes when the server is renamed, and when another running server takes the same slug (the `_2` suffix follows name order). A tool's saved state (Off, Request approval, On) is keyed by its name, so after such a change it no longer applies and the tool reads Off. Code-read.
+- The switch "Connect when LocalGenie starts" also stops a running server when it is turned off, because the save stops an active server. The label does not say so. Code-read.
+- A new server is saved with the switch on (the dialog sends `enabled: true`), so saving starts it at once, and a mistyped command shows Failed straight away.
+- An HTTP server that goes away is noticed only when a listing or a call fails; no check runs in between, so it reads Running until then. Code-read; not run.
+- A call that outlives 60 s is dropped on the app side. Whether the server is told to cancel is not checked.
+- `toolStore.refreshTools` (run on each status event) sets the tool list but not `loaded`. After a failed first tool load, a status event can fill the list while Settings > Tools still shows its retry. Code-read; minor.
 
 ## Native tools (2026-11-11 working tree, phases 1-3; code-read and unit tests written, not run with a model or a real site)
 - Nothing ran with a real tool-capable model or the real GenieX server. The request shape, the streamed call and the tool-reply pairing come from the GenieX source and LocalGenie's tests (`geniex-server-behaviour.md`, "Tool calls").

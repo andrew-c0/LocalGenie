@@ -1,5 +1,6 @@
 import type { SearchSourceInfo, ToolApproval, ToolRisk, ToolStatus } from "../types";
 import { formatDuration } from "./format";
+import { mcpDisplayName } from "./mcpTools";
 import { parseJsonObject } from "./toolRecords";
 
 /** Human labels of the built-in tools. A tool not listed here shows its raw name. */
@@ -17,9 +18,12 @@ const TARGET_KEYS = ["path", "query", "url"] as const;
 /** Longest argument summary shown on the line. The details show the full arguments. */
 export const TARGET_MAX_LENGTH = 80;
 
-/** The label of a tool line, from the tool's name. */
-export function toolLabel(name: string): string {
-  return TOOL_LABELS.get(name) ?? name;
+/**
+ * The label of a tool line, from the tool's name. An MCP tool reads "<server> · <tool>"; `serverName`
+ * is the server's name when the caller knows it, else the slug in the name is used.
+ */
+export function toolLabel(name: string, serverName?: string): string {
+  return TOOL_LABELS.get(name) ?? mcpDisplayName(name, serverName) ?? name;
 }
 
 /** Cuts `text` to `max` characters, ending with an ellipsis when it is cut. */
@@ -85,6 +89,12 @@ export function approvalText(approval: ToolApproval): string {
     case "chat":
       return "Allowed for this chat";
   }
+}
+
+/** The line the approval dialog shows under an MCP tool's call: the server runs it, not the app. */
+export function externalToolNote(serverName: string | undefined): string {
+  const server = serverName ? `"${serverName}"` : "you added";
+  return `This tool runs on the external server ${server}. What it returns comes from that server and is untrusted, like a web page.`;
 }
 
 const READ_NOTE = "This tool can read files in the folders you allowed.";

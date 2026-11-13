@@ -1,0 +1,20 @@
+/* One server per block, with a line between the blocks. */
+.mcp-server-row {
+  padding: var(--spacingVerticalS) 0;
+  border-bottom: 1px solid var(--colorNeutralStroke2);
+}
+
+.mcp-server-row:last-child {
+  border-bottom: none;
+}
+
+/* The name takes the room left of the status badge and may shrink. */
+.mcp-server-row__name {
+  min-width: 0;
+}
+
+/* A long failure reason wraps instead of pushing the buttons out of the card. */
+.mcp-server-row__error {
+  overflow-wrap: anywhere;
+  color: var(--colorPaletteRedForeground1);
+}

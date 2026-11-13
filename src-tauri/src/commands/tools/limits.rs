@@ -19,6 +19,9 @@ pub const WEB_FETCH_TIMEOUT_SECS: u64 = 45;
 /// Longest time a `web_search` call may run. Each source has its own `SEARCH_TIMEOUT_SECS`.
 pub const WEB_SEARCH_TIMEOUT_SECS: u64 = 60;
 
+/// Longest time one call to an MCP server's tool may run.
+pub const MCP_CALL_TIMEOUT_SECS: u64 = 60;
+
 /// Timeout of one web request (a page hop, a robots.txt hop or a search request).
 pub const WEB_REQUEST_TIMEOUT_SECS: u64 = 15;
 

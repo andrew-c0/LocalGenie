@@ -65,6 +65,7 @@ pub fn run() {
             let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
             let db = tauri::async_runtime::block_on(database::init_database(&db_url))?;
+            let startup_db = db.clone();
 
             // Remove benchmark files that no prompt uses (left behind by a crash or an
             // unsaved editor). A failure here is logged; the app still starts.
@@ -76,6 +77,9 @@ pub fn run() {
             }
 
             app.manage(db);
+            // MCP servers: the manager emits status events, and enabled servers start in the background.
+            app.manage(tools::mcp::McpManager::new(app.handle().clone()));
+            tools::mcp::commands::start_enabled_servers(app.handle().clone(), startup_db);
             tray::init(app)?;
             Ok(())
         })
@@ -115,6 +119,12 @@ pub fn run() {
             tools::tool_list,
             tools::tool_execute,
             tools::web_search_sources,
+            // Tools: MCP servers (Settings > Tools)
+            tools::mcp::commands::mcp_server_list,
+            tools::mcp::commands::mcp_server_save,
+            tools::mcp::commands::mcp_server_remove,
+            tools::mcp::commands::mcp_server_start,
+            tools::mcp::commands::mcp_server_stop,
             // CLI utilities
             cli::get_runtime_versions,
             commands::download::download_file,
@@ -232,6 +242,7 @@ pub fn run() {
                     .state::<playground::PlaygroundJobs>()
                     .kill_active_sync();
                 window.state::<playground::SpeechJobs>().kill_active_sync();
+                window.state::<tools::mcp::McpManager>().kill_all_sync();
             }
         })
         .run(tauri::generate_context!())

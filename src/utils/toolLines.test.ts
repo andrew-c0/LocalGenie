@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   approvalNote,
   approvalText,
+  externalToolNote,
   prettyArguments,
   TARGET_MAX_LENGTH,
   toolLabel,
@@ -166,5 +167,17 @@ describe("approvalNote", () => {
 
   it("adds nothing for a tool without a risk note", () => {
     expect(approvalNote("make_coffee", undefined, "{}", [])).toBeNull();
+  });
+});
+
+describe("externalToolNote", () => {
+  it("names the server that runs the tool", () => {
+    expect(externalToolNote("Local files")).toBe(
+      'This tool runs on the external server "Local files". What it returns comes from that server and is untrusted, like a web page.',
+    );
+  });
+
+  it("does not invent a server name when none is known", () => {
+    expect(externalToolNote(undefined)).toContain("the external server you added.");
   });
 });

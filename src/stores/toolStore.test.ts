@@ -432,4 +432,63 @@ describe("toolStore", () => {
       expect(useToolStore.getState().hasChatGrant("chat-1", "read_text_file")).toBe(false);
     });
   });
+
+  describe("refreshTools", () => {
+    const mcpSpec: ToolSpec = {
+      id: "mcp__files__read",
+      name: "mcp__files__read",
+      description: "Read.",
+      parameters: {},
+      risk: "external",
+      source: "mcp",
+      serverId: "srv-1",
+      serverName: "Files",
+    };
+
+    it("re-reads the tool list and gives a new tool its saved state", async () => {
+      loadedState();
+      listTools.mockResolvedValue([...specs, mcpSpec]);
+      loadToolStates.mockResolvedValue({ mcp__files__read: "ask" });
+
+      await useToolStore.getState().refreshTools();
+
+      const state = useToolStore.getState();
+      expect(state.tools).toEqual([...specs, mcpSpec]);
+      expect(state.states.mcp__files__read).toBe("ask");
+    });
+
+    it("keeps the states it already knows, even when the saved value differs", async () => {
+      loadedState();
+      listTools.mockResolvedValue(specs);
+      loadToolStates.mockResolvedValue({ list_directory: "off", read_text_file: "off" });
+
+      await useToolStore.getState().refreshTools();
+
+      expect(useToolStore.getState().states.list_directory).toBe("on");
+    });
+
+    it("shows only the tools the backend lists now, and keeps the other settings", async () => {
+      loadedState();
+      listTools.mockResolvedValue([specs[0]]);
+      loadToolStates.mockResolvedValue({});
+
+      await useToolStore.getState().refreshTools();
+
+      const state = useToolStore.getState();
+      expect(state.tools).toEqual([specs[0]]);
+      expect(state.allowedFolders).toEqual(["C:\\Work"]);
+      expect(state.loaded).toBe(true);
+    });
+
+    it("keeps the old list and logs when the read fails, without a toast", async () => {
+      loadedState();
+      listTools.mockRejectedValue(new Error("registry busy"));
+
+      await useToolStore.getState().refreshTools();
+
+      expect(useToolStore.getState().tools).toEqual(specs);
+      expect(console.warn).toHaveBeenCalled();
+      expect(toastError).not.toHaveBeenCalled();
+    });
+  });
 });

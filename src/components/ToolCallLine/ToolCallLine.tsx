@@ -1,5 +1,6 @@
 import { ChevronDownRegular, ChevronUpRegular, WrenchRegular } from "@fluentui/react-icons";
 import { useId, useState } from "react";
+import { useToolStore } from "../../stores/toolStore";
 import type { Message } from "../../types";
 import { toolRowImage } from "../../utils/toolImage";
 import {
@@ -30,8 +31,12 @@ export default function ToolCallLine({ message }: ToolCallLineProps) {
   const [expanded, setExpanded] = useState(false);
   const detailId = useId();
   const record = message.toolRecord;
+  // The server's name, for an MCP tool; the tool may be gone from the list, then the slug is shown.
+  const serverName = useToolStore((s) =>
+    record ? s.tools.find((tool) => tool.name === record.name)?.serverName : undefined,
+  );
 
-  const label = record ? toolLabel(record.name) : UNKNOWN_TOOL;
+  const label = record ? toolLabel(record.name, serverName) : UNKNOWN_TOOL;
   const target = record ? toolTargetSummary(record.arguments) : null;
   const status = record ? toolStatusText(record.status, record.durationMs) : null;
   const image = toolRowImage(message);

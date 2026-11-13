@@ -1,16 +1,20 @@
 import { useToolStore } from "../../../stores/toolStore";
+import { groupToolsBySource } from "../../../utils/mcpTools";
 import { Flex } from "../../ui/Flex/Flex";
 import { RetryBlock } from "../../ui/RetryBlock/RetryBlock";
 import { SkeletonBlock } from "../../ui/Skeletons/SkeletonBlock";
 import { Body, Meta } from "../../ui/Typography/Typography";
 import { AllowedFoldersCard } from "./AllowedFoldersCard/AllowedFoldersCard";
+import { McpServersCard } from "./McpServersCard/McpServersCard";
+import { McpToolGroups } from "./McpToolGroups";
 import { SearchSourcesBlock } from "./SearchSourcesBlock";
 import { ToolCard } from "./ToolCard";
 
 /**
- * Settings > Tools: one card per tool with its three-way state, the search sources under web_search,
- * then the folders the file tools may read. The tool list and the saved settings are read once at
- * startup; a failed read shows a retry and the intro and notes stay on the page.
+ * Settings > Tools: one card per built-in tool with its three-way state, the search sources under
+ * web_search, the MCP servers with their tools under each server's name, then the folders the file
+ * tools may read. The tool list and the saved settings are read once at startup; a failed read shows
+ * a retry and the intro and notes stay on the page.
  */
 export default function ToolsSettings() {
   const loaded = useToolStore((s) => s.loaded);
@@ -18,6 +22,7 @@ export default function ToolsSettings() {
   const tools = useToolStore((s) => s.tools);
   const load = useToolStore((s) => s.load);
   const failed = !loaded && loadError !== null;
+  const groups = groupToolsBySource(tools);
 
   return (
     <Flex direction="column" gap="m">
@@ -42,13 +47,16 @@ export default function ToolsSettings() {
         />
       )}
 
-      {loaded && tools.length === 0 && <Meta>No tools are available in this build.</Meta>}
+      {loaded && groups.native.length === 0 && <Meta>No tools are available in this build.</Meta>}
       {loaded &&
-        tools.map((tool) => (
+        groups.native.map((tool) => (
           <ToolCard key={tool.name} tool={tool}>
             {tool.name === "web_search" && <SearchSourcesBlock />}
           </ToolCard>
         ))}
+
+      <McpServersCard />
+      {loaded && <McpToolGroups groups={groups.servers} />}
       {loaded && <AllowedFoldersCard />}
 
       <Meta>

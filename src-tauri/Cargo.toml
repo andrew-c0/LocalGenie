@@ -48,6 +48,10 @@ tauri-plugin-notification = "~2.4.0"
 # Native TLS (schannel) like the rest of the app: the default rustls feature pulls in `ring`, which needs clang to build on Windows ARM64.
 tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "system-proxy", "zip"] }
 tauri-plugin-process = "2"
+# MCP client: stdio and streamable HTTP. Default features off (no server, no macros); HTTP uses the reqwest the app already has.
+rmcp = { version = "3.9", default-features = false, features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest"] }
+# MCP server ids (v4 is already in the lockfile through other crates).
+uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [

@@ -3,10 +3,15 @@ import { WrenchRegular } from "@fluentui/react-icons";
 import { useNavigate } from "react-router-dom";
 import { routeById } from "../../../navigation/routeUtils";
 import { useToolStore } from "../../../stores/toolStore";
-import { activeChatToolCount, chatToolRows, chatToolsLabel } from "../../../utils/chatTools";
+import {
+  activeChatToolCount,
+  chatToolGroups,
+  chatToolRows,
+  chatToolsLabel,
+} from "../../../utils/chatTools";
 import { isOfferable } from "../../../utils/webSearchSources";
 import { Flex } from "../../ui/Flex/Flex";
-import { BodyStrong } from "../../ui/Typography/Typography";
+import { BodyStrong, Meta } from "../../ui/Typography/Typography";
 import { ChatToolRow } from "./ChatToolRow/ChatToolRow";
 import "./ToolsChip.css";
 
@@ -52,15 +57,20 @@ export function ToolsChip({ sessionId }: ToolsChipProps) {
       <PopoverSurface className="tools-chip__surface">
         <Flex direction="column" gap="s">
           <BodyStrong>Tools for this chat</BodyStrong>
-          {rows.map((tool) => (
-            <ChatToolRow
-              key={tool.name}
-              sessionId={sessionId}
-              tool={tool}
-              state={states[tool.name] ?? "off"}
-              enabled={!disabled.includes(tool.name)}
-              offerable={isOfferable(tool, enabledSearchSources, searchSources)}
-            />
+          {chatToolGroups(rows).map((group) => (
+            <Flex key={group.key} direction="column" gap="s">
+              {group.title && <Meta>{group.title}</Meta>}
+              {group.tools.map((tool) => (
+                <ChatToolRow
+                  key={tool.name}
+                  sessionId={sessionId}
+                  tool={tool}
+                  state={states[tool.name] ?? "off"}
+                  enabled={!disabled.includes(tool.name)}
+                  offerable={isOfferable(tool, enabledSearchSources, searchSources)}
+                />
+              ))}
+            </Flex>
           ))}
           <Button appearance="subtle" onClick={() => navigate(TOOL_SETTINGS_PATH)}>
             Tool settings

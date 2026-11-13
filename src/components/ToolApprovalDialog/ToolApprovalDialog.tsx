@@ -10,7 +10,13 @@ import {
 import type { ApprovalDecision } from "../../stores/toolApprovalStore";
 import { useToolApprovalStore } from "../../stores/toolApprovalStore";
 import { useToolStore } from "../../stores/toolStore";
-import { approvalNote, prettyArguments, toolLabel, toolTargetSummary } from "../../utils/toolLines";
+import {
+  approvalNote,
+  externalToolNote,
+  prettyArguments,
+  toolLabel,
+  toolTargetSummary,
+} from "../../utils/toolLines";
 import { enabledSources } from "../../utils/webSearchSources";
 import { Flex } from "../ui/Flex/Flex";
 import { Body, BodyStrong } from "../ui/Typography/Typography";
@@ -30,13 +36,18 @@ export function ToolApprovalDialog() {
 
   const { id, toolName, arguments: args } = current.request;
   const spec = tools.find((tool) => tool.name === toolName);
+  const label = toolLabel(toolName, spec?.serverName);
   const target = toolTargetSummary(args);
-  const note = approvalNote(
-    toolName,
-    spec?.risk,
-    args,
-    enabledSources(enabledSearchSources, searchSources),
-  );
+  // An MCP tool names its server; the built-in tools have their own notes.
+  const note =
+    spec?.source === "mcp"
+      ? externalToolNote(spec.serverName)
+      : approvalNote(
+          toolName,
+          spec?.risk,
+          args,
+          enabledSources(enabledSearchSources, searchSources),
+        );
   const decide = (decision: ApprovalDecision) => resolveApproval(id, decision);
 
   return (
@@ -51,7 +62,7 @@ export function ToolApprovalDialog() {
           <DialogTitle>Allow this tool call?</DialogTitle>
           <DialogContent>
             <Flex direction="column" gap="s">
-              <BodyStrong>{toolLabel(toolName)}</BodyStrong>
+              <BodyStrong>{label}</BodyStrong>
               {target && <BodyStrong className="tool-approval__target">{target}</BodyStrong>}
               {note && <Body>{note}</Body>}
               <pre className="tool-approval__arguments">{prettyArguments(args)}</pre>

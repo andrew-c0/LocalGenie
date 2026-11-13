@@ -1096,10 +1096,13 @@ export interface AppUpdateProgress {
   fraction: number | null;
 }
 
-/** A tool the registry offers, as `tool_list` returns it. Only `read` risk exists in v1. */
-/** `read` touches files the user allowed; `network` reaches the internet. */
-export type ToolRisk = "read" | "network";
+/** `read` touches files the user allowed; `network` reaches the internet; `external` runs on an MCP server the user added. */
+export type ToolRisk = "read" | "network" | "external";
 
+/** Where a tool comes from: built into the app (`native`), or an MCP server the user added (`mcp`). */
+export type ToolSource = "native" | "mcp";
+
+/** A tool the registry offers, as `tool_list` returns it. `serverId` and `serverName` are set for an MCP tool only. */
 export interface ToolSpec {
   id: string;
   name: string;
@@ -1107,7 +1110,47 @@ export interface ToolSpec {
   /** JSON schema of the arguments. */
   parameters: Record<string, unknown>;
   risk: ToolRisk;
-  source: "native";
+  source: ToolSource;
+  serverId?: string;
+  serverName?: string;
+}
+
+/** How an MCP server is reached: a program run on this computer (`stdio`), or a streamable HTTP endpoint. */
+export type McpTransport = "stdio" | "http";
+
+/** Where an MCP server is in its life. `failed` carries the reason in `McpServerInfo.error`. */
+export type McpStatus = "stopped" | "starting" | "running" | "failed";
+
+/**
+ * A saved MCP server, as the Rust side keeps it. `id` is empty when a new server is saved; the backend
+ * makes the id. Env values and headers are stored as plain text on this computer.
+ */
+export interface McpServerConfig {
+  id: string;
+  name: string;
+  transport: McpTransport;
+  /** stdio: the program to run. */
+  command?: string;
+  /** stdio: the arguments, in order. */
+  args: string[];
+  /** stdio: environment variables the program gets. */
+  env: Record<string, string>;
+  /** http: the endpoint address. */
+  url?: string;
+  /** http: headers sent with every request. */
+  headers: Record<string, string>;
+  /** Connect when the app starts. */
+  enabled: boolean;
+}
+
+/** A saved MCP server with its live status, as `mcp_server_list` and the status event send it. */
+export interface McpServerInfo {
+  config: McpServerConfig;
+  status: McpStatus;
+  /** The reason the server failed. Set when `status` is `failed`. */
+  error?: string;
+  /** Tools the server offers while it is running. */
+  toolCount: number;
 }
 
 /** One web search source the backend offers (`web_search_sources`). */

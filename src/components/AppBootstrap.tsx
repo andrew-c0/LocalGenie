@@ -4,6 +4,7 @@ import * as geniex from "../services/geniex";
 import { backfillModelRam } from "../services/modelRam";
 import { useAppUpdateStore } from "../stores/appUpdateStore";
 import { useChatStore } from "../stores/chatStore";
+import { useMcpStore } from "../stores/mcpStore";
 import { useModelStore } from "../stores/modelStore";
 import { useRamEstimateStore } from "../stores/ramEstimateStore";
 import { useRuntimeNoticeStore } from "../stores/runtimeNoticeStore";
@@ -14,8 +15,8 @@ import { useToolStore } from "../stores/toolStore";
 /**
  * Startup only: loads the runtime list (which also sets the CLI state), saved sessions, installed
  * models, server status, the sidebar's saved state, the runtime update checks, the saved runtime notice state and the
- * saved app update notified version and the tool settings (states, allowed folders) once. Everything that runs afterwards is owned by
- * the component that uses it (model loading in the header, downloads in the drawer, streaming in `ChatRuntime`).
+ * saved app update notified version, the tool settings (states, allowed folders) and the MCP server list once. Everything that runs afterwards is owned by
+ * the component that uses it (model loading in the header, downloads in the drawer, streaming in `ChatRuntime`, MCP status events in `McpRuntime`).
  */
 export default function AppBootstrap({ children }: { children: ReactNode }) {
   const loadSessions = useChatStore((s) => s.loadSessions);
@@ -38,6 +39,7 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
     void useRuntimeNoticeStore.getState().load();
     void useAppUpdateStore.getState().loadNotifiedVersion();
     void useToolStore.getState().load();
+    void useMcpStore.getState().load();
 
     (async () => {
       // The release checks call GitHub and can be slow, so they start once the list is read and do not

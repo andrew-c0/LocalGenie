@@ -5,6 +5,7 @@
 
 mod file_tools;
 mod limits;
+pub mod mcp;
 mod output;
 mod paths;
 mod spec;
@@ -12,11 +13,15 @@ mod spec;
 mod test_support;
 mod web;
 
-use limits::{TOOL_TIMEOUT_SECS, WEB_FETCH_TIMEOUT_SECS, WEB_SEARCH_TIMEOUT_SECS};
+use limits::{
+    MCP_CALL_TIMEOUT_SECS, TOOL_TIMEOUT_SECS, WEB_FETCH_TIMEOUT_SECS, WEB_SEARCH_TIMEOUT_SECS,
+};
+use mcp::McpManager;
 use serde::Serialize;
 use spec::{ToolSpec, LIST_DIRECTORY, READ_IMAGE, READ_TEXT_FILE, WEB_FETCH, WEB_SEARCH};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
+use tauri::State;
 use web::search::SearchSourceInfo;
 
 const TIMED_OUT: &str = "The tool timed out";
@@ -52,10 +57,16 @@ pub struct ToolResult {
     pub attachment: Option<ToolAttachment>,
 }
 
-/// The native tools the model may be offered.
+/// The tools the model may be offered: the native tools, then the tools of the running MCP servers.
 #[tauri::command]
-pub async fn tool_list() -> Result<Vec<ToolSpec>, String> {
-    Ok(spec::registry())
+pub async fn tool_list(mcp: State<'_, McpManager>) -> Result<Vec<ToolSpec>, String> {
+    list_specs(&mcp)
+}
+
+fn list_specs(manager: &McpManager) -> Result<Vec<ToolSpec>, String> {
+    let mut specs = spec::registry();
+    specs.extend(mcp::tool_specs(manager)?);
+    Ok(specs)
 }
 
 /// The public sources `web_search` can use, for the settings screen. No network call.
@@ -69,6 +80,24 @@ pub async fn web_search_sources() -> Result<Vec<SearchSourceInfo>, String> {
 /// turned on for `web_search` (null or empty when none). Each call runs under its own time limit.
 #[tauri::command]
 pub async fn tool_execute(
+    mcp: State<'_, McpManager>,
+    name: String,
+    arguments: String,
+    allowed_folders: Vec<String>,
+    enabled_search_sources: Option<Vec<String>>,
+) -> Result<ToolResult, String> {
+    execute_tool(
+        &mcp,
+        name,
+        arguments,
+        allowed_folders,
+        enabled_search_sources,
+    )
+    .await
+}
+
+async fn execute_tool(
+    manager: &McpManager,
     name: String,
     arguments: String,
     allowed_folders: Vec<String>,
@@ -78,7 +107,7 @@ pub async fn tool_execute(
     let limit = Duration::from_secs(timeout_secs(&name));
     let timed_out = timed_out_message(&name);
     let enabled = enabled_search_sources.unwrap_or_default();
-    let call = run_call(&name, &arguments, &allowed_folders, &enabled);
+    let call = run_call(manager, &name, &arguments, &allowed_folders, &enabled);
     let outcome = match tokio::time::timeout(limit, call).await {
         Err(_elapsed) => Err(timed_out),
         Ok(result) => result,
@@ -109,6 +138,7 @@ fn tool_result(outcome: Result<ToolOutput, String>, elapsed: Duration) -> ToolRe
 
 /// Route one call to its tool.
 async fn run_call(
+    manager: &McpManager,
     name: &str,
     arguments: &str,
     allowed_folders: &[String],
@@ -120,6 +150,7 @@ async fn run_call(
         }
         WEB_FETCH => web::fetch_tool(arguments).await,
         WEB_SEARCH => web::search_tool(arguments, enabled_sources).await,
+        other if mcp::is_mcp_name(other) => mcp::call_tool_output(manager, other, arguments).await,
         other => Err(unknown_tool(other)),
     }
 }
@@ -176,6 +207,7 @@ fn timeout_secs(name: &str) -> u64 {
     match name {
         WEB_FETCH => WEB_FETCH_TIMEOUT_SECS,
         WEB_SEARCH => WEB_SEARCH_TIMEOUT_SECS,
+        other if mcp::is_mcp_name(other) => MCP_CALL_TIMEOUT_SECS,
         _ => TOOL_TIMEOUT_SECS,
     }
 }
@@ -215,7 +247,8 @@ fn parse_arguments(arguments: &str) -> Result<serde_json::Value, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{tool_execute, tool_list, tool_result, ToolAttachment, ToolOutput, ToolResult};
+    use super::{execute_tool, list_specs, tool_result, ToolAttachment, ToolOutput, ToolResult};
+    use crate::commands::tools::mcp::McpManager;
     use crate::commands::tools::paths::display_path;
     use crate::commands::tools::test_support::TempTree;
     use std::time::Duration;
@@ -224,30 +257,47 @@ mod tests {
     const PNG_BYTES: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0];
 
     async fn execute(name: &str, arguments: &str, allowed: Vec<String>) -> ToolResult {
-        tool_execute(name.into(), arguments.into(), allowed, None)
-            .await
-            .expect("tool_execute returns Ok for tool-level problems")
+        execute_tool(
+            &McpManager::default(),
+            name.into(),
+            arguments.into(),
+            allowed,
+            None,
+        )
+        .await
+        .expect("execute_tool returns Ok for tool-level problems")
     }
 
     async fn execute_with_sources(arguments: &str, enabled: &[&str]) -> ToolResult {
         let sources = enabled.iter().map(|id| (*id).to_string()).collect();
-        tool_execute(
+        execute_tool(
+            &McpManager::default(),
             "web_search".into(),
             arguments.into(),
             vec![],
             Some(sources),
         )
         .await
-        .expect("tool_execute returns Ok for tool-level problems")
+        .expect("execute_tool returns Ok for tool-level problems")
     }
 
-    #[tokio::test]
-    async fn tool_list_returns_the_file_tools_then_the_web_tools() {
-        let specs = tool_list().await.expect("list");
+    #[test]
+    fn tool_list_returns_the_file_tools_then_the_web_tools() {
+        let specs = list_specs(&McpManager::default()).expect("list");
         let names: Vec<&str> = specs.iter().map(|spec| spec.name.as_str()).collect();
         assert_eq!(
             names,
             ["list_directory", "read_text_file", "read_image", "web_fetch", "web_search"]
+        );
+    }
+
+    #[tokio::test]
+    async fn an_mcp_tool_that_is_not_running_is_a_readable_failure() {
+        let result = execute("mcp__docs__search", "{}", vec![]).await;
+        assert!(!result.ok);
+        assert_eq!(
+            result.content,
+            "The tool 'mcp__docs__search' is not running: its MCP server is stopped or failed."
         );
     }
 
@@ -472,6 +522,11 @@ mod tests {
         assert_eq!(super::timed_out_message("list_directory"), super::TIMED_OUT);
         assert_eq!(super::timeout_secs("web_search"), 60);
         assert_eq!(super::timeout_secs("read_text_file"), 10);
+        assert_eq!(super::timeout_secs("mcp__docs__search"), 60);
+        assert_eq!(
+            super::timed_out_message("mcp__docs__search"),
+            super::TIMED_OUT
+        );
     }
 
     #[test]

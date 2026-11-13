@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { SearchSourceInfo, ToolSpec } from "../types";
-import { activeChatToolCount, chatToolRows, chatToolStateText, chatToolsLabel } from "./chatTools";
+import {
+  activeChatToolCount,
+  chatToolGroups,
+  chatToolRows,
+  chatToolStateText,
+  chatToolsLabel,
+} from "./chatTools";
 
 function spec(name: string): ToolSpec {
   return { id: name, name, description: "", parameters: {}, risk: "read", source: "native" };
@@ -88,5 +94,58 @@ describe("chatToolsLabel", () => {
   it("names the count of active tools for screen readers", () => {
     expect(chatToolsLabel(3)).toBe("Tools for this chat, 3 active");
     expect(chatToolsLabel(0)).toBe("Tools for this chat, 0 active");
+  });
+});
+
+describe("chatToolGroups", () => {
+  function mcpSpec(name: string, serverId: string, serverName: string): ToolSpec {
+    return {
+      id: name,
+      name,
+      description: "",
+      parameters: {},
+      risk: "external",
+      source: "mcp",
+      serverId,
+      serverName,
+    };
+  }
+
+  const mixed = [
+    spec("list_directory"),
+    mcpSpec("mcp__beta__ping", "beta", "Beta"),
+    mcpSpec("mcp__alpha__one", "alpha", "Alpha"),
+    mcpSpec("mcp__alpha__two", "alpha", "Alpha"),
+  ];
+
+  it("lists the built-in tools first, untitled, then one titled group per server", () => {
+    const groups = chatToolGroups(mixed);
+    expect(groups.map((group) => group.title)).toEqual([null, "Alpha", "Beta"]);
+    expect(groups[0].tools.map((tool) => tool.name)).toEqual(["list_directory"]);
+    expect(groups[1].tools.map((tool) => tool.name)).toEqual([
+      "mcp__alpha__one",
+      "mcp__alpha__two",
+    ]);
+  });
+
+  it("gives no groups for no tools", () => {
+    expect(chatToolGroups([])).toEqual([]);
+  });
+
+  it("counts the MCP tools the same way as the built-in ones, once grouped", () => {
+    const rows = chatToolRows(mixed, {
+      list_directory: "on",
+      mcp__alpha__one: "on",
+      mcp__alpha__two: "ask",
+      mcp__beta__ping: "on",
+    });
+    expect(activeChatToolCount(rows, ["mcp__beta__ping"], [], sources)).toBe(3);
+    const grouped = chatToolGroups(rows).flatMap((group) => group.tools);
+    expect(grouped).toHaveLength(rows.length);
+  });
+
+  it("treats an MCP tool as offerable, since only web_search needs a source", () => {
+    const rows = chatToolRows(mixed, { mcp__alpha__one: "on" });
+    expect(activeChatToolCount(rows, [], [], [])).toBe(1);
   });
 });

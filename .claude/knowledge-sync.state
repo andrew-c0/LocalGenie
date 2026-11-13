@@ -1,3 +1,3 @@
-last_synced_commit=64ee9f5fafbc9a7049e54eedd5e897128c0feaad
-last_synced_date=2026-11-12
-note=Cursor moved from 6334860 to 64ee9f5 (the per-chat tools chip and the image preview, committed). Also synced: the follow-up that is committed right after 64ee9f5 (chip count leaves out a web_search with no source on, deleting a chat clears its grants, ToolCallAccumulator keys calls by index, id or last call, web pages decoded by charset via web/charset.rs). Those are already documented, so the next sync only needs to check the follow-up commit against them. Not run by the sync: tests, tsc, cargo, the app. tasks.md and tasks-ordered.md are user-owned and not synced.
+last_synced_commit=68304f5ea35cde2593bc541a3a09249948190b28
+last_synced_date=2026-11-13
+note=Cursor moved from 64ee9f5 to 68304f5 (the follow-up to phase 5: chip count, grant cleanup, call keys, page charset). Also synced: phase 4, the MCP client, as it is read from the working copy on 2026-11-13; it is committed right after 68304f5, so the next sync checks that commit against the MCP section of codebase-map.md. Not run by the sync: tests, tsc, cargo, the app. tasks.md and tasks-ordered.md are user-owned and not synced.

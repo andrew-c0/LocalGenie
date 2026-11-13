@@ -12,22 +12,26 @@ pub const WEB_FETCH: &str = "web_fetch";
 /// Name of the tool that searches the public sources.
 pub const WEB_SEARCH: &str = "web_search";
 
-/// How much a tool can do. File tools only read; web tools reach the network.
+/// How much a tool can do. File tools only read; web tools reach the network; tools of MCP servers
+/// are external and their effect is up to the server.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ToolRisk {
     Read,
     Network,
+    External,
 }
 
-/// Where a tool comes from. Only `Native` (implemented in Rust) exists so far.
+/// Where a tool comes from: implemented in Rust (`Native`) or offered by a user's MCP server (`Mcp`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ToolSource {
     Native,
+    Mcp,
 }
 
-/// One tool the model may be offered. `parameters` is a JSON schema object.
+/// One tool the model may be offered. `parameters` is a JSON schema object. `server_id` and
+/// `server_name` are set for an MCP tool only.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolSpec {
@@ -37,6 +41,10 @@ pub struct ToolSpec {
     pub parameters: serde_json::Value,
     pub risk: ToolRisk,
     pub source: ToolSource,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_name: Option<String>,
 }
 
 impl ToolSpec {
@@ -53,6 +61,28 @@ impl ToolSpec {
             parameters,
             risk,
             source: ToolSource::Native,
+            server_id: None,
+            server_name: None,
+        }
+    }
+
+    /// The spec of a tool a running MCP server listed. `name` is the name the model sees.
+    pub(super) fn mcp(
+        name: &str,
+        description: &str,
+        parameters: serde_json::Value,
+        server_id: &str,
+        server_name: &str,
+    ) -> Self {
+        Self {
+            id: name.to_string(),
+            name: name.to_string(),
+            description: description.to_string(),
+            parameters,
+            risk: ToolRisk::External,
+            source: ToolSource::Mcp,
+            server_id: Some(server_id.to_string()),
+            server_name: Some(server_name.to_string()),
         }
     }
 }
@@ -248,5 +278,23 @@ mod tests {
         assert!(json.get("parameters").is_some());
         let fetch = serde_json::to_value(spec_named(WEB_FETCH)).expect("serialize");
         assert_eq!(fetch["risk"], "network");
+        assert!(fetch.get("serverId").is_none());
+    }
+
+    #[test]
+    fn an_mcp_spec_serializes_as_external_with_its_server() {
+        let spec = ToolSpec::mcp(
+            "mcp__docs__search",
+            "Search the docs",
+            serde_json::json!({ "type": "object" }),
+            "srv-1",
+            "Docs",
+        );
+        let json = serde_json::to_value(&spec).expect("serialize");
+        assert_eq!(json["risk"], "external");
+        assert_eq!(json["source"], "mcp");
+        assert_eq!(json["id"], "mcp__docs__search");
+        assert_eq!(json["serverId"], "srv-1");
+        assert_eq!(json["serverName"], "Docs");
     }
 }

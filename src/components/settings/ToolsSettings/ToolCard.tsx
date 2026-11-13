@@ -1,4 +1,4 @@
-import { Field, Radio, RadioGroup } from "@fluentui/react-components";
+import { Badge, Field, Radio, RadioGroup } from "@fluentui/react-components";
 import type { ReactNode } from "react";
 import { useToolStore } from "../../../stores/toolStore";
 import type { ToolSpec } from "../../../types";
@@ -29,14 +29,23 @@ interface ToolCardProps {
 
 /** One tool: its name, what it does, its three-way state (Off, Request approval, On) and what that state means. */
 export function ToolCard({ tool, children }: ToolCardProps) {
-  const label = toolLabel(tool.name);
+  const label = toolLabel(tool.name, tool.serverName);
   const state = useToolStore((s) => s.states[tool.name] ?? "off");
   const setState = useToolStore((s) => s.setState);
   const note = TOOL_NOTES[tool.name];
+  const isMcp = tool.source === "mcp";
 
   return (
     <SurfaceCard title={label}>
       <Flex direction="column" gap="s">
+        {isMcp && (
+          <Flex align="center" gap="s" wrap>
+            <Badge appearance="tint" size="small">
+              MCP
+            </Badge>
+            <Meta>Comes from an external server you added.</Meta>
+          </Flex>
+        )}
         {tool.risk === "network" && <Meta>Uses the internet</Meta>}
         <Secondary>{tool.description}</Secondary>
         {note && <Secondary>{note}</Secondary>}

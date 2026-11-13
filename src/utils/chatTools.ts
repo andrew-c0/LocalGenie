@@ -4,6 +4,7 @@
  */
 
 import type { SearchSourceInfo, ToolSpec } from "../types";
+import { groupToolsBySource } from "./mcpTools";
 import type { ToolState } from "./toolAccess";
 import { isOfferable } from "./webSearchSources";
 
@@ -28,6 +29,28 @@ export function chatToolStateText(state: ToolState, offerable: boolean): string 
 /** The tools whose global state is not off, in registry order. These are the tools the chip lists. */
 export function chatToolRows(tools: ToolSpec[], states: Record<string, ToolState>): ToolSpec[] {
   return tools.filter((tool) => (states[tool.name] ?? "off") !== "off");
+}
+
+/** One part of the chip's list: the built-in tools (no title) or the tools of one MCP server. */
+export interface ChatToolGroup {
+  key: string;
+  /** The server's name, or null for the built-in tools. */
+  title: string | null;
+  tools: ToolSpec[];
+}
+
+/**
+ * The chip's rows in groups: the built-in tools first, then one group per MCP server, sorted by name.
+ * Each group keeps the registry order of its tools. The counts do not depend on the grouping.
+ */
+export function chatToolGroups(rows: ToolSpec[]): ChatToolGroup[] {
+  const { native, servers } = groupToolsBySource(rows);
+  const groups: ChatToolGroup[] = [];
+  if (native.length > 0) groups.push({ key: "native", title: null, tools: native });
+  for (const server of servers) {
+    groups.push({ key: server.serverId, title: server.serverName, tools: server.tools });
+  }
+  return groups;
 }
 
 /**

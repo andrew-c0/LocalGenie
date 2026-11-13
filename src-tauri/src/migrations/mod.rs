@@ -23,6 +23,7 @@ mod m20261035_000001_message_covers_through;
 mod m20261036_000001_downloaded_model_ram;
 mod m20261037_000001_drop_model_compute_setting;
 mod m20261038_000001_message_tool_fields;
+mod m20261039_000001_create_mcp_servers;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -52,6 +53,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261036_000001_downloaded_model_ram::Migration),
             Box::new(m20261037_000001_drop_model_compute_setting::Migration),
             Box::new(m20261038_000001_message_tool_fields::Migration),
+            Box::new(m20261039_000001_create_mcp_servers::Migration),
         ]
     }
 }
@@ -231,8 +233,8 @@ mod tests {
         assert_eq!(msg.token_count, Some(42));
         assert_eq!(msg.prompt_chars, Some(7));
 
-        // Nineteen steps: this one, then the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM, dropped compute setting and message tool fields migrations.
-        Migrator::down(&db, Some(19))
+        // Twenty steps: this one, then the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields and MCP servers migrations.
+        Migrator::down(&db, Some(20))
             .await
             .expect("revert stats migration");
         let after_down = columns(db.clone()).await;
@@ -262,8 +264,8 @@ mod tests {
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
         // Put back the old JSON row, then apply the migrations again so it copies it.
-        // Eighteen steps: the settings one, then the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM, dropped compute setting and message tool fields migrations.
-        Migrator::down(&db, Some(18))
+        // Nineteen steps: the settings one, then the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields and MCP servers migrations.
+        Migrator::down(&db, Some(19))
             .await
             .expect("revert settings migration");
         db.execute(Statement::from_string(
@@ -591,8 +593,8 @@ mod tests {
         assert_eq!(row.facets.as_deref(), Some(facets));
 
         // Reverting drops the column; reapplying brings it back as null for old rows.
-        // Six steps: this one, then the installed runtimes, message covers-through, downloaded model RAM, dropped compute setting and message tool fields migrations.
-        Migrator::down(&db, Some(6)).await.expect("revert facets");
+        // Seven steps: this one, then the installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields and MCP servers migrations.
+        Migrator::down(&db, Some(7)).await.expect("revert facets");
         assert!(!columns(db.clone()).await.iter().any(|c| c == "facets"));
         Migrator::up(&db, None).await.expect("reapply facets");
         let row = downloaded_model::Entity::find_by_id("org/model")
@@ -747,8 +749,8 @@ mod tests {
         assert_eq!(row.context_ram_bytes, Some(512));
         assert_eq!(row.ram_approximate, Some(true));
 
-        // Reverting drops the three columns (and the later tool fields migration); reapplying brings them back as null.
-        Migrator::down(&db, Some(3)).await.expect("revert RAM columns");
+        // Reverting drops the three columns (and the later tool fields and MCP servers migrations); reapplying brings them back as null.
+        Migrator::down(&db, Some(4)).await.expect("revert RAM columns");
         let after_down = columns(db.clone()).await;
         for col in ram_cols {
             assert!(!after_down.iter().any(|c| c == col), "{col} left after down");
@@ -848,8 +850,8 @@ mod tests {
         let tmp = TempDb::new("migrate-tool-old");
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
-        // Drop the tool fields, write a row the way an older build did, then apply the migration again.
-        Migrator::down(&db, Some(1))
+        // Drop the tool fields (and the MCP servers table above them), write a row the way an older build did, then apply the migrations again.
+        Migrator::down(&db, Some(2))
             .await
             .expect("revert tool fields");
         chat_session::ActiveModel {

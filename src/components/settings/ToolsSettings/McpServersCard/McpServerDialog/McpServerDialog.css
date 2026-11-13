@@ -1,0 +1,22 @@
+/* Fluent sizes an Input and a Textarea to their content. The form's fields fill the dialog width instead. */
+.mcp-dialog__form .fui-Input,
+.mcp-dialog__form .fui-Textarea {
+  width: 100%;
+}
+
+/* A name or value field in a row takes its share of the row and may shrink. */
+.mcp-dialog__row-field {
+  min-width: 0;
+}
+
+/* The command line that will run: monospace, and a long line wraps. */
+.mcp-dialog__command {
+  display: block;
+  padding: var(--spacingVerticalS) var(--spacingHorizontalM);
+  border-radius: var(--borderRadiusMedium);
+  background: var(--colorNeutralBackground3);
+  font-family: var(--fontFamilyMonospace);
+  font-size: var(--fontSizeBase200);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

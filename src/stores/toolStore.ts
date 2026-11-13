@@ -39,6 +39,11 @@ interface ToolStoreState {
   chatDisabled: Record<string, string[]>;
   /** Reads the tool list, the saved states, the folders and the search sources. Safe to call again to retry. */
   load: () => Promise<void>;
+  /**
+   * Re-reads only the tool list, for when an MCP server starts or stops. States already known are kept;
+   * a new tool gets its saved state. A failure is logged and the old list stays.
+   */
+  refreshTools: () => Promise<void>;
   /** Saves one tool's state, then shows it. A failed save keeps the old state and shows a toast. */
   setState: (name: string, state: ToolState) => Promise<void>;
   /** Adds a folder and saves the list. Resolves to true when the folder was added. */
@@ -94,6 +99,16 @@ export const useToolStore = create<ToolStoreState>((set, get) => ({
     } catch (err) {
       console.warn("[tools] Tool settings unavailable:", err);
       set({ loaded: false, loadError: err });
+    }
+  },
+
+  refreshTools: async () => {
+    try {
+      const tools = await listTools();
+      const fresh = await loadToolStates(tools.map((tool) => tool.name));
+      set((current) => ({ tools, states: { ...fresh, ...current.states } }));
+    } catch (err) {
+      console.warn("[tools] Tool list refresh failed:", err);
     }
   },
 
