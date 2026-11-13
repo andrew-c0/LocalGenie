@@ -1,6 +1,6 @@
 [package]
 name = "LocalGenie"
-version = "0.1.1"
+version = "0.1.2"
 description = "A Tauri 2 app for Qualcomm GenieX"
 authors = ["you"]
 edition = "2021"
