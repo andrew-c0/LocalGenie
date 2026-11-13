@@ -23,6 +23,11 @@ export function messagesOf(sessionId: string): Message[] {
   return useChatStore.getState().sessions.find((s) => s.id === sessionId)?.messages ?? [];
 }
 
+/** The settings a conversation overrides, or undefined when it overrides none. */
+export function overridesOf(sessionId: string): ChatSettingsOverrides | undefined {
+  return useChatStore.getState().sessions.find((s) => s.id === sessionId)?.settingsOverrides;
+}
+
 interface ChatState {
   sessions: ChatSession[];
   activeSessionId: string | null;

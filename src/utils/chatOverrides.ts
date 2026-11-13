@@ -15,6 +15,18 @@ const CHAT_OVERRIDE_KEYS = [
   "systemBlocks",
 ] as const satisfies readonly (keyof ChatSettingsOverrides)[];
 
+/**
+ * The compaction settings a chat can override. They are not model settings, so `applyChatOverrides`
+ * does not merge them into the model's settings; they are kept with the other overrides.
+ */
+const COMPACTION_OVERRIDE_KEYS = [
+  "compaction",
+  "compactionThreshold",
+] as const satisfies readonly (keyof ChatSettingsOverrides)[];
+
+/** Every key a chat's stored overrides may hold. */
+const STORED_OVERRIDE_KEYS = [...CHAT_OVERRIDE_KEYS, ...COMPACTION_OVERRIDE_KEYS];
+
 /** The model's settings with a chat's overrides on top. A key the chat does not set keeps the model's value. */
 export function applyChatOverrides(
   stored: StoredModelSettings,
@@ -31,7 +43,7 @@ export function applyChatOverrides(
 /** Keeps only the keys a chat sets, so stored overrides never hold empty entries. */
 export function cleanOverrides(overrides: ChatSettingsOverrides): ChatSettingsOverrides {
   const clean: Record<string, unknown> = {};
-  for (const key of CHAT_OVERRIDE_KEYS) {
+  for (const key of STORED_OVERRIDE_KEYS) {
     if (overrides[key] !== undefined) clean[key] = overrides[key];
   }
   return clean as ChatSettingsOverrides;

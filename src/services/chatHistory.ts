@@ -1,6 +1,7 @@
 import type { AttachmentRef, Message } from "../types";
 import { type PendingAttachment, userMessageContent } from "../utils/attachments";
 import { messagesAfterSummary } from "../utils/compaction";
+import { parseThinking } from "../utils/thinking";
 import { toast } from "../utils/toast";
 import { pairedToolHistory } from "../utils/toolHistory";
 import { isToolMessage } from "../utils/toolRecords";
@@ -105,12 +106,39 @@ async function chatMessageFor(
 }
 
 /**
+ * The text an earlier reply is sent with: its answer, without its thinking. A reply with no answer and no
+ * calls keeps its text, so no empty assistant message is sent. A reply with calls and no answer is sent
+ * with empty text, since its calls and results carry the turn.
+ */
+function earlierReplyContent(m: Message): string {
+  const answer = parseThinking(m.content).answer;
+  if (answer || (m.toolCalls?.length ?? 0) > 0) return answer;
+  return m.content;
+}
+
+/**
+ * Ids of the assistant replies before the last user message, which are the earlier turns. The current
+ * turn (the last user message and the replies after it, tool rounds included) is not in this set.
+ */
+function earlierReplyIds(messages: Message[]): Set<string> {
+  const lastUser = messages.map((m) => m.role).lastIndexOf("user");
+  if (lastUser < 0) return new Set();
+  const earlier = messages.slice(0, lastUser).filter((m) => m.role === "assistant");
+  return new Set(earlier.map((m) => m.id));
+}
+
+/**
  * Chat history for the server. Only the messages after the newest summary are sent; the summary
- * itself goes in the system prompt. Every user message's files are read again from their paths, so
- * the model has them on every turn. `fresh` gives the files of the message being sent, which are
- * already in memory. Files no longer on the device are left out and named in `unavailable`.
- * Tool calls and their results are sent as pairs (see `pairedToolHistory`). The images a group of tool
- * results read follow that group as one user message; that message is not stored or shown.
+ * itself goes in the system prompt. Error lines are not sent: they are shown, but the model never saw
+ * them. Every user message's files are read again from their paths, so the model has them on every
+ * turn. `fresh` gives the files of the message being sent, which are already in memory. Files no longer
+ * on the device are left out and named in `unavailable`. Tool calls and their results are sent as pairs
+ * (see `pairedToolHistory`). The images a group of tool results read follow that group as one user
+ * message; that message is not stored or shown.
+ *
+ * Thinking is sent only for the current turn. An earlier reply goes out as its answer (see
+ * `earlierReplyContent`). This changes the prefix the server cached for the earlier turns, so the server
+ * may read that earlier history again on the next request.
  */
 export async function historyFor(
   messages: Message[],
@@ -119,7 +147,9 @@ export async function historyFor(
   const history: ChatMessage[] = [];
   const unavailable: string[] = [];
   let toolImages: AttachmentRef[] = [];
-  for (const m of pairedToolHistory(messagesAfterSummary(messages))) {
+  const sent = messagesAfterSummary(messages).filter((m) => !m.isError);
+  const earlier = earlierReplyIds(sent);
+  for (const m of pairedToolHistory(sent)) {
     if (isToolMessage(m)) {
       // A result without a record cannot be paired, so it is not sent (pairedToolHistory drops it).
       if (m.toolRecord) {
@@ -137,7 +167,8 @@ export async function historyFor(
       await pushToolImages(history, unavailable, toolImages);
       toolImages = [];
     }
-    history.push(await chatMessageFor(m, unavailable, fresh));
+    const outgoing = earlier.has(m.id) ? { ...m, content: earlierReplyContent(m) } : m;
+    history.push(await chatMessageFor(outgoing, unavailable, fresh));
   }
   if (toolImages.length > 0) await pushToolImages(history, unavailable, toolImages);
   return { history, unavailable };

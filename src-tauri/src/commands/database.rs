@@ -71,6 +71,7 @@ pub async fn load_sessions(
         message::Entity::find()
             .filter(message::Column::SessionId.is_in(&session_ids))
             .order_by_asc(message::Column::CreatedAt)
+            .order_by_asc(message::Column::Id)
             .all(&*db)
             .await
             .map_err(|e| e.to_string())?
@@ -299,23 +300,86 @@ pub async fn save_message(
     Ok(())
 }
 
+/// Refused when a summary row is deleted or a message that a summary covers.
+const REFUSE_SUMMARY_ROW: &str = "A conversation summary cannot be deleted.";
+const REFUSE_COVERED: &str = "This message is covered by a summary and cannot be deleted.";
+
+/// Deletes one message and the errors attached to it. A message covered by a summary cannot be
+/// deleted. A missing message is a no-op.
 #[tauri::command]
 pub async fn delete_message(
     db: tauri::State<'_, DatabaseConnection>,
     id: String,
 ) -> Result<(), String> {
-    // Errors attached to the reply go with it.
+    delete_message_rows(&db, &id).await
+}
+
+/// The guarded delete behind `delete_message`: check, then remove the message and its errors in one
+/// transaction.
+async fn delete_message_rows(db: &DatabaseConnection, id: &str) -> Result<(), String> {
     let txn = db.begin().await.map_err(|e| e.to_string())?;
+    if let Some(target) = message::Entity::find_by_id(id)
+        .one(&txn)
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        let ordered = session_messages_in_order(&txn, &target.session_id).await?;
+        check_deletable(id, &ordered)?;
+    }
+    // Errors attached to the reply go with it.
     chat_error::Entity::delete_many()
-        .filter(chat_error::Column::MessageId.eq(&id))
+        .filter(chat_error::Column::MessageId.eq(id))
         .exec(&txn)
         .await
         .map_err(|e| e.to_string())?;
-    message::Entity::delete_by_id(&id)
+    message::Entity::delete_by_id(id)
         .exec(&txn)
         .await
         .map_err(|e| e.to_string())?;
     txn.commit().await.map_err(|e| e.to_string())
+}
+
+/// The messages of a session in load order: created_at, then id. Read inside the delete's
+/// transaction so the check and the delete see the same rows.
+async fn session_messages_in_order(
+    txn: &impl ConnectionTrait,
+    session_id: &str,
+) -> Result<Vec<message::Model>, String> {
+    message::Entity::find()
+        .filter(message::Column::SessionId.eq(session_id))
+        .order_by_asc(message::Column::CreatedAt)
+        .order_by_asc(message::Column::Id)
+        .all(txn)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Decides whether message `id` may be deleted. `ordered` holds the session's messages in load
+/// order. A summary row is never deleted. A message is covered when it sits at or before the last
+/// message any summary in the session covers, so it cannot be deleted either. An id that is not in
+/// `ordered` is allowed, since the delete then does nothing.
+fn check_deletable(id: &str, ordered: &[message::Model]) -> Result<(), String> {
+    let Some(target) = ordered.iter().position(|m| m.id == id) else {
+        return Ok(());
+    };
+    if is_summary_row(&ordered[target]) {
+        return Err(REFUSE_SUMMARY_ROW.to_owned());
+    }
+    let covered_through = ordered
+        .iter()
+        .filter(|m| is_summary_row(m))
+        .filter_map(|s| s.covers_through_id.as_deref())
+        .filter_map(|covers| ordered.iter().position(|m| m.id == covers))
+        .max();
+    match covered_through {
+        Some(last) if target <= last => Err(REFUSE_COVERED.to_owned()),
+        _ => Ok(()),
+    }
+}
+
+/// True for a compaction summary row.
+fn is_summary_row(message: &message::Model) -> bool {
+    message.kind == "system" && message.system_type.as_deref() == Some(SYSTEM_TYPE_SUMMARY)
 }
 
 // ─── Chat Errors ───────────────────────────────────────────────────
@@ -673,6 +737,224 @@ mod facet_tests {
         assert!(validate_facets(Some("[]")).is_err());
         assert!(validate_facets(Some("\"text\"")).is_err());
         assert!(validate_facets(Some("{not json")).is_err());
+    }
+}
+
+#[cfg(test)]
+mod delete_guard_tests {
+    use super::{check_deletable, delete_message_rows, session_messages_in_order};
+    use crate::entities::{chat_session, message};
+    use crate::migrations::Migrator;
+    use sea_orm::{
+        ActiveModelTrait, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection,
+        EntityTrait, Set, Statement,
+    };
+    use sea_orm_migration::MigratorTrait;
+
+    /// A chat message, created at `created_at`.
+    fn chat(id: &str, created_at: i64) -> message::Model {
+        message::Model {
+            id: id.into(),
+            session_id: "s".into(),
+            role: "user".into(),
+            content: "text".into(),
+            model_id: None,
+            created_at,
+            finish_reason: None,
+            time_to_first_token_ms: None,
+            total_time_ms: None,
+            token_count: None,
+            prompt_chars: None,
+            attachments: None,
+            prompt_tokens: None,
+            completion_tokens: None,
+            kind: "text".into(),
+            system_type: None,
+            compute: None,
+            covers_through_id: None,
+            tool_calls: None,
+            tool_record: None,
+        }
+    }
+
+    /// A summary row, created at `created_at`, covering the messages through `covers`.
+    fn summary(id: &str, created_at: i64, covers: &str) -> message::Model {
+        message::Model {
+            kind: "system".into(),
+            system_type: Some("summary".into()),
+            covers_through_id: Some(covers.into()),
+            role: "system".into(),
+            ..chat(id, created_at)
+        }
+    }
+
+    /// Session order: a question and answer, a summary covering them, then a new question.
+    fn summarised_session() -> Vec<message::Model> {
+        vec![
+            chat("u1", 1),
+            chat("a1", 2),
+            summary("sum", 3, "a1"),
+            chat("u2", 4),
+        ]
+    }
+
+    #[test]
+    fn a_summary_row_is_refused() {
+        let ordered = summarised_session();
+        assert!(check_deletable("sum", &ordered).is_err());
+    }
+
+    #[test]
+    fn a_message_covered_by_a_summary_is_refused() {
+        let ordered = summarised_session();
+        assert!(check_deletable("u1", &ordered).is_err());
+        assert!(check_deletable("a1", &ordered).is_err());
+    }
+
+    #[test]
+    fn a_message_after_the_summary_is_allowed() {
+        let ordered = summarised_session();
+        assert!(check_deletable("u2", &ordered).is_ok());
+    }
+
+    #[test]
+    fn a_session_without_summaries_is_allowed() {
+        let ordered = vec![chat("u1", 1), chat("a1", 2)];
+        assert!(check_deletable("u1", &ordered).is_ok());
+        assert!(check_deletable("a1", &ordered).is_ok());
+    }
+
+    #[test]
+    fn with_two_summaries_the_later_one_decides_how_far_coverage_reaches() {
+        // The first summary covers a1; the second covers a2 and so reaches further.
+        let ordered = vec![
+            chat("u1", 1),
+            chat("a1", 2),
+            summary("sum1", 3, "a1"),
+            chat("u2", 4),
+            chat("a2", 5),
+            summary("sum2", 6, "a2"),
+            chat("u3", 7),
+        ];
+        assert!(check_deletable("u1", &ordered).is_err());
+        assert!(check_deletable("u2", &ordered).is_err());
+        assert!(check_deletable("a2", &ordered).is_err());
+        assert!(check_deletable("sum1", &ordered).is_err());
+        assert!(check_deletable("u3", &ordered).is_ok());
+    }
+
+    #[test]
+    fn a_summary_covering_a_message_outside_the_session_covers_nothing() {
+        let ordered = vec![chat("u1", 1), summary("sum", 2, "gone")];
+        assert!(check_deletable("u1", &ordered).is_ok());
+    }
+
+    #[test]
+    fn a_missing_message_is_allowed_so_the_delete_is_a_no_op() {
+        let ordered = summarised_session();
+        assert!(check_deletable("missing", &ordered).is_ok());
+        assert!(check_deletable("missing", &[]).is_ok());
+    }
+
+    /// A fresh database file in the temp dir, removed when the test ends.
+    struct TempDb(std::path::PathBuf);
+
+    impl TempDb {
+        fn new(name: &str) -> Self {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0);
+            Self(std::env::temp_dir().join(format!(
+                "localgenie-{name}-{}-{nanos}.db",
+                std::process::id()
+            )))
+        }
+
+        fn url(&self) -> String {
+            format!("sqlite:{}?mode=rwc", self.0.display())
+        }
+    }
+
+    impl Drop for TempDb {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    async fn insert(db: &DatabaseConnection, row: message::Model) {
+        message::ActiveModel {
+            id: Set(row.id),
+            session_id: Set(row.session_id),
+            role: Set(row.role),
+            content: Set(row.content),
+            created_at: Set(row.created_at),
+            kind: Set(row.kind),
+            system_type: Set(row.system_type),
+            covers_through_id: Set(row.covers_through_id),
+            ..Default::default()
+        }
+        .insert(db)
+        .await
+        .expect("insert message");
+    }
+
+    #[tokio::test]
+    async fn delete_refuses_covered_rows_and_keeps_later_ones() {
+        let tmp = TempDb::new("delete-guard");
+        let url = tmp.url();
+        let db = Database::connect(&url).await.expect("connect");
+        db.execute(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            "PRAGMA foreign_keys = ON".to_owned(),
+        ))
+        .await
+        .expect("foreign keys");
+        Migrator::up(&db, None).await.expect("migrations apply");
+
+        chat_session::ActiveModel {
+            id: Set("s".into()),
+            title: Set("t".into()),
+            model_id: Set(None),
+            context_chars: Set(0),
+            created_at: Set(1),
+            updated_at: Set(1),
+            pinned: Set(false),
+            settings_overrides: Set(None),
+        }
+        .insert(&db)
+        .await
+        .expect("insert session");
+        for row in summarised_session() {
+            insert(&db, row).await;
+        }
+
+        let ordered = session_messages_in_order(&db, "s").await.expect("load");
+        assert_eq!(ordered.len(), 4);
+        assert!(check_deletable("a1", &ordered).is_err());
+
+        delete_message_rows(&db, "a1").await.expect_err("covered");
+        delete_message_rows(&db, "sum")
+            .await
+            .expect_err("summary row");
+        delete_message_rows(&db, "u2")
+            .await
+            .expect("after the summary");
+        delete_message_rows(&db, "missing")
+            .await
+            .expect("missing is a no-op");
+
+        let left = message::Entity::find()
+            .all(&db)
+            .await
+            .expect("query")
+            .into_iter()
+            .map(|m| m.id)
+            .collect::<Vec<_>>();
+        assert!(left.contains(&"u1".to_owned()));
+        assert!(left.contains(&"a1".to_owned()));
+        assert!(left.contains(&"sum".to_owned()));
+        assert!(!left.contains(&"u2".to_owned()));
     }
 }
 

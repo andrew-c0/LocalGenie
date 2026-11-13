@@ -49,19 +49,19 @@ export interface ContextUsage {
 
 /**
  * Context in use: everything the next request carries, from the newest summary on. A reply counts
- * the completion tokens the server reported for it (thinking included, since it is sent back with
- * the history); every other message is estimated from its text. The server's prompt count is not
+ * the completion tokens the server reported for it, thinking included. Only the current turn sends
+ * its thinking back (earlier replies go out as their answers, see `historyFor`), so this can count
+ * more than is sent. Every other message is estimated from its text. The server's prompt count is not
  * used: it only covers the tokens processed for that request, and a reused KV cache leaves the
  * earlier messages out, so it is far below the real context.
  *
  * With a summary, the context is the summary plus the messages after it. Messages before it are no
- * longer sent.
+ * longer sent. System lines and error lines are not sent either, so they add nothing.
  */
 export function contextUsageOf(messages: Message[]): ContextUsage {
   const summaryAt = latestSummaryIndex(messages);
   const summary = summaryAt >= 0 ? messages[summaryAt] : null;
-  // System lines are not sent to the model, so they add nothing to the context.
-  const sent = messages.slice(summaryAt + 1).filter((m) => !isSystemEvent(m));
+  const sent = messages.slice(summaryAt + 1).filter((m) => !isSystemEvent(m) && !m.isError);
 
   let tokens = summary ? Math.round(summary.content.length / CHARS_PER_TOKEN) : 0;
   for (const message of sent) {

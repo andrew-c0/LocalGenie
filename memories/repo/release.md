@@ -5,7 +5,7 @@ Windows ARM64 only, NSIS installer. Workflows: `.github/workflows/ci.yml` (every
 Confirmed on GitHub (2026-11-10/11): CI passes on `windows-11-arm` (about 20 min). The Release run for tag `v0.1.1` succeeded (about 30 min) and created the release "LocalGenie v0.1.1" with `LocalGenie_0.1.1_arm64-setup.exe`, its `.sig` and `latest.json`; the release is published and marked Latest. The repo is public and both signing secrets are set. The installed app (already 0.1.1) reads the real feed over TLS (native-tls) and gets a valid `latest.json`.
 
 ## Cut a release
-Shortcut: `npm run release -- <patch|minor|major|x.y.z>` (add `--dry-run` to only check) or the `/release` skill (`.claude/skills/release/SKILL.md`, user-invoked only). The script checks `main` and a clean tree, bumps the version files, refreshes `Cargo.lock`, commits "Release X.Y.Z", pushes, then tags `vX.Y.Z` and pushes the tag. Only the dry run's clean-tree refusal has been run; the full command and the skill are not yet tested end to end.
+Shortcut: `npm run release -- <patch|minor|major|x.y.z>` (add `--dry-run` to only check) or the `/release` skill (`.claude/skills/release/SKILL.md`, user-invoked only). The script checks `main` and a clean tree, bumps the version files, refreshes `Cargo.lock`, commits "Release X.Y.Z", pushes, then tags `vX.Y.Z` and pushes the tag. `npm run release -- 0.1.2` was run end to end on 2026-11-13: it made the version bump commit febb07b, pushed tag v0.1.2, and the Release workflow started. The draft is not published yet (step 5). The `/release` skill itself has not been run.
 
 Manual version:
 1. `npm run version:bump -- patch` (or `minor`, `major`, or an exact `x.y.z`). This sets `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`.
@@ -39,9 +39,9 @@ The local feed is in `scripts/updater-test/` (tested 2026-11-10: 0.1.0 updated t
 4. Run the older app, check for updates in Settings > Application & Runtime, install, and confirm the app restarts as the newer version.
 
 ## Not yet verified
-- Downloading and installing an update from the GitHub feed. This needs a newer published release (e.g. 0.1.2) and an older install (0.1.1 or earlier) that reads it.
+- Downloading and installing an update from the GitHub feed. This needs the v0.1.2 draft published (it is not yet) and an older install (0.1.1 or earlier) that reads it.
 - A non-debug installer (the 0.1.1 installer was built by the workflow; its install and update path is not yet tested in the app).
-- The `/release` skill and `npm run release` end to end.
+- The `/release` skill end to end. (`npm run release` ran end to end for 0.1.2, see "Cut a release".)
 
 ## Skipped for now
 - Authenticode code signing: SmartScreen warns on the installer. The disabled placeholder step is in `release.yml`; when a certificate exists, sign through `bundle.windows.signCommand` so the updater signature covers the signed installer.

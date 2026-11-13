@@ -65,6 +65,17 @@ describe("contextUsageOf", () => {
     expect(contextUsageOf([reply("r1", undefined, "y".repeat(80))]).total).toBe(20);
   });
 
+  it("does not count an error line, which is not sent", () => {
+    const error: Message = {
+      id: "e1",
+      role: "assistant",
+      content: "x".repeat(400),
+      timestamp: 2,
+      isError: true,
+    };
+    expect(contextUsageOf([user("u1", 40), error]).total).toBe(10);
+  });
+
   describe("with a summary", () => {
     const summary = (content: string): Message => ({
       id: "s",

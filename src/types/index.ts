@@ -190,6 +190,10 @@ export interface ChatSettingsOverrides {
   seed?: number;
   /** Replaces the model's system prompt for this chat when present, even when empty. */
   systemBlocks?: SystemPromptBlock[];
+  /** Summarises this chat automatically: true on, false off, absent to use the app setting. */
+  compaction?: boolean;
+  /** The share of the window (50 to 90, in percent) that triggers a summary here. Absent uses the app threshold. */
+  compactionThreshold?: number;
 }
 
 export interface ServerStatus {

@@ -19,9 +19,13 @@ import { withSystemBlocks } from "../../../utils/systemPrompt";
 import SystemPromptEditor from "../../ModelSettings/SystemPromptEditor/SystemPromptEditor";
 import { ConfirmDialog } from "../../ui/ConfirmDialog/ConfirmDialog";
 import { Meta } from "../../ui/Typography/Typography";
+import { CompactionOverride } from "../CompactionOverride/CompactionOverride";
 import "./ChatSettingsDrawer.css";
 
-type NumberKey = Exclude<keyof ChatSettingsOverrides, "systemBlocks">;
+type NumberKey = Exclude<
+  keyof ChatSettingsOverrides,
+  "systemBlocks" | "compaction" | "compactionThreshold"
+>;
 
 interface NumberField {
   key: NumberKey;
@@ -163,6 +167,11 @@ export function ChatSettingsDrawer({ sessionId, onClose }: ChatSettingsDrawerPro
                 </Field>
               );
             })}
+
+            <CompactionOverride
+              value={draft}
+              onChange={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
+            />
 
             <section className="chat-settings__prompt">
               <Field

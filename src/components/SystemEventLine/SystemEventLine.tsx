@@ -14,7 +14,7 @@ interface SystemEventLineProps {
 }
 
 /** The line shown for a summary row. Its content is the summary, which opens under the line. */
-const SUMMARY_TEXT = "Conversation summarised automatically";
+const SUMMARY_TEXT = "Conversation summarised";
 
 /** The text of a model-change line, from its content fields. */
 function modelChangedText(fields: Record<string, unknown>): string | null {

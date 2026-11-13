@@ -141,19 +141,37 @@ export function summaryItemsOf(messages: Message[]): CompactMessage[] {
 }
 
 /**
- * What to summarise for a new prompt: the messages before that prompt, from the newest summary on.
- * The previous summary goes in as well, so a later summary folds it in and summaries do not chain.
- * A prompt that is not in `messages` counts as not yet added, so every message is before it.
+ * The id of the newest message a summary can cover: one that is neither a system line nor an error.
+ * An error is not part of the conversation, so it never becomes the end of a summary. Null when none.
  */
-export function summaryInputFor(messages: Message[], newPromptId: string): SummaryInput {
-  const before = messagesBefore(messages, newPromptId);
-  const summary = latestSummary(before);
-  const items = summaryItemsOf(messagesAfterSummary(before));
+export function lastSummarisableId(messages: Message[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (!isSystemEvent(m) && !m.isError) return m.id;
+  }
+  return null;
+}
+
+/**
+ * What to summarise for a conversation as it stands: the messages from the newest summary on, folded
+ * into that summary. The previous summary goes in as well, so a later summary folds it in and summaries
+ * do not chain.
+ */
+export function summaryInputBefore(messages: Message[]): SummaryInput {
+  const summary = latestSummary(messages);
   return {
     previousSummary: summary ? summary.content : null,
-    items,
-    coversThroughId: before.length > 0 ? before[before.length - 1].id : null,
+    items: summaryItemsOf(messagesAfterSummary(messages)),
+    coversThroughId: lastSummarisableId(messages),
   };
+}
+
+/**
+ * What to summarise for a new prompt: the messages before that prompt. A prompt that is not in
+ * `messages` counts as not yet added, so every message is before it.
+ */
+export function summaryInputFor(messages: Message[], newPromptId: string): SummaryInput {
+  return summaryInputBefore(messagesBefore(messages, newPromptId));
 }
 
 export interface CompactionCheck {
@@ -189,6 +207,14 @@ export function systemPromptWithSummary(systemPrompt: string, summary: string | 
   return systemPrompt.trim() === "" ? block : `${systemPrompt}\n\n${block}`;
 }
 
+/**
+ * Where a summary row goes. Before the prompt that triggered it, or at the end of the conversation when
+ * the user asked for it (Compact now).
+ */
+export type SummaryPlacement =
+  | { kind: "beforePrompt"; prompt: Pick<Message, "id" | "timestamp"> }
+  | { kind: "atEnd"; lastTimestamp: number; now: number };
+
 export interface SummaryRowInput {
   /**
    * The session the row belongs to. A `Message` does not carry it, so the caller saves the row with
@@ -197,26 +223,35 @@ export interface SummaryRowInput {
   sessionId: string;
   summary: string;
   coversThroughId: string | null;
-  /** The prompt that triggered the summary. The row goes just before it. */
-  beforeMessage: Pick<Message, "timestamp">;
+  placement: SummaryPlacement;
+}
+
+/** The id of the message a summary row goes before, or null when it goes at the end. */
+export function summaryBeforeId(placement: SummaryPlacement): string | null {
+  return placement.kind === "beforePrompt" ? placement.prompt.id : null;
+}
+
+/**
+ * The time of a summary row. Before a prompt it is one millisecond earlier, so deleting or retrying that
+ * prompt keeps the row. At the end it is after the newest message and not before now, so it sorts last.
+ */
+function summaryTimeOf(placement: SummaryPlacement): number {
+  if (placement.kind === "beforePrompt") return placement.prompt.timestamp - 1;
+  return Math.max(placement.now, placement.lastTimestamp + 1);
 }
 
 /**
  * The summary row for a conversation. It is a system line, so the transcript stays user and assistant
- * only. Its time is one millisecond before the prompt, so deleting or retrying that prompt keeps it.
+ * only. The row is stored by the caller at `summaryBeforeId(placement)`, or at the end.
  */
-export function summaryRowFor({
-  summary,
-  coversThroughId,
-  beforeMessage,
-}: SummaryRowInput): Message {
+export function summaryRowFor({ summary, coversThroughId, placement }: SummaryRowInput): Message {
   return {
     id: crypto.randomUUID(),
     role: "system",
     kind: "system",
     systemType: SUMMARY_SYSTEM_TYPE,
     content: summary,
-    timestamp: beforeMessage.timestamp - 1,
+    timestamp: summaryTimeOf(placement),
     coversThroughId,
   };
 }

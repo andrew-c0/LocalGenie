@@ -86,20 +86,56 @@ const CHAT_OVERRIDE_KEYS: &[SettingKey] = &[
     SettingKey::SystemBlocks,
 ];
 
+/// Chat-only override: `true` compacts this chat automatically, `false` never does. Absent uses
+/// the app setting. Not a model setting.
+const COMPACTION_KEY: &str = "compaction";
+/// Chat-only override: the percent of the window that triggers a compaction. Absent uses the app
+/// threshold. Not a model setting.
+const COMPACTION_THRESHOLD_KEY: &str = "compactionThreshold";
+const COMPACTION_THRESHOLD_MIN: i64 = 50;
+const COMPACTION_THRESHOLD_MAX: i64 = 90;
+
 /// Checks a chat's overrides: a JSON object whose keys are all chat-overridable and whose values
-/// have the type of their setting. Nothing is stored when any check fails.
+/// have the type of their setting. The compaction keys are checked on their own: `compaction` is a
+/// boolean and `compactionThreshold` a whole number from 50 to 90. Nothing is stored when any
+/// check fails.
 pub fn validate_chat_overrides(text: &str) -> Result<(), String> {
     let value: Value = serde_json::from_str(text).map_err(|e| format!("chat settings: {e}"))?;
     let object = value
         .as_object()
         .ok_or("chat settings must be a JSON object")?;
     for (name, value) in object {
-        let key = SettingKey::from_name(name)
-            .filter(|key| CHAT_OVERRIDE_KEYS.contains(key))
-            .ok_or_else(|| format!("{name} cannot be set per chat"))?;
-        key.validate(value)?;
+        match name.as_str() {
+            COMPACTION_KEY => validate_compaction(value)?,
+            COMPACTION_THRESHOLD_KEY => validate_compaction_threshold(value)?,
+            _ => {
+                let key = SettingKey::from_name(name)
+                    .filter(|key| CHAT_OVERRIDE_KEYS.contains(key))
+                    .ok_or_else(|| format!("{name} cannot be set per chat"))?;
+                key.validate(value)?;
+            }
+        }
     }
     Ok(())
+}
+
+/// `compaction` must be a boolean. Null is refused too: the key is left out to use the app setting.
+fn validate_compaction(value: &Value) -> Result<(), String> {
+    if value.is_boolean() {
+        Ok(())
+    } else {
+        Err(format!("{COMPACTION_KEY}: must be true or false"))
+    }
+}
+
+/// `compactionThreshold` must be a whole number from 50 to 90. A fraction such as 70.5 is refused.
+fn validate_compaction_threshold(value: &Value) -> Result<(), String> {
+    match value.as_i64() {
+        Some(n) if (COMPACTION_THRESHOLD_MIN..=COMPACTION_THRESHOLD_MAX).contains(&n) => Ok(()),
+        _ => Err(format!(
+            "{COMPACTION_THRESHOLD_KEY}: must be a whole number from {COMPACTION_THRESHOLD_MIN} to {COMPACTION_THRESHOLD_MAX}"
+        )),
+    }
 }
 
 /// One part of a system prompt, as the editor stores it. Mirrors `SystemPromptBlock` in the
@@ -354,5 +390,36 @@ mod tests {
         assert!(validate_chat_overrides(r#"{"think":true}"#).is_err());
         assert!(validate_chat_overrides(r#"{"temperature":"hot"}"#).is_err());
         assert!(validate_chat_overrides("[1,2]").is_err());
+    }
+
+    #[test]
+    fn chat_overrides_accept_compaction_flag_and_threshold() {
+        assert!(validate_chat_overrides(r#"{"compaction":true}"#).is_ok());
+        assert!(validate_chat_overrides(r#"{"compaction":false}"#).is_ok());
+        assert!(validate_chat_overrides(r#"{"compactionThreshold":50}"#).is_ok());
+        assert!(validate_chat_overrides(r#"{"compactionThreshold":90}"#).is_ok());
+        assert!(validate_chat_overrides(r#"{"compaction":true,"compactionThreshold":70}"#).is_ok());
+    }
+
+    #[test]
+    fn chat_overrides_refuse_a_non_boolean_compaction() {
+        assert!(validate_chat_overrides(r#"{"compaction":"yes"}"#).is_err());
+        assert!(validate_chat_overrides(r#"{"compaction":1}"#).is_err());
+        assert!(validate_chat_overrides(r#"{"compaction":null}"#).is_err());
+    }
+
+    #[test]
+    fn chat_overrides_refuse_a_threshold_outside_50_to_90_or_not_whole() {
+        assert!(validate_chat_overrides(r#"{"compactionThreshold":49}"#).is_err());
+        assert!(validate_chat_overrides(r#"{"compactionThreshold":91}"#).is_err());
+        assert!(validate_chat_overrides(r#"{"compactionThreshold":70.5}"#).is_err());
+        assert!(validate_chat_overrides(r#"{"compactionThreshold":70.0}"#).is_err());
+        assert!(validate_chat_overrides(r#"{"compactionThreshold":"70"}"#).is_err());
+    }
+
+    #[test]
+    fn compaction_keys_are_chat_only_not_model_settings() {
+        assert_eq!(SettingKey::from_name("compaction"), None);
+        assert_eq!(SettingKey::from_name("compactionThreshold"), None);
     }
 }

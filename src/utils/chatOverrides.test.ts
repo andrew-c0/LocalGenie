@@ -39,12 +39,27 @@ describe("cleanOverrides", () => {
   it("drops keys that are set to undefined", () => {
     expect(cleanOverrides({ temperature: 0.5, topP: undefined })).toEqual({ temperature: 0.5 });
   });
+
+  it("keeps the compaction overrides, including an off switch", () => {
+    expect(cleanOverrides({ compaction: false, compactionThreshold: 85 })).toEqual({
+      compaction: false,
+      compactionThreshold: 85,
+    });
+  });
+});
+
+describe("applyChatOverrides with compaction", () => {
+  it("does not copy the compaction overrides into the model's settings", () => {
+    const merged = applyChatOverrides(model, { compaction: true, compactionThreshold: 60 });
+    expect(merged).toEqual(model);
+  });
 });
 
 describe("overrideCount", () => {
-  it("counts the settings a chat sets", () => {
+  it("counts the settings a chat sets, compaction included", () => {
     expect(overrideCount(undefined)).toBe(0);
     expect(overrideCount({ temperature: 0.5, seed: 7 })).toBe(2);
+    expect(overrideCount({ compaction: false })).toBe(1);
   });
 });
 

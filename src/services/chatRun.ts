@@ -1,4 +1,4 @@
-import { messagesOf, useChatStore } from "../stores/chatStore";
+import { messagesOf, overridesOf, useChatStore } from "../stores/chatStore";
 import { defaultSettings, useModelStore } from "../stores/modelStore";
 import type {
   ChatSettings,
@@ -86,10 +86,10 @@ export async function resolveModelRun(sessionId: string): Promise<ModelRun> {
   const key = modelId ? modelSettingsKey(modelId) : null;
   const { saved, nativeContext } = await savedSettingsFor(key);
   // The chat's own overrides replace the model's settings for this conversation.
-  const overrides = useChatStore
-    .getState()
-    .sessions.find((s) => s.id === sessionId)?.settingsOverrides;
-  const stored = applyChatOverrides(withSystemBlocks({ ...defaultSettings, ...saved }), overrides);
+  const stored = applyChatOverrides(
+    withSystemBlocks({ ...defaultSettings, ...saved }),
+    overridesOf(sessionId),
+  );
   const model = key
     ? useModelStore.getState().models.find((m) => modelSettingsKey(m.name) === key)
     : undefined;

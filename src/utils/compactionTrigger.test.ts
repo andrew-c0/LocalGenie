@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Message } from "../types";
+import { effectiveCompaction } from "./compactionSettings";
 import { compactionDue } from "./compactionTrigger";
 
 /** A message of `chars` characters. At four characters per token, it is `chars / 4` tokens. */
@@ -75,6 +76,31 @@ describe("compactionDue", () => {
         windowTokens: 1000,
       }),
     ).toBe(false);
+  });
+
+  it("follows the chat's own switch and threshold, resolved from the app setting", () => {
+    // History 700 tokens + prompt 10 tokens: 71% of 1000. Due at 70%, not at 75%.
+    const messages = [text("a", 2800), prompt];
+    const due = (
+      app: { enabled: boolean; thresholdPercent: number },
+      overrides?: Parameters<typeof effectiveCompaction>[1],
+    ) => {
+      const settings = effectiveCompaction(app, overrides);
+      return compactionDue({
+        enabled: settings.enabled,
+        thresholdPercent: settings.thresholdPercent,
+        messages,
+        prompt,
+        windowTokens: 1000,
+      });
+    };
+    const appOff = { enabled: false, thresholdPercent: 70 };
+    const appOn = { enabled: true, thresholdPercent: 70 };
+    expect(due(appOff)).toBe(false);
+    expect(due(appOff, { compaction: true })).toBe(true);
+    expect(due(appOn, { compaction: false })).toBe(false);
+    expect(due(appOn, { compactionThreshold: 75 })).toBe(false);
+    expect(due(appOn, { compactionThreshold: 50 })).toBe(true);
   });
 
   it("counts the tokens of attached text files in the prompt", () => {

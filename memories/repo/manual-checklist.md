@@ -505,7 +505,7 @@ Not yet run:
 ## Conversation compaction (tested by the user on 2026-11-02: the main flow with a 2048 window, the summary row and a second summary; the items below were not ticked one by one)
 - [ ] Settings > Compact long conversations: off by default; the threshold slider (50 to 90, default 70) appears only when the switch is on; Save persists after a restart.
 - [ ] With it off, a prompt over the context shows the usual error. No summary, no button.
-- [ ] With it on, a small context (for example nctx 2048) and a chat that passes the threshold: "Summarising the conversation…" shows, input is disabled, then a "Conversation summarised automatically" line appears just before the prompt and the reply arrives.
+- [ ] With it on, a small context (for example nctx 2048) and a chat that passes the threshold: "Summarising the conversation…" shows, input is disabled, then a "Conversation summarised" line appears just before the prompt and the reply arrives.
 - [ ] Clicking that line (mouse and keyboard) opens and closes the summary text. The summary has no thinking text and reads as bullet points.
 - [ ] Delete and Retry are gone on the summarised messages and on the summary line; messages after it keep Delete; Retry is only on the last user message.
 - [ ] Deleting or retrying the prompt that triggered the summary keeps the summary.
@@ -514,3 +514,14 @@ Not yet run:
 - [ ] Overflow with the setting on: a prompt over the window summarises and retries once; when it still does not fit, the error shows.
 - [ ] Turning the setting off keeps existing summaries in effect and stops new ones.
 - [ ] Check the server logs: the request after a summary carries the summary in the system prompt and the model does not reload.
+
+## Conversation compaction follow-ups (committed after febb07b, 2026-11-13; not tested by the user yet)
+- [ ] Error rows: after a reply that failed, send another prompt. The server log's request has no error text, and the context ring does not count the error line.
+- [ ] Stripped thinking: with thinking on, a reply with a think block, then a second prompt. In the server log the earlier assistant turn has only its answer, and the new reply still shows its own thinking. The reply after the change may be slower (the server re-reads earlier history).
+- [ ] Per-chat switch: chat settings > Conversation compaction. "On" summarises that chat at its threshold even when the app setting is off; "Off" never summarises that chat while the app setting is on; "Use app setting" shows the app's current state in its hint. Save and reopen the chat: the choice stays.
+- [ ] Per-chat threshold: with "On", untick "Use the app threshold" and set 50; the chat summarises earlier than with the app's 70 (use a small nctx). Ticking the box again follows the app threshold.
+- [ ] Reset to model settings clears the compaction choice back to "Use app setting".
+- [ ] Compact now, with the switch off: a model loaded, the server running and new messages since the last summary. The confirm dialog shows; Compact writes a "Conversation summarised" line at the end of the chat; the covered messages show no Delete.
+- [ ] Compact now is disabled, with its reason as the tooltip, when there is no model, the server is stopped, a reply is streaming, or nothing is new since the last summary.
+- [ ] Compact now fails (for example the server stops) or is stopped with the Stop button: a failure shows "Summary failed"; either way the conversation is unchanged.
+- [ ] After a restart, the summary line stays at the end and the transcript order matches the order before the restart. The database refusal of a covered message is not reachable from the UI; it is covered by `cargo test` (`delete_refuses_covered_rows_and_keeps_later_ones`), not run in this sync.

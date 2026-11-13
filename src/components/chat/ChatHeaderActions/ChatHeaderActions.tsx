@@ -1,6 +1,12 @@
 import { CounterBadge, Toolbar, ToolbarButton, ToolbarDivider } from "@fluentui/react-components";
-import { EditRegular, MoreHorizontalRegular, SettingsRegular } from "@fluentui/react-icons";
+import {
+  ArrowSyncRegular,
+  EditRegular,
+  MoreHorizontalRegular,
+  SettingsRegular,
+} from "@fluentui/react-icons";
 import { useState } from "react";
+import { useCompactNow } from "../../../hooks/useCompactNow";
 import { useContextWindow } from "../../../hooks/useContextWindow";
 import { useSessionActions } from "../../../hooks/useSessionActions";
 import { useModelStore } from "../../../stores/modelStore";
@@ -9,6 +15,7 @@ import { overrideCount } from "../../../utils/chatOverrides";
 import { contextUsageOf } from "../../../utils/contextUsage";
 import { formatCount } from "../../../utils/format";
 import { BreadcrumbActions } from "../../ui/Breadcrumbs/BreadcrumbActions";
+import { ConfirmDialog } from "../../ui/ConfirmDialog/ConfirmDialog";
 import { RenameDialog } from "../../ui/RenameDialog/RenameDialog";
 import { Meta } from "../../ui/Typography/Typography";
 import { ChatSettingsDrawer } from "../ChatSettingsDrawer/ChatSettingsDrawer";
@@ -23,16 +30,18 @@ interface ChatHeaderActionsProps {
 
 /**
  * The open conversation's controls, shown at the end of the breadcrumb row: context usage against the
- * model's window, then rename, chat settings and the conversation menu. The dialogs and the settings drawer
- * sit outside the portal, since they portal themselves and keep their state here.
+ * model's window, then Compact now, rename, chat settings and the conversation menu. The dialogs and the
+ * settings drawer sit outside the portal, since they portal themselves and keep their state here.
  */
 export function ChatHeaderActions({ session }: ChatHeaderActionsProps) {
   const actions = useSessionActions();
   const activeModelId = useModelStore((s) => s.activeModelId);
   const contextWindow = useContextWindow();
+  const compactNow = useCompactNow(session);
   const [renaming, setRenaming] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingCompact, setConfirmingCompact] = useState(false);
 
   // An estimate of what the next request carries. Text files are drawn in their own colour.
   const { total: usedTokens, fileTokens } = contextUsageOf(session.messages);
@@ -61,6 +70,14 @@ export function ChatHeaderActions({ session }: ChatHeaderActionsProps) {
             </Meta>
           )}
           <Toolbar aria-label="Conversation actions">
+            <ToolbarButton
+              icon={<ArrowSyncRegular />}
+              title={compactNow.blocker ?? "Compact now"}
+              aria-label="Compact now"
+              disabled={compactNow.blocker !== null}
+              onClick={() => setConfirmingCompact(true)}
+            />
+            <ToolbarDivider />
             <ToolbarButton
               icon={<EditRegular />}
               title="Rename conversation"
@@ -112,6 +129,18 @@ export function ChatHeaderActions({ session }: ChatHeaderActionsProps) {
             setRenaming(false);
           }}
           onCancel={() => setRenaming(false)}
+        />
+      )}
+      {confirmingCompact && (
+        <ConfirmDialog
+          title="Compact this conversation now?"
+          message="The earlier messages are replaced by a summary for the model. The summary is written now, with the loaded model. This is permanent: it cannot be undone, and the covered messages cannot be deleted or retried."
+          confirmLabel="Compact"
+          onConfirm={() => {
+            setConfirmingCompact(false);
+            compactNow.compact();
+          }}
+          onCancel={() => setConfirmingCompact(false)}
         />
       )}
       {confirmingDelete && (

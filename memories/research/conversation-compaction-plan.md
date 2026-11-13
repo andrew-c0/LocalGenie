@@ -1,6 +1,8 @@
 # Conversation compaction (optional)
 
-Plan, updated 2026-11-01 with the user's decisions. Research only; nothing is built. Waiting for the user's approval of the points under "Still to confirm".
+Plan, updated 2026-11-01 with the user's decisions.
+
+**Status (2026-11-13):** the main flow is built and was tested by the user on 2026-11-02. The later items above are built too: the per-chat override, "Compact now", stripping `<think>` from earlier replies, error rows left out of the history, and the database delete guard. The summary line now reads "Conversation summarised". Not yet run in the app; see `manual-checklist.md`. The text below is the plan as decided, not a record of the code (see `codebase-map.md`, Key flows).
 
 ## Decisions (user)
 - **Off by default.** Compaction is an option the user turns on, never automatic unless enabled.

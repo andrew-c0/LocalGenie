@@ -1,10 +1,11 @@
-import { messagesOf, useChatStore } from "../stores/chatStore";
+import { messagesOf, overridesOf, useChatStore } from "../stores/chatStore";
 import { useModelStore } from "../stores/modelStore";
 import type { AttachmentKind, Message } from "../types";
 import type { PendingAttachment } from "../utils/attachments";
 import { attachmentKindLabel, blockedKinds } from "../utils/attachments";
 import { isContextOverflow } from "../utils/chatError";
 import { canRemoveFrom } from "../utils/compaction";
+import { effectiveCompaction } from "../utils/compactionSettings";
 import { compactionDue } from "../utils/compactionTrigger";
 import { toast } from "../utils/toast";
 import { type SummaryOutcome, summariseBeforePrompt } from "./chatCompaction";
@@ -158,9 +159,10 @@ async function retryAfterOverflow(
 }
 
 /**
- * Sends a prompt that is already stored in the conversation, with its history. With compaction on, the
- * conversation is summarised first when the context reaches the threshold, and once more if the server
- * refuses the prompt as too long. With compaction off, a send is one request and the tool rounds it starts.
+ * Sends a prompt that is already stored in the conversation, with its history. With compaction on for
+ * this chat (its own setting, else the app's), the conversation is summarised first when the context
+ * reaches the chat's threshold, and once more if the server refuses the prompt as too long. With
+ * compaction off, a send is one request and the tool rounds it starts.
  */
 export async function sendPrompt(
   sessionId: string,
@@ -170,7 +172,7 @@ export async function sendPrompt(
 ): Promise<void> {
   try {
     const run = await resolveModelRun(sessionId);
-    const compaction = await getCompactionSettings();
+    const compaction = effectiveCompaction(await getCompactionSettings(), overridesOf(sessionId));
 
     let toSend: ChatMessage[] | null = history;
     if (

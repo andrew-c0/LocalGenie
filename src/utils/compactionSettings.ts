@@ -1,4 +1,4 @@
-import type { CompactionSettings } from "../types";
+import type { ChatSettingsOverrides, CompactionSettings } from "../types";
 
 /** Preference key: whether long conversations are summarised automatically. */
 export const COMPACTION_ENABLED_KEY = "compaction_enabled";
@@ -43,4 +43,42 @@ export function resolveCompactionSettings(stored: {
       ? stored.thresholdPercent
       : COMPACTION_THRESHOLD_DEFAULT,
   };
+}
+
+/** The compaction fields of a chat's overrides. */
+export type CompactionOverrides = Pick<ChatSettingsOverrides, "compaction" | "compactionThreshold">;
+
+/**
+ * The setting a chat runs with: its own switch and threshold where it sets them, else the app setting.
+ * An invalid chat threshold is ignored and the app threshold is used.
+ */
+export function effectiveCompaction(
+  app: CompactionSettings,
+  overrides: CompactionOverrides | undefined,
+): CompactionSettings {
+  const threshold = overrides?.compactionThreshold;
+  return {
+    enabled: overrides?.compaction ?? app.enabled,
+    thresholdPercent: isValidThreshold(threshold) ? threshold : app.thresholdPercent,
+  };
+}
+
+/** The three choices of a chat's compaction switch. */
+export type CompactionChoice = "app" | "on" | "off";
+
+/** The choice a chat's stored switch stands for. Absent means the app setting. */
+export function compactionChoiceOf(compaction: boolean | undefined): CompactionChoice {
+  if (compaction === undefined) return "app";
+  return compaction ? "on" : "off";
+}
+
+/** The stored switch for a choice. The app setting is stored as absent. */
+export function compactionOverrideOf(choice: CompactionChoice): boolean | undefined {
+  if (choice === "app") return undefined;
+  return choice === "on";
+}
+
+/** A short description of a compaction setting, for helper text: "on, at 70% of the window" or "off". */
+export function describeCompaction(settings: CompactionSettings): string {
+  return settings.enabled ? `on, at ${settings.thresholdPercent}% of the window` : "off";
 }

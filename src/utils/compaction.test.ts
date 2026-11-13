@@ -5,11 +5,14 @@ import {
   coveredMessageIds,
   isCoveredBySummary,
   isSummaryMessage,
+  lastSummarisableId,
   latestSummary,
   messagesAfterSummary,
   messagesBefore,
   SUMMARY_SYSTEM_TYPE,
   shouldCompact,
+  summaryBeforeId,
+  summaryInputBefore,
   summaryInputFor,
   summaryRowFor,
   systemPromptWithSummary,
@@ -185,7 +188,7 @@ describe("messagesBefore", () => {
 });
 
 describe("summaryInputFor errors", () => {
-  it("keeps error text out of the summary input", () => {
+  it("keeps error text out of the summary input, and does not cover the error", () => {
     const messages = [
       msg("u1", "user", "question"),
       msg("e1", "assistant", "⚠️ Error: Server returned 400", { isError: true }),
@@ -193,7 +196,70 @@ describe("summaryInputFor errors", () => {
     ];
     const input = summaryInputFor(messages, "u2");
     expect(input.items).toEqual([{ role: "user", content: "question" }]);
-    expect(input.coversThroughId).toBe("e1");
+    expect(input.coversThroughId).toBe("u1");
+  });
+
+  it("does not count an error as a message to summarise", () => {
+    const messages = [
+      msg("u1", "user", "question"),
+      msg("a1", "assistant", "answer"),
+      msg("e1", "assistant", "⚠️ Error: cut off", { isError: true }),
+      msg("u2", "user", "next"),
+    ];
+    expect(summaryInputFor(messages, "u2").coversThroughId).toBe("a1");
+  });
+
+  it("has nothing to summarise when the only message before the prompt is an error", () => {
+    const messages = [
+      msg("e1", "assistant", "⚠️ Error: x", { isError: true }),
+      msg("u2", "user", "next"),
+    ];
+    expect(summaryInputFor(messages, "u2")).toEqual({
+      previousSummary: null,
+      items: [],
+      coversThroughId: null,
+    });
+  });
+});
+
+describe("lastSummarisableId", () => {
+  it("is the newest message that is not a system line or an error", () => {
+    const messages = [
+      msg("a", "user", "one"),
+      msg("b", "assistant", "two"),
+      modelLine("m"),
+      msg("e", "assistant", "⚠️ Error", { isError: true }),
+    ];
+    expect(lastSummarisableId(messages)).toBe("b");
+  });
+
+  it("is null when no message qualifies", () => {
+    expect(lastSummarisableId([])).toBeNull();
+    expect(lastSummarisableId([modelLine("m")])).toBeNull();
+  });
+});
+
+describe("summaryInputBefore", () => {
+  it("summarises the whole conversation, from the newest summary on", () => {
+    const messages = [
+      msg("u1", "user", "old"),
+      summaryRow("s", "Earlier facts.", "u1"),
+      msg("u2", "user", "after"),
+      msg("a2", "assistant", "reply"),
+    ];
+    expect(summaryInputBefore(messages)).toEqual({
+      previousSummary: "Earlier facts.",
+      items: [
+        { role: "user", content: "after" },
+        { role: "assistant", content: "reply" },
+      ],
+      coversThroughId: "a2",
+    });
+  });
+
+  it("has no items when the newest summary is the last message", () => {
+    const messages = [msg("u1", "user", "old"), summaryRow("s", "Facts.", "u1")];
+    expect(summaryInputBefore(messages).items).toEqual([]);
   });
 });
 
@@ -342,7 +408,7 @@ describe("summaryRowFor", () => {
       sessionId: "session-1",
       summary: "Facts so far.",
       coversThroughId: "a1",
-      beforeMessage: { timestamp: 5000 },
+      placement: { kind: "beforePrompt", prompt: { id: "u2", timestamp: 5000 } },
     });
     expect(row).toEqual({
       id: "00000000-0000-4000-8000-000000000000",
@@ -354,7 +420,31 @@ describe("summaryRowFor", () => {
       coversThroughId: "a1",
     });
     expect(isSummaryMessage(row)).toBe(true);
+    expect(summaryBeforeId({ kind: "beforePrompt", prompt: { id: "u2", timestamp: 5000 } })).toBe(
+      "u2",
+    );
     vi.restoreAllMocks();
+  });
+
+  it("builds a row at the end, dated after the newest message and not before now", () => {
+    const row = summaryRowFor({
+      sessionId: "session-1",
+      summary: "Facts.",
+      coversThroughId: "a2",
+      placement: { kind: "atEnd", lastTimestamp: 9000, now: 8000 },
+    });
+    expect(row.timestamp).toBe(9001);
+    const later = summaryRowFor({
+      sessionId: "session-1",
+      summary: "Facts.",
+      coversThroughId: "a2",
+      placement: { kind: "atEnd", lastTimestamp: 1000, now: 8000 },
+    });
+    expect(later.timestamp).toBe(8000);
+  });
+
+  it("has no id to place it before when the row goes at the end", () => {
+    expect(summaryBeforeId({ kind: "atEnd", lastTimestamp: 1, now: 2 })).toBeNull();
   });
 });
 

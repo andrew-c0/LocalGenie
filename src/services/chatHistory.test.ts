@@ -155,3 +155,139 @@ describe("historyFor with images from tool results", () => {
     expect(unavailable).toEqual(["a.png"]);
   });
 });
+
+describe("historyFor thinking and errors", () => {
+  const user = (id: string, content: string): Message => ({
+    id,
+    role: "user",
+    content,
+    timestamp: 1,
+  });
+  const answer = (id: string, content: string): Message => ({
+    id,
+    role: "assistant",
+    content,
+    timestamp: 2,
+  });
+  const errorLine: Message = {
+    id: "e1",
+    role: "assistant",
+    content: "⚠️ Error: Server returned 400",
+    timestamp: 3,
+    isError: true,
+  };
+
+  it("sends an earlier reply without its thinking", async () => {
+    const messages = [
+      user("u1", "first"),
+      answer("a1", "<think>weighing it</think>One."),
+      user("u2", "second"),
+    ];
+
+    const { history } = await historyFor(messages);
+
+    expect(history.map((m) => m.content)).toEqual(["first", "One.", "second"]);
+  });
+
+  it("keeps the thinking of the current turn, tool rounds included", async () => {
+    const call: ChatToolCall = { id: "c1", name: "read_text_file", arguments: "{}" };
+    const toolReply: Message = {
+      id: "r1",
+      role: "assistant",
+      content: "<think>plan</think>",
+      timestamp: 3,
+      toolCalls: [call],
+    };
+    const toolResult: Message = {
+      id: "t1",
+      role: "tool",
+      kind: "tool",
+      content: "file text",
+      timestamp: 4,
+      toolRecord: {
+        callId: "c1",
+        name: "read_text_file",
+        arguments: "{}",
+        status: "ok",
+        approval: "auto",
+      },
+    };
+    const messages = [
+      user("u1", "first"),
+      answer("a1", "<think>old</think>One."),
+      user("u2", "read it"),
+      toolReply,
+      toolResult,
+      answer("a2", "<think>sum up</think>Done."),
+    ];
+
+    const { history } = await historyFor(messages);
+
+    expect(history.map((m) => m.role)).toEqual([
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "tool",
+      "assistant",
+    ]);
+    expect(history[1].content).toBe("One.");
+    expect(history[3].content).toBe("<think>plan</think>");
+    expect(history[5].content).toBe("<think>sum up</think>Done.");
+  });
+
+  it("sends the original text when an earlier answer is empty and it made no calls", async () => {
+    const messages = [
+      user("u1", "first"),
+      answer("a1", "<think>only thinking</think>"),
+      user("u2", "next"),
+    ];
+
+    const { history } = await historyFor(messages);
+
+    expect(history[1].content).toBe("<think>only thinking</think>");
+  });
+
+  it("sends an earlier reply with calls and no answer as empty text, with its calls", async () => {
+    const call: ChatToolCall = { id: "c1", name: "read_text_file", arguments: "{}" };
+    const messages: Message[] = [
+      user("u1", "first"),
+      {
+        id: "a1",
+        role: "assistant",
+        content: "<think>plan</think>",
+        timestamp: 2,
+        toolCalls: [call],
+      },
+      {
+        id: "t1",
+        role: "tool",
+        kind: "tool",
+        content: "file text",
+        timestamp: 3,
+        toolRecord: {
+          callId: "c1",
+          name: "read_text_file",
+          arguments: "{}",
+          status: "ok",
+          approval: "auto",
+        },
+      },
+      answer("a2", "Final."),
+      user("u2", "next"),
+    ];
+
+    const { history } = await historyFor(messages);
+
+    expect(history[1]).toMatchObject({ role: "assistant", content: "" });
+    expect(history[1].tool_calls).toHaveLength(1);
+  });
+
+  it("does not send an error line", async () => {
+    const messages = [user("u1", "first"), errorLine, user("u2", "second")];
+
+    const { history } = await historyFor(messages);
+
+    expect(history.map((m) => m.content)).toEqual(["first", "second"]);
+  });
+});

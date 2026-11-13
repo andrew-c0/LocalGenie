@@ -112,11 +112,13 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Limits (code-verified in `commands/attachments.rs`, `utils/attachments.ts`): 4 files per message, 10 MB for image and audio, 512 KB UTF-8 for text. The "Open location" action is Windows only.
 - Earlier cache overwrite (a second quant of the same repo replaced the first in the cache) was not reproduced in isolation. The observed loss was explained by a manual removal (reported). Treat as unconfirmed.
 
-## Conversation compaction (committed 1116bf1)
-- The main flow was tested by the user on 2026-11-02 (per the header of `manual-checklist.md`, section "Conversation compaction"); the remaining checklist items are not ticked.
+## Conversation compaction (committed 1116bf1; follow-ups committed after febb07b, not run)
+- The main flow was tested by the user on 2026-11-02 (per the header of `manual-checklist.md`, section "Conversation compaction"); the remaining checklist items are not ticked. The 2026-11-13 follow-ups (per-chat override, Compact now, stripped thinking in earlier replies, error rows left out, database delete guard) have their own unticked section there.
+- Stripping thinking from earlier replies lowers the context the request carries, but the context ring still counts the reply's completion tokens, thinking included (`contextUsageOf`). The ring can overstate the context after a reply with a long think block. Code-read.
+- Stripping thinking changes the prefix the server cached for earlier turns, so the server may read that history again on the next request. The extra prefill cost is not measured.
 - The trigger and the summary budget use the same character estimate as the context total, so a summary can come earlier or later than the real window would need. An unknown window disables the trigger and the splitting (code-read).
 - The summary is the model's own text. The code checks only that it is not empty; nothing checks it against the conversation. A weak summary stays in effect until a later summary folds it in; summaries also stay in effect when the setting is off.
-- Covered messages cannot be deleted or retried. This is enforced in the store and the UI; the summary row itself also cannot be removed.
+- Covered messages cannot be deleted or retried. This is enforced in the store, the UI and `delete_message` (database; code-read, not run); the summary row itself also cannot be removed.
 
 ## Sidebar usage chart with Playground jobs (committed 9a18c4f; code-read, partly run)
 - Only the text to image and OCR lines were confirmed in the app by the user (2026-11-03). Upscaling, speech, image to image on a GPU or NPU device, and Auto on a device with no NPU counter are not checked.
