@@ -78,6 +78,22 @@ fn has_known_extension(program: &str, exts: &[String]) -> bool {
         })
 }
 
+/// The working folder a stdio server starts in: `cwd` when the server has one (it must exist and be
+/// a folder), else None for the app's folder.
+pub fn working_folder(cwd: Option<&str>) -> Result<Option<PathBuf>, String> {
+    let Some(text) = cwd else {
+        return Ok(None);
+    };
+    let folder = Path::new(text);
+    if folder.is_dir() {
+        Ok(Some(folder.to_path_buf()))
+    } else if folder.exists() {
+        Err(format!("The working folder '{text}' is not a folder."))
+    } else {
+        Err(format!("The working folder '{text}' does not exist."))
+    }
+}
+
 /// The command that runs `program`: no console window on Windows, and the child is killed if the
 /// command is dropped. The caller adds arguments, environment and its stdio.
 pub fn command(program: &Path) -> Command {
@@ -183,6 +199,42 @@ mod tests {
             |path| path.is_file(),
         );
         assert_eq!(shown(found), Some(shown_path(&file)));
+    }
+
+    #[test]
+    fn no_working_folder_means_the_app_folder() {
+        assert_eq!(working_folder(None), Ok(None));
+    }
+
+    #[test]
+    fn an_existing_folder_is_the_working_folder() {
+        let tree = TempTree::new("program-cwd-ok");
+        let folder = tree.folder("project");
+        let text = folder.to_string_lossy().into_owned();
+        assert_eq!(working_folder(Some(&text)), Ok(Some(folder)));
+    }
+
+    #[test]
+    fn a_missing_working_folder_fails_the_start_with_a_readable_message() {
+        let tree = TempTree::new("program-cwd-missing");
+        let text = tree.path().join("gone").to_string_lossy().into_owned();
+        let error = working_folder(Some(&text)).expect_err("missing");
+        assert_eq!(
+            error,
+            format!("The working folder '{text}' does not exist.")
+        );
+    }
+
+    #[test]
+    fn a_file_is_not_a_working_folder() {
+        let tree = TempTree::new("program-cwd-file");
+        let file = tree.file("server.js", b"");
+        let text = file.to_string_lossy().into_owned();
+        let error = working_folder(Some(&text)).expect_err("file");
+        assert_eq!(
+            error,
+            format!("The working folder '{text}' is not a folder.")
+        );
     }
 
     #[test]

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   listMcpServers,
+  refreshMcpServer,
   removeMcpServer,
   saveMcpServer,
   startMcpServer,
@@ -18,7 +19,7 @@ interface McpStoreState {
   loaded: boolean;
   /** The first-load failure, kept as the raw error. Null when the last load worked or has not failed. */
   loadError: unknown;
-  /** Ids of the servers with a start, stop, remove or enable change in progress. */
+  /** Ids of the servers with a start, stop, refresh, remove or enable change in progress. */
   busyIds: string[];
   /** Reads the server list, then the tool list (a running server adds its tools). Safe to call again to retry. */
   load: () => Promise<void>;
@@ -30,6 +31,8 @@ interface McpStoreState {
   start: (id: string) => Promise<void>;
   /** Stops a server. A failure shows a toast. */
   stop: (id: string) => Promise<void>;
+  /** Lists a running server's tools again. A failure shows a toast and the server keeps its last status. */
+  refresh: (id: string) => Promise<void>;
   /** Turns connect-at-start on or off for a server and saves it. A failure shows a toast. */
   setEnabled: (id: string, enabled: boolean) => Promise<void>;
   /** Keeps a status the backend sent (the status event, or a command's result) and refreshes the tool list. */
@@ -109,6 +112,9 @@ export const useMcpStore = create<McpStoreState>((set, get) => {
     start: (id) => runServerCommand(id, "Could not start the MCP server", () => startMcpServer(id)),
 
     stop: (id) => runServerCommand(id, "Could not stop the MCP server", () => stopMcpServer(id)),
+
+    refresh: (id) =>
+      runServerCommand(id, "Could not refresh the MCP server's tools", () => refreshMcpServer(id)),
 
     setEnabled: async (id, enabled) => {
       const current = get().servers[id];

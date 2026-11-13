@@ -2,7 +2,7 @@
 
 Run through these checks manually after building or deploying the app. Automated checks cannot fully verify installer behavior, filesystem permissions, or OS-level interactions.
 
-## MCP servers (phase 4, 2026-11-13; ticked = the user tested)
+## MCP servers (phase 4 and its follow-up, 2026-11-13; ticked = the user tested)
 - [x] Remote HTTP server: Settings > Tools > MCP servers > Add server, transport Web address; it connects, its tools appear under its name, and a chat uses one of them (tested by the user, 2026-11-13).
 - [x] Stdio server: a node program running a local demo, added with the Program transport (the command and the script path in the arguments, both absolute), started, its tools listed and one used in a chat (tested by the user, 2026-11-13).
 - [ ] A missing command (for example `no-such-program`): the row reads Failed with "Cannot find ..."; the other servers and the chat keep working. Not run.
@@ -11,9 +11,21 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] `npx` on Windows: a stdio server with the command `npx` starts (npx.cmd is found through PATH). Not run.
 - [ ] A server with "Connect when LocalGenie starts" on connects after a restart without a click, and a server that fails at start does not delay the window. Not run.
 - [ ] An HTTP server that is down: Failed with "Failed to reach the MCP server at ..." (not "did not start"). Not run.
-- [ ] Edit and Save a running server: it restarts and its tool list follows. Not run.
+- [ ] Edit a connection setting (the command or an argument) of a running server and Save: it restarts and its tool list follows. Not run.
 - [ ] Request approval on an MCP tool: the dialog shows the external-server note; the tool line reads "<server> · <tool>". Not run.
 - [ ] Remove a server: its tools leave the list and the chat's tools chip; the other tools are unchanged. Not run.
+- [x] Refresh on a running server re-lists its tools (confirmed in the app by the user, 2026-11-13).
+- [x] Switch "Connect when LocalGenie starts": turning it on or off does not start or stop a running server (confirmed in the app by the user, 2026-11-13).
+- [x] Rename keeps tool states: after a rename a tool keeps its name and its Off, Request approval or On state (confirmed in the app by the user, 2026-11-13).
+- [x] Working folder: a stdio server with a folder set starts in it; Browse fills the field; the command line preview reads "in <folder>" (confirmed in the app by the user, 2026-11-13).
+- [x] Test button: a server that connects shows "Connected" with its tools; one that does not shows the reason (confirmed in the app by the user, 2026-11-13).
+- [x] Error display: a long error shows its first lines; Show more and Show less switch between them (confirmed in the app by the user, 2026-11-13).
+- [ ] Test saves nothing: after a Test (passing or failing) the server list and the saved settings are as they were; changing the form hides the result. Not run.
+- [ ] A stdio server that fails with output: the error shows the server's own stderr lines after "Server output:"; an env value or header of 6 or more characters shows as [redacted]. Not run.
+- [ ] A working folder that does not exist: the row reads Failed with "The working folder '...' does not exist."; saving the server is not refused. Not run.
+- [ ] Two servers with the same name: the second one's tool names use `_2` (for example `mcp__docs_2__<tool>`), and they keep it after a rename. Not run.
+- [ ] A database with servers saved before this change: each server keeps its tool names and their saved states after the app starts. Not run.
+- [ ] Test on a stdio server whose first start is slow (a first `npx` download): the result is either Connected or "did not answer within 30 seconds". Not run.
 
 ## GGUF projector matching and the drawer warning (2026-11-12 working tree; ticked = the user tested)
 - [x] A download of a UD repo (for example `unsloth/Qwen3.5-4B-GGUF`) gets its projector: the projector is downloaded and imported (tested by the user, 2026-11-12).

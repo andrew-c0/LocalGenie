@@ -1,6 +1,17 @@
-import { Field, Input, MessageBar, MessageBarBody, Textarea } from "@fluentui/react-components";
+import {
+  Button,
+  Field,
+  Input,
+  MessageBar,
+  MessageBarBody,
+  Textarea,
+} from "@fluentui/react-components";
+import { FolderOpenRegular } from "@fluentui/react-icons";
+import * as systemService from "../../../../../services/system";
+import { errorMessage } from "../../../../../utils/errorMessage";
 import type { McpDraftErrors } from "../../../../../utils/mcpServers";
 import { commandLineOf, parseArgs, STDIO_WARNING } from "../../../../../utils/mcpServers";
+import { toast } from "../../../../../utils/toast";
 import { Flex } from "../../../../ui/Flex/Flex";
 import { Meta } from "../../../../ui/Typography/Typography";
 import { McpKeyValueRows } from "./McpKeyValueRows";
@@ -12,12 +23,21 @@ interface McpStdioFieldsProps {
 }
 
 /**
- * The fields of a stdio server: the warning, the program, its arguments, the environment variables and
- * the exact command line that will run.
+ * The fields of a stdio server: the warning, the program, its arguments, the working folder, the
+ * environment variables and the exact command line that will run.
  */
 export function McpStdioFields({ form, errors }: McpStdioFieldsProps) {
   const { draft, setField, addRowTo, changeRowIn, removeRowFrom } = form;
-  const commandLine = commandLineOf(draft.command, parseArgs(draft.argsText));
+  const commandLine = commandLineOf(draft.command, parseArgs(draft.argsText), draft.cwd);
+
+  const chooseFolder = async () => {
+    try {
+      const path = await systemService.pickFolder();
+      if (path) setField("cwd", path);
+    } catch (err) {
+      toast.error("Could not open the folder dialog", errorMessage(err));
+    }
+  };
 
   return (
     <Flex direction="column" gap="m">
@@ -42,6 +62,24 @@ export function McpStdioFields({ form, errors }: McpStdioFieldsProps) {
           value={draft.argsText}
           onChange={(_, data) => setField("argsText", data.value)}
         />
+      </Field>
+
+      <Field
+        label="Working folder"
+        hint="Leave empty to use LocalGenie's folder. Relative paths in the arguments are resolved from here."
+      >
+        <Flex align="center" gap="s">
+          <div className="flex-grow mcp-dialog__folder-input">
+            <Input value={draft.cwd} onChange={(_, data) => setField("cwd", data.value)} />
+          </div>
+          <Button
+            appearance="secondary"
+            icon={<FolderOpenRegular />}
+            onClick={() => void chooseFolder()}
+          >
+            Browse
+          </Button>
+        </Flex>
       </Field>
 
       <McpKeyValueRows

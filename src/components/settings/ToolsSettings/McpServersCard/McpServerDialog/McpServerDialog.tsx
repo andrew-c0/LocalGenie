@@ -10,6 +10,7 @@ import {
   Input,
   Radio,
   RadioGroup,
+  Spinner,
 } from "@fluentui/react-components";
 import { useState } from "react";
 import { useMcpStore } from "../../../../../stores/mcpStore";
@@ -27,8 +28,10 @@ import { Flex } from "../../../../ui/Flex/Flex";
 import { Meta } from "../../../../ui/Typography/Typography";
 import { McpHttpFields } from "./McpHttpFields";
 import { McpStdioFields } from "./McpStdioFields";
+import { McpTestPanel } from "./McpTestPanel/McpTestPanel";
 import "./McpServerDialog.css";
 import { useMcpDraft } from "./useMcpDraft";
+import { useMcpServerTest } from "./useMcpServerTest";
 
 interface McpServerDialogProps {
   /** The server being edited, or null for a new one. */
@@ -38,11 +41,13 @@ interface McpServerDialogProps {
 
 /**
  * Adds or edits an MCP server. The problems of the form show after the first Save. A save that the
- * backend refuses keeps the form open with its reason. Nothing starts until the server is saved.
+ * backend refuses keeps the form open with its reason. Test connects with the form's values and shows
+ * the tools, without saving. Nothing starts until the server is saved.
  */
 export function McpServerDialog({ config, onClose }: McpServerDialogProps) {
   const form = useMcpDraft(config);
   const save = useMcpStore((s) => s.save);
+  const test = useMcpServerTest(form.draft, config);
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -50,14 +55,15 @@ export function McpServerDialog({ config, onClose }: McpServerDialogProps) {
   const { draft, setField, setTransport } = form;
   const errors = validateDraft(draft);
   const shownErrors: McpDraftErrors = submitted ? errors : {};
+  const invalid = hasDraftErrors(errors);
 
   const handleSave = async () => {
     setSubmitted(true);
-    if (hasDraftErrors(errors)) return;
+    if (invalid) return;
     setSaving(true);
     setSaveError(null);
     try {
-      await save(configFromDraft(draft, config?.id ?? "", config?.enabled ?? true));
+      await save(configFromDraft(draft, config));
       onClose();
     } catch (err) {
       setSaveError(errorMessage(err));
@@ -104,12 +110,22 @@ export function McpServerDialog({ config, onClose }: McpServerDialogProps) {
               )}
 
               <Meta>{PLAIN_TEXT_NOTE}</Meta>
+              {test.testing && <Meta>Connecting to the server...</Meta>}
+              {test.result && <McpTestPanel result={test.result} />}
               {saveError && <ErrorBanner message={saveError} />}
             </Flex>
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" disabled={saving} onClick={onClose}>
               Cancel
+            </Button>
+            <Button
+              appearance="secondary"
+              icon={test.testing ? <Spinner size="tiny" /> : undefined}
+              disabled={saving || test.testing || invalid}
+              onClick={() => void test.runTest()}
+            >
+              {test.testing ? "Testing..." : "Test"}
             </Button>
             <Button appearance="primary" disabled={saving} onClick={() => void handleSave()}>
               {saving ? "Saving..." : "Save"}

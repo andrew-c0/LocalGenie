@@ -1141,6 +1141,23 @@ export interface McpServerConfig {
   headers: Record<string, string>;
   /** Connect when the app starts. */
   enabled: boolean;
+  /** stdio: the working folder the program starts in. Null or empty uses LocalGenie's folder. */
+  cwd?: string | null;
+  /** Backend-owned short name used in tool names. Kept as the backend sent it; absent for a new server. */
+  slug?: string;
+}
+
+/** One tool a test connection listed: its name and the description the server gave, if any. */
+export interface McpToolSummary {
+  name: string;
+  description?: string;
+}
+
+/** The result of testing an unsaved server. A server that does not connect is `ok: false` with the reason in `error`. */
+export interface McpTestResult {
+  ok: boolean;
+  error?: string;
+  tools: McpToolSummary[];
 }
 
 /** A saved MCP server with its live status, as `mcp_server_list` and the status event send it. */

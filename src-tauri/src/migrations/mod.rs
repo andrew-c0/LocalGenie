@@ -24,6 +24,7 @@ mod m20261036_000001_downloaded_model_ram;
 mod m20261037_000001_drop_model_compute_setting;
 mod m20261038_000001_message_tool_fields;
 mod m20261039_000001_create_mcp_servers;
+mod m20261040_000001_mcp_server_slug_and_cwd;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -54,6 +55,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261037_000001_drop_model_compute_setting::Migration),
             Box::new(m20261038_000001_message_tool_fields::Migration),
             Box::new(m20261039_000001_create_mcp_servers::Migration),
+            Box::new(m20261040_000001_mcp_server_slug_and_cwd::Migration),
         ]
     }
 }
@@ -233,8 +235,8 @@ mod tests {
         assert_eq!(msg.token_count, Some(42));
         assert_eq!(msg.prompt_chars, Some(7));
 
-        // Twenty steps: this one, then the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields and MCP servers migrations.
-        Migrator::down(&db, Some(20))
+        // Twenty-one steps: this one, then the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields, MCP servers and MCP slug migrations.
+        Migrator::down(&db, Some(21))
             .await
             .expect("revert stats migration");
         let after_down = columns(db.clone()).await;
@@ -264,8 +266,8 @@ mod tests {
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
         // Put back the old JSON row, then apply the migrations again so it copies it.
-        // Nineteen steps: the settings one, then the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields and MCP servers migrations.
-        Migrator::down(&db, Some(19))
+        // Twenty steps: the settings one, then the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields, MCP servers and MCP slug migrations.
+        Migrator::down(&db, Some(20))
             .await
             .expect("revert settings migration");
         db.execute(Statement::from_string(
@@ -290,7 +292,10 @@ mod tests {
 
         assert_eq!(stored.get("temperature").map(String::as_str), Some("0.2"));
         assert_eq!(stored.get("think").map(String::as_str), Some("false"));
-        assert!(!stored.contains_key("compute"), "the dropped compute setting is deleted");
+        assert!(
+            !stored.contains_key("compute"),
+            "the dropped compute setting is deleted"
+        );
         assert_eq!(stored.get("nctx").map(String::as_str), Some("4096"));
         assert!(!stored.contains_key("seed"), "null values are not copied");
         assert!(!stored.contains_key("origins"));
@@ -538,11 +543,14 @@ mod tests {
             .await
             .expect("query")
             .is_empty());
-        assert!(benchmark_file::Entity::find_by_id("f1")
-            .one(&db)
-            .await
-            .expect("query")
-            .is_some(), "the file row is removed by the app, not the database");
+        assert!(
+            benchmark_file::Entity::find_by_id("f1")
+                .one(&db)
+                .await
+                .expect("query")
+                .is_some(),
+            "the file row is removed by the app, not the database"
+        );
     }
 
     #[tokio::test]
@@ -593,8 +601,8 @@ mod tests {
         assert_eq!(row.facets.as_deref(), Some(facets));
 
         // Reverting drops the column; reapplying brings it back as null for old rows.
-        // Seven steps: this one, then the installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields and MCP servers migrations.
-        Migrator::down(&db, Some(7)).await.expect("revert facets");
+        // Eight steps: this one, then the installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields, MCP servers and MCP slug migrations.
+        Migrator::down(&db, Some(8)).await.expect("revert facets");
         assert!(!columns(db.clone()).await.iter().any(|c| c == "facets"));
         Migrator::up(&db, None).await.expect("reapply facets");
         let row = downloaded_model::Entity::find_by_id("org/model")
@@ -622,7 +630,10 @@ mod tests {
             installed_at: Set(1),
         };
         row("1.0").insert(&db).await.expect("first install");
-        assert!(row("1.1").insert(&db).await.is_err(), "runtime_id is the primary key");
+        assert!(
+            row("1.1").insert(&db).await.is_err(),
+            "runtime_id is the primary key"
+        );
 
         installed_runtime::Entity::delete_by_id("sd-cpp")
             .exec(&db)
@@ -749,11 +760,16 @@ mod tests {
         assert_eq!(row.context_ram_bytes, Some(512));
         assert_eq!(row.ram_approximate, Some(true));
 
-        // Reverting drops the three columns (and the later tool fields and MCP servers migrations); reapplying brings them back as null.
-        Migrator::down(&db, Some(4)).await.expect("revert RAM columns");
+        // Reverting drops the three columns (and the later tool fields, MCP servers and MCP slug migrations); reapplying brings them back as null.
+        Migrator::down(&db, Some(5))
+            .await
+            .expect("revert RAM columns");
         let after_down = columns(db.clone()).await;
         for col in ram_cols {
-            assert!(!after_down.iter().any(|c| c == col), "{col} left after down");
+            assert!(
+                !after_down.iter().any(|c| c == col),
+                "{col} left after down"
+            );
         }
         Migrator::up(&db, None).await.expect("reapply RAM columns");
         let row = downloaded_model::Entity::find_by_id("org/model")
@@ -782,8 +798,14 @@ mod tests {
             .iter()
             .map(|r| r.try_get::<String>("", "name").expect("name"))
             .collect();
-        assert!(names.iter().any(|c| c == "tool_calls"), "tool_calls missing");
-        assert!(names.iter().any(|c| c == "tool_record"), "tool_record missing");
+        assert!(
+            names.iter().any(|c| c == "tool_calls"),
+            "tool_calls missing"
+        );
+        assert!(
+            names.iter().any(|c| c == "tool_record"),
+            "tool_record missing"
+        );
 
         chat_session::ActiveModel {
             id: Set("s1".into()),
@@ -850,8 +872,8 @@ mod tests {
         let tmp = TempDb::new("migrate-tool-old");
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
-        // Drop the tool fields (and the MCP servers table above them), write a row the way an older build did, then apply the migrations again.
-        Migrator::down(&db, Some(2))
+        // Drop the tool fields (and the MCP servers table and its slug columns above them), write a row the way an older build did, then apply the migrations again.
+        Migrator::down(&db, Some(3))
             .await
             .expect("revert tool fields");
         chat_session::ActiveModel {
@@ -875,9 +897,7 @@ mod tests {
         ))
         .await
         .expect("insert legacy row");
-        Migrator::up(&db, None)
-            .await
-            .expect("reapply tool fields");
+        Migrator::up(&db, None).await.expect("reapply tool fields");
 
         let old = message::Entity::find_by_id("old1")
             .one(&db)
@@ -899,5 +919,52 @@ mod tests {
         Migrator::up(&db, None)
             .await
             .expect("reapply new migration");
+    }
+
+    #[tokio::test]
+    async fn mcp_slug_migration_fills_existing_servers_in_creation_order() {
+        let tmp = TempDb::new("migrate-mcp-slug");
+        let db = init_database(&tmp.url()).await.expect("migrations apply");
+        Migrator::down(&db, Some(1))
+            .await
+            .expect("revert the slug migration");
+        // Rows as the previous schema stored them, inserted out of creation order.
+        db.execute_unprepared(
+            "INSERT INTO mcp_server (id, name, transport, command, args, env, headers, enabled, created_at) VALUES \
+             ('c', 'Alpha', 'stdio', 'npx', '[]', '{}', '{}', 1, 30), \
+             ('a', 'Docs', 'stdio', 'npx', '[]', '{}', '{}', 1, 10), \
+             ('b', 'docs', 'stdio', 'npx', '[]', '{}', '{}', 0, 20)",
+        )
+        .await
+        .expect("insert old rows");
+        Migrator::up(&db, None)
+            .await
+            .expect("reapply the slug migration");
+
+        let rows = db
+            .query_all(Statement::from_string(
+                DatabaseBackend::Sqlite,
+                "SELECT id, slug, cwd FROM mcp_server ORDER BY id".to_owned(),
+            ))
+            .await
+            .expect("query");
+        let slugs: Vec<(String, String, Option<String>)> = rows
+            .iter()
+            .map(|row| {
+                (
+                    row.try_get::<String>("", "id").expect("id"),
+                    row.try_get::<String>("", "slug").expect("slug"),
+                    row.try_get::<Option<String>>("", "cwd").expect("cwd"),
+                )
+            })
+            .collect();
+        assert_eq!(
+            slugs,
+            [
+                ("a".to_string(), "docs".to_string(), None),
+                ("b".to_string(), "docs_2".to_string(), None),
+                ("c".to_string(), "alpha".to_string(), None),
+            ]
+        );
     }
 }

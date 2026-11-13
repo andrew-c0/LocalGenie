@@ -125,6 +125,8 @@ pub fn run() {
             tools::mcp::commands::mcp_server_remove,
             tools::mcp::commands::mcp_server_start,
             tools::mcp::commands::mcp_server_stop,
+            tools::mcp::commands::mcp_server_refresh,
+            tools::mcp::commands::mcp_server_test,
             // CLI utilities
             cli::get_runtime_versions,
             commands::download::download_file,

@@ -16,6 +16,7 @@ use tokio::time::timeout;
 use super::config::{McpServerConfig, McpServerInfo, McpServerStatus};
 use super::connect::{connect_session, list_tools, McpTool, Session};
 use super::naming::NameAllocator;
+use super::stderr::StderrTail;
 use crate::commands::tools::limits::MCP_CALL_TIMEOUT_SECS;
 use crate::commands::tools::TIMED_OUT;
 
@@ -33,6 +34,7 @@ pub struct RunningTool {
     pub description: Option<String>,
     pub input_schema: JsonObject,
     pub peer: Peer<RoleClient>,
+    pub stderr: StderrTail,
 }
 
 /// Receives every status change. The app sends it to the window; tests record it. Keeping the Tauri
@@ -73,6 +75,13 @@ impl ServerEntry {
     }
 }
 
+/// The open session of a running server, for listing its tools again.
+struct RunningSession {
+    generation: u64,
+    peer: Peer<RoleClient>,
+    stderr: StderrTail,
+}
+
 /// What a start has to do, decided under the lock.
 enum StartStep {
     /// Nothing runs: connect, as the attempt with this generation.
@@ -80,10 +89,7 @@ enum StartStep {
     /// A connection is already being made: report it.
     Busy(McpServerInfo),
     /// Running: list the tools again on this session.
-    Refresh {
-        generation: u64,
-        peer: Peer<RoleClient>,
-    },
+    Refresh(RunningSession),
 }
 
 impl McpManager {
@@ -102,9 +108,20 @@ impl McpManager {
         }
     }
 
-    /// The status of a server. A server the manager has never run is stopped.
+    /// The status of a saved server, with the settings given. A server the manager has never run is
+    /// stopped.
     pub fn info(&self, config: &McpServerConfig) -> Result<McpServerInfo, String> {
         let state = self.lock()?;
+        Ok(info_now(&state, config))
+    }
+
+    /// Give a saved server its new settings without changing how it runs. A running server shows
+    /// the new name at once.
+    pub fn update_settings(&self, config: &McpServerConfig) -> Result<McpServerInfo, String> {
+        let mut state = self.lock()?;
+        if let Some(entry) = state.entries.get_mut(&config.id) {
+            entry.config = config.clone();
+        }
         Ok(info_now(&state, config))
     }
 
@@ -124,10 +141,15 @@ impl McpManager {
         match self.claim_start(&config)? {
             StartStep::Connect(generation) => self.connect(&config, generation).await,
             StartStep::Busy(info) => Ok(info),
-            StartStep::Refresh { generation, peer } => {
-                self.refresh(&config, generation, &peer).await
-            }
+            StartStep::Refresh(session) => self.relist(&config, session).await,
         }
+    }
+
+    /// List the tools of a running server again and emit its status. A server that is not running
+    /// is an error. A listing that fails marks the server failed, as a start does.
+    pub async fn refresh(&self, id: &str) -> Result<McpServerInfo, String> {
+        let (config, session) = self.running_session(id)?;
+        self.relist(&config, session).await
     }
 
     /// Stop a server and close its process. A connection still being made is discarded.
@@ -177,11 +199,13 @@ impl McpManager {
             Err(_elapsed) => Err(TIMED_OUT.to_string()),
             Ok(Ok(result)) => Ok(result),
             Ok(Err(error)) if is_lost_connection(&error) => {
-                let message = lost_text(&tool.server_name);
+                let message = tool.stderr.with_output(&lost_text(&tool.server_name));
                 self.mark_failed(&tool.server_id, message.clone());
                 Err(message)
             }
-            Ok(Err(error)) => Err(format!("The tool failed: {error}")),
+            Ok(Err(error)) => Err(tool
+                .stderr
+                .with_output(&format!("The tool failed: {error}"))),
         }
     }
 
@@ -211,16 +235,18 @@ impl McpManager {
         Ok(info)
     }
 
-    async fn refresh(
+    /// List the tools on an open session, then store them or fail the server.
+    async fn relist(
         &self,
         config: &McpServerConfig,
-        generation: u64,
-        peer: &Peer<RoleClient>,
+        session: RunningSession,
     ) -> Result<McpServerInfo, String> {
-        let listed = list_tools(peer).await;
-        let (info, dead) = self.settle_refresh(config, generation, listed)?;
-        if let Some(session) = dead {
-            session.shutdown().await;
+        let listed = list_tools(&session.peer)
+            .await
+            .map_err(|error| session.stderr.with_output(&error));
+        let (info, dead) = self.settle_refresh(config, session.generation, listed)?;
+        if let Some(dead) = dead {
+            dead.shutdown().await;
         }
         Ok(info)
     }
@@ -234,15 +260,11 @@ impl McpManager {
             .entry(config.id.clone())
             .or_insert_with(|| ServerEntry::new(config.clone()));
         entry.config = config.clone();
-        match (entry.status, entry.session.as_ref()) {
-            (McpServerStatus::Starting, _) => return Ok(StartStep::Busy(info_of(entry))),
-            (McpServerStatus::Running, Some(session)) => {
-                return Ok(StartStep::Refresh {
-                    generation: entry.generation,
-                    peer: session.peer(),
-                })
-            }
-            _ => {}
+        if entry.status == McpServerStatus::Starting {
+            return Ok(StartStep::Busy(info_of(entry)));
+        }
+        if let Some(running) = running_session_of(entry) {
+            return Ok(StartStep::Refresh(running));
         }
         state.next_generation += 1;
         entry.generation = state.next_generation;
@@ -251,6 +273,20 @@ impl McpManager {
         let info = info_of(entry);
         self.publish(&info);
         Ok(StartStep::Connect(entry.generation))
+    }
+
+    /// The config and open session of a running server, or the reason it cannot be listed.
+    fn running_session(&self, id: &str) -> Result<(McpServerConfig, RunningSession), String> {
+        let state = self.lock()?;
+        state
+            .entries
+            .get(id)
+            .and_then(|entry| {
+                running_session_of(entry).map(|session| (entry.config.clone(), session))
+            })
+            .ok_or_else(|| {
+                "This MCP server is not running. Start it before you refresh its tools.".to_string()
+            })
     }
 
     /// Record the outcome of a connection. Returns the info and, when the attempt was stale, the
@@ -384,9 +420,26 @@ impl McpManager {
     }
 }
 
+/// The open session of an entry that is running, for a listing.
+fn running_session_of(entry: &ServerEntry) -> Option<RunningSession> {
+    if entry.status != McpServerStatus::Running {
+        return None;
+    }
+    entry.session.as_ref().map(|session| RunningSession {
+        generation: entry.generation,
+        peer: session.peer(),
+        stderr: session.stderr().clone(),
+    })
+}
+
 fn info_of(entry: &ServerEntry) -> McpServerInfo {
+    status_info(entry.config.clone(), entry)
+}
+
+/// The info of a server with the settings given and the status of `entry`.
+fn status_info(config: McpServerConfig, entry: &ServerEntry) -> McpServerInfo {
     McpServerInfo {
-        config: entry.config.clone(),
+        config,
         status: entry.status,
         error: entry.error.clone(),
         tool_count: entry
@@ -398,7 +451,7 @@ fn info_of(entry: &ServerEntry) -> McpServerInfo {
 
 fn info_now(state: &ManagerState, config: &McpServerConfig) -> McpServerInfo {
     match state.entries.get(&config.id) {
-        Some(entry) => info_of(entry),
+        Some(entry) => status_info(config.clone(), entry),
         None => McpServerInfo::stopped(config.clone()),
     }
 }
@@ -412,18 +465,19 @@ fn mark_lost_connections(entries: &mut HashMap<String, ServerEntry>) -> Vec<McpS
         if !lost {
             continue;
         }
-        if let Some(session) = entry.session.take() {
-            session.kill_sync();
-        }
+        let Some(session) = entry.session.take() else {
+            continue;
+        };
+        session.kill_sync();
         entry.status = McpServerStatus::Failed;
-        entry.error = Some(lost_text(&entry.config.name));
+        entry.error = Some(session.stderr().with_output(&lost_text(&entry.config.name)));
         infos.push(info_of(entry));
     }
     infos
 }
 
-/// The tools of the running servers. Servers are taken in name order, so the names do not move
-/// between two calls while the set of running servers stays the same.
+/// The tools of the running servers. Servers are taken in slug order. A slug is fixed when the
+/// server is saved, so the names of the tools do not move while the servers keep running.
 fn collect_running_tools(entries: &HashMap<String, ServerEntry>) -> Vec<RunningTool> {
     let mut running: Vec<(&ServerEntry, &Session)> = entries
         .values()
@@ -432,24 +486,24 @@ fn collect_running_tools(entries: &HashMap<String, ServerEntry>) -> Vec<RunningT
         .collect();
     running.sort_by(|(left, _), (right, _)| {
         left.config
-            .name
-            .cmp(&right.config.name)
+            .slug
+            .cmp(&right.config.slug)
             .then_with(|| left.config.id.cmp(&right.config.id))
     });
 
     let mut names = NameAllocator::default();
     let mut tools = Vec::new();
     for (entry, session) in running {
-        let slug = names.server_slug(&entry.config.name);
         for tool in session.tools() {
             tools.push(RunningTool {
-                exposed_name: names.tool_name(&slug, &tool.name),
+                exposed_name: names.tool_name(&entry.config.slug, &tool.name),
                 server_id: entry.config.id.clone(),
                 server_name: entry.config.name.clone(),
                 tool_name: tool.name.clone(),
                 description: tool.description.clone(),
                 input_schema: tool.input_schema.clone(),
                 peer: session.peer(),
+                stderr: session.stderr().clone(),
             });
         }
     }
@@ -482,9 +536,11 @@ mod tests {
             command: Some("npx".into()),
             args: Vec::new(),
             env: BTreeMap::new(),
+            cwd: None,
             url: None,
             headers: BTreeMap::new(),
             enabled: false,
+            slug: "docs".into(),
         }
     }
 
@@ -521,6 +577,16 @@ mod tests {
         assert_eq!(
             error,
             "The tool 'mcp__docs__search' is not running: its MCP server is stopped or failed."
+        );
+    }
+
+    #[tokio::test]
+    async fn refreshing_a_server_that_is_not_running_is_an_error() {
+        let manager = McpManager::default();
+        let error = manager.refresh("a").await.expect_err("not running");
+        assert_eq!(
+            error,
+            "This MCP server is not running. Start it before you refresh its tools."
         );
     }
 
@@ -568,6 +634,36 @@ mod tests {
             .expect("settle");
         assert_eq!(info.status, McpServerStatus::Stopped);
         assert!(info.error.is_none());
+    }
+
+    #[test]
+    fn the_info_carries_the_settings_it_is_given() {
+        let manager = McpManager::default();
+        let cfg = config("a");
+        manager.settle_stop(&cfg).expect("stop");
+        let renamed = McpServerConfig {
+            name: "Renamed".into(),
+            ..cfg
+        };
+        let info = manager.info(&renamed).expect("info");
+        assert_eq!(info.config.name, "Renamed");
+        assert_eq!(info.status, McpServerStatus::Stopped);
+    }
+
+    #[test]
+    fn updating_settings_keeps_the_status_and_shows_the_new_name() {
+        let manager = McpManager::default();
+        let cfg = config("a");
+        let StartStep::Connect(_) = manager.claim_start(&cfg).expect("claim") else {
+            panic!("expected a connect step");
+        };
+        let renamed = McpServerConfig {
+            name: "Renamed".into(),
+            ..cfg
+        };
+        let info = manager.update_settings(&renamed).expect("update");
+        assert_eq!(info.status, McpServerStatus::Starting);
+        assert_eq!(info.config.name, "Renamed");
     }
 
     #[test]

@@ -1,6 +1,7 @@
-//! The names the model sees for MCP tools: `mcp__<server>__<tool>`. Each part uses only
+//! The names the model sees for MCP tools: `mcp__<slug>__<tool>`. Each part uses only
 //! `[a-zA-Z0-9_-]`, the whole name is at most 64 characters, and no two tools share a name. The
-//! server part never contains `__`, so the first `__` after the prefix ends it.
+//! slug is chosen once, when a server is saved, and never changes; it never contains `__`, so the
+//! first `__` after the prefix ends it.
 
 use std::collections::HashSet;
 
@@ -9,7 +10,7 @@ pub const MCP_PREFIX: &str = "mcp__";
 const SEPARATOR: &str = "__";
 /// Longest tool name a model provider accepts.
 const NAME_MAX_CHARS: usize = 64;
-/// Longest server part, so the tool part keeps at least 33 characters.
+/// Longest slug, so the tool part keeps at least 33 characters.
 const SLUG_MAX_CHARS: usize = 24;
 const SLUG_FALLBACK: &str = "server";
 const TOOL_FALLBACK: &str = "tool";
@@ -19,25 +20,38 @@ pub fn is_mcp_name(name: &str) -> bool {
     name.starts_with(MCP_PREFIX)
 }
 
-/// Hands out server parts and tool names that no other server or tool already has.
+/// The slug for a new server called `server_name`, not already in `taken`. A taken slug gets
+/// `_2`, `_3`... and its stem is cut so the slug stays within the limit.
+pub fn new_server_slug(server_name: &str, taken: &HashSet<String>) -> String {
+    let base = slug_text(&server_name.to_ascii_lowercase());
+    first_free_part(&base, SLUG_MAX_CHARS, |candidate| {
+        !taken.contains(candidate)
+    })
+}
+
+/// The slugs of servers named `names`, given in creation order. Each server gets the slug a new
+/// server with its name would get after the ones before it, so the backfill of existing rows
+/// follows the same rule as a server saved now.
+pub fn backfill_slugs<'a>(names: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    let mut taken = HashSet::new();
+    names
+        .into_iter()
+        .map(|name| {
+            let slug = new_server_slug(name, &taken);
+            taken.insert(slug.clone());
+            slug
+        })
+        .collect()
+}
+
+/// Hands out tool names that no other tool of the running servers already has.
 #[derive(Default)]
 pub struct NameAllocator {
-    slugs: HashSet<String>,
     names: HashSet<String>,
 }
 
 impl NameAllocator {
-    /// A unique server part for a server called `server_name`.
-    pub fn server_slug(&mut self, server_name: &str) -> String {
-        let base = slug_text(&server_name.to_ascii_lowercase());
-        let slug = first_free_part(&base, SLUG_MAX_CHARS, |candidate| {
-            !self.slugs.contains(candidate)
-        });
-        self.slugs.insert(slug.clone());
-        slug
-    }
-
-    /// The name of tool `tool_name` on the server with server part `slug`.
+    /// The name of tool `tool_name` on the server with slug `slug`.
     pub fn tool_name(&mut self, slug: &str, tool_name: &str) -> String {
         let budget = NAME_MAX_CHARS - MCP_PREFIX.len() - slug.len() - SEPARATOR.len();
         let base = clean_part(tool_name, budget, TOOL_FALLBACK);
@@ -54,7 +68,7 @@ fn full_name(slug: &str, part: &str) -> String {
     format!("{MCP_PREFIX}{slug}{SEPARATOR}{part}")
 }
 
-/// The server part: cleaned, with runs of underscores collapsed so it never holds `__`.
+/// The slug text: cleaned, with runs of underscores collapsed so it never holds `__`.
 fn slug_text(text: &str) -> String {
     let mut collapsed = String::new();
     for c in clean_part(text, SLUG_MAX_CHARS, SLUG_FALLBACK).chars() {
@@ -111,29 +125,65 @@ fn first_free_part(base: &str, max: usize, is_free: impl Fn(&str) -> bool) -> St
 mod tests {
     use super::*;
 
-    #[test]
-    fn server_names_are_sanitised_and_lowercased() {
-        let mut names = NameAllocator::default();
-        assert_eq!(names.server_slug("My Server!"), "my_server");
-        assert_eq!(names.server_slug("docs-tools"), "docs-tools");
-        assert_eq!(names.server_slug("!!!"), "server");
-        assert_eq!(names.server_slug("Server"), "server_2");
+    fn slug_of(server_name: &str) -> String {
+        new_server_slug(server_name, &HashSet::new())
     }
 
     #[test]
-    fn a_server_part_never_contains_a_double_underscore() {
-        let mut names = NameAllocator::default();
-        let slug = names.server_slug("a__b   c");
-        assert_eq!(slug, "a_b_c");
-        assert!(!slug.contains("__"));
-        let slug = names.server_slug("x____y");
-        assert!(!slug.contains("__"), "{slug}");
+    fn server_names_are_sanitised_and_lowercased() {
+        assert_eq!(slug_of("My Server!"), "my_server");
+        assert_eq!(slug_of("docs-tools"), "docs-tools");
+        assert_eq!(slug_of("!!!"), "server");
+    }
+
+    #[test]
+    fn a_slug_never_contains_a_double_underscore() {
+        assert_eq!(slug_of("a__b   c"), "a_b_c");
+        assert!(!slug_of("x____y").contains("__"));
+    }
+
+    #[test]
+    fn a_taken_slug_gets_a_numeric_suffix() {
+        let taken = HashSet::from(["server".to_string()]);
+        assert_eq!(new_server_slug("Server", &taken), "server_2");
+        let taken = HashSet::from(["docs".to_string(), "docs_2".to_string()]);
+        assert_eq!(new_server_slug("Docs", &taken), "docs_3");
+    }
+
+    #[test]
+    fn a_long_slug_with_a_suffix_stays_within_the_limit() {
+        let long = "s".repeat(100);
+        let taken = HashSet::from([slug_of(&long)]);
+        let slug = new_server_slug(&long, &taken);
+        assert_eq!(slug.len(), SLUG_MAX_CHARS);
+        assert!(slug.ends_with("_2"));
+    }
+
+    #[test]
+    fn backfill_follows_creation_order_and_the_collision_rule() {
+        assert_eq!(
+            backfill_slugs(["Docs", "docs", "DOCS", "Alpha"]),
+            ["docs", "docs_2", "docs_3", "alpha"]
+        );
+    }
+
+    #[test]
+    fn backfill_of_no_servers_is_empty() {
+        assert!(backfill_slugs(std::iter::empty()).is_empty());
+    }
+
+    #[test]
+    fn a_later_server_with_a_taken_name_gets_the_suffix() {
+        // The first server keeps `docs` for good; the second one, saved under the same name, gets
+        // `docs_2`.
+        let taken = HashSet::from([slug_of("Docs")]);
+        assert_eq!(new_server_slug("Docs", &taken), "docs_2");
     }
 
     #[test]
     fn tool_names_are_sanitised_and_prefixed() {
         let mut names = NameAllocator::default();
-        let slug = names.server_slug("docs");
+        let slug = slug_of("docs");
         assert_eq!(names.tool_name(&slug, "read.file"), "mcp__docs__read_file");
         assert_eq!(
             names.tool_name(&slug, "list items"),
@@ -144,7 +194,7 @@ mod tests {
     #[test]
     fn a_long_name_is_kept_within_64_characters() {
         let mut names = NameAllocator::default();
-        let slug = names.server_slug(&"s".repeat(100));
+        let slug = slug_of(&"s".repeat(100));
         assert_eq!(slug.len(), SLUG_MAX_CHARS);
         let name = names.tool_name(&slug, &"t".repeat(200));
         assert!(name.len() <= NAME_MAX_CHARS, "{} {name}", name.len());
@@ -154,7 +204,7 @@ mod tests {
     #[test]
     fn a_long_colliding_tool_name_still_fits() {
         let mut names = NameAllocator::default();
-        let slug = names.server_slug("docs");
+        let slug = slug_of("docs");
         let long = "t".repeat(200);
         let first = names.tool_name(&slug, &long);
         let second = names.tool_name(&slug, &long);
@@ -164,17 +214,9 @@ mod tests {
     }
 
     #[test]
-    fn servers_with_the_same_name_get_different_slugs() {
-        let mut names = NameAllocator::default();
-        assert_eq!(names.server_slug("Docs"), "docs");
-        assert_eq!(names.server_slug("docs"), "docs_2");
-        assert_eq!(names.server_slug("DOCS"), "docs_3");
-    }
-
-    #[test]
     fn tools_with_the_same_sanitised_name_get_different_names() {
         let mut names = NameAllocator::default();
-        let slug = names.server_slug("docs");
+        let slug = slug_of("docs");
         assert_eq!(names.tool_name(&slug, "a.b"), "mcp__docs__a_b");
         assert_eq!(names.tool_name(&slug, "a_b"), "mcp__docs__a_b_2");
         assert_eq!(names.tool_name(&slug, "a b"), "mcp__docs__a_b_3");
@@ -183,8 +225,8 @@ mod tests {
     #[test]
     fn the_same_tool_name_on_two_servers_is_unique() {
         let mut names = NameAllocator::default();
-        let first_slug = names.server_slug("alpha");
-        let second_slug = names.server_slug("beta");
+        let first_slug = slug_of("alpha");
+        let second_slug = slug_of("beta");
         let first = names.tool_name(&first_slug, "search");
         let second = names.tool_name(&second_slug, "search");
         assert_eq!(first, "mcp__alpha__search");

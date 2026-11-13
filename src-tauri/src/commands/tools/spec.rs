@@ -199,7 +199,12 @@ mod tests {
     fn required_of(spec: &ToolSpec) -> Vec<&str> {
         spec.parameters["required"]
             .as_array()
-            .map(|values| values.iter().filter_map(serde_json::Value::as_str).collect())
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -209,7 +214,13 @@ mod tests {
         let names: Vec<&str> = specs.iter().map(|spec| spec.name.as_str()).collect();
         assert_eq!(
             names,
-            [LIST_DIRECTORY, READ_TEXT_FILE, READ_IMAGE, WEB_FETCH, WEB_SEARCH]
+            [
+                LIST_DIRECTORY,
+                READ_TEXT_FILE,
+                READ_IMAGE,
+                WEB_FETCH,
+                WEB_SEARCH
+            ]
         );
         for spec in &specs {
             assert_eq!(spec.id, spec.name);
@@ -260,7 +271,12 @@ mod tests {
         let search = spec_named(WEB_SEARCH);
         let ids: Vec<&str> = search.parameters["properties"]["source"]["enum"]
             .as_array()
-            .map(|values| values.iter().filter_map(serde_json::Value::as_str).collect())
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .collect()
+            })
             .unwrap_or_default();
         assert_eq!(
             ids,

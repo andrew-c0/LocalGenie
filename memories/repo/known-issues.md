@@ -209,15 +209,15 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Relaunch after install is best effort: on Windows the installer closes the app when it starts (`services/appUpdate.ts`).
 - Migrations are forward-only, so an older build cannot be restored over a newer database. Plan decision; the release notes must say so. Not built.
 
-## MCP servers (phase 4, 2026-11-13; code-read and unit tests written; the remote HTTP and the stdio demo paths were tested by the user on 2026-11-13, the rest not run)
+## MCP servers (phase 4 and its follow-up, 2026-11-13; code-read and unit tests written; the remote HTTP and the stdio demo paths were tested by the user on 2026-11-13, and the follow-up was confirmed in the app the same day; the rest not run)
 - Secrets are plain text: env values and headers (often API tokens) sit in the `mcp_server` JSON columns. There is no credential store. The form says so (`PLAIN_TEXT_NOTE`).
-- No per-server Refresh. The UI has no button that re-lists a running server's tools. Ways to get a fresh list: Edit and Save (an enabled server restarts), or Stop then Start. The backend's `mcp_server_start` on a running server does re-list, but no UI calls it. Stop then Start is code-read only.
-- No `tools/list_changed` handling: a server that adds or removes tools keeps its old list until it is restarted (see above).
+- No `tools/list_changed` handling: a server that adds or removes tools keeps its old list until it is refreshed or restarted.
+- Output redaction is partial (`stderr.rs`; `secret_values` in `connect.rs`): only env values and header values of 6 or more characters are blanked. Shorter values, a value cut by the 512-byte line limit or split by a line break, and the arguments and URL (which can carry a token) are shown as the server wrote them. Code-read.
+- A failed call can include stderr lines the server wrote earlier in the same session, not only the lines of that call: the tail is kept per session (20 lines, 4 KB). Code-read.
+- The slug migration (`m20261040_000001_mcp_server_slug_and_cwd`) calls `backfill_slugs` from app code. On a database that has not yet run it, a later change to the slug rule would change the backfilled slugs of those rows, and so their tool names and saved tool states. Code-read.
+- Saving an enabled server (a new one, or a running one whose connection settings changed) awaits its start in `mcp_server_save`, so the save returns only after the start ends (up to the 30 s limit). The dialog's waiting state was not checked. Code-read.
+- Test starts the server with the form's values, so a stdio start includes a first `npx` download. The 30 s limit can end a slow first start with "did not answer within 30 seconds". Not run.
 - Not built: MCP resources and prompts, sampling, images from tools (a note replaces them), OAuth. An HTTP server that needs OAuth fails at start with its error text.
-- A stdio server has no working-folder field, so the child inherits the app's working folder. The program and any script path in the arguments must be absolute. Names such as `npx` are looked up on PATH.
-- The stderr of a stdio server is discarded (`Stdio::null()` in `connect.rs`). A server that writes its reason to stderr shows only the protocol error ("The server did not start: ...").
-- Tool names carry the server name. `mcp__<server slug>__<tool>` changes when the server is renamed, and when another running server takes the same slug (the `_2` suffix follows name order). A tool's saved state (Off, Request approval, On) is keyed by its name, so after such a change it no longer applies and the tool reads Off. Code-read.
-- The switch "Connect when LocalGenie starts" also stops a running server when it is turned off, because the save stops an active server. The label does not say so. Code-read.
 - A new server is saved with the switch on (the dialog sends `enabled: true`), so saving starts it at once, and a mistyped command shows Failed straight away.
 - An HTTP server that goes away is noticed only when a listing or a call fails; no check runs in between, so it reads Running until then. Code-read; not run.
 - A call that outlives 60 s is dropped on the app side. Whether the server is told to cancel is not checked.
@@ -237,6 +237,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Not built: reading PDF, Word or audio files. Tool results are plain text by design.
 
 ## Resolved (code-verified; runtime-unverified)
+- MCP gaps of the 2026-11-13 follow-up (code-read and unit tests in `commands/tools/mcp/*.rs`, `utils/mcpServers.test.ts`; the user confirmed the changes in the app on 2026-11-13): no per-server Refresh (`McpServerRow` Refresh, `mcp_server_refresh`); the stderr of a stdio server was discarded (`stderr.rs`, shown in failures); the switch stopped a running server (only the start at launch now; `save_step` in `commands/tools/mcp/commands.rs`); tool names changed with the running set and on rename (the slug is saved at the first save with a unique index, and a rename keeps it); no working folder (`cwd`, checked at start by `program::working_folder`).
 - Native tools chip count and chat grants (2026-11-12, follow-up to 64ee9f5; code-read and unit tests in `utils/chatTools.test.ts`, `utils/webSearchSources.test.ts`, `stores/toolStore.test.ts`; not run in the app): the chip's count leaves out a `web_search` with no source on (`isOfferable`); deleting a chat clears its "Allow for this chat" grants (`clearChatToolSettings` calls `clearChatGrants`).
 - Native tools call without an `index` (2026-11-12, follow-up to 64ee9f5; `chat_helpers.rs` tests; not run with a real server): calls are keyed by `index`, else `id`, else the last call, so calls without an index no longer merge at index 0.
 - Native tools non-UTF-8 pages (2026-11-12, follow-up to 64ee9f5; `web/charset.rs` tests; not run on live pages): `web_fetch` decodes by BOM, Content-Type charset, `<meta>` charset, else UTF-8 lossy (`encoding_rs`).

@@ -1,0 +1,9 @@
+/* The error keeps its line breaks; a long line wraps instead of pushing the layout out. */
+.mcp-error-text {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--colorPaletteRedForeground1);
+}

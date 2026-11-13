@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { McpServerConfig, McpServerInfo } from "../types";
+import type { McpServerConfig, McpServerInfo, McpTestResult } from "../types";
 import { listenEvent } from "./events";
 
 /** The event the backend sends with the new status of an MCP server, on every change. */
@@ -28,6 +28,16 @@ export async function startMcpServer(id: string): Promise<McpServerInfo> {
 /** Stops a server and returns its status. */
 export async function stopMcpServer(id: string): Promise<McpServerInfo> {
   return invoke("mcp_server_stop", { id });
+}
+
+/** Lists the tools of a running server again and returns its status. */
+export async function refreshMcpServer(id: string): Promise<McpServerInfo> {
+  return invoke("mcp_server_refresh", { id });
+}
+
+/** Connects with an unsaved config, lists its tools and disconnects. Saves nothing. */
+export async function testMcpServer(config: McpServerConfig): Promise<McpTestResult> {
+  return invoke("mcp_server_test", { config });
 }
 
 /** Listens for status changes of every MCP server. Resolves to the function that stops listening. */

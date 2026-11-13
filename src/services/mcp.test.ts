@@ -10,15 +10,17 @@ vi.mock("./events", () => ({
   listenEvent: (event: string, handler: unknown) => listenEvent(event, handler),
 }));
 
-import type { McpServerConfig, McpServerInfo } from "../types";
+import type { McpServerConfig, McpServerInfo, McpTestResult } from "../types";
 import {
   listenMcpServerStatus,
   listMcpServers,
   MCP_STATUS_EVENT,
+  refreshMcpServer,
   removeMcpServer,
   saveMcpServer,
   startMcpServer,
   stopMcpServer,
+  testMcpServer,
 } from "./mcp";
 
 const config: McpServerConfig = {
@@ -63,6 +65,25 @@ describe("MCP service", () => {
     expect(invoke).toHaveBeenLastCalledWith("mcp_server_start", { id: "a" });
     await expect(stopMcpServer("a")).resolves.toEqual(info);
     expect(invoke).toHaveBeenLastCalledWith("mcp_server_stop", { id: "a" });
+  });
+
+  it("refreshes a running server by id and returns its status", async () => {
+    invoke.mockResolvedValue(info);
+    await expect(refreshMcpServer("a")).resolves.toEqual(info);
+    expect(invoke).toHaveBeenCalledWith("mcp_server_refresh", { id: "a" });
+  });
+
+  it("tests an unsaved config and returns the tools it listed", async () => {
+    const result: McpTestResult = { ok: true, tools: [{ name: "read", description: "Reads" }] };
+    invoke.mockResolvedValue(result);
+    await expect(testMcpServer(config)).resolves.toEqual(result);
+    expect(invoke).toHaveBeenCalledWith("mcp_server_test", { config });
+  });
+
+  it("returns a failed test as a result, not a rejection", async () => {
+    const result: McpTestResult = { ok: false, error: "The server did not start", tools: [] };
+    invoke.mockResolvedValue(result);
+    await expect(testMcpServer(config)).resolves.toEqual(result);
   });
 
   it("rejects with the backend's message when a command fails", async () => {

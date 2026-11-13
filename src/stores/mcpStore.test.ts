@@ -5,12 +5,14 @@ const saveMcpServer = vi.fn();
 const removeMcpServer = vi.fn();
 const startMcpServer = vi.fn();
 const stopMcpServer = vi.fn();
+const refreshMcpServer = vi.fn();
 vi.mock("../services/mcp", () => ({
   listMcpServers: () => listMcpServers(),
   saveMcpServer: (config: unknown) => saveMcpServer(config),
   removeMcpServer: (id: string) => removeMcpServer(id),
   startMcpServer: (id: string) => startMcpServer(id),
   stopMcpServer: (id: string) => stopMcpServer(id),
+  refreshMcpServer: (id: string) => refreshMcpServer(id),
 }));
 
 const refreshTools = vi.fn();
@@ -185,6 +187,47 @@ describe("mcpStore", () => {
 
       expect(toastError).toHaveBeenCalledWith("Could not stop the MCP server", "process is gone");
       expect(useMcpStore.getState().servers.a.status).toBe("running");
+    });
+  });
+
+  describe("refresh", () => {
+    it("shows the server's new tool count and refreshes the tool list", async () => {
+      useMcpStore.setState({ servers: { a: info("a", { status: "running", toolCount: 1 }) } });
+      refreshMcpServer.mockResolvedValue(info("a", { status: "running", toolCount: 4 }));
+
+      await useMcpStore.getState().refresh("a");
+
+      expect(refreshMcpServer).toHaveBeenCalledWith("a");
+      expect(useMcpStore.getState().servers.a).toMatchObject({ status: "running", toolCount: 4 });
+      expect(useMcpStore.getState().busyIds).toEqual([]);
+      expect(refreshTools).toHaveBeenCalled();
+    });
+
+    it("marks the server busy while the refresh runs", async () => {
+      useMcpStore.setState({ servers: { a: info("a", { status: "running" }) } });
+      const pending = deferred<McpServerInfo>();
+      refreshMcpServer.mockReturnValue(pending.promise);
+
+      const running = useMcpStore.getState().refresh("a");
+      expect(useMcpStore.getState().busyIds).toEqual(["a"]);
+
+      pending.resolve(info("a", { status: "running" }));
+      await running;
+      expect(useMcpStore.getState().busyIds).toEqual([]);
+    });
+
+    it("shows a toast and keeps the last status when the refresh fails", async () => {
+      useMcpStore.setState({ servers: { a: info("a", { status: "running", toolCount: 2 }) } });
+      refreshMcpServer.mockRejectedValue("The server stopped answering");
+
+      await useMcpStore.getState().refresh("a");
+
+      expect(toastError).toHaveBeenCalledWith(
+        "Could not refresh the MCP server's tools",
+        "The server stopped answering",
+      );
+      expect(useMcpStore.getState().servers.a).toMatchObject({ status: "running", toolCount: 2 });
+      expect(useMcpStore.getState().busyIds).toEqual([]);
     });
   });
 

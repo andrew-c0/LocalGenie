@@ -56,14 +56,36 @@ pub struct McpServerConfig {
     pub args: Vec<String>,
     #[serde(default)]
     pub env: BTreeMap<String, String>,
+    /// The working folder of a stdio server. None runs it in the app's folder. Ignored for HTTP.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
     /// The endpoint of an HTTP server.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     #[serde(default)]
     pub headers: BTreeMap<String, String>,
-    /// Started when the app starts. Saving an enabled server starts it.
+    /// Connect when the app starts. Turning it on or off does not start or stop a running server.
     #[serde(default)]
     pub enabled: bool,
+    /// The short name in the tool names (`mcp__<slug>__<tool>`). The backend picks it when the
+    /// server is first saved and keeps it through renames. A value the form sends is ignored.
+    #[serde(default)]
+    pub slug: String,
+}
+
+impl McpServerConfig {
+    /// Whether a change from `self` to `next` alters how the server is started: the transport, the
+    /// program and its arguments, environment, folder, endpoint or headers. A rename, or a change of
+    /// `enabled`, does not.
+    pub fn connection_differs(&self, next: &McpServerConfig) -> bool {
+        self.transport != next.transport
+            || self.command != next.command
+            || self.args != next.args
+            || self.env != next.env
+            || self.cwd != next.cwd
+            || self.url != next.url
+            || self.headers != next.headers
+    }
 }
 
 /// Where a server is in its life.
@@ -115,6 +137,7 @@ pub fn normalize(mut config: McpServerConfig) -> Result<McpServerConfig, String>
                 .map(|arg| check_text(arg, "An argument"))
                 .collect::<Result<_, _>>()?;
             config.env = normalize_pairs(config.env, "environment variable")?;
+            config.cwd = normalize_cwd(config.cwd.as_deref())?;
             config.url = None;
             config.headers.clear();
         }
@@ -125,6 +148,7 @@ pub fn normalize(mut config: McpServerConfig) -> Result<McpServerConfig, String>
             config.command = None;
             config.args.clear();
             config.env.clear();
+            config.cwd = None;
         }
     }
     Ok(config)
@@ -179,6 +203,15 @@ fn normalize_command(command: Option<&str>) -> Result<String, String> {
     check_text(command.to_string(), "The command")
 }
 
+/// The working folder, trimmed. Blank means the app's folder (None). Whether it exists is checked
+/// when the server starts, not when it is saved.
+fn normalize_cwd(cwd: Option<&str>) -> Result<Option<String>, String> {
+    match cwd.map(str::trim).filter(|folder| !folder.is_empty()) {
+        Some(folder) => check_text(folder.to_string(), "The working folder").map(Some),
+        None => Ok(None),
+    }
+}
+
 fn normalize_url(url: Option<&str>) -> Result<String, String> {
     let url = url.map(str::trim).unwrap_or_default();
     let parsed = url::Url::parse(url)
@@ -228,9 +261,11 @@ mod tests {
             command: Some(" npx ".into()),
             args: vec!["-y".into(), "server".into()],
             env: BTreeMap::from([("TOKEN".to_string(), "abc".to_string())]),
+            cwd: Some(" C:/work ".into()),
             url: Some("https://ignored.example".into()),
             headers: BTreeMap::from([("X-Key".to_string(), "1".to_string())]),
             enabled: true,
+            slug: "docs".into(),
         }
     }
 
@@ -242,9 +277,69 @@ mod tests {
             command: Some("ignored".into()),
             args: vec!["ignored".into()],
             env: BTreeMap::from([("IGNORED".to_string(), "x".to_string())]),
+            cwd: Some("ignored".into()),
             url: Some(url.into()),
             headers: BTreeMap::from([("Authorization".to_string(), "Bearer t".to_string())]),
             enabled: false,
+            slug: String::new(),
+        }
+    }
+
+    #[test]
+    fn a_stdio_working_folder_is_trimmed_and_a_blank_one_is_none() {
+        let config = normalize(stdio_config()).expect("valid");
+        assert_eq!(config.cwd.as_deref(), Some("C:/work"));
+
+        let mut blank = stdio_config();
+        blank.cwd = Some("   ".into());
+        assert_eq!(normalize(blank).expect("valid").cwd, None);
+    }
+
+    #[test]
+    fn an_http_server_has_no_working_folder() {
+        let config = normalize(http_config("https://mcp.example")).expect("valid");
+        assert_eq!(config.cwd, None);
+    }
+
+    #[test]
+    fn a_rename_or_an_enabled_switch_is_not_a_connection_change() {
+        let saved = normalize(stdio_config()).expect("valid");
+        let renamed = McpServerConfig {
+            name: "Other".into(),
+            enabled: false,
+            slug: "changed".into(),
+            ..saved.clone()
+        };
+        assert!(!saved.connection_differs(&renamed));
+    }
+
+    #[test]
+    fn each_connection_field_counts_as_a_change() {
+        let saved = normalize(stdio_config()).expect("valid");
+        let changes = [
+            McpServerConfig {
+                command: Some("node".into()),
+                ..saved.clone()
+            },
+            McpServerConfig {
+                args: vec!["other".into()],
+                ..saved.clone()
+            },
+            McpServerConfig {
+                env: BTreeMap::from([("TOKEN".to_string(), "new".to_string())]),
+                ..saved.clone()
+            },
+            McpServerConfig {
+                cwd: None,
+                ..saved.clone()
+            },
+            McpServerConfig {
+                transport: McpTransport::Http,
+                ..saved.clone()
+            },
+        ];
+        for changed in changes {
+            assert!(saved.connection_differs(&changed), "{changed:?}");
         }
     }
 

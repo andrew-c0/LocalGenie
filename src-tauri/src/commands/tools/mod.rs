@@ -287,7 +287,13 @@ mod tests {
         let names: Vec<&str> = specs.iter().map(|spec| spec.name.as_str()).collect();
         assert_eq!(
             names,
-            ["list_directory", "read_text_file", "read_image", "web_fetch", "web_search"]
+            [
+                "list_directory",
+                "read_text_file",
+                "read_image",
+                "web_fetch",
+                "web_search"
+            ]
         );
     }
 
@@ -305,7 +311,10 @@ mod tests {
     async fn web_search_sources_lists_the_five_sources_in_camel_case() {
         let sources = super::web_search_sources().await.expect("sources");
         let ids: Vec<&str> = sources.iter().map(|source| source.id.as_str()).collect();
-        assert_eq!(ids, ["wikipedia", "hackernews", "stackoverflow", "npm", "crates"]);
+        assert_eq!(
+            ids,
+            ["wikipedia", "hackernews", "stackoverflow", "npm", "crates"]
+        );
         let json = serde_json::to_value(&sources[1]).expect("serialize");
         assert_eq!(json["label"], "Hacker News");
         assert_eq!(json["host"], "hn.algolia.com");

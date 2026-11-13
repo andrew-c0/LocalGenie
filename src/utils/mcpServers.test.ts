@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { McpServerConfig, McpServerInfo } from "../types";
 import {
   addRow,
+  canRefresh,
   changeRow,
   commandLineOf,
   configFromDraft,
@@ -11,12 +12,16 @@ import {
   isHttpUrl,
   type KeyValueRow,
   type McpDraft,
+  type McpTestRun,
   parseArgs,
+  previewText,
   recordFromRows,
   removeRow,
   rowsFromRecord,
+  shortDescription,
   sortServersByName,
   statusLabel,
+  testResultFor,
   toolCountLabel,
   transportLabel,
   validateDraft,
@@ -51,6 +56,7 @@ const savedStdio: McpServerConfig = {
   args: ["-y", "@modelcontextprotocol/server-filesystem", "C:\\Work"],
   env: { API_KEY: "secret", MODE: "fast" },
   headers: {},
+  cwd: "C:\\Work\\project",
   enabled: true,
 };
 
@@ -70,16 +76,42 @@ describe("draftFromConfig and configFromDraft", () => {
     ]);
   });
 
+  it("loads the working folder, or an empty one when the server has none", () => {
+    expect(draftFromConfig(savedStdio, nextId).cwd).toBe("C:\\Work\\project");
+    expect(draftFromConfig({ ...savedStdio, cwd: null }, nextId).cwd).toBe("");
+  });
+
   it("round-trips a stdio server through the form without change", () => {
     const draft = draftFromConfig(savedStdio, nextId);
-    expect(configFromDraft(draft, "srv-1", true)).toEqual(savedStdio);
+    expect(configFromDraft(draft, savedStdio)).toEqual(savedStdio);
+  });
+
+  it("keeps the saved id, connect-at-start switch and slug of an edited server", () => {
+    const slugged = { ...savedStdio, enabled: false, slug: "files_2" };
+    const config = configFromDraft(draftFromConfig(slugged, nextId), slugged);
+    expect(config).toMatchObject({ id: "srv-1", enabled: false, slug: "files_2" });
+  });
+
+  it("sends no slug for a new server, and enables it", () => {
+    const config = configFromDraft(stdioDraft(), null);
+    expect(config.id).toBe("");
+    expect(config.enabled).toBe(true);
+    expect(config).not.toHaveProperty("slug");
+  });
+
+  it("sends the working folder trimmed, or null when it is empty", () => {
+    expect(configFromDraft(stdioDraft({ cwd: "  C:\\Tools  " }), null).cwd).toBe("C:\\Tools");
+    expect(configFromDraft(stdioDraft({ cwd: "   " }), null).cwd).toBeNull();
+  });
+
+  it("sends no working folder for an HTTP server", () => {
+    expect(configFromDraft(httpDraft({ cwd: "C:\\Tools" }), null).cwd).toBeNull();
   });
 
   it("trims the name and the command and drops the other transport's fields", () => {
     const config = configFromDraft(
       stdioDraft({ name: "  Files  ", command: " npx ", url: "https://left.over" }),
-      "",
-      true,
+      null,
     );
     expect(config).toEqual({
       id: "",
@@ -89,6 +121,7 @@ describe("draftFromConfig and configFromDraft", () => {
       args: [],
       env: {},
       headers: {},
+      cwd: null,
       enabled: true,
     });
     expect(config).not.toHaveProperty("url");
@@ -102,8 +135,7 @@ describe("draftFromConfig and configFromDraft", () => {
         argsText: "--x",
         headers: [{ id: "h", key: "Authorization", value: "Bearer t" }],
       }),
-      "",
-      false,
+      null,
     );
     expect(config).toEqual({
       id: "",
@@ -113,7 +145,8 @@ describe("draftFromConfig and configFromDraft", () => {
       args: [],
       env: {},
       headers: { Authorization: "Bearer t" },
-      enabled: false,
+      cwd: null,
+      enabled: true,
     });
     expect(config).not.toHaveProperty("command");
   });
@@ -191,7 +224,7 @@ describe("validateDraft", () => {
   it("allows an empty row, which is left out on save", () => {
     const draft = stdioDraft({ env: [{ id: "a", key: "", value: "" }] });
     expect(validateDraft(draft)).toEqual({});
-    expect(configFromDraft(draft, "", true).env).toEqual({});
+    expect(configFromDraft(draft, null).env).toEqual({});
   });
 
   it("checks the header rows of a web server", () => {
@@ -269,6 +302,80 @@ describe("commandLineOf", () => {
 
   it("is empty when there is no command", () => {
     expect(commandLineOf("  ", ["-y"])).toBe("");
+  });
+
+  it("adds the working folder after the arguments as 'in <folder>'", () => {
+    expect(commandLineOf("npx", ["-y", "server"], "C:\\Work")).toBe("npx -y server in C:\\Work");
+  });
+
+  it("leaves the folder out when it is empty or blank", () => {
+    expect(commandLineOf("npx", ["-y"], "  ")).toBe("npx -y");
+  });
+});
+
+describe("previewText", () => {
+  it("keeps a short text whole and not truncated", () => {
+    expect(previewText("one\ntwo")).toEqual({ preview: "one\ntwo", truncated: false });
+  });
+
+  it("shows the first lines with their breaks and flags the rest as cut", () => {
+    expect(previewText("a\nb\nc\nd\ne")).toEqual({ preview: "a\nb\nc", truncated: true });
+  });
+
+  it("does not flag a text that only ends in a new line", () => {
+    expect(previewText("a\nb\nc\n")).toEqual({ preview: "a\nb\nc", truncated: false });
+  });
+
+  it("cuts one very long line by characters", () => {
+    const result = previewText("x".repeat(300), 3, 100);
+    expect(result.preview).toHaveLength(100);
+    expect(result.truncated).toBe(true);
+  });
+});
+
+describe("shortDescription", () => {
+  it("collapses new lines and runs of spaces onto one line", () => {
+    expect(shortDescription("Reads\n  a   file\r\nfrom disk")).toBe("Reads a file from disk");
+  });
+
+  it("is empty when there is no description", () => {
+    expect(shortDescription(undefined)).toBe("");
+  });
+
+  it("cuts a long description with an ellipsis", () => {
+    const short = shortDescription("word ".repeat(100), 20);
+    expect(short).toHaveLength(20);
+    expect(short.endsWith("…")).toBe(true);
+  });
+});
+
+describe("testResultFor", () => {
+  const result = { ok: true, tools: [{ name: "read" }] };
+
+  it("shows the result while the form is the one that was tested", () => {
+    const draft = stdioDraft();
+    const run: McpTestRun = { draft, result };
+    expect(testResultFor(run, draft)).toBe(result);
+  });
+
+  it("hides the result once any field has changed to a new form object", () => {
+    const draft = stdioDraft();
+    const run: McpTestRun = { draft, result };
+    expect(testResultFor(run, { ...draft, name: "Other" })).toBeNull();
+  });
+
+  it("is null when there was no test", () => {
+    expect(testResultFor(null, stdioDraft())).toBeNull();
+  });
+});
+
+describe("canRefresh", () => {
+  it("is offered only for a running server", () => {
+    const base = { config: savedStdio, toolCount: 1 };
+    expect(canRefresh({ ...base, status: "running" })).toBe(true);
+    expect(canRefresh({ ...base, status: "stopped" })).toBe(false);
+    expect(canRefresh({ ...base, status: "starting" })).toBe(false);
+    expect(canRefresh({ ...base, status: "failed" })).toBe(false);
   });
 });
 

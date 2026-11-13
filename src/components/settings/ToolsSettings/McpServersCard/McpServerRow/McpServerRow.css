@@ -12,9 +12,3 @@
 .mcp-server-row__name {
   min-width: 0;
 }
-
-/* A long failure reason wraps instead of pushing the buttons out of the card. */
-.mcp-server-row__error {
-  overflow-wrap: anywhere;
-  color: var(--colorPaletteRedForeground1);
-}

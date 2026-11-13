@@ -1,6 +1,8 @@
-//! Starts one MCP server and lists its tools. A stdio server is a child process the app owns; an
-//! HTTP server is a streamable HTTP session with the configured headers. The whole start, with the
-//! tool listing, is bounded by `CONNECT_TIMEOUT_SECS`.
+//! Starts one MCP server and lists its tools. A stdio server is a child process the app owns, run in
+//! the server's working folder with its stderr read into a tail; an HTTP server is a streamable HTTP
+//! session with the configured headers. The whole start, with the tool listing, is bounded by
+//! `CONNECT_TIMEOUT_SECS`. Every failure comes back as the readable text the UI shows, with the
+//! server's own output appended when it wrote any.
 
 use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
@@ -20,12 +22,15 @@ use tokio::time::timeout;
 
 use super::config::{self, McpServerConfig, McpTransport};
 use super::program;
+use super::stderr::StderrTail;
 use crate::commands::server;
 
 /// Longest time a server may take to start and list its tools.
 pub const CONNECT_TIMEOUT_SECS: u64 = 30;
 /// Longest time a session may take to close before its process is killed.
 const SHUTDOWN_TIMEOUT_SECS: u64 = 5;
+/// Longest time a failure waits for a dead server's stderr to end, so its last words are shown.
+const OUTPUT_SETTLE_SECS: u64 = 1;
 
 /// A tool a server listed, as the manager keeps it.
 #[derive(Debug, Clone)]
@@ -36,19 +41,22 @@ pub struct McpTool {
     pub input_schema: rmcp::model::JsonObject,
 }
 
-/// One live connection to a server. A stdio session also keeps the process id, for the kill.
+/// One live connection to a server. A stdio session also keeps the process id, for the kill, and
+/// the tail of the server's stderr.
 pub struct Session {
     client: RunningService<RoleClient, ()>,
     pid: Option<u32>,
     tools: Vec<McpTool>,
+    stderr: StderrTail,
 }
 
 impl Session {
-    fn new(client: RunningService<RoleClient, ()>, pid: Option<u32>) -> Self {
+    fn new(client: RunningService<RoleClient, ()>, pid: Option<u32>, stderr: StderrTail) -> Self {
         Self {
             client,
             pid,
             tools: Vec::new(),
+            stderr,
         }
     }
 
@@ -58,6 +66,11 @@ impl Session {
 
     pub fn set_tools(&mut self, tools: Vec<McpTool>) {
         self.tools = tools;
+    }
+
+    /// The server's stderr tail, for the text of a failure.
+    pub fn stderr(&self) -> &StderrTail {
+        &self.stderr
     }
 
     /// A handle for calls on this session. It stays usable only while the session is open.
@@ -87,19 +100,26 @@ impl Session {
     }
 }
 
-/// Start a server and list its tools. Every failure comes back as the readable text the UI shows.
+/// Start a server and list its tools. The session is returned open; the caller shuts it down.
 pub async fn connect_session(config: &McpServerConfig) -> Result<Session, String> {
-    timeout(
+    let stderr = StderrTail::new(secret_values(config));
+    match timeout(
         Duration::from_secs(CONNECT_TIMEOUT_SECS),
-        start_and_list(config),
+        start_and_list(config, &stderr),
     )
     .await
-    .map_err(|_| format!("The server did not answer within {CONNECT_TIMEOUT_SECS} seconds."))?
+    {
+        Ok(result) => result,
+        Err(_) => Err(stderr.with_output(&format!(
+            "The server did not answer within {CONNECT_TIMEOUT_SECS} seconds."
+        ))),
+    }
 }
 
-/// Start the server, then list its tools. A session whose listing fails is shut down.
-async fn start_and_list(config: &McpServerConfig) -> Result<Session, String> {
-    let mut session = start(config).await?;
+/// Start the server, then list its tools. A session whose listing fails is shut down first, so
+/// its output has ended when the error is written.
+async fn start_and_list(config: &McpServerConfig, stderr: &StderrTail) -> Result<Session, String> {
+    let mut session = start(config, stderr).await?;
     match list_tools(&session.peer()).await {
         Ok(tools) => {
             session.set_tools(tools);
@@ -107,7 +127,10 @@ async fn start_and_list(config: &McpServerConfig) -> Result<Session, String> {
         }
         Err(error) => {
             session.shutdown().await;
-            Err(error)
+            stderr
+                .wait_ended(Duration::from_secs(OUTPUT_SETTLE_SECS))
+                .await;
+            Err(stderr.with_output(&error))
         }
     }
 }
@@ -124,52 +147,64 @@ pub async fn list_tools(peer: &Peer<RoleClient>) -> Result<Vec<McpTool>, String>
     Ok(tools.into_iter().map(McpTool::from).collect())
 }
 
-async fn start(config: &McpServerConfig) -> Result<Session, String> {
+async fn start(config: &McpServerConfig, stderr: &StderrTail) -> Result<Session, String> {
     match config.transport {
-        McpTransport::Stdio => {
-            let command = config
-                .command
-                .as_deref()
-                .ok_or("Enter the command that starts the server.")?;
-            start_stdio(command, &config.args, &config.env).await
-        }
+        McpTransport::Stdio => start_stdio(config, stderr).await,
         McpTransport::Http => {
             let url = config
                 .url
                 .as_deref()
                 .ok_or("Enter a web address that starts with http:// or https://.")?;
-            start_http(url, &config.headers).await
+            start_http(url, &config.headers, stderr).await
         }
     }
 }
 
-async fn start_stdio(
-    command: &str,
-    args: &[String],
-    env: &BTreeMap<String, String>,
-) -> Result<Session, String> {
+async fn start_stdio(config: &McpServerConfig, stderr: &StderrTail) -> Result<Session, String> {
+    let command = config
+        .command
+        .as_deref()
+        .ok_or("Enter the command that starts the server.")?;
     let program = program::resolve_program(command)?;
+    let folder = program::working_folder(config.cwd.as_deref())?;
     let mut process_command = program::command(&program);
-    process_command.args(args).envs(env);
-    let (process, _no_stderr) = TokioChildProcess::builder(process_command)
-        .stderr(Stdio::null())
+    process_command.args(&config.args).envs(&config.env);
+    if let Some(folder) = folder {
+        process_command.current_dir(folder);
+    }
+    let (process, output) = TokioChildProcess::builder(process_command)
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("Could not start '{command}': {error}"))?;
+    if let Some(output) = output {
+        stderr.read_from(output);
+    }
     let pid = process.id();
-    let client = ()
-        .serve(process)
-        .await
-        .map_err(|error| format!("The server did not start: {error}"))?;
-    Ok(Session::new(client, pid))
+    match ().serve(process).await {
+        Ok(client) => Ok(Session::new(client, pid, stderr.clone())),
+        Err(error) => {
+            stderr
+                .wait_ended(Duration::from_secs(OUTPUT_SETTLE_SECS))
+                .await;
+            Err(stderr.with_output(&format!("The server did not start: {error}")))
+        }
+    }
 }
 
-async fn start_http(url: &str, headers: &BTreeMap<String, String>) -> Result<Session, String> {
+async fn start_http(
+    url: &str,
+    headers: &BTreeMap<String, String>,
+    stderr: &StderrTail,
+) -> Result<Session, String> {
     let header_map: HashMap<_, _> = config::parse_headers(headers)?.into_iter().collect();
     let transport_config =
         StreamableHttpClientTransportConfig::with_uri(url).custom_headers(header_map);
     let transport = StreamableHttpClientTransport::from_config(transport_config);
-    let client = ().serve(transport).await.map_err(|error| http_start_error(url, &error))?;
-    Ok(Session::new(client, None))
+    let client = ()
+        .serve(transport)
+        .await
+        .map_err(|error| stderr.with_output(&http_start_error(url, &error)))?;
+    Ok(Session::new(client, None, stderr.clone()))
 }
 
 /// The readable reason an HTTP server did not start. A server that answered with an error is not
@@ -196,6 +231,16 @@ fn chain_answered(error: &(dyn Error + 'static)) -> bool {
         current = link.source();
     }
     false
+}
+
+/// The environment and header values of a server. They are blanked out of any text shown.
+fn secret_values(config: &McpServerConfig) -> Vec<String> {
+    config
+        .env
+        .values()
+        .chain(config.headers.values())
+        .cloned()
+        .collect()
 }
 
 impl From<Tool> for McpTool {

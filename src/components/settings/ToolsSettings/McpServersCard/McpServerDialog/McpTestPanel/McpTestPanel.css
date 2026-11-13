@@ -1,0 +1,30 @@
+/* The result sits in a block of its own under the form. */
+.mcp-test-panel {
+  padding: var(--spacingVerticalS) var(--spacingHorizontalM);
+  border-radius: var(--borderRadiusMedium);
+  background: var(--colorNeutralBackground3);
+}
+
+/* A long tool list scrolls inside the panel instead of stretching the dialog. */
+.mcp-test-panel__tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalXS);
+  margin: 0;
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.mcp-test-panel__tool {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mcp-test-panel__name {
+  font-family: var(--fontFamilyMonospace);
+  font-size: var(--fontSizeBase200);
+  overflow-wrap: anywhere;
+}

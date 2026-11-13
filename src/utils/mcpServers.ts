@@ -1,4 +1,10 @@
-import type { McpServerConfig, McpServerInfo, McpStatus, McpTransport } from "../types";
+import type {
+  McpServerConfig,
+  McpServerInfo,
+  McpStatus,
+  McpTestResult,
+  McpTransport,
+} from "../types";
 import { countLabel } from "./format";
 
 /**
@@ -19,6 +25,8 @@ export interface McpDraft {
   transport: McpTransport;
   command: string;
   argsText: string;
+  /** The working folder for stdio. Empty means LocalGenie's folder. */
+  cwd: string;
   env: KeyValueRow[];
   url: string;
   headers: KeyValueRow[];
@@ -48,6 +56,7 @@ export function emptyDraft(): McpDraft {
     transport: "stdio",
     command: "",
     argsText: "",
+    cwd: "",
     env: [],
     url: "",
     headers: [],
@@ -77,6 +86,7 @@ export function draftFromConfig(config: McpServerConfig | null, newId: () => str
     transport: config.transport,
     command: config.command ?? "",
     argsText: config.args.join("\n"),
+    cwd: config.cwd ?? "",
     env: rowsFromRecord(config.env, newId),
     url: config.url ?? "",
     headers: rowsFromRecord(config.headers, newId),
@@ -151,18 +161,22 @@ export function hasDraftErrors(errors: McpDraftErrors): boolean {
 }
 
 /**
- * The config the form saves. Only the chosen transport's fields are kept, so switching transport does
- * not leave the other transport's settings behind. `id` is empty for a new server.
+ * The config the form saves, for a new server (`saved` null) or an edited one. Only the chosen
+ * transport's fields are kept, so switching transport does not leave the other transport's settings
+ * behind. The id, the connect-at-start switch and the slug come from the saved server. A new server
+ * has no slug, so none is sent.
  */
-export function configFromDraft(draft: McpDraft, id: string, enabled: boolean): McpServerConfig {
+export function configFromDraft(draft: McpDraft, saved: McpServerConfig | null): McpServerConfig {
   const base = {
-    id,
+    id: saved?.id ?? "",
     name: draft.name.trim(),
     transport: draft.transport,
     args: [],
     env: {},
     headers: {},
-    enabled,
+    cwd: null,
+    enabled: saved?.enabled ?? true,
+    ...(saved?.slug ? { slug: saved.slug } : {}),
   };
   if (draft.transport === "stdio") {
     return {
@@ -170,6 +184,7 @@ export function configFromDraft(draft: McpDraft, id: string, enabled: boolean): 
       command: draft.command.trim(),
       args: parseArgs(draft.argsText),
       env: recordFromRows(draft.env),
+      cwd: draft.cwd.trim() || null,
     };
   }
   return { ...base, url: draft.url.trim(), headers: recordFromRows(draft.headers) };
@@ -181,11 +196,16 @@ function quoteArg(arg: string): string {
   return /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg;
 }
 
-/** The command line that will run, with the arguments in order. Empty when there is no command. */
-export function commandLineOf(command: string, args: string[]): string {
+/**
+ * The command line that will run, with the arguments in order and "in <folder>" after them when a
+ * working folder is set. Empty when there is no command.
+ */
+export function commandLineOf(command: string, args: string[], folder = ""): string {
   const program = command.trim();
   if (program === "") return "";
-  return [program, ...args.map(quoteArg)].join(" ");
+  const line = [program, ...args.map(quoteArg)].join(" ");
+  const place = folder.trim();
+  return place === "" ? line : `${line} in ${place}`;
 }
 
 /** The status as the list shows it. */
@@ -215,6 +235,50 @@ export function toolCountLabel(count: number): string {
 /** A server's status as the list needs it: a running server can be stopped, the others started. */
 export function canStop(info: McpServerInfo): boolean {
   return info.status === "running" || info.status === "starting";
+}
+
+/** Only a running server can have its tools listed again. */
+export function canRefresh(info: McpServerInfo): boolean {
+  return info.status === "running";
+}
+
+/** How many lines and characters of a long text the collapsed view shows. */
+export const ERROR_PREVIEW_LINES = 3;
+export const ERROR_PREVIEW_CHARS = 280;
+
+/**
+ * The start of a long text (an error, which may carry a server's stderr) for the collapsed view. Keeps
+ * the line breaks of the lines shown. `truncated` is true when some of the text is left out.
+ */
+export function previewText(
+  text: string,
+  maxLines = ERROR_PREVIEW_LINES,
+  maxChars = ERROR_PREVIEW_CHARS,
+): { preview: string; truncated: boolean } {
+  const body = text.trimEnd();
+  let preview = body.split(/\r?\n/).slice(0, maxLines).join("\n");
+  if (preview.length > maxChars) preview = preview.slice(0, maxChars);
+  return { preview, truncated: preview.length < body.length };
+}
+
+/** A tool description on one line: runs of spaces and new lines collapsed, long text cut with "…". */
+export function shortDescription(description: string | undefined, maxChars = 140): string {
+  const oneLine = (description ?? "").replace(/\s+/g, " ").trim();
+  return oneLine.length > maxChars ? `${oneLine.slice(0, maxChars - 1).trimEnd()}…` : oneLine;
+}
+
+/** A finished connection test and the form values it ran with. */
+export interface McpTestRun {
+  draft: McpDraft;
+  result: McpTestResult;
+}
+
+/**
+ * The test result to show for the form now. Every edit makes a new draft object, so a result from an
+ * earlier form is not shown. Null when there is no test, or the form has changed since it ran.
+ */
+export function testResultFor(run: McpTestRun | null, draft: McpDraft): McpTestResult | null {
+  return run && run.draft === draft ? run.result : null;
 }
 
 /** Servers ordered by name, without case. Returns a new array. */

@@ -9,6 +9,11 @@
   min-width: 0;
 }
 
+/* The working folder's input takes the room left of its Browse button and may shrink. */
+.mcp-dialog__folder-input {
+  min-width: 0;
+}
+
 /* The command line that will run: monospace, and a long line wraps. */
 .mcp-dialog__command {
   display: block;
