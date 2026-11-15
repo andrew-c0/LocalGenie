@@ -1210,3 +1210,9 @@ export interface ToolDefinition {
     parameters: Record<string, unknown>;
   };
 }
+
+/** Background behaviour: whether closing the window keeps the app in the tray, and whether it starts with Windows. */
+export interface BackgroundSettings {
+  keepRunningInTray: boolean;
+  startWithWindows: boolean;
+}

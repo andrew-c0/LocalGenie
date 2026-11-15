@@ -465,8 +465,13 @@ pub async fn get_preference(
     db: tauri::State<'_, DatabaseConnection>,
     key: String,
 ) -> Result<Option<String>, String> {
-    let result = user_preference::Entity::find_by_id(&key)
-        .one(&*db)
+    read_preference(&db, &key).await
+}
+
+/// Read one preference value as stored (text). `None` when the key is absent.
+pub async fn read_preference(db: &DatabaseConnection, key: &str) -> Result<Option<String>, String> {
+    let result = user_preference::Entity::find_by_id(key)
+        .one(db)
         .await
         .map_err(|e| e.to_string())?;
     Ok(result.map(|r| r.value))
@@ -479,10 +484,20 @@ pub async fn set_preference(
     value: String,
     pref_type: String,
 ) -> Result<(), String> {
+    write_preference(&db, &key, &value, &pref_type).await
+}
+
+/// Store one preference value, replacing any earlier value for the key.
+pub async fn write_preference(
+    db: &DatabaseConnection,
+    key: &str,
+    value: &str,
+    pref_type: &str,
+) -> Result<(), String> {
     user_preference::Entity::insert(user_preference::ActiveModel {
-        key: Set(key),
-        value: Set(value),
-        pref_type: Set(pref_type),
+        key: Set(key.to_owned()),
+        value: Set(value.to_owned()),
+        pref_type: Set(pref_type.to_owned()),
     })
     .on_conflict(
         OnConflict::column(user_preference::Column::Key)
@@ -492,7 +507,7 @@ pub async fn set_preference(
             ])
             .to_owned(),
     )
-    .exec(&*db)
+    .exec(db)
     .await
     .map_err(|e| e.to_string())?;
     Ok(())

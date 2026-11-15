@@ -11,6 +11,7 @@ pub mod migrations;
 
 use commands::aihub;
 use commands::attachments;
+use commands::background;
 use commands::benchmark_files;
 use commands::benchmark_prompts;
 use commands::benchmark_runner;
@@ -40,16 +41,27 @@ pub fn run() {
     if let Some(args) = commands::uninstall_cleanup::parse_args(std::env::args().skip(1)) {
         std::process::exit(commands::uninstall_cleanup::run(args));
     }
-    let builder = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Single instance is registered first: a second launch hands over to the running app and exits.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        tray::show_main_window(app);
+    }));
+    let builder = builder
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init());
-    // Updater and process (restart) are desktop-only. The updater reads `plugins.updater` from
-    // tauri.conf.json when it is initialised, so the app will not start until that block exists.
+    // Updater, process (restart) and autostart are desktop-only. The updater reads `plugins.updater`
+    // from tauri.conf.json when it is initialised, so the app will not start until that block exists.
+    // Autostart starts the app with `--minimized`, so the window stays hidden at Windows sign-in.
     #[cfg(desktop)]
     let builder = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init());
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![background::MINIMIZED_ARG]),
+        ));
     builder
         .setup(|app| {
             // Resolve DB path in the app data directory. A database under its legacy name is renamed first.
@@ -77,6 +89,7 @@ pub fn run() {
             }
 
             app.manage(db);
+            background::init(app);
             // MCP servers: the manager emits status events, and enabled servers start in the background.
             app.manage(tools::mcp::McpManager::new(app.handle().clone()));
             tools::mcp::commands::start_enabled_servers(app.handle().clone(), startup_db);
@@ -143,6 +156,14 @@ pub fn run() {
             commands::ram_store::backfill_model_ram,
             system::get_platform_info,
             system_usage::get_system_usage,
+            // Background running (close to tray, start with Windows, explicit exit)
+            background::background_settings_get,
+            background::background_keep_running_in_tray_set,
+            background::background_start_with_windows_set,
+            background::app_exit,
+            // Tray status (tooltip text) and notifications while the window is hidden
+            tray::tray_set_tooltip,
+            tray::notify_if_hidden,
             // Settings Storage card (folder sizes, open a folder in Explorer)
             commands::storage::storage_usage,
             commands::storage::storage_open_folder,
@@ -229,24 +250,28 @@ pub fn run() {
             database::list_downloaded_models,
             database::delete_downloaded_model,
         ])
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                let state = window.state::<commands::AppState>();
-                let pid = state
-                    .server_process
-                    .lock()
-                    .ok()
-                    .and_then(|mut proc| proc.take());
-                if let Some(pid) = pid {
-                    server::kill_process_sync(pid);
+        .on_window_event(|window, event| match event {
+            // With "keep running in the tray" on, the close button hides the main window instead.
+            tauri::WindowEvent::CloseRequested { api, .. } if window.label() == "main" => {
+                let keep_running = window
+                    .state::<commands::AppState>()
+                    .keep_running_in_tray
+                    .load(std::sync::atomic::Ordering::SeqCst);
+                if keep_running {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    background::show_tray_hint_once(window.app_handle());
                 }
-                window
-                    .state::<playground::PlaygroundJobs>()
-                    .kill_active_sync();
-                window.state::<playground::SpeechJobs>().kill_active_sync();
-                window.state::<tools::mcp::McpManager>().kill_all_sync();
             }
+            tauri::WindowEvent::Destroyed => background::cleanup_children(window.app_handle()),
+            _ => {}
         })
-        .run(tauri::generate_context!())
-        .expect("error while running LocalGenie");
+        .build(tauri::generate_context!())
+        .expect("error while running LocalGenie")
+        .run(|app, event| {
+            // Runs on every exit path, including restart and logoff, where the window may never be destroyed.
+            if let tauri::RunEvent::Exit = event {
+                background::cleanup_children(app);
+            }
+        });
 }

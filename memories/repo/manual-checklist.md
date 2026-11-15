@@ -2,30 +2,44 @@
 
 Run through these checks manually after building or deploying the app. Automated checks cannot fully verify installer behavior, filesystem permissions, or OS-level interactions.
 
+## Background running (Dispatch phase A, 2026-11-15; ticked = the user tested)
+- [x] Settings > Background > Keep running in the tray on: closing the window hides it to the tray and the app keeps running (confirmed in a dev run by the user, 2026-11-15; fixed after the first try, the close listener now blocks the close).
+- [ ] The first hide to the tray shows one notification ("LocalGenie is still running"); later hides show none. May not show in a dev build. Not run.
+- [ ] Tray: left click opens the window, right click shows Open LocalGenie and Exit. Not run.
+- [ ] Exit with a download running asks "Exit LocalGenie?" and Cancel keeps the app; with nothing running Exit quits at once and no geniex, node or MCP child process is left. Not run.
+- [ ] A second launch of the app shows the running window and starts no second copy. To be tested with Start with Windows.
+- [x] Keep running off (the default): closing the window quits as before, and with a download running the old "Close LocalGenie?" prompt shows (confirmed by the user, 2026-11-15). With it on, a running download keeps going in the tray (confirmed).
+- [ ] Start with Windows (installed build): after sign-in the app starts hidden in the tray; turning the switch off removes it. Not run.
+- [x] A chat reply left generating while the window is hidden for a few minutes finishes correctly when the window is reopened (the Dispatch spike: a frontend runner works while hidden; confirmed by the user, 2026-11-15).
+- [ ] Tray tooltip: while a model downloads, hovering the tray icon shows "Downloading <name> 42%" ("(+N more)" for several); it goes back to "LocalGenie" when nothing is active. Not run.
+- [ ] A download that finishes while the window is hidden or minimized shows a Windows notification "Download complete" with the model name; none when the window is on screen, none for cancelled or failed ones. Not run.
+- [ ] A runtime install (Settings > Runtimes) shows "Installing <name>" in the tooltip and "<name> was installed." when done and hidden. Not run.
+- [ ] An update install while the app is hidden in the tray restarts cleanly. Not run.
+
 ## MCP servers (phase 4 and its follow-up, 2026-11-13; ticked = the user tested)
 - [x] Remote HTTP server: Settings > Tools > MCP servers > Add server, transport Web address; it connects, its tools appear under its name, and a chat uses one of them (tested by the user, 2026-11-13).
 - [x] Stdio server: a node program running a local demo, added with the Program transport (the command and the script path in the arguments, both absolute), started, its tools listed and one used in a chat (tested by the user, 2026-11-13).
-- [ ] A missing command (for example `no-such-program`): the row reads Failed with "Cannot find ..."; the other servers and the chat keep working. Not run.
-- [ ] Stop on a running server: the row reads Stopped, its tools leave the tool list and its child process is gone (Task Manager). Not run.
-- [ ] Closing the app leaves no child process (node, npx) running. Not run.
-- [ ] `npx` on Windows: a stdio server with the command `npx` starts (npx.cmd is found through PATH). Not run.
-- [ ] A server with "Connect when LocalGenie starts" on connects after a restart without a click, and a server that fails at start does not delay the window. Not run.
-- [ ] An HTTP server that is down: Failed with "Failed to reach the MCP server at ..." (not "did not start"). Not run.
-- [ ] Edit a connection setting (the command or an argument) of a running server and Save: it restarts and its tool list follows. Not run.
-- [ ] Request approval on an MCP tool: the dialog shows the external-server note; the tool line reads "<server> · <tool>". Not run.
-- [ ] Remove a server: its tools leave the list and the chat's tools chip; the other tools are unchanged. Not run.
+- [x] A missing command (for example `no-such-program`): the row reads Failed with "Cannot find ..."; the other servers and the chat keep working. (confirmed in the app by the user, 2026-11-15).
+- [x] Stop on a running server: the row reads Stopped, its tools leave the tool list and its child process is gone (Task Manager). (confirmed in the app by the user, 2026-11-15).
+- [x] Closing the app leaves no child process (node, npx) running. (confirmed in the app by the user, 2026-11-15).
+- [x] `npx` on Windows: a stdio server with the command `npx` starts (npx.cmd is found through PATH). (confirmed in the app by the user, 2026-11-15).
+- [x] A server with "Connect when LocalGenie starts" on connects after a restart without a click, and a server that fails at start does not delay the window. (confirmed in the app by the user, 2026-11-15).
+- [x] An HTTP server that is down: Failed with "Failed to reach the MCP server at ..." (not "did not start"). (confirmed in the app by the user, 2026-11-15).
+- [x] Edit a connection setting (the command or an argument) of a running server and Save: it restarts and its tool list follows. (confirmed in the app by the user, 2026-11-15).
+- [x] Request approval on an MCP tool: the dialog shows the external-server note; the tool line reads "<server> · <tool>". (confirmed in the app by the user, 2026-11-15).
+- [x] Remove a server: its tools leave the list and the chat's tools chip; the other tools are unchanged. (confirmed in the app by the user, 2026-11-15).
 - [x] Refresh on a running server re-lists its tools (confirmed in the app by the user, 2026-11-13).
 - [x] Switch "Connect when LocalGenie starts": turning it on or off does not start or stop a running server (confirmed in the app by the user, 2026-11-13).
 - [x] Rename keeps tool states: after a rename a tool keeps its name and its Off, Request approval or On state (confirmed in the app by the user, 2026-11-13).
 - [x] Working folder: a stdio server with a folder set starts in it; Browse fills the field; the command line preview reads "in <folder>" (confirmed in the app by the user, 2026-11-13).
 - [x] Test button: a server that connects shows "Connected" with its tools; one that does not shows the reason (confirmed in the app by the user, 2026-11-13).
 - [x] Error display: a long error shows its first lines; Show more and Show less switch between them (confirmed in the app by the user, 2026-11-13).
-- [ ] Test saves nothing: after a Test (passing or failing) the server list and the saved settings are as they were; changing the form hides the result. Not run.
-- [ ] A stdio server that fails with output: the error shows the server's own stderr lines after "Server output:"; an env value or header of 6 or more characters shows as [redacted]. Not run.
-- [ ] A working folder that does not exist: the row reads Failed with "The working folder '...' does not exist."; saving the server is not refused. Not run.
-- [ ] Two servers with the same name: the second one's tool names use `_2` (for example `mcp__docs_2__<tool>`), and they keep it after a rename. Not run.
-- [ ] A database with servers saved before this change: each server keeps its tool names and their saved states after the app starts. Not run.
-- [ ] Test on a stdio server whose first start is slow (a first `npx` download): the result is either Connected or "did not answer within 30 seconds". Not run.
+- [x] Test saves nothing: after a Test (passing or failing) the server list and the saved settings are as they were; changing the form hides the result. (confirmed in the app by the user, 2026-11-15).
+- [x] A stdio server that fails with output: the error shows the server's own stderr lines after "Server output:"; an env value or header of 6 or more characters shows as [redacted]. (confirmed in the app by the user, 2026-11-15).
+- [x] A working folder that does not exist: the row reads Failed with "The working folder '...' does not exist."; saving the server is not refused. (confirmed in the app by the user, 2026-11-15).
+- [x] Two servers with the same name: the second one's tool names use `_2` (for example `mcp__docs_2__<tool>`), and they keep it after a rename. (confirmed in the app by the user, 2026-11-15).
+- [x] A database with servers saved before this change: each server keeps its tool names and their saved states after the app starts. (confirmed in the app by the user, 2026-11-15).
+- [x] Test on a stdio server whose first start is slow (a first `npx` download): the result is either Connected or "did not answer within 30 seconds". (confirmed in the app by the user, 2026-11-15).
 
 ## GGUF projector matching and the drawer warning (2026-11-12 working tree; ticked = the user tested)
 - [x] A download of a UD repo (for example `unsloth/Qwen3.5-4B-GGUF`) gets its projector: the projector is downloaded and imported (tested by the user, 2026-11-12).
@@ -515,13 +529,13 @@ Not yet run:
 - [ ] Turning the setting off keeps existing summaries in effect and stops new ones.
 - [ ] Check the server logs: the request after a summary carries the summary in the system prompt and the model does not reload.
 
-## Conversation compaction follow-ups (committed after febb07b, 2026-11-13; not tested by the user yet)
-- [ ] Error rows: after a reply that failed, send another prompt. The server log's request has no error text, and the context ring does not count the error line.
-- [ ] Stripped thinking: with thinking on, a reply with a think block, then a second prompt. In the server log the earlier assistant turn has only its answer, and the new reply still shows its own thinking. The reply after the change may be slower (the server re-reads earlier history).
-- [ ] Per-chat switch: chat settings > Conversation compaction. "On" summarises that chat at its threshold even when the app setting is off; "Off" never summarises that chat while the app setting is on; "Use app setting" shows the app's current state in its hint. Save and reopen the chat: the choice stays.
-- [ ] Per-chat threshold: with "On", untick "Use the app threshold" and set 50; the chat summarises earlier than with the app's 70 (use a small nctx). Ticking the box again follows the app threshold.
-- [ ] Reset to model settings clears the compaction choice back to "Use app setting".
-- [ ] Compact now, with the switch off: a model loaded, the server running and new messages since the last summary. The confirm dialog shows; Compact writes a "Conversation summarised" line at the end of the chat; the covered messages show no Delete.
-- [ ] Compact now is disabled, with its reason as the tooltip, when there is no model, the server is stopped, a reply is streaming, or nothing is new since the last summary.
-- [ ] Compact now fails (for example the server stops) or is stopped with the Stop button: a failure shows "Summary failed"; either way the conversation is unchanged.
-- [ ] After a restart, the summary line stays at the end and the transcript order matches the order before the restart. The database refusal of a covered message is not reachable from the UI; it is covered by `cargo test` (`delete_refuses_covered_rows_and_keeps_later_ones`), not run in this sync.
+## Conversation compaction follow-ups (committed after febb07b, 2026-11-13; tested by the user, 2026-11-15)
+- [x] Error rows: after a reply that failed, send another prompt. The server log's request has no error text, and the context ring does not count the error line. (confirmed in the app by the user, 2026-11-15).
+- [x] Stripped thinking: with thinking on, a reply with a think block, then a second prompt. In the server log the earlier assistant turn has only its answer, and the new reply still shows its own thinking. The reply after the change may be slower (the server re-reads earlier history). (confirmed in the app by the user, 2026-11-15).
+- [x] Per-chat switch: chat settings > Conversation compaction. "On" summarises that chat at its threshold even when the app setting is off; "Off" never summarises that chat while the app setting is on; "Use app setting" shows the app's current state in its hint. Save and reopen the chat: the choice stays. (confirmed in the app by the user, 2026-11-15).
+- [x] Per-chat threshold: with "On", untick "Use the app threshold" and set 50; the chat summarises earlier than with the app's 70 (use a small nctx). Ticking the box again follows the app threshold. (confirmed in the app by the user, 2026-11-15).
+- [x] Reset to model settings clears the compaction choice back to "Use app setting". (confirmed in the app by the user, 2026-11-15).
+- [x] Compact now, with the switch off: a model loaded, the server running and new messages since the last summary. The confirm dialog shows; Compact writes a "Conversation summarised" line at the end of the chat; the covered messages show no Delete. (confirmed in the app by the user, 2026-11-15).
+- [x] Compact now is disabled, with its reason as the tooltip, when there is no model, the server is stopped, a reply is streaming, or nothing is new since the last summary. (confirmed in the app by the user, 2026-11-15).
+- [x] Compact now fails (for example the server stops) or is stopped with the Stop button: a failure shows "Summary failed"; either way the conversation is unchanged. (confirmed in the app by the user, 2026-11-15).
+- [x] After a restart, the summary line stays at the end and the transcript order matches the order before the restart. The database refusal of a covered message is not reachable from the UI; it is covered by `cargo test` (`delete_refuses_covered_rows_and_keeps_later_ones`), not run in this sync. (confirmed in the app by the user, 2026-11-15).

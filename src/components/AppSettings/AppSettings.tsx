@@ -1,4 +1,5 @@
 import AppUpdateCard from "../settings/AppUpdateCard/AppUpdateCard";
+import BackgroundCard from "../settings/BackgroundCard/BackgroundCard";
 import CompactionCard from "../settings/CompactionCard/CompactionCard";
 import RamHeadroomCard from "../settings/RamHeadroomCard/RamHeadroomCard";
 import RuntimeUpdateNoticeCard from "../settings/RuntimeUpdateNoticeCard/RuntimeUpdateNoticeCard";
@@ -12,6 +13,7 @@ export default function AppSettings() {
   return (
     <div className="app-settings__section">
       <AppUpdateCard />
+      <BackgroundCard />
       <ServerPortCard />
       <RamHeadroomCard />
       <CompactionCard />

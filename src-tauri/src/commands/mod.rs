@@ -1,5 +1,6 @@
 pub mod aihub;
 pub mod attachments;
+pub mod background;
 pub mod benchmark_files;
 pub mod benchmark_prompts;
 pub mod benchmark_runner;
@@ -31,6 +32,7 @@ pub mod system_usage;
 pub mod tools;
 pub mod uninstall_cleanup;
 
+use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
 
 /// Shared application state managed by Tauri.
@@ -43,6 +45,8 @@ pub struct AppState {
     pub http_client: reqwest::Client,
     /// Recent `geniex serve` output for the Logs page.
     pub server_logs: Mutex<logs::LogBuffer>,
+    /// Close hides the window to the tray instead of quitting. Loaded from the preference at setup.
+    pub keep_running_in_tray: AtomicBool,
 }
 
 impl Default for AppState {
@@ -50,6 +54,7 @@ impl Default for AppState {
         Self {
             server_process: Mutex::new(None),
             server_logs: Mutex::new(logs::LogBuffer::default()),
+            keep_running_in_tray: AtomicBool::new(false),
             // No total timeout here: chat streams run until the model finishes.
             // Non-streaming calls set `HTTP_TIMEOUT_SECS` per request.
             http_client: reqwest::Client::builder()

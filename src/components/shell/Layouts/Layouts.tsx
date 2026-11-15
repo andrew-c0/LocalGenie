@@ -7,11 +7,13 @@ import { ToolApprovalDialog } from "../../ToolApprovalDialog/ToolApprovalDialog"
 import { Breadcrumbs } from "../../ui/Breadcrumbs/Breadcrumbs";
 import { AppUpdateRuntime } from "../AppUpdateRuntime/AppUpdateRuntime";
 import CloseGuard from "../CloseGuard";
+import ExitGuard from "../ExitGuard";
 import Header from "../Header/Header";
 import { McpRuntime } from "../McpRuntime/McpRuntime";
 import { RuntimeUpdateRuntime } from "../RuntimeUpdateRuntime/RuntimeUpdateRuntime";
 import Sidebar from "../Sidebar/Sidebar";
 import TitleBar from "../TitleBar/TitleBar";
+import { TrayStatusRuntime } from "../TrayStatusRuntime/TrayStatusRuntime";
 import "./Layouts.css";
 
 /**
@@ -25,6 +27,7 @@ import "./Layouts.css";
  * `RuntimeUpdateRuntime` runs the periodic runtime update check and its desktop notice.
  * `AppUpdateRuntime` does the same for the app's own new version.
  * `McpRuntime` keeps the MCP servers' status events flowing, so the tool list follows a server on any page.
+ * `TrayStatusRuntime` keeps the tray tooltip showing background work and notifies when a download ends.
  */
 export function MainLayout() {
   const selectorOpen = useModelStore((s) => s.selectorOpen);
@@ -43,6 +46,7 @@ export function MainLayout() {
         </div>
       </div>
       <CloseGuard />
+      <ExitGuard />
       <ToolApprovalDialog />
       <ChatRuntime />
       <PlaygroundRuntime />
@@ -50,6 +54,7 @@ export function MainLayout() {
       <RuntimeUpdateRuntime />
       <AppUpdateRuntime />
       <McpRuntime />
+      <TrayStatusRuntime />
     </div>
   );
 }

@@ -1,11 +1,11 @@
 # Release and update feed
 
-Windows ARM64 only, NSIS installer. Workflows: `.github/workflows/ci.yml` (every PR and push to main) and `.github/workflows/release.yml` (tag `v*`). Version files: `scripts/` (`npm run version:bump -- <x.y.z|patch|minor|major>`, `npm run version:check [-- vX.Y.Z]`). Line endings: `.gitattributes` forces LF in the repo and in every checkout.
+Windows ARM64 only, NSIS installer. Workflows: `.github/workflows/ci.yml` (every PR and push to main) and `.github/workflows/release.yml` (tag `v*`) and `.github/workflows/release-notes.yml` (published releases). Version files: `scripts/` (`npm run version:bump -- <x.y.z|patch|minor|major>`, `npm run version:check [-- vX.Y.Z]`). Line endings: `.gitattributes` forces LF in the repo and in every checkout.
 
 Confirmed on GitHub (2026-11-10/11): CI passes on `windows-11-arm` (about 20 min). The Release run for tag `v0.1.1` succeeded (about 30 min) and created the release "LocalGenie v0.1.1" with `LocalGenie_0.1.1_arm64-setup.exe`, its `.sig` and `latest.json`; the release is published and marked Latest. The repo is public and both signing secrets are set. The installed app (already 0.1.1) reads the real feed over TLS (native-tls) and gets a valid `latest.json`.
 
 ## Cut a release
-Shortcut: `npm run release -- <patch|minor|major|x.y.z>` (add `--dry-run` to only check) or the `/release` skill (`.claude/skills/release/SKILL.md`, user-invoked only). The script checks `main` and a clean tree, bumps the version files, refreshes `Cargo.lock`, commits "Release X.Y.Z", pushes, then tags `vX.Y.Z` and pushes the tag. `npm run release -- 0.1.2` was run end to end on 2026-11-13: it made the version bump commit febb07b, pushed tag v0.1.2, and the Release workflow started. The draft is not published yet (step 5). The `/release` skill itself has not been run.
+Shortcut: `npm run release -- <patch|minor|major|x.y.z>` (add `--dry-run` to only check) or the `/release` skill (`.claude/skills/release/SKILL.md`, user-invoked only). The script checks `main` and a clean tree, bumps the version files, refreshes `Cargo.lock`, commits "Release X.Y.Z", pushes, then tags `vX.Y.Z` and pushes the tag. `npm run release -- 0.1.2` was run end to end on 2026-11-13: it made the version bump commit febb07b, pushed tag v0.1.2, and the Release workflow started. v0.1.2 was published, and the update to it from the GitHub feed works (the user confirmed on 2026-11-15). The `/release` skill itself has not been run.
 
 Manual version:
 1. `npm run version:bump -- patch` (or `minor`, `major`, or an exact `x.y.z`). This sets `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`.
@@ -39,8 +39,8 @@ The local feed is in `scripts/updater-test/` (tested 2026-11-10: 0.1.0 updated t
 4. Run the older app, check for updates in Settings > Application & Runtime, install, and confirm the app restarts as the newer version.
 
 ## Not yet verified
-- Downloading and installing an update from the GitHub feed. This needs the v0.1.2 draft published (it is not yet) and an older install (0.1.1 or earlier) that reads it.
-- A non-debug installer (the 0.1.1 installer was built by the workflow; its install and update path is not yet tested in the app).
+- The Release notes workflow (`release-notes.yml`, added in cf36bc6) and `npm run release:notes`: not run on GitHub yet. Check that the update dialog shows the release page notes after the next publish.
+- A fresh install from a non-debug installer: the update to 0.1.2 (a workflow-built installer) works (user, 2026-11-15); a fresh install is not recorded.
 - The `/release` skill end to end. (`npm run release` ran end to end for 0.1.2, see "Cut a release".)
 
 ## Skipped for now

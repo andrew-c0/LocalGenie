@@ -112,13 +112,17 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Limits (code-verified in `commands/attachments.rs`, `utils/attachments.ts`): 4 files per message, 10 MB for image and audio, 512 KB UTF-8 for text. The "Open location" action is Windows only.
 - Earlier cache overwrite (a second quant of the same repo replaced the first in the cache) was not reproduced in isolation. The observed loss was explained by a manual removal (reported). Treat as unconfirmed.
 
-## Conversation compaction (committed 1116bf1; follow-ups committed after febb07b, not run)
-- The main flow was tested by the user on 2026-11-02 (per the header of `manual-checklist.md`, section "Conversation compaction"); the remaining checklist items are not ticked. The 2026-11-13 follow-ups (per-chat override, Compact now, stripped thinking in earlier replies, error rows left out, database delete guard) have their own unticked section there.
+## Conversation compaction (committed 1116bf1; the 2026-11-13 follow-ups tested by the user 2026-11-15)
+- The main flow was tested by the user on 2026-11-02 (per the header of `manual-checklist.md`, section "Conversation compaction"). The 2026-11-13 follow-ups (per-chat override, Compact now, stripped thinking in earlier replies, error rows left out, database delete guard) were tested by the user on 2026-11-15; their section there is ticked.
 - Stripping thinking from earlier replies lowers the context the request carries, but the context ring still counts the reply's completion tokens, thinking included (`contextUsageOf`). The ring can overstate the context after a reply with a long think block. Code-read.
 - Stripping thinking changes the prefix the server cached for earlier turns, so the server may read that history again on the next request. The extra prefill cost is not measured.
 - The trigger and the summary budget use the same character estimate as the context total, so a summary can come earlier or later than the real window would need. An unknown window disables the trigger and the splitting (code-read).
 - The summary is the model's own text. The code checks only that it is not empty; nothing checks it against the conversation. A weak summary stays in effect until a later summary folds it in; summaries also stay in effect when the setting is off.
-- Covered messages cannot be deleted or retried. This is enforced in the store, the UI and `delete_message` (database; code-read, not run); the summary row itself also cannot be removed.
+- Covered messages cannot be deleted or retried. This is enforced in the store, the UI and `delete_message`; the database check is the cargo test `delete_refuses_covered_rows_and_keeps_later_ones` (not run in this sync). The summary row itself also cannot be removed.
+
+## Background running (Dispatch phase A, 2026-11-15; code-read, partly run)
+- Exit and the close prompt check only downloads (`utils/exitBlockers.ts`, `CloseGuard.tsx`). A running chat reply, benchmark run, Playground image, speech or OCR job, or an MCP call is cut off without a prompt by the tray's Exit, and by closing the window when "keep running in the tray" is off. Code-read. Dispatch is meant to add its own blocker.
+- Not run: the tray menu and Exit, the tooltip, the finish notices, a second launch, Start with Windows (installed build), an update or uninstall while the app is in the tray. Steps: `manual-checklist.md` ("Background running").
 
 ## Sidebar usage chart with Playground jobs (committed 9a18c4f; code-read, partly run)
 - Only the text to image and OCR lines were confirmed in the app by the user (2026-11-03). Upscaling, speech, image to image on a GPU or NPU device, and Auto on a device with no NPU counter are not checked.
