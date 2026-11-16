@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChatSession, Message } from "../types";
-import { messageCountLabel, pinnedFirst } from "./conversations";
+import { chatSessionsOf, messageCountLabel, pinnedFirst } from "./conversations";
 
 function session(id: string, pinned = false, updatedAt = 0): ChatSession {
   return {
@@ -68,5 +68,14 @@ describe("messageCountLabel", () => {
   it("does not count tool results", () => {
     const toolRow: Message = { ...message(), role: "tool", kind: "tool" };
     expect(messageCountLabel([message(), toolRow, message("tool")])).toBe("1 message");
+  });
+});
+
+describe("chatSessionsOf", () => {
+  it("leaves out a Dispatch task's session and keeps the conversations in order", () => {
+    const dispatch: ChatSession = { ...session("task"), kind: "dispatch" };
+    const chat: ChatSession = { ...session("chat"), kind: "chat" };
+    const legacy = session("legacy");
+    expect(chatSessionsOf([dispatch, chat, legacy]).map((s) => s.id)).toEqual(["chat", "legacy"]);
   });
 });

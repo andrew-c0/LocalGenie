@@ -29,6 +29,11 @@ export function toolStateKey(name: string): string {
   return `tool_state_${name}`;
 }
 
+/** The preference key of one tool's saved Dispatch state. Written only once the user sets it. */
+export function dispatchToolStateKey(name: string): string {
+  return `tool_dispatch_state_${name}`;
+}
+
 /** The preference key of the shared list of folders the file tools may read. */
 export const TOOL_ALLOWED_FOLDERS_KEY = "tool_allowed_folders";
 

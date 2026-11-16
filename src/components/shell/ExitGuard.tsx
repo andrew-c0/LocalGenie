@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { exitApp, onExitRequested } from "../../services/background";
+import { useDispatchStore } from "../../stores/dispatchStore";
 import { useDownloadStore } from "../../stores/downloadStore";
 import { errorMessage } from "../../utils/errorMessage";
 import { exitBlockers } from "../../utils/exitBlockers";
@@ -17,7 +18,10 @@ export default function ExitGuard() {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     onExitRequested(() => {
-      const found = exitBlockers(useDownloadStore.getState().downloads);
+      const found = exitBlockers(
+        useDownloadStore.getState().downloads,
+        useDispatchStore.getState().tasks,
+      );
       if (found.length === 0) void quit();
       else setBlockers(found);
     }).then((fn) => {

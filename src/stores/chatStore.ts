@@ -8,6 +8,7 @@ import type {
   ReplyUsage,
 } from "../types";
 import { canRemoveFrom } from "../utils/compaction";
+import { chatSessionsOf } from "../utils/conversations";
 import { isReplyMessage } from "../utils/toolRecords";
 
 /** Max characters used for auto-generated session titles from the first message. */
@@ -43,6 +44,8 @@ interface ChatState {
   lastSendTime: number;
 
   createSession: (modelId?: string) => string;
+  /** Adds a session, or replaces the one with its id. Used for a Dispatch task's session when it is created. */
+  addSession: (session: ChatSession) => void;
   deleteSession: (id: string) => void;
   setActiveSession: (id: string | null) => void;
   addMessage: (sessionId: string, message: Message) => void;
@@ -87,7 +90,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   createSession: (modelId?: string) => {
     // One empty draft at a time: a new conversation opens the existing empty one.
-    const draft = get().sessions.find((s) => s.messages.length === 0);
+    const draft = chatSessionsOf(get().sessions).find((s) => s.messages.length === 0);
     if (draft) return draft.id;
 
     const id = crypto.randomUUID();
@@ -101,6 +104,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       createdAt: now,
       updatedAt: now,
       pinned: false,
+      kind: "chat",
     };
     set((state) => ({
       sessions: [session, ...state.sessions],
@@ -109,13 +113,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
     return id;
   },
 
+  addSession: (session: ChatSession) => {
+    set((state) => ({
+      sessions: state.sessions.some((s) => s.id === session.id)
+        ? state.sessions.map((s) => (s.id === session.id ? session : s))
+        : [session, ...state.sessions],
+    }));
+  },
+
   deleteSession: (id: string) => {
     set((state) => {
       const filtered = state.sessions.filter((s) => s.id !== id);
       return {
         sessions: filtered,
         activeSessionId:
-          state.activeSessionId === id ? (filtered[0]?.id ?? null) : state.activeSessionId,
+          state.activeSessionId === id
+            ? (chatSessionsOf(filtered)[0]?.id ?? null)
+            : state.activeSessionId,
       };
     });
   },
@@ -319,8 +333,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   discardEmptySessions: (keepId: string | null) => {
+    // A Dispatch task's session stays even while it is empty: the task is stored without messages until it starts.
     set((state) => ({
-      sessions: state.sessions.filter((s) => s.messages.length > 0 || s.id === keepId),
+      sessions: state.sessions.filter(
+        (s) => s.kind === "dispatch" || s.messages.length > 0 || s.id === keepId,
+      ),
     }));
   },
 }));

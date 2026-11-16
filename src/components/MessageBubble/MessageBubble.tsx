@@ -40,6 +40,8 @@ interface MessageBubbleProps {
   isLive?: boolean;
   /** True when a summary stands in for this message (or is the summary row). No delete or retry. */
   isCovered?: boolean;
+  /** A transcript that cannot be changed (a Dispatch task). No delete or retry. */
+  readOnly?: boolean;
 }
 
 export default function MessageBubble({
@@ -48,6 +50,7 @@ export default function MessageBubble({
   isStreaming = false,
   isLive = false,
   isCovered = false,
+  readOnly = false,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
@@ -58,10 +61,11 @@ export default function MessageBubble({
   const hasAttachments = (message.attachments?.length ?? 0) > 0;
   // Every message is sent to the model on later turns, so any of them can be removed with the ones after it.
   // A message a summary covers stays: the summary has replaced it, and it cannot be removed.
-  const showDelete = !isStreaming && !isCovered;
+  const showDelete = !readOnly && !isStreaming && !isCovered;
   // Files saved before paths were kept cannot be read again, so their message cannot be retried.
   const filesCanBeResent = (message.attachments ?? []).every((file) => !!file.path);
   const showRetry =
+    !readOnly &&
     isUser &&
     isLastUserMessage &&
     !isStreaming &&

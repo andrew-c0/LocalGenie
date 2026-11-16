@@ -5,6 +5,7 @@ import { backfillModelRam } from "../services/modelRam";
 import { useAppUpdateStore } from "../stores/appUpdateStore";
 import { useBackgroundStore } from "../stores/backgroundStore";
 import { useChatStore } from "../stores/chatStore";
+import { useDispatchStore } from "../stores/dispatchStore";
 import { useMcpStore } from "../stores/mcpStore";
 import { useModelStore } from "../stores/modelStore";
 import { useRamEstimateStore } from "../stores/ramEstimateStore";
@@ -16,7 +17,8 @@ import { useToolStore } from "../stores/toolStore";
 /**
  * Startup only: loads the runtime list (which also sets the CLI state), saved sessions, installed
  * models, server status, the sidebar's saved state, the runtime update checks, the saved runtime notice state and the
- * saved app update notified version, the tool settings (states, allowed folders), the MCP server list and the background settings once. Everything that runs afterwards is owned by
+ * saved app update notified version, the tool settings (states, allowed folders), the MCP server list, the background settings and the Dispatch tasks once. It marks the model and server reads done
+ * when they finish (`startupRead`), which the Dispatch resume offer waits for. Everything that runs afterwards is owned by
  * the component that uses it (model loading in the header, downloads in the drawer, streaming in `ChatRuntime`, MCP status events in `McpRuntime`).
  */
 export default function AppBootstrap({ children }: { children: ReactNode }) {
@@ -42,6 +44,7 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
     void useToolStore.getState().load();
     void useMcpStore.getState().load();
     void useBackgroundStore.getState().load();
+    void useDispatchStore.getState().load();
 
     (async () => {
       // The release checks call GitHub and can be slow, so they start once the list is read and do not
@@ -77,6 +80,7 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
         .getServerStatus(useModelStore.getState().serverPort)
         .catch(() => null);
       if (status) setServerStatus(status);
+      useModelStore.getState().markStartupRead();
     })();
   }, [loadSessions, setModels, setServerStatus, setServerPort, setChipset]);
 

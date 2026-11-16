@@ -8,6 +8,8 @@ export interface CompactNowState {
   serverRunning: boolean;
   streaming: boolean;
   compacting: boolean;
+  /** A Dispatch task uses the model now. A summary would queue behind its request. */
+  dispatchRunning?: boolean;
   messages: Message[];
 }
 
@@ -18,6 +20,7 @@ export interface CompactNowState {
 export function compactNowBlocker(state: CompactNowState): string | null {
   if (state.compacting) return "A summary is already running.";
   if (state.streaming) return "Wait for the reply to finish.";
+  if (state.dispatchRunning) return "Dispatch is using the model.";
   if (state.modelId === null) return "Select a model to summarise this conversation.";
   if (!state.serverRunning) return "Start the GenieX server to summarise this conversation.";
   if (summaryInputBefore(state.messages).items.length === 0) {

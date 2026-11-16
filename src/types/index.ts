@@ -174,7 +174,12 @@ export interface ChatSession {
   pinned: boolean;
   /** Settings this chat sets for itself. Keys left out use the model's settings. */
   settingsOverrides?: ChatSettingsOverrides;
+  /** What the session is. Absent means `chat`. A Dispatch task's session is `dispatch` and is not listed as a chat. */
+  kind?: SessionKind;
 }
+
+/** A conversation (`chat`) or the session of a Dispatch task (`dispatch`). */
+export type SessionKind = "chat" | "dispatch";
 
 /**
  * The settings a chat can override, as stored with the conversation. Only the keys a chat sets are
@@ -1215,4 +1220,56 @@ export interface ToolDefinition {
 export interface BackgroundSettings {
   keepRunningInTray: boolean;
   startWithWindows: boolean;
+}
+
+/**
+ * Where a Dispatch conversation stands. `queued` waits for the running turn; `running` is a turn in progress;
+ * `done` is a turn that ended with a reply ("Ready"); `interrupted` is a turn the app stopped when it closed.
+ * `needs_you` is a turn waiting for the user's approval of a tool call. It still holds the model.
+ */
+export type DispatchStatus =
+  | "queued"
+  | "running"
+  | "needs_you"
+  | "done"
+  | "failed"
+  | "stopped"
+  | "interrupted";
+
+/** Limits an earlier version stored. The backend still returns them as zeros; nothing reads them now. */
+export interface DispatchLimits {
+  maxSteps: number;
+  maxMinutes: number;
+}
+
+/** A Dispatch conversation, as `dispatch_list` and `dispatch_create` return it. Its messages live in `sessionId`. */
+export interface DispatchTask {
+  id: string;
+  sessionId: string;
+  /** The first message the conversation was started with. It is the session's title. */
+  goal: string;
+  status: DispatchStatus;
+  allowedTools: string[];
+  limits: DispatchLimits;
+  notes: string;
+  report: string | null;
+  error: string | null;
+  steps: number;
+  createdAt: number;
+  startedAt: number | null;
+  finishedAt: number | null;
+}
+
+/**
+ * The fields `dispatch_update` changes. A field left out is not changed. `report` and `error` take null
+ * to clear them; the other fields take a value only.
+ */
+export interface DispatchPatch {
+  status?: DispatchStatus;
+  notes?: string;
+  steps?: number;
+  startedAt?: number;
+  finishedAt?: number;
+  report?: string | null;
+  error?: string | null;
 }

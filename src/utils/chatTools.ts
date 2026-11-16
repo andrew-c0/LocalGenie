@@ -3,10 +3,9 @@
  * No state and no I/O here; the composer's chip reads them from the tool store.
  */
 
-import type { SearchSourceInfo, ToolSpec } from "../types";
+import type { ToolSpec } from "../types";
 import { groupToolsBySource } from "./mcpTools";
 import type { ToolState } from "./toolAccess";
-import { isOfferable } from "./webSearchSources";
 
 /** The global state as the chip's popover shows it. A tool that is off is not listed, so only two appear. */
 const CHAT_TOOL_STATE_TEXT: Record<ToolState, string> = {
@@ -51,22 +50,6 @@ export function chatToolGroups(rows: ToolSpec[]): ChatToolGroup[] {
     groups.push({ key: server.serverId, title: server.serverName, tools: server.tools });
   }
   return groups;
-}
-
-/**
- * How many of the listed tools the model is offered in this chat: not switched off for it, and offerable
- * now. A tool with no search source on is not counted, because the model is not offered it.
- */
-export function activeChatToolCount(
-  rows: ToolSpec[],
-  disabledInChat: string[],
-  enabledSourceIds: string[],
-  searchSources: SearchSourceInfo[],
-): number {
-  return rows.filter(
-    (tool) =>
-      !disabledInChat.includes(tool.name) && isOfferable(tool, enabledSourceIds, searchSources),
-  ).length;
 }
 
 /** The chip's accessible name, for example "Tools for this chat, 3 active". */

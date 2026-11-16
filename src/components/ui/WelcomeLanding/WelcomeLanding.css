@@ -1,0 +1,48 @@
+/* The landing's scrolling part: the hero, then the page's content. The message field, if any, sits below it. */
+.welcome-landing {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--spacingHorizontalL);
+}
+
+.welcome-landing__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalL);
+}
+
+.welcome-landing__hero {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacingHorizontalL);
+  padding: var(--spacingVerticalL) var(--spacingHorizontalXL);
+  border-radius: var(--borderRadiusXLarge);
+  border: 1px solid var(--colorNeutralStroke2);
+  background: linear-gradient(135deg, var(--colorBrandBackground2), var(--colorNeutralBackground3));
+}
+
+.welcome-landing__hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalXS);
+  flex: 1;
+  min-width: 240px;
+}
+
+.welcome-landing__status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacingHorizontalS);
+  color: var(--colorNeutralForeground3);
+}
+
+/* On a very wide window the content stops at 80% of the width and is centred. */
+@media (min-width: 1600px) {
+  .welcome-landing__inner {
+    max-width: 80%;
+    margin-inline: auto;
+  }
+}

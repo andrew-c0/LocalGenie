@@ -7,6 +7,7 @@ import { ToolApprovalDialog } from "../../ToolApprovalDialog/ToolApprovalDialog"
 import { Breadcrumbs } from "../../ui/Breadcrumbs/Breadcrumbs";
 import { AppUpdateRuntime } from "../AppUpdateRuntime/AppUpdateRuntime";
 import CloseGuard from "../CloseGuard";
+import DispatchResumeGuard from "../DispatchResumeGuard";
 import ExitGuard from "../ExitGuard";
 import Header from "../Header/Header";
 import { McpRuntime } from "../McpRuntime/McpRuntime";
@@ -28,6 +29,7 @@ import "./Layouts.css";
  * `AppUpdateRuntime` does the same for the app's own new version.
  * `McpRuntime` keeps the MCP servers' status events flowing, so the tool list follows a server on any page.
  * `TrayStatusRuntime` keeps the tray tooltip showing background work and notifies when a download ends.
+ * `DispatchResumeGuard` offers once per start to continue the Dispatch conversations that an app close interrupted.
  */
 export function MainLayout() {
   const selectorOpen = useModelStore((s) => s.selectorOpen);
@@ -47,6 +49,7 @@ export function MainLayout() {
       </div>
       <CloseGuard />
       <ExitGuard />
+      <DispatchResumeGuard />
       <ToolApprovalDialog />
       <ChatRuntime />
       <PlaygroundRuntime />

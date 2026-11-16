@@ -38,7 +38,10 @@ interface ModelState {
   loadedCompute: ComputeChoice | null;
   /** Context window (tokens) the loaded model was loaded with. Null when no model was loaded by this app. */
   loadedContext: number | null;
+  /** True once the startup reads (model list, server status) have finished, so they can be trusted. */
+  startupRead: boolean;
 
+  markStartupRead: () => void;
   setCliInstalled: (v: boolean) => void;
   setChipset: (chipset: string | null) => void;
   setModels: (models: ModelInfo[]) => void;
@@ -68,7 +71,9 @@ export const useModelStore = create<ModelState>((set) => ({
   chipset: null,
   loadedCompute: null,
   loadedContext: null,
+  startupRead: false,
 
+  markStartupRead: () => set({ startupRead: true }),
   setCliInstalled: (v) => set({ cliInstalled: v }),
   setChipset: (chipset) => set({ chipset }),
   setSelectorOpen: (open: boolean) => set({ selectorOpen: open }),

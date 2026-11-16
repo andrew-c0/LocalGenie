@@ -7,10 +7,12 @@ import {
   DialogSurface,
   DialogTitle,
 } from "@fluentui/react-components";
+import { useChatStore } from "../../stores/chatStore";
 import type { ApprovalDecision } from "../../stores/toolApprovalStore";
 import { useToolApprovalStore } from "../../stores/toolApprovalStore";
 import { useToolStore } from "../../stores/toolStore";
 import {
+  allowForScopeLabel,
   approvalNote,
   externalToolNote,
   prettyArguments,
@@ -32,6 +34,10 @@ export function ToolApprovalDialog() {
   const tools = useToolStore((s) => s.tools);
   const searchSources = useToolStore((s) => s.searchSources);
   const enabledSearchSources = useToolStore((s) => s.enabledSearchSources);
+  const requestSessionId = current?.request.sessionId;
+  const inDispatch = useChatStore(
+    (s) => s.sessions.find((session) => session.id === requestSessionId)?.kind === "dispatch",
+  );
   if (!current) return null;
 
   const { id, toolName, arguments: args } = current.request;
@@ -76,7 +82,7 @@ export function ToolApprovalDialog() {
               Allow once
             </Button>
             <Button appearance="secondary" onClick={() => decide("chat")}>
-              Allow for this chat
+              {allowForScopeLabel(inDispatch)}
             </Button>
           </DialogActions>
         </DialogBody>

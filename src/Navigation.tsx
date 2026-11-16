@@ -14,6 +14,7 @@ import BenchmarkRuns from "./pages/benchmark/BenchmarkRuns/BenchmarkRuns";
 import BenchmarkSuiteItem from "./pages/benchmark/BenchmarkSuiteItem/BenchmarkSuiteItem";
 import BenchmarkSuites from "./pages/benchmark/BenchmarkSuites/BenchmarkSuites";
 import ChatPage from "./pages/ChatPage/ChatPage";
+import DispatchPage from "./pages/DispatchPage/DispatchPage";
 import HubModelsPage from "./pages/HubModelsPage/HubModelsPage";
 import LocalModelsBrowserPage from "./pages/LocalModelsBrowserPage/LocalModelsBrowserPage";
 import ModelsLandingPage from "./pages/ModelsLandingPage/ModelsLandingPage";
@@ -40,6 +41,7 @@ import { audioTaskUrl } from "./utils/audioTask";
  * - `/models/huggingface` Hugging Face browser, `/models/huggingface/:repoId` its detail
  * - `/models/aihub` Qualcomm AI Hub catalog, `/models/aihub/:id` its detail
  * - `/chat` default content, `/chat/:sessionId` one conversation
+ * - `/dispatch` the landing (recent conversations and the message field that starts one), `/dispatch/:taskId` one conversation (both need the GenieX CLI)
  * - `/playground` landing, `/playground/text-to-image|image-to-image|image-upscaling|ocr|audio` one tool each; the old
  *   `speech-to-text|text-to-speech|audio-to-audio` paths redirect to `audio` with `?task=`
  * - `/settings` landing, `/settings/app|runtimes|inference|tools|logs|about` one page each
@@ -68,6 +70,8 @@ export default function Navigation() {
           <Route path="/models/aihub/:id" element={<AihubModelDetail />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/chat/:sessionId" element={<ChatPage />} />
+          <Route path="/dispatch" element={<DispatchPage />} />
+          <Route path="/dispatch/:taskId" element={<DispatchPage />} />
           <Route path="/benchmarks">
             <Route index element={<BenchmarksLandingPage />} />
             {/* The sub-pages share one frame (padding, scrolling); the landing sits outside it. */}

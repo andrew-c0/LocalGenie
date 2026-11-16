@@ -1,43 +1,4 @@
-.chat-welcome {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: var(--spacingHorizontalL);
-}
-
-.chat-welcome__inner {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacingVerticalL);
-}
-
-.chat-welcome__hero {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--spacingHorizontalL);
-  padding: var(--spacingVerticalL) var(--spacingHorizontalXL);
-  border-radius: var(--borderRadiusXLarge);
-  border: 1px solid var(--colorNeutralStroke2);
-  background: linear-gradient(135deg, var(--colorBrandBackground2), var(--colorNeutralBackground3));
-}
-
-.chat-welcome__hero-text {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacingVerticalXS);
-  flex: 1;
-  min-width: 240px;
-}
-
-.chat-welcome__status {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--spacingHorizontalS);
-  color: var(--colorNeutralForeground3);
-}
-
+/* The feature tiles under the chat landing's hero. The hero and the scrolling frame are WelcomeLanding's. */
 .chat-welcome__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -64,12 +25,4 @@
   font-size: 22px;
   color: var(--colorBrandForeground1);
   background-color: var(--colorBrandBackground2);
-}
-
-/* On a very wide window the content stops at 80% of the width and is centred. */
-@media (min-width: 1600px) {
-  .chat-welcome__inner {
-    max-width: 80%;
-    margin-inline: auto;
-  }
 }

@@ -29,6 +29,9 @@ export default function ToolsSettings() {
       <Body>
         Let models use tools. Every tool starts off. A model only sees the tools you turn on.
       </Body>
+      <Meta>
+        Dispatch conversations use their own tool settings, set under Dispatch on each tool.
+      </Meta>
 
       {!loaded && !failed && (
         <Flex direction="column" gap="m">

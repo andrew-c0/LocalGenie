@@ -2,6 +2,7 @@ import { Badge, Field, Radio, RadioGroup } from "@fluentui/react-components";
 import type { ReactNode } from "react";
 import { useToolStore } from "../../../stores/toolStore";
 import type { ToolSpec } from "../../../types";
+import { dispatchStateOf } from "../../../utils/dispatchTools";
 import {
   parseToolState,
   TOOL_STATE_HELP,
@@ -27,11 +28,16 @@ interface ToolCardProps {
   children?: ReactNode;
 }
 
-/** One tool: its name, what it does, its three-way state (Off, Request approval, On) and what that state means. */
+/**
+ * One tool: its name, what it does, and two three-way states (Off, Request approval, On): one for chats and one
+ * for Dispatch conversations, which use their own settings. A Dispatch state never set is On.
+ */
 export function ToolCard({ tool, children }: ToolCardProps) {
   const label = toolLabel(tool.name, tool.serverName);
   const state = useToolStore((s) => s.states[tool.name] ?? "off");
   const setState = useToolStore((s) => s.setState);
+  const dispatchState = useToolStore((s) => dispatchStateOf(tool.name, s.dispatchStates));
+  const setDispatchState = useToolStore((s) => s.setDispatchState);
   const note = TOOL_NOTES[tool.name];
   const isMcp = tool.source === "mcp";
 
@@ -49,10 +55,10 @@ export function ToolCard({ tool, children }: ToolCardProps) {
         {tool.risk === "network" && <Meta>Uses the internet</Meta>}
         <Secondary>{tool.description}</Secondary>
         {note && <Secondary>{note}</Secondary>}
-        <Field label="Access">
+        <Field label="Chat">
           <RadioGroup
             layout="horizontal"
-            aria-label={`Access to ${label}`}
+            aria-label={`Chat access to ${label}`}
             value={state}
             onChange={(_, data) => void setState(tool.name, parseToolState(data.value))}
           >
@@ -62,6 +68,20 @@ export function ToolCard({ tool, children }: ToolCardProps) {
           </RadioGroup>
         </Field>
         <Meta>{TOOL_STATE_HELP[state]}</Meta>
+        <Meta>Dispatch tools are On unless you change them here.</Meta>
+        <Field label="Dispatch">
+          <RadioGroup
+            layout="horizontal"
+            aria-label={`Dispatch access to ${label}`}
+            value={dispatchState}
+            onChange={(_, data) => void setDispatchState(tool.name, parseToolState(data.value))}
+          >
+            {TOOL_STATES.map((option) => (
+              <Radio key={option} value={option} label={TOOL_STATE_LABEL[option]} />
+            ))}
+          </RadioGroup>
+        </Field>
+        <Meta>{TOOL_STATE_HELP[dispatchState]}</Meta>
         {children}
       </Flex>
     </SurfaceCard>

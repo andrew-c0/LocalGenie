@@ -1,30 +1,16 @@
 import { Text } from "@fluentui/react-components";
 import { useChatStore } from "../../../stores/chatStore";
+import { fastestReplies } from "../../../utils/generationSpeed";
 import { ProgressBar } from "../../ui/ProgressBar/ProgressBar";
 import { StateBlock } from "../../ui/StateBlock/StateBlock";
 import "./SpeedList.css";
 
-/** Derives tokens/sec from stored chat message stats and shows the top 5. */
+const TOP_COUNT = 5;
+
+/** Derives tokens/sec from the stored chat replies and shows the top 5. Dispatch conversations are not counted. */
 export function SpeedList() {
   const sessions = useChatStore((s) => s.sessions);
-
-  const speeds: { model: string; tps: number }[] = [];
-  for (const session of sessions) {
-    for (const msg of session.messages) {
-      if (
-        msg.role === "assistant" &&
-        msg.stats &&
-        msg.stats.totalTime > 0 &&
-        msg.stats.tokenCount > 0 &&
-        msg.modelId
-      ) {
-        const tps = msg.stats.tokenCount / (msg.stats.totalTime / 1000);
-        speeds.push({ model: msg.modelId.split("/").pop() ?? msg.modelId, tps });
-      }
-    }
-  }
-  speeds.sort((a, b) => b.tps - a.tps);
-  const top = speeds.slice(0, 5);
+  const top = fastestReplies(sessions, TOP_COUNT);
   const max = top.length > 0 ? top[0].tps : 1;
 
   if (top.length === 0) {

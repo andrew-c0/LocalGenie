@@ -1,0 +1,36 @@
+/* The conversation canvas takes the whole page. The chat and Dispatch share it, so both lay out alike. */
+.conversation-canvas {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A state shown in place of the content (no conversation, loading) fills the canvas. */
+.conversation-canvas__empty {
+  flex: 1;
+}
+
+/* The transcript scrolls inside the canvas; the message field stays at the bottom. */
+.conversation-canvas__transcript {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--spacingHorizontalL);
+}
+
+/* The rule above the message field, then the shared composer (its field, buttons and tools row). */
+.conversation-canvas__composer {
+  padding: var(--spacingVerticalS) var(--spacingHorizontalL) var(--spacingVerticalM);
+  border-top: 1px solid var(--colorNeutralStroke2);
+}
+
+/* On a very wide window the composer stops at 80% of the width and is centred, as the transcript is. */
+@media (min-width: 1600px) {
+  .conversation-canvas__composer .message-composer__wrapper,
+  .conversation-canvas__composer .message-composer__toolbar {
+    max-width: 80%;
+    margin-inline: auto;
+  }
+}

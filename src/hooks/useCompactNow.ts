@@ -1,5 +1,6 @@
 import { compactConversationNow } from "../services/chatCompaction";
 import { useChatStore } from "../stores/chatStore";
+import { useDispatchStore } from "../stores/dispatchStore";
 import { useModelStore } from "../stores/modelStore";
 import type { ChatSession } from "../types";
 import { compactNowBlocker } from "../utils/compactNow";
@@ -13,12 +14,14 @@ export function useCompactNow(session: ChatSession) {
   const serverRunning = useModelStore((s) => s.serverStatus.running);
   const streaming = useChatStore((s) => s.isStreaming);
   const compacting = useChatStore((s) => s.compacting);
+  const dispatchRunning = useDispatchStore((s) => s.runningTaskId !== null);
 
   const blocker = compactNowBlocker({
     modelId,
     serverRunning,
     streaming,
     compacting,
+    dispatchRunning,
     messages: session.messages,
   });
   const compact = () => {

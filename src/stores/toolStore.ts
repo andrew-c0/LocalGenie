@@ -1,9 +1,11 @@
 import { create } from "zustand";
 import {
   loadAllowedFolders,
+  loadDispatchToolStates,
   loadSearchSourceIds,
   loadToolStates,
   saveAllowedFolders,
+  saveDispatchToolState,
   saveSearchSourceIds,
   saveToolState,
 } from "../services/toolSettings";
@@ -16,8 +18,13 @@ import { toolLabel } from "../utils/toolLines";
 import { toggleSource } from "../utils/webSearchSources";
 
 interface ToolStoreState {
-  /** The saved state of each tool, by name. A tool missing from the map is off. */
+  /** The saved state of each tool, by name, for chats. A tool missing from the map is off. */
   states: Record<string, ToolState>;
+  /**
+   * The Dispatch state the user set for each tool, by name. A tool missing from the map has none of its own
+   * and is On in Dispatch (see `dispatchStateOf`). The chat state does not reach Dispatch.
+   */
+  dispatchStates: Record<string, ToolState>;
   /** The absolute folders the file tools may read. Empty until loaded. */
   allowedFolders: string[];
   /** The tools the backend knows, from `tool_list`. Empty until loaded. */
@@ -44,8 +51,10 @@ interface ToolStoreState {
    * a new tool gets its saved state. A failure is logged and the old list stays.
    */
   refreshTools: () => Promise<void>;
-  /** Saves one tool's state, then shows it. A failed save keeps the old state and shows a toast. */
+  /** Saves one tool's chat state, then shows it. A failed save keeps the old state and shows a toast. */
   setState: (name: string, state: ToolState) => Promise<void>;
+  /** Saves one tool's Dispatch state, then shows it. From then on the tool's Dispatch state is its own. */
+  setDispatchState: (name: string, state: ToolState) => Promise<void>;
   /** Adds a folder and saves the list. Resolves to true when the folder was added. */
   addFolder: (path: string) => Promise<boolean>;
   /** Removes a folder and saves the list. */
@@ -68,6 +77,7 @@ interface ToolStoreState {
 /** Tool settings: each tool's state, the folders the file tools may read, the search sources and per-chat grants. */
 export const useToolStore = create<ToolStoreState>((set, get) => ({
   states: {},
+  dispatchStates: {},
   allowedFolders: [],
   tools: [],
   searchSources: [],
@@ -86,16 +96,22 @@ export const useToolStore = create<ToolStoreState>((set, get) => ({
         listSearchSources(),
         loadSearchSourceIds(),
       ]);
-      const states = await loadToolStates(tools.map((tool) => tool.name));
-      set({
+      const names = tools.map((tool) => tool.name);
+      const [states, dispatchStates] = await Promise.all([
+        loadToolStates(names),
+        loadDispatchToolStates(names),
+      ]);
+      // A state the user set while these reads were in flight is newer than the read: it is kept.
+      set((current) => ({
         tools,
         allowedFolders,
         searchSources,
         enabledSearchSources,
-        states,
+        states: { ...states, ...current.states },
+        dispatchStates: { ...dispatchStates, ...current.dispatchStates },
         loaded: true,
         loadError: null,
-      });
+      }));
     } catch (err) {
       console.warn("[tools] Tool settings unavailable:", err);
       set({ loaded: false, loadError: err });
@@ -105,8 +121,16 @@ export const useToolStore = create<ToolStoreState>((set, get) => ({
   refreshTools: async () => {
     try {
       const tools = await listTools();
-      const fresh = await loadToolStates(tools.map((tool) => tool.name));
-      set((current) => ({ tools, states: { ...fresh, ...current.states } }));
+      const names = tools.map((tool) => tool.name);
+      const [fresh, freshDispatch] = await Promise.all([
+        loadToolStates(names),
+        loadDispatchToolStates(names),
+      ]);
+      set((current) => ({
+        tools,
+        states: { ...fresh, ...current.states },
+        dispatchStates: { ...freshDispatch, ...current.dispatchStates },
+      }));
     } catch (err) {
       console.warn("[tools] Tool list refresh failed:", err);
     }
@@ -120,6 +144,16 @@ export const useToolStore = create<ToolStoreState>((set, get) => ({
       return;
     }
     set((current) => ({ states: { ...current.states, [name]: state } }));
+  },
+
+  setDispatchState: async (name, state) => {
+    try {
+      await saveDispatchToolState(name, state);
+    } catch (err) {
+      toast.error(`Could not save the Dispatch setting for ${toolLabel(name)}`, errorMessage(err));
+      return;
+    }
+    set((current) => ({ dispatchStates: { ...current.dispatchStates, [name]: state } }));
   },
 
   addFolder: async (path) => {

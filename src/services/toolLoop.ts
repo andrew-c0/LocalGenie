@@ -96,14 +96,57 @@ async function runRound(
   const split = splitCalls(calls);
   for (const call of split.run) {
     if (isStopped(sessionId)) break;
-    addToolRow(sessionId, call, await outcomeForCall(sessionId, call, modelId));
+    addToolRow(sessionId, call, await outcomeForCall(chatRunRules(sessionId), call, modelId));
   }
   for (const call of split.skipped) addToolRow(sessionId, call, skippedOutcome());
 }
 
-/** The outcome of one call: unknown, off, denied, cancelled, or the result of running it. */
-async function outcomeForCall(
+/**
+ * Who decides the calls of one run: the session it belongs to (its grants and its approval requests use it),
+ * the state each tool has in this kind of run, which tools are switched on for the session, and how the user is
+ * asked about a tool set to Request approval.
+ */
+export interface RunRules {
+  sessionId: string;
+  /** The state of a tool in this run: the chat state for a chat, the Dispatch state for a conversation. */
+  stateOf: (name: string) => ToolState;
+  /** True when the tool is switched on for this run. A tool that is not gets an off result. */
+  switchedOn: (name: string) => boolean;
+  /** Asks the user about one call. Resolves with the answer. */
+  ask: (call: ChatToolCall) => Promise<ApprovalDecision>;
+}
+
+/** The rules of a run in a session. The caller gives the state of each tool and how the user is asked. */
+export function runRules(
   sessionId: string,
+  stateOf: (name: string) => ToolState,
+  ask: (call: ChatToolCall) => Promise<ApprovalDecision>,
+): RunRules {
+  return {
+    sessionId,
+    stateOf,
+    switchedOn: (name) => useToolStore.getState().isToolEnabledInChat(sessionId, name),
+    ask,
+  };
+}
+
+/** The rules of a chat run: the chat states, and the chat's approval dialog. */
+export function chatRunRules(sessionId: string): RunRules {
+  return runRules(
+    sessionId,
+    (name) => useToolStore.getState().states[name] ?? "off",
+    (call) => requestToolApproval(sessionId, call),
+  );
+}
+
+/**
+ * The outcome of one call in a run, the same rule for a chat and a Dispatch conversation. An unknown tool is an
+ * error. A tool that is Off or switched off for the run is left out. A tool with no search source is not offered.
+ * A tool set to On runs. A tool set to Request approval runs once the session has its grant, and otherwise waits
+ * for `rules.ask`. Resolves with the result, or with denied, cancelled or off.
+ */
+export async function outcomeForCall(
+  rules: RunRules,
   call: ChatToolCall,
   modelId: string | null,
 ): Promise<ToolOutcome> {
@@ -111,30 +154,34 @@ async function outcomeForCall(
   const spec = tools.tools.find((item) => item.name === call.name);
   if (!spec) return unknownToolOutcome(call.name);
 
-  const state: ToolState = tools.states[call.name] ?? "off";
-  const granted = tools.hasChatGrant(sessionId, call.name);
+  const state = rules.stateOf(call.name);
+  const granted = tools.hasChatGrant(rules.sessionId, call.name);
   const access = toolAccess(state, granted);
-  if (access === "skip" || !tools.isToolEnabledInChat(sessionId, call.name)) return offOutcome();
+  if (access === "skip" || !rules.switchedOn(call.name)) return offOutcome();
   if (!isOfferable(spec, tools.enabledSearchSources, tools.searchSources)) {
     return noSourceOutcome();
   }
   if (access === "run") return runCall(call, state === "on" ? "auto" : "chat", modelId);
 
-  const decision = await askApproval(sessionId, call);
+  const decision = await rules.ask(call);
   switch (decision) {
     case "deny":
       return deniedOutcome();
     case "cancel":
       return cancelledOutcome();
     case "chat":
-      useToolStore.getState().grantForChat(sessionId, call.name);
+      useToolStore.getState().grantForChat(rules.sessionId, call.name);
       return runCall(call, "chat", modelId);
     case "once":
       return runCall(call, "once", modelId);
   }
 }
 
-function askApproval(sessionId: string, call: ChatToolCall): Promise<ApprovalDecision> {
+/** Asks the user about one call in the approval dialog. The request is for `sessionId`, so Stop can cancel it. */
+export function requestToolApproval(
+  sessionId: string,
+  call: ChatToolCall,
+): Promise<ApprovalDecision> {
   return useToolApprovalStore.getState().requestApproval({
     id: crypto.randomUUID(),
     sessionId,
@@ -180,7 +227,7 @@ async function mayReceiveImages(modelId: string | null): Promise<boolean> {
 }
 
 /** Adds a tool row to the chat and stores it at once, so a crash keeps every result already made. */
-function addToolRow(sessionId: string, call: ChatToolCall, outcome: ToolOutcome): void {
+export function addToolRow(sessionId: string, call: ChatToolCall, outcome: ToolOutcome): void {
   const row = buildToolMessage(call, outcome, crypto.randomUUID(), Date.now());
   useChatStore.getState().addMessage(sessionId, row);
   db.saveMessage(sessionId, row).catch((err: unknown) => {
@@ -251,7 +298,7 @@ export async function toolsForRun(
   return offered;
 }
 
-async function modelRefusesTools(modelId: string): Promise<boolean> {
+export async function modelRefusesTools(modelId: string): Promise<boolean> {
   const entries = await loadModelCapabilities(modelId).catch(() => []);
   return toolCallsRefused(entries);
 }

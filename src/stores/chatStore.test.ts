@@ -103,3 +103,41 @@ describe("updateMessageToolCalls", () => {
     expect(messages[1].content).toBe("r");
   });
 });
+
+describe("Dispatch sessions", () => {
+  function taskSession(id: string): ChatSession {
+    return { ...sessionWith([]), id, kind: "dispatch" };
+  }
+
+  it("does not reuse an empty Dispatch session as the new-chat draft", () => {
+    useChatStore.setState({ sessions: [taskSession("task")], activeSessionId: null });
+    const id = useChatStore.getState().createSession();
+    expect(id).not.toBe("task");
+    expect(useChatStore.getState().sessions.map((s) => s.id)).toContain("task");
+  });
+
+  it("keeps an empty Dispatch session when the empty drafts are discarded", () => {
+    const draft = { ...sessionWith([]), id: "draft" };
+    useChatStore.setState({ sessions: [taskSession("task"), draft] });
+    useChatStore.getState().discardEmptySessions(null);
+    expect(useChatStore.getState().sessions.map((s) => s.id)).toEqual(["task"]);
+  });
+
+  it("falls back to a chat, not a Dispatch session, when the open chat is deleted", () => {
+    useChatStore.setState({
+      sessions: [taskSession("task"), sessionWith(summarisedChat())],
+      activeSessionId: "chat",
+    });
+    useChatStore.getState().deleteSession("chat");
+    expect(useChatStore.getState().activeSessionId).toBeNull();
+  });
+
+  it("adds a session once, and replaces it when the id is already there", () => {
+    useChatStore.setState({ sessions: [] });
+    useChatStore.getState().addSession(taskSession("task"));
+    useChatStore.getState().addSession({ ...taskSession("task"), title: "Renamed" });
+    const sessions = useChatStore.getState().sessions;
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].title).toBe("Renamed");
+  });
+});

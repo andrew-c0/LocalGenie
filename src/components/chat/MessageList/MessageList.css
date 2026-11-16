@@ -1,17 +1,10 @@
-.chat-area__area {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: var(--spacingHorizontalL);
-}
-
-.chat-area__messages {
+.message-list__items {
   display: flex;
   flex-direction: column;
   gap: var(--spacingVerticalM);
 }
 
-.chat-area__typing {
+.message-list__status {
   display: flex;
   align-items: center;
   gap: var(--spacingHorizontalS);
@@ -20,7 +13,7 @@
 
 /* On a very wide window the content stops at 80% of the width and is centred. */
 @media (min-width: 1600px) {
-  .chat-area__messages {
+  .message-list__items {
     max-width: 80%;
     margin-inline: auto;
   }

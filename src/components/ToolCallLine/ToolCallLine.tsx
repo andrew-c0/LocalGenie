@@ -17,6 +17,8 @@ import "./ToolCallLine.css";
 interface ToolCallLineProps {
   /** A `tool` row: the result of one tool call, with its record. */
   message: Message;
+  /** The row is in a Dispatch conversation, so an approval for the rest of it names the conversation. */
+  inDispatch?: boolean;
 }
 
 /** Label of a row whose record is missing or damaged. Its result still shows in the details. */
@@ -27,7 +29,7 @@ const UNKNOWN_TOOL = "Tool result";
  * outcome. Collapsed by default; opening it shows the exact arguments, how the call was approved and the
  * result. A tool line has no actions: it cannot be copied, retried or deleted on its own.
  */
-export default function ToolCallLine({ message }: ToolCallLineProps) {
+export default function ToolCallLine({ message, inDispatch = false }: ToolCallLineProps) {
   const [expanded, setExpanded] = useState(false);
   const detailId = useId();
   const record = message.toolRecord;
@@ -72,7 +74,7 @@ export default function ToolCallLine({ message }: ToolCallLineProps) {
             <>
               <Meta>Arguments</Meta>
               <pre className="tool-call__code">{prettyArguments(record.arguments)}</pre>
-              <Meta>Approval: {approvalText(record.approval)}</Meta>
+              <Meta>Approval: {approvalText(record.approval, inDispatch)}</Meta>
             </>
           )}
           <Meta>Result</Meta>

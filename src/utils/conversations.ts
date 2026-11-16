@@ -2,6 +2,14 @@ import type { ChatSession, Message } from "../types";
 import { isToolMessage } from "./toolRecords";
 
 /**
+ * The conversations a chat list shows: every session but a Dispatch task's. The new-chat draft, the
+ * fallback when a chat is deleted and the chat route use these too, so a task is never opened as a chat.
+ */
+export function chatSessionsOf(sessions: readonly ChatSession[]): ChatSession[] {
+  return sessions.filter((session) => session.kind !== "dispatch");
+}
+
+/**
  * Pinned conversations first, then the most recently updated first inside each group. The sort is
  * stable, so conversations updated at the same time keep the store's order. Returns a new array; the
  * store's own list is not changed.

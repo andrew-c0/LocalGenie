@@ -14,6 +14,7 @@ pub mod cli;
 pub mod compaction;
 pub mod constants;
 pub mod database;
+pub mod dispatch;
 pub mod download;
 pub mod files;
 pub mod hub;

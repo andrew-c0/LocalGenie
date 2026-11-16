@@ -1,0 +1,39 @@
+/* The message composer, shared by the chat and Dispatch: the field, the square button beside it, the note and the tools row. */
+
+/* Field and button share a row. The grid column sizes the button from its stretched height. */
+.message-composer__wrapper {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: var(--spacingHorizontalS);
+}
+
+/* A leading control (the chat's attach button) gets its own column at the start of the row. */
+.message-composer__wrapper--leading {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.message-composer__field {
+  min-width: 0;
+}
+
+/* Square buttons, full height of the field. Scoped so they win over Fluent's button sizing. */
+.message-composer__wrapper .message-composer__button {
+  align-self: stretch;
+  justify-self: stretch;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  max-width: none;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+}
+
+/* The row under the note holds the tools chip. It takes no space when the chip renders nothing. */
+.message-composer__toolbar {
+  margin-top: var(--spacingVerticalXS);
+}
+
+.message-composer__toolbar:empty {
+  display: none;
+}

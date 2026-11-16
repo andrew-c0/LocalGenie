@@ -5,11 +5,12 @@ import ChatInput from "../../components/ChatInput/ChatInput";
 import { ChatHeaderActions } from "../../components/chat/ChatHeaderActions/ChatHeaderActions";
 import { ChatWelcome } from "../../components/chat/ChatWelcome/ChatWelcome";
 import MissingFileBanner from "../../components/chat/MissingFileBanner/MissingFileBanner";
+import { ConversationCanvas } from "../../components/ui/ConversationCanvas/ConversationCanvas";
 import { StateBlock } from "../../components/ui/StateBlock/StateBlock";
 import { useBreadcrumbLabel } from "../../navigation/useBreadcrumbLabel";
 import { useChatStore } from "../../stores/chatStore";
 import { useModelStore } from "../../stores/modelStore";
-import "./ChatPage.css";
+import { chatSessionsOf } from "../../utils/conversations";
 
 /** The breadcrumb text while the conversation's title is not known: it is missing, or still loading. */
 const UNKNOWN_CONVERSATION_LABEL = "Conversation";
@@ -27,8 +28,9 @@ export default function ChatPage() {
   const sessions = useChatStore((s) => s.sessions);
   const serverStatus = useModelStore((s) => s.serverStatus);
 
-  // Sessions may still be loading when the page opens, so a missing id is shown, not redirected.
-  const activeSession = sessions.find((s) => s.id === sessionId);
+  // Sessions may still be loading when the page opens, so a missing id is shown, not redirected. A Dispatch
+  // task's session is not a chat, so its id reads as a missing conversation here.
+  const activeSession = chatSessionsOf(sessions).find((s) => s.id === sessionId);
 
   // The last breadcrumb is the conversation's title, so a renamed chat updates the trail.
   useBreadcrumbLabel(
@@ -55,7 +57,7 @@ export default function ChatPage() {
   } else if (sessionId) {
     // The breadcrumb's "Chat" crumb leads back to the landing, so no button is needed here.
     content = (
-      <div className="chat-page__empty">
+      <div className="conversation-canvas__empty">
         <StateBlock icon="🔎" message="This conversation no longer exists." />
       </div>
     );
@@ -70,9 +72,9 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="chat-page__canvas">
+    <ConversationCanvas>
       {activeSession && <ChatHeaderActions session={activeSession} />}
       {content}
-    </div>
+    </ConversationCanvas>
   );
 }

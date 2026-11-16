@@ -121,8 +121,22 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Covered messages cannot be deleted or retried. This is enforced in the store, the UI and `delete_message`; the database check is the cargo test `delete_refuses_covered_rows_and_keeps_later_ones` (not run in this sync). The summary row itself also cannot be removed.
 
 ## Background running (Dispatch phase A, 2026-11-15; code-read, partly run)
-- Exit and the close prompt check only downloads (`utils/exitBlockers.ts`, `CloseGuard.tsx`). A running chat reply, benchmark run, Playground image, speech or OCR job, or an MCP call is cut off without a prompt by the tray's Exit, and by closing the window when "keep running in the tray" is off. Code-read. Dispatch is meant to add its own blocker.
+- The tray's Exit prompts for downloads and a running Dispatch turn (`utils/exitBlockers.ts`, 2026-11-16). The window close prompt (`CloseGuard.tsx`) checks downloads only. A running chat reply, benchmark run, Playground image, speech or OCR job, or an MCP call is cut off without a prompt by either, and by closing the window when "keep running in the tray" is off. Code-read.
 - Not run: the tray menu and Exit, the tooltip, the finish notices, a second launch, Start with Windows (installed build), an update or uninstall while the app is in the tray. Steps: `manual-checklist.md` ("Background running").
+
+## Dispatch (background conversations; phase B, 2026-11-16; code-read and unit tests, not run in the app)
+- Open, reported by the user once: the Dispatch composer stayed disabled after an answer, with no reason shown. The cause was not found. `finishTurn` (`services/dispatchRunner/queue.ts`) now clears the streaming state and the running turn first and always, and logs a failed status write. That is hardening, not a confirmed fix. If it returns, check `dispatchStore.runningTaskId`, `chatStore.isStreaming` and the queue.
+- No loop protection: no step, time or repeat limit (deferred by the user). A model that repeats a tool call runs until Stop. Dispatch has no cap on tool calls per reply.
+- Tools are On in Dispatch by default: a tool never set under Dispatch runs without asking, including a new or MCP tool, whatever its chat state (a product choice, 2026-11-16; check it in the app before relying on it).
+- Approval while the window is hidden only notifies ("Dispatch needs your approval"). Clicking the notice does not open the app (no click action, as for the other notices).
+- "Allow for this conversation" grants are in memory only (`toolStore`), so a restart asks again.
+- Closing the window with "keep running in the tray" off does not prompt for a running turn (see Background running). The turn is then interrupted and offered at the next start.
+- A queue does not survive a restart. At startup every queued, running or needs-you conversation is marked interrupted (`interrupt_unfinished`), and the in-memory queue is gone. They come back through the resume dialog or Continue; a queue from a previous run does not start by itself.
+- The resume offer is decided once per start. If the CLI is missing or a chat reply or turn is busy at that moment, it is not shown again that start, and the conversations stay interrupted (code-read).
+- The desktop notices are sent only while the window is hidden: "Dispatch replied" when a turn ends with an answer, "Dispatch stopped: <reason>" when it fails. A stop sends none (`utils/dispatchTask.ts` `turnNotice`).
+- An empty model reply is asked again twice as the same step; after the third empty reply the turn fails with "The model returned an empty reply 3 times in a row..." (`EMPTY_REPLY_FAILURE`). Not run with a real model.
+- Every turn's model load carries the warmup-hang risk in "Active" (the same load path as chat).
+- The shared chat components were extracted in the same change (`MessageList`, `MessageComposer`, `ConversationCanvas`, `WelcomeLanding`, `PagedList`, the ToolsChip modes). The chat after that refactor is not run in the app, and neither is the Dispatch path with a real model (send, tool rounds, approvals, queue, stop, notices, tray line, resume, delete). Steps: `manual-checklist.md`, "Dispatch conversations".
 
 ## Sidebar usage chart with Playground jobs (committed 9a18c4f; code-read, partly run)
 - Only the text to image and OCR lines were confirmed in the app by the user (2026-11-03). Upscaling, speech, image to image on a GPU or NPU device, and Auto on a device with no NPU counter are not checked.
@@ -158,7 +172,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - `run_geniex` in `models.rs` has no timeout, so a hung `geniex list` blocks startup. `cli.rs` already has one; reuse it.
 - `cli.rs`: timeouts and retry counts are magic numbers (move to `constants.rs`).
 - `load_sessions` (`database.rs`) matches messages with a nested `find` and loads every session at startup. `list_downloaded_models` returns the full `model_card` text the grid does not need.
-- Migration `m20261020_000001` (`add_repo_columns`) ignores every `ALTER TABLE` error. `delete_session` runs two statements without a transaction.
+- Migration `m20261020_000001` (`add_repo_columns`) ignores every `ALTER TABLE` error.
 - Tauri calls outside `services/`: `AihubModelDetail` imports `open` from `@tauri-apps/plugin-shell` directly. `HubModelDetail` now uses `openExternal` (27e98d1).
 - Chat streaming cost: `updateLastAssistantMessage` still rebuilds the message and `contextChars` on each flush. Chunks are written once per animation frame (`useChatStream.ts`, committed in 1b5d554), so the rate is lower; the rebuild itself is unchanged (code-verified).
 - `DEFAULT_BASE_URL` duplicates `DEFAULT_PORT` in `constants.rs`. `package.json` has an `allowScripts` field, which is not a standard npm field.
@@ -243,6 +257,7 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Not built: reading PDF, Word or audio files. Tool results are plain text by design.
 
 ## Resolved (code-verified; runtime-unverified)
+- `delete_session` ran its two deletes (messages, then the session) without a transaction. It now removes the session, its messages and its errors in one transaction (`remove_session`, `commands/database.rs`; the Dispatch phase B working tree, 2026-11-16; code-read, not run).
 - MCP gaps of the 2026-11-13 follow-up (code-read and unit tests in `commands/tools/mcp/*.rs`, `utils/mcpServers.test.ts`; the user confirmed the changes in the app on 2026-11-13): no per-server Refresh (`McpServerRow` Refresh, `mcp_server_refresh`); the stderr of a stdio server was discarded (`stderr.rs`, shown in failures); the switch stopped a running server (only the start at launch now; `save_step` in `commands/tools/mcp/commands.rs`); tool names changed with the running set and on rename (the slug is saved at the first save with a unique index, and a rename keeps it); no working folder (`cwd`, checked at start by `program::working_folder`).
 - Native tools chip count and chat grants (2026-11-12, follow-up to 64ee9f5; code-read and unit tests in `utils/chatTools.test.ts`, `utils/webSearchSources.test.ts`, `stores/toolStore.test.ts`; not run in the app): the chip's count leaves out a `web_search` with no source on (`isOfferable`); deleting a chat clears its "Allow for this chat" grants (`clearChatToolSettings` calls `clearChatGrants`).
 - Native tools call without an `index` (2026-11-12, follow-up to 64ee9f5; `chat_helpers.rs` tests; not run with a real server): calls are keyed by `index`, else `id`, else the last call, so calls without an index no longer merge at index 0.

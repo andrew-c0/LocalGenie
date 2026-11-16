@@ -1,4 +1,6 @@
+import { useDispatchStore } from "../../../stores/dispatchStore";
 import { useDownloadStore } from "../../../stores/downloadStore";
+import { dispatchActivityOf } from "../../../utils/dispatchTask";
 import { downloadActivityOf } from "../../../utils/downloadActivity";
 import type { TrayActivity } from "../../../utils/trayStatus";
 
@@ -20,11 +22,23 @@ const downloadSource: TrayActivitySource = {
   subscribe: (onChange) => useDownloadStore.subscribe(onChange),
 };
 
+const dispatchSource: TrayActivitySource = {
+  read: () =>
+    useDispatchStore
+      .getState()
+      .tasks.map(dispatchActivityOf)
+      .filter((activity): activity is TrayActivity => activity !== null),
+  subscribe: (onChange) => useDispatchStore.subscribe(onChange),
+};
+
 /**
- * Every source the tooltip merges. Dispatch adds its own source here later (its `read` and the store it
- * reads from as `subscribe`); the tooltip and the runtime need no other change.
+ * Every source the tooltip merges: downloads, then Dispatch tasks. The tooltip and the runtime need no
+ * other change when a source is added.
  */
-export const TRAY_ACTIVITY_SOURCES: readonly TrayActivitySource[] = [downloadSource];
+export const TRAY_ACTIVITY_SOURCES: readonly TrayActivitySource[] = [
+  downloadSource,
+  dispatchSource,
+];
 
 /** The activities of every source, in source order. */
 export function collectTrayActivities(): TrayActivity[] {

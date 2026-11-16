@@ -25,6 +25,7 @@ mod m20261037_000001_drop_model_compute_setting;
 mod m20261038_000001_message_tool_fields;
 mod m20261039_000001_create_mcp_servers;
 mod m20261040_000001_mcp_server_slug_and_cwd;
+mod m20261041_000001_create_dispatch_tasks;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -56,6 +57,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261038_000001_message_tool_fields::Migration),
             Box::new(m20261039_000001_create_mcp_servers::Migration),
             Box::new(m20261040_000001_mcp_server_slug_and_cwd::Migration),
+            Box::new(m20261041_000001_create_dispatch_tasks::Migration),
         ]
     }
 }
@@ -111,6 +113,7 @@ mod tests {
             updated_at: Set(1),
             pinned: Set(false),
             settings_overrides: Set(None),
+            kind: Set("chat".into()),
         }
         .insert(&db)
         .await
@@ -194,6 +197,7 @@ mod tests {
             updated_at: Set(1),
             pinned: Set(false),
             settings_overrides: Set(None),
+            kind: Set("chat".into()),
         }
         .insert(&db)
         .await
@@ -235,8 +239,8 @@ mod tests {
         assert_eq!(msg.token_count, Some(42));
         assert_eq!(msg.prompt_chars, Some(7));
 
-        // Twenty-one steps: this one, then the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields, MCP servers and MCP slug migrations.
-        Migrator::down(&db, Some(21))
+        // Twenty-two steps: this one, then the model settings, capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields, MCP servers, MCP slug and dispatch tasks migrations.
+        Migrator::down(&db, Some(22))
             .await
             .expect("revert stats migration");
         let after_down = columns(db.clone()).await;
@@ -266,8 +270,8 @@ mod tests {
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
         // Put back the old JSON row, then apply the migrations again so it copies it.
-        // Twenty steps: the settings one, then the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields, MCP servers and MCP slug migrations.
-        Migrator::down(&db, Some(20))
+        // Twenty-one steps: the settings one, then the capability, attachment, usage, pinned, benchmark, counter, text, power, chat overrides, message kind, message compute, downloaded model facets, installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields, MCP servers, MCP slug and dispatch tasks migrations.
+        Migrator::down(&db, Some(21))
             .await
             .expect("revert settings migration");
         db.execute(Statement::from_string(
@@ -354,6 +358,7 @@ mod tests {
             updated_at: Set(1),
             pinned: Set(false),
             settings_overrides: Set(None),
+            kind: Set("chat".into()),
         }
         .insert(&db)
         .await
@@ -601,8 +606,8 @@ mod tests {
         assert_eq!(row.facets.as_deref(), Some(facets));
 
         // Reverting drops the column; reapplying brings it back as null for old rows.
-        // Eight steps: this one, then the installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields, MCP servers and MCP slug migrations.
-        Migrator::down(&db, Some(8)).await.expect("revert facets");
+        // Nine steps: this one, then the installed runtimes, message covers-through, downloaded model RAM, dropped compute setting, message tool fields, MCP servers, MCP slug and dispatch tasks migrations.
+        Migrator::down(&db, Some(9)).await.expect("revert facets");
         assert!(!columns(db.clone()).await.iter().any(|c| c == "facets"));
         Migrator::up(&db, None).await.expect("reapply facets");
         let row = downloaded_model::Entity::find_by_id("org/model")
@@ -660,6 +665,7 @@ mod tests {
             updated_at: Set(1),
             pinned: Set(false),
             settings_overrides: Set(None),
+            kind: Set("chat".into()),
         }
         .insert(&db)
         .await
@@ -760,8 +766,8 @@ mod tests {
         assert_eq!(row.context_ram_bytes, Some(512));
         assert_eq!(row.ram_approximate, Some(true));
 
-        // Reverting drops the three columns (and the later tool fields, MCP servers and MCP slug migrations); reapplying brings them back as null.
-        Migrator::down(&db, Some(5))
+        // Reverting drops the three columns (and the later tool fields, MCP servers, MCP slug and dispatch tasks migrations); reapplying brings them back as null.
+        Migrator::down(&db, Some(6))
             .await
             .expect("revert RAM columns");
         let after_down = columns(db.clone()).await;
@@ -816,6 +822,7 @@ mod tests {
             updated_at: Set(1),
             pinned: Set(false),
             settings_overrides: Set(None),
+            kind: Set("chat".into()),
         }
         .insert(&db)
         .await
@@ -872,21 +879,17 @@ mod tests {
         let tmp = TempDb::new("migrate-tool-old");
         let db = init_database(&tmp.url()).await.expect("migrations apply");
 
-        // Drop the tool fields (and the MCP servers table and its slug columns above them), write a row the way an older build did, then apply the migrations again.
-        Migrator::down(&db, Some(3))
+        // Drop the tool fields (and the MCP servers table, its slug columns and the dispatch tasks above them), write a row the way an older build did, then apply the migrations again.
+        Migrator::down(&db, Some(4))
             .await
             .expect("revert tool fields");
-        chat_session::ActiveModel {
-            id: Set("s1".into()),
-            title: Set("t".into()),
-            model_id: Set(None),
-            context_chars: Set(0),
-            created_at: Set(1),
-            updated_at: Set(1),
-            pinned: Set(false),
-            settings_overrides: Set(None),
-        }
-        .insert(&db)
+        // Raw SQL: the session entity now has the `kind` column, which this older schema does not.
+        db.execute(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            "INSERT INTO chat_sessions (id, title, context_chars, created_at, updated_at, pinned) \
+             VALUES ('s1', 't', 0, 1, 1, 0)"
+                .to_owned(),
+        ))
         .await
         .expect("insert session");
         db.execute(Statement::from_string(
@@ -925,7 +928,8 @@ mod tests {
     async fn mcp_slug_migration_fills_existing_servers_in_creation_order() {
         let tmp = TempDb::new("migrate-mcp-slug");
         let db = init_database(&tmp.url()).await.expect("migrations apply");
-        Migrator::down(&db, Some(1))
+        // Two steps: the dispatch tasks migration, then the slug migration.
+        Migrator::down(&db, Some(2))
             .await
             .expect("revert the slug migration");
         // Rows as the previous schema stored them, inserted out of creation order.

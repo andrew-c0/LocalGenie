@@ -12,6 +12,8 @@ interface ConfirmDialogProps {
   title: string;
   message: React.ReactNode;
   confirmLabel?: string;
+  /** The label of the secondary button. Closing the dialog (Escape) takes the same path. */
+  cancelLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -21,6 +23,7 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -37,7 +40,7 @@ export function ConfirmDialog({
           <DialogContent>{message}</DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={onCancel}>
-              Cancel
+              {cancelLabel}
             </Button>
             <Button appearance="primary" onClick={onConfirm}>
               {confirmLabel}

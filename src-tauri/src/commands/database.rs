@@ -126,6 +126,7 @@ pub async fn save_session(
     if let Some(overrides) = &session.settings_overrides {
         model_settings::validate_chat_overrides(overrides)?;
     }
+    validate_kind(&session.kind)?;
     chat_session::Entity::insert(chat_session::ActiveModel {
         id: Set(session.id),
         title: Set(session.title),
@@ -135,6 +136,7 @@ pub async fn save_session(
         updated_at: Set(session.updated_at),
         pinned: Set(session.pinned),
         settings_overrides: Set(session.settings_overrides),
+        kind: Set(session.kind),
     })
     .on_conflict(
         OnConflict::column(chat_session::Column::Id)
@@ -155,28 +157,42 @@ pub async fn save_session(
     Ok(())
 }
 
+/// The kinds a session can have. Only `dispatch_create` makes a dispatch session.
+fn validate_kind(kind: &str) -> Result<(), String> {
+    match kind {
+        chat_session::KIND_CHAT | chat_session::KIND_DISPATCH => Ok(()),
+        other => Err(format!("unknown session kind: {other}")),
+    }
+}
+
 #[tauri::command]
 pub async fn delete_session(
     db: tauri::State<'_, DatabaseConnection>,
     id: String,
 ) -> Result<(), String> {
-    // Messages, errors and the session row go together or not at all.
     let txn = db.begin().await.map_err(|e| e.to_string())?;
+    remove_session(&txn, &id).await?;
+    txn.commit().await.map_err(|e| e.to_string())
+}
+
+/// Removes a session with its messages and errors, on the caller's transaction, so the removal goes
+/// together with whatever else the caller removes (a Dispatch task's row).
+pub(super) async fn remove_session(txn: &impl ConnectionTrait, id: &str) -> Result<(), String> {
     message::Entity::delete_many()
-        .filter(message::Column::SessionId.eq(&id))
-        .exec(&txn)
+        .filter(message::Column::SessionId.eq(id))
+        .exec(txn)
         .await
         .map_err(|e| e.to_string())?;
     chat_error::Entity::delete_many()
-        .filter(chat_error::Column::SessionId.eq(&id))
-        .exec(&txn)
+        .filter(chat_error::Column::SessionId.eq(id))
+        .exec(txn)
         .await
         .map_err(|e| e.to_string())?;
-    chat_session::Entity::delete_by_id(&id)
-        .exec(&txn)
+    chat_session::Entity::delete_by_id(id)
+        .exec(txn)
         .await
         .map_err(|e| e.to_string())?;
-    txn.commit().await.map_err(|e| e.to_string())
+    Ok(())
 }
 
 // ─── Messages ──────────────────────────────────────────────────────
@@ -714,7 +730,7 @@ pub(super) async fn stored_sources(
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
-fn now_millis() -> i64 {
+pub(super) fn now_millis() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
@@ -752,6 +768,58 @@ mod facet_tests {
         assert!(validate_facets(Some("[]")).is_err());
         assert!(validate_facets(Some("\"text\"")).is_err());
         assert!(validate_facets(Some("{not json")).is_err());
+    }
+}
+
+/// Shared test helpers for the database and the modules that store through it.
+#[cfg(test)]
+pub(super) mod test_support {
+    /// A fresh database file in the temp dir, removed when the test ends.
+    pub struct TempDb(std::path::PathBuf);
+
+    impl TempDb {
+        pub fn new(name: &str) -> Self {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0);
+            Self(std::env::temp_dir().join(format!(
+                "localgenie-{name}-{}-{nanos}.db",
+                std::process::id()
+            )))
+        }
+
+        pub fn url(&self) -> String {
+            format!("sqlite:{}?mode=rwc", self.0.display())
+        }
+    }
+
+    impl Drop for TempDb {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+}
+
+#[cfg(test)]
+mod session_kind_tests {
+    use super::validate_kind;
+    use crate::entities::chat_session;
+
+    #[test]
+    fn accepts_chat_and_dispatch_only() {
+        assert!(validate_kind("chat").is_ok());
+        assert!(validate_kind("dispatch").is_ok());
+        assert!(validate_kind("").is_err());
+        assert!(validate_kind("Chat").is_err());
+    }
+
+    #[test]
+    fn a_session_sent_without_kind_is_a_chat() {
+        let text = r#"{"id":"s","title":"t","model_id":null,"context_chars":0,"created_at":1,
+            "updated_at":1,"pinned":false,"settings_overrides":null}"#;
+        let session: chat_session::Model = serde_json::from_str(text).expect("read");
+        assert_eq!(session.kind, chat_session::KIND_CHAT);
     }
 }
 
@@ -871,31 +939,7 @@ mod delete_guard_tests {
         assert!(check_deletable("missing", &[]).is_ok());
     }
 
-    /// A fresh database file in the temp dir, removed when the test ends.
-    struct TempDb(std::path::PathBuf);
-
-    impl TempDb {
-        fn new(name: &str) -> Self {
-            let nanos = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0);
-            Self(std::env::temp_dir().join(format!(
-                "localgenie-{name}-{}-{nanos}.db",
-                std::process::id()
-            )))
-        }
-
-        fn url(&self) -> String {
-            format!("sqlite:{}?mode=rwc", self.0.display())
-        }
-    }
-
-    impl Drop for TempDb {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_file(&self.0);
-        }
-    }
+    use super::test_support::TempDb;
 
     async fn insert(db: &DatabaseConnection, row: message::Model) {
         message::ActiveModel {
@@ -936,6 +980,7 @@ mod delete_guard_tests {
             updated_at: Set(1),
             pinned: Set(false),
             settings_overrides: Set(None),
+            kind: Set("chat".into()),
         }
         .insert(&db)
         .await

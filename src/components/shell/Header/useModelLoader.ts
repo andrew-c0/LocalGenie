@@ -1,32 +1,22 @@
 import { useEffect, useState } from "react";
 import { useTauriEvent } from "../../../hooks";
-import * as db from "../../../services/database";
 import * as geniex from "../../../services/geniex";
+import { activateModel } from "../../../services/modelLoad";
 import { useChatStore } from "../../../stores/chatStore";
-import { COMPUTE_TARGETS, type ComputeChoice, useModelStore } from "../../../stores/modelStore";
-import type { ModelLoadSettings } from "../../../types";
+import { type ComputeChoice, useModelStore } from "../../../stores/modelStore";
 import { shortModelKey } from "../../../utils/modelKey";
-import {
-  DEFAULT_CONTEXT_WINDOW,
-  engineOf,
-  modelSettingsKey,
-  resolveLoadParams,
-  sameServerOptions,
-} from "../../../utils/modelSettings";
 import { toast } from "../../../utils/toast";
 
 /** Key used for `loading` while all models are being unloaded. */
 export const LOADING_UNLOAD = "__unload__";
 
 /**
- * Owns the model lifecycle shown in the top bar: starting the GenieX server, loading a model onto
- * it and unloading. A model is loaded with its saved load parameters (compute, context, GPU layers,
- * power mode, speculation); chat requests send the same parameters, so the server does not reload.
- * Only origins and keepalive need a server restart. Results go to the model store; components read
- * them from there. Outcomes that the user waited on are reported as toasts.
+ * Owns the model lifecycle shown in the top bar: selecting a model (loading it, or starting the server it
+ * needs), switching the compute target and unloading. The load itself is `activateModel` in
+ * `services/modelLoad.ts`, which the Dispatch runner uses too. This hook adds the progress state, the error
+ * text and the toasts the user waits on. Components read the results from the model store.
  */
 export function useModelLoader() {
-  const serverStatus = useModelStore((s) => s.serverStatus);
   const serverPort = useModelStore((s) => s.serverPort);
   const setServerStatus = useModelStore((s) => s.setServerStatus);
   const setActiveModel = useModelStore((s) => s.setActiveModel);
@@ -34,10 +24,7 @@ export function useModelLoader() {
   const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
   const compute = useModelStore((s) => s.compute);
   const setCompute = useModelStore((s) => s.setCompute);
-  const serverOptions = useModelStore((s) => s.serverOptions);
   const setServerOptions = useModelStore((s) => s.setServerOptions);
-  const setLoadedCompute = useModelStore((s) => s.setLoadedCompute);
-  const setLoadedContext = useModelStore((s) => s.setLoadedContext);
 
   /** Model name, or LOADING_UNLOAD, while an action is in progress. */
   const [loading, setLoading] = useState<string | null>(null);
@@ -56,72 +43,22 @@ export function useModelLoader() {
     toast.error("GenieX server stopped", "The server process exited unexpectedly.");
   });
 
-  /**
-   * True when the model is loaded on another compute target than the one it would load on now (its
-   * own setting, else the header's). Unknown when the app did not load it, so that counts as no.
-   */
-  const loadedOnOtherCompute = async (name: string): Promise<boolean> => {
-    const loadedAs = useModelStore.getState().loadedCompute;
-    if (loadedAs === null) return false;
-    const key = modelSettingsKey(name);
-    const [saved, nativeContext] = await Promise.all([
-      db.loadModelSettings(key).catch(() => ({})),
-      db.loadNativeContext(key).catch(() => null),
-    ]);
-    const model = useModelStore.getState().models.find((m) => m.name === name);
-    const wanted = resolveLoadParams(saved, engineOf(model), compute, nativeContext).compute;
-    return wanted !== undefined && wanted !== loadedAs;
-  };
-
   /** Load a model and make it active. Starts or restarts the server first if its server settings differ. */
   const selectModel = async (name: string) => {
     const key = shortModelKey(name);
-    // A loaded model is only made active, unless the compute target changed: then it loads again.
-    if (
-      serverStatus.models.some((lm) => shortModelKey(lm) === key) &&
-      !(await loadedOnOtherCompute(name))
-    ) {
-      setActiveModel(name);
-      setSelectorOpen(false);
-      return;
-    }
-    setLoading(name);
-    setError(null);
     try {
-      const model = useModelStore.getState().models.find((m) => m.name === name);
-      const saved: ModelLoadSettings = await db
-        .loadModelSettings(modelSettingsKey(name))
-        .catch(() => ({}));
-
-      const serverSettings = await db.getServerSettings();
-      // A server started with other origins or keepalive must restart. An external server
-      // (settings unknown) is reused as it is.
-      const needsRestart =
-        serverStatus.running &&
-        serverOptions !== null &&
-        !sameServerOptions(serverOptions, serverSettings);
-      if (needsRestart) {
-        await geniex.stopServer(serverPort);
-      }
-      if (needsRestart || !serverStatus.running) {
-        const started = await geniex.startServer({ port: serverPort, ...serverSettings });
-        setServerStatus(started);
-        setServerOptions(serverSettings);
-      }
-
-      const nativeContext = await db.loadNativeContext(modelSettingsKey(name)).catch(() => null);
-      const load = resolveLoadParams(saved, engineOf(model), compute, nativeContext);
-      const status = await geniex.loadModel(name, load, geniex.serverBaseUrl(serverPort));
-      setServerStatus(status);
-      setLoadedCompute(COMPUTE_TARGETS.find((c) => c === load.compute) ?? null);
-      // Without a saved or native value the server applies its default window.
-      setLoadedContext(load.nctx ?? DEFAULT_CONTEXT_WINDOW);
-      setActiveModel(name);
-      const activeId = useChatStore.getState().activeSessionId;
-      if (activeId) useChatStore.getState().setSessionModel(activeId, name);
+      const activated = await activateModel(name, () => {
+        setLoading(name);
+        setError(null);
+      });
       setSelectorOpen(false);
-      const where = load.compute ? ` on ${load.compute.toUpperCase()}` : "";
-      toast.success(`Model loaded${where}`, key);
+      if (activated) {
+        // The open chat, if any, records the model it now runs on.
+        const activeId = useChatStore.getState().activeSessionId;
+        if (activeId) useChatStore.getState().setSessionModel(activeId, name);
+        const where = activated.compute ? ` on ${activated.compute.toUpperCase()}` : "";
+        toast.success(`Model loaded${where}`, key);
+      }
     } catch (err) {
       setError(String(err));
       toast.error("Model failed to load", `${key}: ${String(err)}`);

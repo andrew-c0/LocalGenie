@@ -5,19 +5,21 @@ import { ItemRowMenu, type ItemRowMenuItem } from "../../ui/ItemRowMenu/ItemRowM
 interface ConversationMenuProps {
   /** The conversation's title, named by the default button. */
   title: string;
-  pinned: boolean;
+  /** Whether the conversation is pinned. Only read when `onTogglePin` is given. */
+  pinned?: boolean;
   /** Adds Rename at the top. Left out where the caller already has a Rename button. */
   onRename?: () => void;
-  onTogglePin: () => void;
+  /** Adds Pin or Unpin. Left out where conversations do not pin (a Dispatch conversation). */
+  onTogglePin?: () => void;
   onDelete: () => void;
   /** A custom button that opens the menu. Omitted, the menu uses the "…" button. */
   trigger?: ReactElement;
 }
 
-/** The menu of one conversation: Rename (optional), Pin or Unpin, Delete. */
+/** The menu of one conversation: Rename (optional), Pin or Unpin (optional), Delete. */
 export function ConversationMenu({
   title,
-  pinned,
+  pinned = false,
   onRename,
   onTogglePin,
   onDelete,
@@ -25,11 +27,15 @@ export function ConversationMenu({
 }: ConversationMenuProps) {
   const items: ItemRowMenuItem[] = [
     ...(onRename ? [{ label: "Rename", icon: <EditRegular />, onClick: onRename }] : []),
-    {
-      label: pinned ? "Unpin" : "Pin",
-      icon: pinned ? <PinOffRegular /> : <PinRegular />,
-      onClick: onTogglePin,
-    },
+    ...(onTogglePin
+      ? [
+          {
+            label: pinned ? "Unpin" : "Pin",
+            icon: pinned ? <PinOffRegular /> : <PinRegular />,
+            onClick: onTogglePin,
+          },
+        ]
+      : []),
     { label: "Delete", icon: <DeleteRegular />, onClick: onDelete },
   ];
   return <ItemRowMenu name={title} items={items} trigger={trigger} />;

@@ -56,6 +56,11 @@
   white-space: nowrap;
 }
 
+.item-row__badge {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
 .item-row__trailing {
   display: flex;
   flex-shrink: 0;

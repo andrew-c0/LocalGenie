@@ -13,13 +13,17 @@ const saveAllowedFolders = vi.fn();
 const saveToolState = vi.fn();
 const loadSearchSourceIds = vi.fn();
 const saveSearchSourceIds = vi.fn();
+const loadDispatchToolStates = vi.fn();
+const saveDispatchToolState = vi.fn();
 vi.mock("../services/toolSettings", () => ({
   loadAllowedFolders: () => loadAllowedFolders(),
   loadToolStates: (names: string[]) => loadToolStates(names),
+  loadDispatchToolStates: (names: string[]) => loadDispatchToolStates(names),
   loadSearchSourceIds: () => loadSearchSourceIds(),
   saveAllowedFolders: (folders: string[]) => saveAllowedFolders(folders),
   saveSearchSourceIds: (ids: string[]) => saveSearchSourceIds(ids),
   saveToolState: (name: string, state: string) => saveToolState(name, state),
+  saveDispatchToolState: (name: string, state: string) => saveDispatchToolState(name, state),
 }));
 
 const toastError = vi.fn();
@@ -56,6 +60,7 @@ const specs: ToolSpec[] = [
 
 const initialState = {
   states: {},
+  dispatchStates: {},
   allowedFolders: [],
   tools: [],
   searchSources: [],
@@ -82,6 +87,8 @@ describe("toolStore", () => {
     vi.clearAllMocks();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     saveToolState.mockResolvedValue(undefined);
+    saveDispatchToolState.mockResolvedValue(undefined);
+    loadDispatchToolStates.mockResolvedValue({});
     saveAllowedFolders.mockResolvedValue(undefined);
     saveSearchSourceIds.mockResolvedValue(undefined);
     listSearchSources.mockResolvedValue([]);
@@ -94,6 +101,7 @@ describe("toolStore", () => {
       listTools.mockResolvedValue(specs);
       loadAllowedFolders.mockResolvedValue(["C:\\Work"]);
       loadToolStates.mockResolvedValue({ list_directory: "ask", read_text_file: "off" });
+      loadDispatchToolStates.mockResolvedValue({ list_directory: "on" });
       listSearchSources.mockResolvedValue(sources);
       loadSearchSourceIds.mockResolvedValue(["wikipedia"]);
 
@@ -101,8 +109,10 @@ describe("toolStore", () => {
 
       const state = useToolStore.getState();
       expect(loadToolStates).toHaveBeenCalledWith(["list_directory", "read_text_file"]);
+      expect(loadDispatchToolStates).toHaveBeenCalledWith(["list_directory", "read_text_file"]);
       expect(state.tools).toEqual(specs);
       expect(state.states).toEqual({ list_directory: "ask", read_text_file: "off" });
+      expect(state.dispatchStates).toEqual({ list_directory: "on" });
       expect(state.allowedFolders).toEqual(["C:\\Work"]);
       expect(state.searchSources).toEqual(sources);
       expect(state.enabledSearchSources).toEqual(["wikipedia"]);
@@ -171,6 +181,67 @@ describe("toolStore", () => {
         "Could not save the setting for Listed folder",
         "disk full",
       );
+    });
+  });
+
+  describe("setDispatchState", () => {
+    it("saves the Dispatch state and shows it, leaving the chat state as it was", async () => {
+      loadedState();
+
+      await useToolStore.getState().setDispatchState("list_directory", "ask");
+
+      expect(saveDispatchToolState).toHaveBeenCalledWith("list_directory", "ask");
+      expect(useToolStore.getState().dispatchStates).toEqual({ list_directory: "ask" });
+      expect(useToolStore.getState().states.list_directory).toBe("on");
+      expect(saveToolState).not.toHaveBeenCalled();
+    });
+
+    it("keeps the old Dispatch state and shows a toast when the save fails", async () => {
+      loadedState();
+      saveDispatchToolState.mockRejectedValue(new Error("disk full"));
+
+      await useToolStore.getState().setDispatchState("list_directory", "off");
+
+      expect(useToolStore.getState().dispatchStates).toEqual({});
+      expect(toastError).toHaveBeenCalledWith(
+        "Could not save the Dispatch setting for Listed folder",
+        "disk full",
+      );
+    });
+
+    it("changing the chat state later does not change a Dispatch state that was set", async () => {
+      loadedState();
+      await useToolStore.getState().setDispatchState("list_directory", "ask");
+
+      await useToolStore.getState().setState("list_directory", "off");
+
+      expect(useToolStore.getState().dispatchStates.list_directory).toBe("ask");
+      expect(useToolStore.getState().states.list_directory).toBe("off");
+    });
+
+    it("keeps the Dispatch state across a restart: a load reads back what was saved", async () => {
+      const saved = new Map<string, string>();
+      saveDispatchToolState.mockImplementation((name: string, state: string) => {
+        saved.set(name, state);
+        return Promise.resolve();
+      });
+      loadDispatchToolStates.mockImplementation((names: string[]) =>
+        Promise.resolve(
+          Object.fromEntries(names.filter((n) => saved.has(n)).map((n) => [n, saved.get(n)])),
+        ),
+      );
+      listTools.mockResolvedValue(specs);
+      loadAllowedFolders.mockResolvedValue([]);
+      loadToolStates.mockResolvedValue({});
+      listSearchSources.mockResolvedValue([]);
+      loadSearchSourceIds.mockResolvedValue([]);
+      loadedState();
+      await useToolStore.getState().setDispatchState("read_text_file", "on");
+
+      useToolStore.setState(initialState);
+      await useToolStore.getState().load();
+
+      expect(useToolStore.getState().dispatchStates).toEqual({ read_text_file: "on" });
     });
   });
 

@@ -77,6 +77,12 @@ describe("breadcrumbsFor", () => {
     expect(breadcrumbsFor("/chat")).toEqual([{ label: "Chat", to: "/chat" }]);
   });
 
+  it("gives Dispatch > Conversation for a conversation, with the id hidden until the page names the crumb", () => {
+    const crumbs = breadcrumbsFor("/dispatch/3f2a9c1e-0b7d");
+    expect(crumbs.map((crumb) => crumb.label)).toEqual(["Dispatch", "Conversation"]);
+    expect(crumbs[1]?.to).toBe("/dispatch/3f2a9c1e-0b7d");
+  });
+
   it("gives Chat > conversation for an open conversation, with the Chat crumb linking to the landing", () => {
     const crumbs = breadcrumbsFor("/chat/3f2a9c1e-0b7d");
     expect(crumbs).toHaveLength(2);
@@ -451,6 +457,7 @@ describe("route table", () => {
       "overview",
       "models",
       "chat",
+      "dispatch",
       "playground",
       "benchmarks",
       "settings",

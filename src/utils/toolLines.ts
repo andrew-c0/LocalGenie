@@ -10,10 +10,11 @@ const TOOL_LABELS = new Map<string, string>([
   ["read_image", "Look at images"],
   ["web_search", "Searched the web"],
   ["web_fetch", "Fetched page"],
+  ["dispatch_notes", "Updated notes"],
 ]);
 
 /** Argument keys that name what a call worked on, in the order they are preferred. */
-const TARGET_KEYS = ["path", "query", "url"] as const;
+const TARGET_KEYS = ["path", "query", "url", "question"] as const;
 
 /** Longest argument summary shown on the line. The details show the full arguments. */
 export const TARGET_MAX_LENGTH = 80;
@@ -79,16 +80,21 @@ export function toolStatusText(status: ToolStatus, durationMs?: number): ToolSta
   }
 }
 
-/** How a call was approved, as the details show it. */
-export function approvalText(approval: ToolApproval): string {
+/** How a call was approved, as the details show it. An approval for the rest of a Dispatch conversation names the conversation. */
+export function approvalText(approval: ToolApproval, inDispatch = false): string {
   switch (approval) {
     case "auto":
       return "Automatic";
     case "once":
       return "Approved once";
     case "chat":
-      return "Allowed for this chat";
+      return inDispatch ? "Allowed for this conversation" : "Allowed for this chat";
   }
+}
+
+/** The approval dialog button that allows a tool for the rest of its conversation: a Dispatch conversation or a chat. */
+export function allowForScopeLabel(inDispatch: boolean): string {
+  return inDispatch ? "Allow for this conversation" : "Allow for this chat";
 }
 
 /** The line the approval dialog shows under an MCP tool's call: the server runs it, not the app. */

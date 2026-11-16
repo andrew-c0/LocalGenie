@@ -1,0 +1,5 @@
+/* The notes keep the line breaks the assistant wrote. */
+.conversation-notes {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

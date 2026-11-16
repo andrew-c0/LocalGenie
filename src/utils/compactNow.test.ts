@@ -61,3 +61,11 @@ describe("compactNowBlocker", () => {
     );
   });
 });
+
+describe("compactNowBlocker with a Dispatch task", () => {
+  it("refuses while a Dispatch task uses the model", () => {
+    expect(compactNowBlocker({ ...ready, dispatchRunning: true })).toBe(
+      "Dispatch is using the model.",
+    );
+  });
+});

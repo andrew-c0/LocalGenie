@@ -5,10 +5,9 @@ import {
   MenuList,
   MenuPopover,
   MenuTrigger,
-  Textarea,
 } from "@fluentui/react-components";
-import { AttachRegular, SendRegular, StopRegular } from "@fluentui/react-icons";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { AttachRegular } from "@fluentui/react-icons";
+import { useCallback, useEffect, useState } from "react";
 import { pickAttachment, readAttachment } from "../../services/attachments";
 import { stopSummary } from "../../services/chatCompaction";
 import {
@@ -20,6 +19,7 @@ import {
 import * as geniex from "../../services/geniex";
 import { abortToolLoop } from "../../services/toolLoop";
 import { useChatStore } from "../../stores/chatStore";
+import { useDispatchStore } from "../../stores/dispatchStore";
 import { useModelStore } from "../../stores/modelStore";
 import type { AttachmentKind, Message } from "../../types";
 import {
@@ -31,13 +31,10 @@ import {
 } from "../../utils/attachments";
 import { toast } from "../../utils/toast";
 import { AttachmentList, KIND_ICON } from "../chat/AttachmentList/AttachmentList";
-import { Flex } from "../ui/Flex/Flex";
+import { MessageComposer } from "../ui/MessageComposer/MessageComposer";
 import { ToolsChip } from "./ToolsChip/ToolsChip";
 import { useActiveModelEntries } from "./useActiveModelEntries";
 import "./ChatInput.css";
-
-/** The message box grows from one row up to this many rows, then scrolls. */
-const MAX_INPUT_ROWS = 5;
 
 /** Attach menu entries, in menu order. */
 const ATTACH_KINDS: AttachmentKind[] = ["image", "audio", "text"];
@@ -46,7 +43,6 @@ export default function ChatInput() {
   const [text, setText] = useState("");
   /** Files picked for the next message. Sent with it, then cleared. */
   const [pending, setPending] = useState<PendingAttachment[]>([]);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeSessionId = useChatStore((s) => s.activeSessionId);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const compacting = useChatStore((s) => s.compacting);
@@ -57,6 +53,9 @@ export default function ChatInput() {
   const setRetryFromMessageId = useChatStore((s) => s.setRetryFromMessageId);
   /** A reply or a summary is in progress. The input waits, and stop ends whichever runs. */
   const busy = isStreaming || compacting;
+  /** A Dispatch conversation's turn uses the model. The input stays off until that turn ends. */
+  const dispatchRunning = useDispatchStore((s) => s.runningTaskId !== null);
+  const locked = busy || dispatchRunning;
 
   /** Pick a file of one kind from the attach menu and read it for the next message. */
   const handleAttach = useCallback(
@@ -87,7 +86,7 @@ export default function ChatInput() {
   /** Handle a normal new-message send. */
   const handleSend = useCallback(async () => {
     const content = text.trim();
-    if ((!content && pending.length === 0) || !activeSessionId || busy) return;
+    if ((!content && pending.length === 0) || !activeSessionId || locked) return;
     if (!serverStatus.running) return;
 
     const files = pending;
@@ -105,7 +104,7 @@ export default function ChatInput() {
     setPending([]);
     await recordPrompt(activeSessionId, prompt);
     await sendPrompt(activeSessionId, prompt, history, files);
-  }, [text, pending, activeSessionId, busy, serverStatus.running]);
+  }, [text, pending, activeSessionId, locked, serverStatus.running]);
 
   /**
    * Stop the reply being streamed, or the summary being written, whichever is running. A reply's tool
@@ -128,126 +127,75 @@ export default function ChatInput() {
 
   /** Handle retry. The request is cleared at once, so it runs once. */
   useEffect(() => {
-    if (!retryFromMessageId || !activeSessionId || busy) return;
+    if (!retryFromMessageId || !activeSessionId || locked) return;
     const messageId = retryFromMessageId;
     setRetryFromMessageId(null);
     void retryPrompt(activeSessionId, messageId);
-  }, [retryFromMessageId, activeSessionId, busy, setRetryFromMessageId]);
+  }, [retryFromMessageId, activeSessionId, locked, setRetryFromMessageId]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  /** Fit the textarea to its content, capped at MAX_INPUT_ROWS rows. Runs whenever the text changes, including after a send clears it. */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: text is the trigger, the height is read from the DOM
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    const computed = getComputedStyle(el);
-    const lineHeight = Number.parseFloat(computed.lineHeight) || 20;
-    const chrome =
-      Number.parseFloat(computed.paddingTop) +
-      Number.parseFloat(computed.paddingBottom) +
-      Number.parseFloat(computed.borderTopWidth) +
-      Number.parseFloat(computed.borderBottomWidth);
-    const maxHeight = lineHeight * MAX_INPUT_ROWS + chrome;
-    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
-    el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
-  }, [text]);
-
-  const isDisabled = (!text.trim() && pending.length === 0) || busy || !serverStatus.running;
+  const isDisabled = (!text.trim() && pending.length === 0) || locked || !serverStatus.running;
   const stopLabel = compacting ? "Stop summarising" : "Stop generation";
 
+  /** Kinds the active model cannot take are left out, not shown disabled. */
+  const attachMenu = (
+    <Menu positioning="above-start">
+      <MenuTrigger disableButtonEnhancement>
+        <Button
+          type="button"
+          appearance="secondary"
+          className="message-composer__button"
+          disabled={locked}
+          title="Attach a file"
+          aria-label="Attach a file"
+        >
+          <AttachRegular />
+        </Button>
+      </MenuTrigger>
+      <MenuPopover>
+        <MenuList>
+          {ATTACH_KINDS.filter((kind) => attachmentGate(kind, modelEntries).allowed).map((kind) => {
+            const Icon = KIND_ICON[kind];
+            return (
+              <MenuItem
+                key={kind}
+                icon={<Icon className={`attachment-kind--${kind}`} />}
+                onClick={() => handleAttach(kind)}
+              >
+                {attachmentKindLabel(kind)}
+              </MenuItem>
+            );
+          })}
+        </MenuList>
+      </MenuPopover>
+    </Menu>
+  );
+
   return (
-    <div className="chat-input__area">
+    <div className="conversation-canvas__composer">
       {pending.length > 0 && (
         <div className="chat-input__attachments">
           <AttachmentList attachments={pending} onRemove={removePending} />
         </div>
       )}
-      <div className="chat-input__wrapper">
-        <Menu positioning="above-start">
-          <MenuTrigger disableButtonEnhancement>
-            <Button
-              type="button"
-              appearance="secondary"
-              className="chat-input__action-button"
-              disabled={busy}
-              title="Attach a file"
-              aria-label="Attach a file"
-            >
-              <AttachRegular />
-            </Button>
-          </MenuTrigger>
-          <MenuPopover>
-            <MenuList>
-              {/* Kinds the active model cannot take are left out, not shown disabled. */}
-              {ATTACH_KINDS.filter((kind) => attachmentGate(kind, modelEntries).allowed).map(
-                (kind) => {
-                  const Icon = KIND_ICON[kind];
-                  return (
-                    <MenuItem
-                      key={kind}
-                      icon={<Icon className={`attachment-kind--${kind}`} />}
-                      onClick={() => handleAttach(kind)}
-                    >
-                      {attachmentKindLabel(kind)}
-                    </MenuItem>
-                  );
-                },
-              )}
-            </MenuList>
-          </MenuPopover>
-        </Menu>
-        <Textarea
-          ref={textareaRef}
-          className="chat-input__field"
-          resize="none"
-          value={text}
-          onChange={(_, data) => setText(data.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            serverStatus.running
-              ? "Type a message… (Shift+Enter for new line)"
-              : "Start the GenieX server to chat"
-          }
-          rows={1}
-          disabled={busy}
-          aria-label="Message"
-        />
-        {busy ? (
-          <Button
-            type="button"
-            appearance="secondary"
-            className="chat-input__action-button"
-            onClick={handleStop}
-            title={stopLabel}
-            aria-label={stopLabel}
-          >
-            <StopRegular />
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            appearance="primary"
-            className="chat-input__action-button"
-            onClick={handleSend}
-            disabled={isDisabled}
-            aria-label="Send message"
-          >
-            <SendRegular />
-          </Button>
-        )}
-      </div>
-      {activeSessionId && (
-        <Flex className="chat-input__toolbar" align="center" gap="s">
-          <ToolsChip sessionId={activeSessionId} />
-        </Flex>
-      )}
+      <MessageComposer
+        value={text}
+        onChange={setText}
+        onSubmit={handleSend}
+        placeholder={
+          serverStatus.running
+            ? "Type a message… (Shift+Enter for new line)"
+            : "Start the GenieX server to chat"
+        }
+        disabled={locked}
+        leading={attachMenu}
+        action={
+          busy
+            ? { kind: "stop", label: stopLabel, onStop: handleStop }
+            : { kind: "send", disabled: isDisabled, onSend: handleSend }
+        }
+        note={dispatchRunning ? "Dispatch is using the model" : null}
+        tools={activeSessionId ? <ToolsChip mode="chat" sessionId={activeSessionId} /> : null}
+      />
     </div>
   );
 }

@@ -23,6 +23,7 @@ use commands::chat;
 use commands::cli;
 use commands::compaction;
 use commands::database;
+use commands::dispatch;
 use commands::files;
 use commands::hub;
 use commands::import;
@@ -86,6 +87,12 @@ pub fn run() {
                 tauri::async_runtime::block_on(benchmark_files::sweep_orphans(&db, &benchmark_root))
             {
                 eprintln!("[benchmark] startup sweep failed: {e}");
+            }
+
+            // A Dispatch task that was queued or running when the app last closed is interrupted.
+            // A failure is logged; the app still starts.
+            if let Err(e) = tauri::async_runtime::block_on(dispatch::interrupt_unfinished(&db)) {
+                eprintln!("[dispatch] startup sweep failed: {e}");
             }
 
             app.manage(db);
@@ -238,6 +245,11 @@ pub fn run() {
             database::load_sessions,
             database::save_session,
             database::delete_session,
+            // Dispatch (agent mode tasks)
+            dispatch::dispatch_list,
+            dispatch::dispatch_create,
+            dispatch::dispatch_update,
+            dispatch::dispatch_delete,
             database::save_message,
             database::delete_message,
             database::save_chat_error,

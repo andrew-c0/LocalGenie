@@ -23,6 +23,9 @@ export const MAX_ROUNDS = 5;
 /** Calls of one reply that run. Any further calls in the same reply are skipped. */
 export const MAX_CALLS_PER_ROUND = 4;
 
+/** The per-reply limit of a run that has none (an unattended Dispatch conversation runs every call). */
+export const NO_CALL_LIMIT = Number.POSITIVE_INFINITY;
+
 /** Texts the model reads as the result of a call that did not run. */
 export const TOOL_TEXT = {
   denied: "The user denied this call.",
@@ -72,14 +75,20 @@ export function pendingToolCalls(messages: Message[]): ChatToolCall[] {
   return reply.toolCalls.filter((call) => !answered.has(call.id));
 }
 
-/** The calls a round runs, and the calls over the per-round limit that are skipped. Order is kept. */
-export function splitCalls(calls: ChatToolCall[]): {
+/**
+ * The calls a reply runs, and the calls over `limit` that are skipped. Order is kept. The chat uses the
+ * per-reply limit; a run with no limit passes NO_CALL_LIMIT and skips nothing.
+ */
+export function splitCalls(
+  calls: ChatToolCall[],
+  limit: number = MAX_CALLS_PER_ROUND,
+): {
   run: ChatToolCall[];
   skipped: ChatToolCall[];
 } {
   return {
-    run: calls.slice(0, MAX_CALLS_PER_ROUND),
-    skipped: calls.slice(MAX_CALLS_PER_ROUND),
+    run: calls.slice(0, limit),
+    skipped: calls.slice(limit),
   };
 }
 

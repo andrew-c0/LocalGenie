@@ -9,6 +9,8 @@ interface ItemRowProps {
   detail?: string;
   /** Leading icon, inside the open button. */
   icon?: ReactNode;
+  /** A status badge at the right of the open button, before the fact. */
+  badge?: ReactNode;
   /** Muted text at the right of the open button, for example "3 installed". */
   fact?: string;
   onOpen: () => void;
@@ -20,7 +22,7 @@ interface ItemRowProps {
  * One item in a list of cards. The open part is a single button (focusable, with hover and focus
  * styles) that carries the icon, title and detail; the trailing slot sits beside it as its own control.
  */
-export function ItemRow({ title, detail, icon, fact, onOpen, trailing }: ItemRowProps) {
+export function ItemRow({ title, detail, icon, badge, fact, onOpen, trailing }: ItemRowProps) {
   return (
     <div className="item-row">
       <button type="button" className="item-row__open" onClick={onOpen}>
@@ -36,6 +38,7 @@ export function ItemRow({ title, detail, icon, fact, onOpen, trailing }: ItemRow
               </Meta>
             )}
           </Flex>
+          {badge && <span className="item-row__badge">{badge}</span>}
           {fact && (
             <Meta as="span" className="item-row__fact">
               {fact}

@@ -112,6 +112,22 @@ export function summariseBeforePrompt(
 }
 
 /**
+ * Summarises the whole conversation and appends the summary at its end, and returns how it ended. Nothing
+ * is sent to the chat, and the conversation stays as it is when the summary fails or is stopped. The
+ * caller decides what to show.
+ */
+export function summariseConversation(sessionId: string, run: ModelRun): Promise<SummaryOutcome> {
+  const messages = messagesOf(sessionId);
+  const last = messages[messages.length - 1];
+  const placement: SummaryPlacement = {
+    kind: "atEnd",
+    lastTimestamp: last?.timestamp ?? 0,
+    now: Date.now(),
+  };
+  return summariseIfNeeded(sessionId, summaryInputBefore(messages), run, placement);
+}
+
+/**
  * Summarises the whole conversation now, without a prompt, and appends the summary at the end. Nothing
  * is sent to the chat, and the conversation stays as it is when the summary fails or is stopped. Its
  * caller checks that the chat can run it (see `compactNowBlocker`).
@@ -122,19 +138,7 @@ export async function compactConversationNow(sessionId: string): Promise<void> {
     // Read after the await: the conversation is what it is when the summary starts.
     const chat = useChatStore.getState();
     if (chat.isStreaming || chat.compacting) return;
-    const messages = messagesOf(sessionId);
-    const last = messages[messages.length - 1];
-    const placement: SummaryPlacement = {
-      kind: "atEnd",
-      lastTimestamp: last?.timestamp ?? 0,
-      now: Date.now(),
-    };
-    const outcome = await summariseIfNeeded(
-      sessionId,
-      summaryInputBefore(messages),
-      run,
-      placement,
-    );
+    const outcome = await summariseConversation(sessionId, run);
     if (outcome.status === "failed") toast.error("Summary failed", outcome.reason);
   } catch (err) {
     toast.error("Summary failed", String(err));

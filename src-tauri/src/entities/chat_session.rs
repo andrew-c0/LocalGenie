@@ -15,6 +15,19 @@ pub struct Model {
     pub pinned: bool,
     /// JSON object of the settings this chat overrides, or null when it uses the model's.
     pub settings_overrides: Option<String>,
+    /// `chat` for a conversation, `dispatch` for a Dispatch task's session. Set when the session is
+    /// created and never changed. A save that leaves it out keeps `chat`.
+    #[serde(default = "default_kind")]
+    pub kind: String,
+}
+
+/// The kind of an ordinary conversation.
+pub const KIND_CHAT: &str = "chat";
+/// The kind of a Dispatch task's session.
+pub const KIND_DISPATCH: &str = "dispatch";
+
+fn default_kind() -> String {
+    KIND_CHAT.to_owned()
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

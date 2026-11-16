@@ -1,4 +1,4 @@
-import { Button, Caption1 } from "@fluentui/react-components";
+import { Button } from "@fluentui/react-components";
 import {
   AttachRegular,
   ChatRegular,
@@ -7,8 +7,8 @@ import {
   LockClosedRegular,
 } from "@fluentui/react-icons";
 import type { ReactNode } from "react";
-import { StatusBadge } from "../../ui/StatusBadge/StatusBadge";
-import { CardTitle, Secondary, SectionTitle } from "../../ui/Typography/Typography";
+import { CardTitle, Secondary } from "../../ui/Typography/Typography";
+import { WelcomeLanding } from "../../ui/WelcomeLanding/WelcomeLanding";
 import { RecentConversations } from "../RecentConversations/RecentConversations";
 import "./ChatWelcome.css";
 
@@ -46,43 +46,29 @@ export function ChatWelcome({
   onNewConversation: () => void;
 }) {
   return (
-    <div className="chat-welcome">
-      <div className="chat-welcome__inner">
-        <section className="chat-welcome__hero">
-          <div className="chat-welcome__hero-text">
-            <div className="chat-welcome__status">
-              <StatusBadge tone={serverRunning ? "green" : "red"}>
-                {serverRunning ? "Running" : "Stopped"}
-              </StatusBadge>
-              <Caption1>
-                {serverRunning
-                  ? `${modelCount} model${modelCount === 1 ? "" : "s"} loaded`
-                  : "Start the server from the model selector to chat"}
-              </Caption1>
-            </div>
-            <SectionTitle>Chat with models running on your PC</SectionTitle>
-            <Secondary>
-              Start a conversation below, or pick up where you left off. Nothing leaves your
-              machine.
-            </Secondary>
+    <WelcomeLanding
+      serverRunning={serverRunning}
+      modelCount={modelCount}
+      stoppedHint="Start the server from the model selector to chat"
+      title="Chat with models running on your PC"
+      text="Start a conversation below, or pick up where you left off. Nothing leaves your machine."
+      action={
+        <Button appearance="primary" icon={<ChatRegular />} onClick={onNewConversation}>
+          New conversation
+        </Button>
+      }
+    >
+      <div className="chat-welcome__grid">
+        {FEATURES.map((feature) => (
+          <div key={feature.title} className="chat-welcome__tile">
+            <div className="chat-welcome__tile-icon">{feature.icon}</div>
+            <CardTitle>{feature.title}</CardTitle>
+            <Secondary>{feature.text}</Secondary>
           </div>
-          <Button appearance="primary" icon={<ChatRegular />} onClick={onNewConversation}>
-            New conversation
-          </Button>
-        </section>
-
-        <div className="chat-welcome__grid">
-          {FEATURES.map((feature) => (
-            <div key={feature.title} className="chat-welcome__tile">
-              <div className="chat-welcome__tile-icon">{feature.icon}</div>
-              <CardTitle>{feature.title}</CardTitle>
-              <Secondary>{feature.text}</Secondary>
-            </div>
-          ))}
-        </div>
-
-        <RecentConversations />
+        ))}
       </div>
-    </div>
+
+      <RecentConversations />
+    </WelcomeLanding>
   );
 }

@@ -6,6 +6,7 @@ import type {
   Message,
   ReplyUsage,
   ServerSettings,
+  SessionKind,
   StoredModelSettings,
 } from "../types";
 import { chatErrorContent } from "../utils/chatError";
@@ -43,6 +44,8 @@ interface DbSessionWithMessages {
   updated_at: number;
   pinned: boolean;
   settings_overrides: string | null;
+  /** `chat` or `dispatch`. A row that predates the column reads as `chat`. */
+  kind: string;
   messages: DbMessageRow[];
   errors: DbChatErrorRow[];
 }
@@ -70,6 +73,11 @@ interface DbMessageRow {
   toolCalls: string | null;
   /** A tool row's record as JSON text, or null. Parse with `parseToolRecord`. */
   toolRecord: string | null;
+}
+
+/** The kind of a stored session. Anything but `dispatch` is a conversation. */
+function toSessionKind(raw: string): SessionKind {
+  return raw === "dispatch" ? "dispatch" : "chat";
 }
 
 /** Exact usage of a reply, when both counts are stored. */
@@ -154,6 +162,7 @@ export async function loadSessions(): Promise<ChatSession[]> {
       updatedAt: row.updated_at,
       pinned: row.pinned,
       settingsOverrides: parseStoredOverrides(row.settings_overrides),
+      kind: toSessionKind(row.kind),
       // Array sort is stable, so on equal timestamps the stored message stays first.
       messages: [...messages, ...errors].sort((a, b) => a.timestamp - b.timestamp),
     };
@@ -173,6 +182,7 @@ export async function saveSession(session: ChatSession): Promise<void> {
       settings_overrides: session.settingsOverrides
         ? JSON.stringify(cleanOverrides(session.settingsOverrides))
         : null,
+      kind: session.kind ?? "chat",
     },
   });
 }

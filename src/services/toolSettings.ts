@@ -1,4 +1,5 @@
 import {
+  dispatchToolStateKey,
   parseAllowedFolders,
   parseToolState,
   serializeAllowedFolders,
@@ -30,6 +31,27 @@ export async function loadToolStates(names: string[]): Promise<Record<string, To
 /** Saves one tool's state. */
 export async function saveToolState(name: string, state: ToolState): Promise<void> {
   await db.setPreference(toolStateKey(name), state, "string");
+}
+
+/**
+ * The Dispatch states the user has set, by tool name. A tool with nothing saved is left out: it is On in Dispatch.
+ * A read that fails rejects, like the chat states.
+ */
+export async function loadDispatchToolStates(names: string[]): Promise<Record<string, ToolState>> {
+  const entries = await Promise.all(
+    names.map(async (name) => {
+      const raw = await db.getPreference<string>(dispatchToolStateKey(name));
+      return [name, raw === null ? null : parseToolState(raw)] as const;
+    }),
+  );
+  return Object.fromEntries(
+    entries.filter((entry): entry is [string, ToolState] => entry[1] !== null),
+  );
+}
+
+/** Saves one tool's Dispatch state. */
+export async function saveDispatchToolState(name: string, state: ToolState): Promise<void> {
+  await db.setPreference(dispatchToolStateKey(name), state, "string");
 }
 
 /** The saved list of folders the file tools may read. Empty when nothing is saved. */

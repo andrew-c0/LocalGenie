@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  allowForScopeLabel,
   approvalNote,
   approvalText,
   externalToolNote,
@@ -21,6 +22,16 @@ describe("toolLabel", () => {
 
   it("shows the raw name for a tool it does not know", () => {
     expect(toolLabel("make_coffee")).toBe("make_coffee");
+  });
+
+  it("labels the Dispatch notes tool", () => {
+    expect(toolLabel("dispatch_notes")).toBe("Updated notes");
+  });
+});
+
+describe("toolTargetSummary for the notes tool", () => {
+  it("names no target for a notes text", () => {
+    expect(toolTargetSummary('{"text":"Plan"}')).toBeNull();
   });
 });
 
@@ -93,6 +104,8 @@ describe("approvalText", () => {
     expect(approvalText("auto")).toBe("Automatic");
     expect(approvalText("once")).toBe("Approved once");
     expect(approvalText("chat")).toBe("Allowed for this chat");
+    expect(approvalText("chat", true)).toBe("Allowed for this conversation");
+    expect(approvalText("once", true)).toBe("Approved once");
   });
 });
 
@@ -179,5 +192,12 @@ describe("externalToolNote", () => {
 
   it("does not invent a server name when none is known", () => {
     expect(externalToolNote(undefined)).toContain("the external server you added.");
+  });
+});
+
+describe("allowForScopeLabel", () => {
+  it("names the conversation for a Dispatch conversation and the chat otherwise", () => {
+    expect(allowForScopeLabel(true)).toBe("Allow for this conversation");
+    expect(allowForScopeLabel(false)).toBe("Allow for this chat");
   });
 });

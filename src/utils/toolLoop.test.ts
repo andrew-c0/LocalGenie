@@ -16,6 +16,7 @@ import {
   folderNotice,
   MAX_CALLS_PER_ROUND,
   MAX_ROUNDS,
+  NO_CALL_LIMIT,
   noSourceOutcome,
   noVisionOutcome,
   offeredTools,
@@ -123,6 +124,26 @@ describe("splitCalls", () => {
     const { run, skipped } = splitCalls([call("a"), call("b")]);
     expect(run).toHaveLength(2);
     expect(skipped).toEqual([]);
+  });
+
+  it("uses the per-reply limit given, in order", () => {
+    const calls = [call("a"), call("b"), call("c")];
+    const { run, skipped } = splitCalls(calls, 2);
+    expect(run.map((c) => c.id)).toEqual(["a", "b"]);
+    expect(skipped.map((c) => c.id)).toEqual(["c"]);
+  });
+
+  it("runs every call and skips none with no limit, however many the reply has", () => {
+    const calls = Array.from({ length: 12 }, (_, i) => call(`c${i}`));
+    const { run, skipped } = splitCalls(calls, NO_CALL_LIMIT);
+    expect(run.map((c) => c.id)).toEqual(calls.map((c) => c.id));
+    expect(skipped).toEqual([]);
+  });
+
+  it("keeps the chat default: the limit is the per-reply cap when none is given", () => {
+    const calls = Array.from({ length: MAX_CALLS_PER_ROUND + 1 }, (_, i) => call(`c${i}`));
+    expect(splitCalls(calls).run).toHaveLength(MAX_CALLS_PER_ROUND);
+    expect(splitCalls(calls, MAX_CALLS_PER_ROUND).skipped).toHaveLength(1);
   });
 });
 
