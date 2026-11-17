@@ -37,16 +37,18 @@ pub(super) fn tool_specs(manager: &McpManager) -> Result<Vec<ToolSpec>, String> 
         .collect())
 }
 
-/// Run one call to an MCP tool. The model's arguments must be a JSON object, or empty.
+/// Run one call to an MCP tool. The model's arguments must be a JSON object, or empty. The text
+/// of the result is capped at `max_chars`.
 pub(super) async fn call_tool_output(
     manager: &McpManager,
     name: &str,
     arguments: &str,
+    max_chars: usize,
 ) -> Result<ToolOutput, String> {
     let arguments = match parse_arguments(arguments)? {
         serde_json::Value::Object(map) => Some(map),
         _ => return Err("The arguments must be a JSON object.".into()),
     };
     let result = manager.call_tool(name, arguments).await?;
-    result::outcome_of(&result)
+    result::outcome_of(&result, max_chars)
 }

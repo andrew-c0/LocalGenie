@@ -1,4 +1,4 @@
-import { messagesOf, overridesOf, useChatStore } from "../stores/chatStore";
+import { kindOf, messagesOf, overridesOf, useChatStore } from "../stores/chatStore";
 import { defaultSettings, useModelStore } from "../stores/modelStore";
 import type {
   ChatSettings,
@@ -11,6 +11,7 @@ import type {
 import { chatErrorContent } from "../utils/chatError";
 import { applyChatOverrides } from "../utils/chatOverrides";
 import { latestSummary, systemPromptWithSummary } from "../utils/compaction";
+import { withDispatchSampling } from "../utils/dispatchSampling";
 import {
   chatSettingsFor,
   contextWindowFor,
@@ -22,6 +23,7 @@ import {
   composeSystemPrompt,
   localTimeZone,
   type PlatformSnapshot,
+  promptTimeFor,
   withSystemBlocks,
 } from "../utils/systemPrompt";
 import { toast } from "../utils/toast";
@@ -80,16 +82,22 @@ async function savedSettingsFor(
   }
 }
 
-/** The model, its settings and the chat's overrides, resolved the same way for every request of a send. */
+/**
+ * The model, its settings and the chat's overrides, resolved the same way for every request of a send. The order is
+ * the model's saved settings, then the Dispatch sampling profile (Dispatch conversations only), then the
+ * conversation's own overrides.
+ */
 export async function resolveModelRun(sessionId: string): Promise<ModelRun> {
   const modelId = useModelStore.getState().activeModelId;
   const key = modelId ? modelSettingsKey(modelId) : null;
   const { saved, nativeContext } = await savedSettingsFor(key);
+  const modelSettings = withSystemBlocks({ ...defaultSettings, ...saved });
+  const sampled =
+    kindOf(sessionId) === "dispatch"
+      ? withDispatchSampling(modelSettings, await db.loadDispatchSampling())
+      : modelSettings;
   // The chat's own overrides replace the model's settings for this conversation.
-  const stored = applyChatOverrides(
-    withSystemBlocks({ ...defaultSettings, ...saved }),
-    overridesOf(sessionId),
-  );
+  const stored = applyChatOverrides(sampled, overridesOf(sessionId));
   const model = key
     ? useModelStore.getState().models.find((m) => modelSettingsKey(m.name) === key)
     : undefined;
@@ -106,11 +114,14 @@ export async function resolveModelRun(sessionId: string): Promise<ModelRun> {
 
 /**
  * The settings of one request: the run's settings with the system prompt. The prompt is composed from
- * the model's blocks, with the newest summary of the conversation as its own block.
+ * the model's blocks, with the newest summary of the conversation as its own block. The date block's time is
+ * rounded to the day for a Dispatch conversation (see `promptTimeFor`).
  */
 async function requestSettingsFor(sessionId: string, run: ModelRun): Promise<ChatSettings> {
+  const kind = kindOf(sessionId);
   const composed = await composeSystemPrompt(run.systemBlocks, {
-    now: new Date(),
+    now: promptTimeFor(kind, new Date()),
+    dateOnly: kind === "dispatch",
     timeZone: localTimeZone(),
     platform: await platformForSend(),
     readFile: systemService.readTextFile,

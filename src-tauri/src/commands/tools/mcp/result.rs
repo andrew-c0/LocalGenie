@@ -10,9 +10,9 @@ use super::super::ToolOutput;
 const NO_TEXT: &str = "The tool returned no text.";
 const ERROR_WITHOUT_TEXT: &str = "The tool reported an error without a message.";
 
-/// The tool output for a result, capped like the native tools. A result marked as an error is
-/// `Err` with its text.
-pub fn outcome_of(result: &CallToolResult) -> Result<ToolOutput, String> {
+/// The tool output for a result, capped at `max_chars` like the native tools. A result marked as an
+/// error is `Err` with its text.
+pub fn outcome_of(result: &CallToolResult, max_chars: usize) -> Result<ToolOutput, String> {
     let is_error = result.is_error.unwrap_or(false);
     let text = text_of(&result.content);
     let text = if !text.is_empty() {
@@ -22,7 +22,7 @@ pub fn outcome_of(result: &CallToolResult) -> Result<ToolOutput, String> {
     } else {
         NO_TEXT.to_string()
     };
-    let capped = capped_output(&text, false);
+    let capped = capped_output(&text, max_chars, false);
     if is_error {
         Err(capped.content)
     } else {
@@ -54,6 +54,7 @@ fn part_text(part: &ContentBlock) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::tools::limits::CONTENT_MAX_CHARS;
 
     fn image_part() -> ContentBlock {
         ContentBlock::image("iVBORw0KGgo=", "image/png")
@@ -66,7 +67,7 @@ mod tests {
             ContentBlock::text(""),
             ContentBlock::text("second"),
         ]);
-        let output = outcome_of(&result).expect("success");
+        let output = outcome_of(&result, CONTENT_MAX_CHARS).expect("success");
         assert_eq!(output.content, "first\nsecond");
         assert!(!output.truncated);
         assert!(output.attachment.is_none());
@@ -75,7 +76,7 @@ mod tests {
     #[test]
     fn an_image_becomes_a_note() {
         let result = CallToolResult::success(vec![ContentBlock::text("caption"), image_part()]);
-        let output = outcome_of(&result).expect("success");
+        let output = outcome_of(&result, CONTENT_MAX_CHARS).expect("success");
         assert_eq!(output.content, "caption\n[image omitted]");
     }
 
@@ -88,30 +89,50 @@ mod tests {
     #[test]
     fn an_error_result_is_a_failed_call_with_its_text() {
         let result = CallToolResult::error(vec![ContentBlock::text("disk full")]);
-        assert_eq!(outcome_of(&result), Err("disk full".to_string()));
+        assert_eq!(
+            outcome_of(&result, CONTENT_MAX_CHARS),
+            Err("disk full".to_string())
+        );
     }
 
     #[test]
     fn an_error_result_without_text_says_so() {
         let result = CallToolResult::error(vec![image_part()]);
-        assert_eq!(outcome_of(&result), Err("[image omitted]".to_string()));
+        assert_eq!(
+            outcome_of(&result, CONTENT_MAX_CHARS),
+            Err("[image omitted]".to_string())
+        );
         let empty = CallToolResult::error(Vec::new());
-        assert_eq!(outcome_of(&empty), Err(ERROR_WITHOUT_TEXT.to_string()));
+        assert_eq!(
+            outcome_of(&empty, CONTENT_MAX_CHARS),
+            Err(ERROR_WITHOUT_TEXT.to_string())
+        );
     }
 
     #[test]
     fn an_empty_success_says_it_has_no_text() {
         let result = CallToolResult::success(Vec::new());
-        let output = outcome_of(&result).expect("success");
+        let output = outcome_of(&result, CONTENT_MAX_CHARS).expect("success");
         assert_eq!(output.content, NO_TEXT);
     }
 
     #[test]
     fn a_long_text_is_capped_like_the_native_tools() {
-        let long = "x".repeat(crate::commands::tools::limits::CONTENT_MAX_CHARS + 10);
+        let long = "x".repeat(CONTENT_MAX_CHARS + 10);
         let result = CallToolResult::success(vec![ContentBlock::text(long)]);
-        let output = outcome_of(&result).expect("success");
+        let output = outcome_of(&result, CONTENT_MAX_CHARS).expect("success");
         assert!(output.truncated);
         assert!(output.content.contains("[truncated: showing"));
+    }
+
+    #[test]
+    fn a_result_is_capped_at_the_budget_it_is_given() {
+        let long = "x".repeat(1500);
+        let result = CallToolResult::success(vec![ContentBlock::text(long)]);
+        let output = outcome_of(&result, 1000).expect("success");
+        assert!(output.truncated);
+        assert!(output
+            .content
+            .ends_with("\n[truncated: showing 1000 of 1500 characters]"));
     }
 }

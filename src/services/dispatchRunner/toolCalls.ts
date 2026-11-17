@@ -2,6 +2,8 @@ import { messagesOf } from "../../stores/chatStore";
 import { useDispatchStore } from "../../stores/dispatchStore";
 import { useToolStore } from "../../stores/toolStore";
 import type { ChatToolCall, ToolDefinition } from "../../types";
+import { judgeCall, judgeResult, NOT_RUN_TEXT } from "../../utils/dispatchGuards";
+import type { TurnEnd } from "../../utils/dispatchTask";
 import {
   conversationMayUse,
   cutNotes,
@@ -49,18 +51,48 @@ export function conversationTools(sessionId: string): ToolDefinition[] {
 }
 
 /**
- * Runs a reply's calls in order, every one of them: an unattended conversation has no per-reply cap. A stop
- * ends the calls with a cancelled result, so each call still has a row.
+ * Runs a reply's calls in order, every one of them: an unattended conversation has no per-reply cap. Before each
+ * call the stall guard judges it: a call the model keeps repeating is not run, and its row carries the nudge. After
+ * each call that ran, the guard counts a streak of errors. A user stop ends the calls with a cancelled result, so
+ * each call still has a row. A guard stop ends the calls with a not-run result and the turn with the guard's reason.
+ * `resultMaxChars` caps each registry tool result. Resolves with the turn's end when the guard stops it, else null.
  */
-export async function runCalls(turn: Turn, calls: ChatToolCall[]): Promise<void> {
+export async function runCalls(
+  turn: Turn,
+  calls: ChatToolCall[],
+  resultMaxChars: number | undefined,
+): Promise<TurnEnd | null> {
   const { run } = splitCalls(calls, NO_CALL_LIMIT);
   for (const call of run) {
     if (turn.stopRequested) {
       answerPendingCalls(turn.sessionId, cancelledOutcome());
-      return;
+      return null;
     }
-    addToolRow(turn.sessionId, call, await resultOf(turn, call));
+    const judgement = judgeCall(turn.guard, call);
+    turn.guard = judgement.state;
+    if (judgement.kind === "repeat") {
+      addToolRow(turn.sessionId, call, notRunOutcome(judgement.nudge));
+      if (judgement.stop) return stoppedByGuard(turn, judgement.stop);
+      continue;
+    }
+    const outcome = await resultOf(turn, call, resultMaxChars);
+    addToolRow(turn.sessionId, call, outcome);
+    const judged = judgeResult(turn.guard, outcome.status, outcome.content);
+    turn.guard = judged.state;
+    if (judged.stop) return stoppedByGuard(turn, judged.stop);
   }
+  return null;
+}
+
+/** The end of a turn the guard stopped: the calls still without a result get a not-run result, then the failure. */
+function stoppedByGuard(turn: Turn, reason: string): TurnEnd {
+  answerPendingCalls(turn.sessionId, notRunOutcome(NOT_RUN_TEXT));
+  return { status: "failed", error: reason };
+}
+
+/** A call the guard did not run. It counts as denied, with the text the model reads. No approval step applies. */
+function notRunOutcome(content: string): ToolOutcome {
+  return { status: "denied", content, approval: "auto" };
 }
 
 /** Gives every call of the last reply that has no result the outcome. */
@@ -70,8 +102,14 @@ export function answerPendingCalls(sessionId: string, outcome: ToolOutcome): voi
   }
 }
 
-function resultOf(turn: Turn, call: ChatToolCall): Promise<ToolOutcome> {
-  return isDispatchTool(call.name) ? notesOutcome(turn, call) : registryOutcome(turn, call);
+function resultOf(
+  turn: Turn,
+  call: ChatToolCall,
+  resultMaxChars: number | undefined,
+): Promise<ToolOutcome> {
+  return isDispatchTool(call.name)
+    ? notesOutcome(turn, call)
+    : registryOutcome(turn, call, resultMaxChars);
 }
 
 /** The Dispatch state of a tool now: the one the user set, else On. */
@@ -93,8 +131,17 @@ function dispatchStates(): Record<string, ToolState> {
  * for this conversation; a Request approval tool asks, and the conversation waits as needs_you while the question
  * is open.
  */
-function registryOutcome(turn: Turn, call: ChatToolCall): Promise<ToolOutcome> {
-  const rules = runRules(turn.sessionId, dispatchStateNow, (item) => askWhileNeedsYou(turn, item));
+function registryOutcome(
+  turn: Turn,
+  call: ChatToolCall,
+  resultMaxChars: number | undefined,
+): Promise<ToolOutcome> {
+  const rules = runRules(
+    turn.sessionId,
+    dispatchStateNow,
+    (item) => askWhileNeedsYou(turn, item),
+    resultMaxChars,
+  );
   return outcomeForCall(rules, call, turn.modelId);
 }
 

@@ -1,4 +1,4 @@
-import type { PlatformInfo, StoredModelSettings, SystemPromptBlock } from "../types";
+import type { PlatformInfo, SessionKind, StoredModelSettings, SystemPromptBlock } from "../types";
 
 /** Platform details for the platform block: the OS probe plus the chipset from startup. */
 export interface PlatformSnapshot extends PlatformInfo {
@@ -12,6 +12,8 @@ export interface PromptContext {
   timeZone: string;
   platform: PlatformSnapshot | null;
   readFile: (path: string) => Promise<string>;
+  /** The date block names the day only, with no clock time. Dispatch uses it so its prompt stays the same all day. */
+  dateOnly?: boolean;
 }
 
 export interface ComposedPrompt {
@@ -53,9 +55,30 @@ export function localTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
+/**
+ * The time a date block shows for a request. A Dispatch conversation uses the start of the local day, so its
+ * system prompt is the same all day and the server keeps the prompt's cached prefix. A chat uses the exact time.
+ */
+export function promptTimeFor(kind: SessionKind, now: Date): Date {
+  if (kind !== "dispatch") return now;
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
 /** The date and time sentence sent for a date block. */
 export function dateTimeSentence(now: Date, timeZone: string): string {
   return `Current date and time: ${formatDateTime(now, timeZone)} (${timeZone}).`;
+}
+
+/** The date-only sentence sent for a date block when the clock time is left out, for example "Current date: Thursday, 22 October 2026 (Europe/Bucharest)." */
+export function dateSentence(now: Date, timeZone: string): string {
+  const day = new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone,
+  }).format(now);
+  return `Current date: ${day} (${timeZone}).`;
 }
 
 /**
@@ -97,7 +120,11 @@ export async function composeSystemPrompt(
         if (block.text.trim()) parts.push(block.text.trim());
         break;
       case "datetime":
-        parts.push(dateTimeSentence(ctx.now, ctx.timeZone));
+        parts.push(
+          ctx.dateOnly
+            ? dateSentence(ctx.now, ctx.timeZone)
+            : dateTimeSentence(ctx.now, ctx.timeZone),
+        );
         break;
       case "platform": {
         const line = platformLine(ctx.platform);

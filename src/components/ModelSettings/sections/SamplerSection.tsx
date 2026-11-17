@@ -1,5 +1,6 @@
 import { Slider, SpinButton, Subtitle1 } from "@fluentui/react-components";
 import { isRejected, rejectedReason } from "../../../utils/capabilityStatus";
+import { SAMPLING_RANGES } from "../../../utils/modelSettings";
 import { spinNumber } from "../../../utils/spinValue";
 import { Body } from "../../ui/Typography/Typography";
 import SettingField from "../SettingField/SettingField";
@@ -31,9 +32,9 @@ export default function SamplerSection({ form, caps }: Props) {
           <Slider
             className="model-settings__slider"
             disabled={isRejected(caps.temperature)}
-            min={0}
-            max={2}
-            step={0.1}
+            min={SAMPLING_RANGES.temperature.min}
+            max={SAMPLING_RANGES.temperature.max}
+            step={SAMPLING_RANGES.temperature.step}
             value={temperature}
             onChange={(_, data) => update("temperature", data.value)}
           />
@@ -50,9 +51,9 @@ export default function SamplerSection({ form, caps }: Props) {
           <Slider
             className="model-settings__slider"
             disabled={isRejected(caps.topP)}
-            min={0}
-            max={1}
-            step={0.05}
+            min={SAMPLING_RANGES.topP.min}
+            max={SAMPLING_RANGES.topP.max}
+            step={SAMPLING_RANGES.topP.step}
             value={topP}
             onChange={(_, data) => update("topP", data.value)}
           />
@@ -68,10 +69,10 @@ export default function SamplerSection({ form, caps }: Props) {
         <SpinButton
           disabled={isRejected(caps.topK)}
           value={settings.topK ?? 40}
-          min={1}
-          max={100}
+          min={SAMPLING_RANGES.topK.min}
+          max={SAMPLING_RANGES.topK.max}
           onChange={(_, data) => {
-            const value = spinNumber(data, 1, 100);
+            const value = spinNumber(data, SAMPLING_RANGES.topK.min, SAMPLING_RANGES.topK.max);
             if (value != null) update("topK", value);
           }}
         />
@@ -86,9 +87,9 @@ export default function SamplerSection({ form, caps }: Props) {
           <Slider
             className="model-settings__slider"
             disabled={isRejected(caps.minP)}
-            min={0}
-            max={1}
-            step={0.01}
+            min={SAMPLING_RANGES.minP.min}
+            max={SAMPLING_RANGES.minP.max}
+            step={SAMPLING_RANGES.minP.step}
             value={minP}
             onChange={(_, data) => update("minP", data.value)}
           />
@@ -104,11 +105,15 @@ export default function SamplerSection({ form, caps }: Props) {
         <SpinButton
           disabled={isRejected(caps.repetitionPenalty)}
           value={settings.repetitionPenalty ?? 1.1}
-          min={1}
-          max={2}
-          step={0.1}
+          min={SAMPLING_RANGES.repetitionPenalty.min}
+          max={SAMPLING_RANGES.repetitionPenalty.max}
+          step={SAMPLING_RANGES.repetitionPenalty.step}
           onChange={(_, data) => {
-            const value = spinNumber(data, 1, 2);
+            const value = spinNumber(
+              data,
+              SAMPLING_RANGES.repetitionPenalty.min,
+              SAMPLING_RANGES.repetitionPenalty.max,
+            );
             if (value != null) update("repetitionPenalty", value);
           }}
         />

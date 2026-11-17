@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const invokeMock = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 
-import { loadSessions, saveMessage } from "./database";
+import { loadDispatchSampling, loadSessions, saveDispatchSampling, saveMessage } from "./database";
 
 const session = {
   id: "s1",
@@ -290,5 +290,65 @@ describe("saveMessage tool fields", () => {
         }),
       }),
     );
+  });
+});
+
+describe("Dispatch sampling profile", () => {
+  // A block body: an arrow that returns the mock would be run as a teardown after each test.
+  beforeEach(() => {
+    invokeMock.mockReset();
+  });
+
+  it("reads the saved profile from the preference", async () => {
+    invokeMock.mockResolvedValue(
+      JSON.stringify({ temperature: 0.5, topP: 0.8, repetitionPenalty: 1.1 }),
+    );
+    await expect(loadDispatchSampling()).resolves.toEqual({
+      temperature: 0.5,
+      topP: 0.8,
+      repetitionPenalty: 1.1,
+    });
+    expect(invokeMock).toHaveBeenCalledWith("get_preference", { key: "dispatch_sampling" });
+  });
+
+  it("reads the defaults when nothing is saved", async () => {
+    invokeMock.mockResolvedValue(null);
+    await expect(loadDispatchSampling()).resolves.toEqual({
+      temperature: 0.3,
+      topP: 0.9,
+      repetitionPenalty: 1.05,
+    });
+  });
+
+  it("reads the defaults for text that is not JSON, or a value out of range", async () => {
+    invokeMock.mockResolvedValue("not json");
+    await expect(loadDispatchSampling()).resolves.toMatchObject({ temperature: 0.3 });
+    invokeMock.mockResolvedValue(
+      JSON.stringify({ temperature: 7, topP: 0.9, repetitionPenalty: 1 }),
+    );
+    await expect(loadDispatchSampling()).resolves.toMatchObject({ temperature: 0.3, topP: 0.9 });
+  });
+
+  it("reads the defaults when the read fails", async () => {
+    // A lazy rejection: a rejected value made up front is reported as unhandled before the read awaits it.
+    invokeMock.mockImplementation(() => Promise.reject(new Error("db closed")));
+    await expect(loadDispatchSampling()).resolves.toMatchObject({ repetitionPenalty: 1.05 });
+  });
+
+  it("saves a valid profile as JSON under the preference key", async () => {
+    invokeMock.mockResolvedValue(undefined);
+    await saveDispatchSampling({ temperature: 0.2, topP: 0.9, repetitionPenalty: 1.05, topK: 30 });
+    expect(invokeMock).toHaveBeenCalledWith("set_preference", {
+      key: "dispatch_sampling",
+      value: JSON.stringify({ temperature: 0.2, topP: 0.9, repetitionPenalty: 1.05, topK: 30 }),
+      prefType: "json",
+    });
+  });
+
+  it("refuses to save a profile out of range, and writes nothing", async () => {
+    await expect(
+      saveDispatchSampling({ temperature: 0.2, topP: 0.9, repetitionPenalty: 3 }),
+    ).rejects.toThrow("Repetition penalty must be between 1 and 2.");
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 });

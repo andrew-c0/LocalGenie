@@ -4,10 +4,12 @@ import type { Message } from "../../types";
 import { isContextOverflow } from "../../utils/chatError";
 import { effectiveCompaction } from "../../utils/compactionSettings";
 import { compactionDue } from "../../utils/compactionTrigger";
-import { CONTINUE_TEXT, dispatchPromptBlock } from "../../utils/dispatchPrompt";
+import { stepLogLine } from "../../utils/dispatchLog";
+import { CONTINUE_TEXT, dispatchPromptBlock, notesMessageText } from "../../utils/dispatchPrompt";
 import { modelChangeFault } from "../../utils/dispatchStart";
 import type { TurnEnd } from "../../utils/dispatchTask";
 import { errorMessage } from "../../utils/errorMessage";
+import { resultBudgetChars } from "../../utils/resultBudget";
 import { isSystemEvent } from "../../utils/systemEvents";
 import { parseThinking } from "../../utils/thinking";
 import { toast } from "../../utils/toast";
@@ -70,9 +72,24 @@ async function runStep(turn: Turn, overflowRetried: boolean): Promise<TurnEnd | 
         "The model does not call tools (its settings scan says so), so a Dispatch conversation cannot run on it.",
     };
   }
+  logSamplingOnce(turn, model);
   await compactIfDue(turn, model);
   if (turn.stopRequested) return { status: "stopped" };
   return sendStep(turn, model, overflowRetried);
+}
+
+/**
+ * Logs the sampling the turn runs with, once per turn, so the user can check a Dispatch conversation uses its
+ * profile. The values are the effective ones: the profile, then the chat's overrides.
+ */
+function logSamplingOnce(turn: Turn, model: ModelRun): void {
+  if (turn.samplingLogged) return;
+  turn.samplingLogged = true;
+  console.info("[dispatch] sampling:", {
+    temperature: model.settings.temperature,
+    topP: model.settings.topP,
+    repetitionPenalty: model.settings.repetitionPenalty,
+  });
 }
 
 /** Summarises the conversation when the context reaches the threshold. Its compaction is on by session override. */
@@ -150,20 +167,23 @@ async function requestStep(
 ): Promise<TurnEnd | null> {
   const { history, unavailable } = await historyFor(messagesOf(turn.sessionId));
   if (unavailable.length > 0) warnUnavailable(unavailable);
+  // The system prompt is the same for every request; the notes go last, for this request only.
   const request: ModelRun = {
     ...model,
-    systemBlocks: [...model.systemBlocks, dispatchPromptBlock(taskNamed(turn.taskId).notes)],
+    systemBlocks: [...model.systemBlocks, dispatchPromptBlock()],
   };
+  const sent = historyWithNotes(history, taskNamed(turn.taskId).notes);
   const messageCountBefore = messagesOf(turn.sessionId).length;
   const failure = await streamReply(
     turn.sessionId,
-    history,
+    sent,
     request,
     conversationTools(turn.sessionId),
   );
   finishStreaming();
-  if (failure) return onStreamFailure(turn, model, failure, overflowRetried);
   const reply = lastReply(messagesOf(turn.sessionId).slice(messageCountBefore));
+  console.info(stepLogLine(attempt.step, reply));
+  if (failure) return onStreamFailure(turn, model, failure, overflowRetried);
   if (!reply && !turn.stopRequested && attempt.emptyRetries < EMPTY_REPLY_RETRIES) {
     const retry = attempt.emptyRetries + 1;
     console.warn(
@@ -171,7 +191,20 @@ async function requestStep(
     );
     return retryRequest(turn, overflowRetried, { ...attempt, emptyRetries: retry });
   }
-  return handleReply(turn, reply);
+  return handleReply(turn, reply, model);
+}
+
+/**
+ * The history one request sends: the stored messages, then the notes as a user message when there are notes. The
+ * message is for this request only. It is not stored or shown, and it comes last, so the prompt before it does
+ * not change when the notes do.
+ */
+export function historyWithNotes(
+  history: geniex.ChatMessage[],
+  notes: string,
+): geniex.ChatMessage[] {
+  const text = notesMessageText(notes);
+  return text === null ? history : [...history, { role: "user", content: text }];
 }
 
 /**
@@ -206,10 +239,15 @@ async function onStreamFailure(
 }
 
 /**
- * The end of a step from its reply. A reply with calls runs them and the turn goes on. A reply with no call
- * is the answer: the turn ends as done with its text.
+ * The end of a step from its reply. A reply with calls runs them and the turn goes on, unless the stall guard ends
+ * it. A reply with no call is the answer: the turn ends as done with its text. Each result is capped at the
+ * model's result budget.
  */
-async function handleReply(turn: Turn, reply: Message | undefined): Promise<TurnEnd | null> {
+async function handleReply(
+  turn: Turn,
+  reply: Message | undefined,
+  model: ModelRun,
+): Promise<TurnEnd | null> {
   if (turn.stopRequested) {
     answerPendingCalls(turn.sessionId, cancelledOutcome());
     return { status: "stopped" };
@@ -218,8 +256,7 @@ async function handleReply(turn: Turn, reply: Message | undefined): Promise<Turn
   const calls = reply.toolCalls ?? [];
   if (calls.length === 0)
     return { status: "done", answer: parseThinking(reply.content).answer.trim() };
-  await runCalls(turn, calls);
-  return null;
+  return runCalls(turn, calls, resultBudgetChars(model.contextWindow));
 }
 
 function lastReply(messages: Message[]): Message | undefined {

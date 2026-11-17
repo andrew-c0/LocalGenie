@@ -11,6 +11,12 @@ import type {
 } from "../types";
 import { chatErrorContent } from "../utils/chatError";
 import { cleanOverrides, parseStoredOverrides } from "../utils/chatOverrides";
+import {
+  DISPATCH_SAMPLING_KEY,
+  type DispatchSampling,
+  dispatchSamplingProblem,
+  parseDispatchSampling,
+} from "../utils/dispatchSampling";
 import { DEFAULT_SERVER_SETTINGS } from "../utils/modelSettings";
 import {
   parseToolCalls,
@@ -307,6 +313,24 @@ export async function getServerSettings(): Promise<ServerSettings> {
 export async function saveServerSettings(settings: ServerSettings): Promise<void> {
   await setPreference("server_origins", settings.origins, "string");
   await setPreference("server_keepalive", settings.keepalive, "number");
+}
+
+// ─── Dispatch sampling profile ─────────────────────────────────────
+
+/**
+ * The saved Dispatch sampling profile. A missing, unreadable or invalid value reads as the defaults, so a
+ * Dispatch conversation always has a profile.
+ */
+export async function loadDispatchSampling(): Promise<DispatchSampling> {
+  const stored = await getPreference<unknown>(DISPATCH_SAMPLING_KEY).catch(() => null);
+  return parseDispatchSampling(stored);
+}
+
+/** Saves the Dispatch sampling profile as JSON. Rejects a profile with a value out of range. */
+export async function saveDispatchSampling(profile: DispatchSampling): Promise<void> {
+  const problem = dispatchSamplingProblem(profile);
+  if (problem) throw new Error(problem);
+  await setPreference(DISPATCH_SAMPLING_KEY, profile, "json");
 }
 
 // ─── Downloaded model metadata ─────────────────────────────────────

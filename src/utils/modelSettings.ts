@@ -47,6 +47,19 @@ export const DEFAULT_SERVER_SETTINGS: ServerSettings = {
   keepalive: 300,
 };
 
+/**
+ * Bounds and slider steps of the sampling and reply-length settings. The model settings and the Dispatch
+ * sampling profile both validate with these.
+ */
+export const SAMPLING_RANGES = {
+  temperature: { min: 0, max: 2, step: 0.1 },
+  topP: { min: 0, max: 1, step: 0.05 },
+  topK: { min: 1, max: 100, step: 1 },
+  minP: { min: 0, max: 1, step: 0.01 },
+  repetitionPenalty: { min: 1, max: 2, step: 0.1 },
+  maxTokens: { min: 256, max: 32768, step: 256 },
+} as const;
+
 /** Speculative decoding types accepted by `geniex serve --spec-type` (one at a time in the UI). */
 export const SPEC_TYPES = [
   "draft-mtp",

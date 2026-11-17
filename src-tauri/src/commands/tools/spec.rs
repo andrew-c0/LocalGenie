@@ -171,13 +171,13 @@ pub(super) fn registry() -> Vec<ToolSpec> {
         ToolSpec::native(
             WEB_FETCH,
             ToolRisk::Network,
-            "Download a web page or text file and return its readable text. Use `start` to continue a long page.",
+            "Download a web page or text file and return its readable text. A web page comes back as Markdown, with its headings, lists, code, tables and links kept. Use `start` to continue a long page.",
             web_fetch_parameters(),
         ),
         ToolSpec::native(
             WEB_SEARCH,
             ToolRisk::Network,
-            "Search public sources: Wikipedia, Hacker News, Stack Overflow, npm and crates.io. It is not a general web search; for news and general questions it often finds nothing.",
+            "Search public sources: Wikipedia, Hacker News, Stack Overflow, npm and crates.io. It is not a general web search; for news and general questions it often finds nothing. When the DuckDuckGo source is turned on, it adds general web results.",
             web_search_parameters(&search::source_ids()),
         ),
     ]
@@ -280,9 +280,17 @@ mod tests {
             .unwrap_or_default();
         assert_eq!(
             ids,
-            ["wikipedia", "hackernews", "stackoverflow", "npm", "crates"]
+            [
+                "wikipedia",
+                "hackernews",
+                "stackoverflow",
+                "npm",
+                "crates",
+                "duckduckgo"
+            ]
         );
         assert_eq!(search.parameters["properties"]["limit"]["maximum"], 10);
+        assert!(search.description.contains("DuckDuckGo"));
     }
 
     #[test]

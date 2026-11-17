@@ -1,6 +1,6 @@
-//! Readable text from HTML, and the text helpers the web tools share: entity decoding, whitespace
-//! and tag stripping for search snippets. A small hand-written reader; no HTML parser is needed for
-//! the readable text of a page.
+//! Plain text from HTML, and the text helpers the web tools share: entity decoding, whitespace and
+//! tag stripping for search snippets. A small hand-written reader: `web_fetch` uses it only when the
+//! Markdown conversion of `markdown.rs` gives nothing; the search sources use the helpers.
 
 /// Elements whose text is raw code or markup, skipped up to their closing tag.
 const RAW_TEXT: [&str; 2] = ["script", "style"];

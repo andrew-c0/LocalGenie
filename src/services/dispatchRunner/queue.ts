@@ -1,6 +1,7 @@
 import { useDispatchStore } from "../../stores/dispatchStore";
 import { useModelStore } from "../../stores/modelStore";
 import type { DispatchTask, Message } from "../../types";
+import { freshStallState } from "../../utils/dispatchGuards";
 import type { TurnEnd } from "../../utils/dispatchTask";
 import { errorMessage } from "../../utils/errorMessage";
 import { showChatError } from "../chatRun";
@@ -58,6 +59,8 @@ async function beginTurn(task: DispatchTask, plan: StartPlan): Promise<void> {
     modelId: null,
     stopRequested: false,
     errorShown: false,
+    guard: freshStallState(),
+    samplingLogged: false,
   };
   setCurrentTurn(turn);
   // Running from the start, so the chat input stays off while the recorded model loads.

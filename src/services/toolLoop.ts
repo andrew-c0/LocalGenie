@@ -114,19 +114,26 @@ export interface RunRules {
   switchedOn: (name: string) => boolean;
   /** Asks the user about one call. Resolves with the answer. */
   ask: (call: ChatToolCall) => Promise<ApprovalDecision>;
+  /** The longest a tool result may be, in characters, in this run. Undefined leaves the backend default. */
+  resultMaxChars?: number;
 }
 
-/** The rules of a run in a session. The caller gives the state of each tool and how the user is asked. */
+/**
+ * The rules of a run in a session. The caller gives the state of each tool, how the user is asked, and the result
+ * budget of the run (none for a chat).
+ */
 export function runRules(
   sessionId: string,
   stateOf: (name: string) => ToolState,
   ask: (call: ChatToolCall) => Promise<ApprovalDecision>,
+  resultMaxChars?: number,
 ): RunRules {
   return {
     sessionId,
     stateOf,
     switchedOn: (name) => useToolStore.getState().isToolEnabledInChat(sessionId, name),
     ask,
+    resultMaxChars,
   };
 }
 
@@ -161,7 +168,8 @@ export async function outcomeForCall(
   if (!isOfferable(spec, tools.enabledSearchSources, tools.searchSources)) {
     return noSourceOutcome();
   }
-  if (access === "run") return runCall(call, state === "on" ? "auto" : "chat", modelId);
+  const run = (approval: ToolApproval) => runCall(call, approval, modelId, rules.resultMaxChars);
+  if (access === "run") return run(state === "on" ? "auto" : "chat");
 
   const decision = await rules.ask(call);
   switch (decision) {
@@ -171,9 +179,9 @@ export async function outcomeForCall(
       return cancelledOutcome();
     case "chat":
       useToolStore.getState().grantForChat(rules.sessionId, call.name);
-      return runCall(call, "chat", modelId);
+      return run("chat");
     case "once":
-      return runCall(call, "once", modelId);
+      return run("once");
   }
 }
 
@@ -192,12 +200,14 @@ export function requestToolApproval(
 
 /**
  * Runs a call with the saved folders. A thrown error becomes an error outcome, so the model still gets a
- * result. A successful image result is kept only when the model may receive images.
+ * result. A successful image result is kept only when the model may receive images. The result is capped at
+ * `resultMaxChars` when the run sets a budget (a Dispatch conversation); a chat passes none.
  */
 async function runCall(
   call: ChatToolCall,
   approval: ToolApproval,
   modelId: string | null,
+  resultMaxChars: number | undefined,
 ): Promise<ToolOutcome> {
   try {
     const tools = useToolStore.getState();
@@ -206,6 +216,7 @@ async function runCall(
       call.arguments,
       tools.allowedFolders,
       activeSourceIds(tools.enabledSearchSources, tools.searchSources),
+      resultMaxChars,
     );
     const { attachment } = result;
     if (!result.ok || attachment === undefined) return resultOutcome(result, approval);

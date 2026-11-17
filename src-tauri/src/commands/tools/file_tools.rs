@@ -26,8 +26,8 @@ struct Entry {
 
 /// List a folder: folders first, then by name. Hidden and system entries are skipped. The first
 /// line counts the folders and files; at most `LIST_MAX_ENTRIES` entries follow, then an
-/// "and N more" line when some are cut.
-pub(super) fn list_directory(folder: &Path) -> Result<ToolOutput, String> {
+/// "and N more" line when some are cut. The text is capped at `max_chars`.
+pub(super) fn list_directory(folder: &Path, max_chars: usize) -> Result<ToolOutput, String> {
     if !folder.is_dir() {
         return Err("This path is not a folder".into());
     }
@@ -52,23 +52,23 @@ pub(super) fn list_directory(folder: &Path) -> Result<ToolOutput, String> {
     if cut {
         lines.push(format!("and {} more", total - LIST_MAX_ENTRIES));
     }
-    Ok(capped_output(&lines.join("\n"), cut))
+    Ok(capped_output(&lines.join("\n"), max_chars, cut))
 }
 
 /// The folders the user allowed, one `folder  <path>` line each, under a short header.
-pub(super) fn list_allowed_folders(folders: &[PathBuf]) -> ToolOutput {
+pub(super) fn list_allowed_folders(folders: &[PathBuf], max_chars: usize) -> ToolOutput {
     let mut lines = vec![ALLOWED_HEADER.to_string()];
     lines.extend(
         folders
             .iter()
             .map(|folder| format!("folder  {}", display_path(folder))),
     );
-    capped_output(&lines.join("\n"), false)
+    capped_output(&lines.join("\n"), max_chars, false)
 }
 
 /// Read a text file. Folders, files over `READ_MAX_BYTES`, binary and non-UTF-8 files are refused.
-/// A UTF-8 byte order mark is dropped.
-pub(super) fn read_text_file(file: &Path) -> Result<ToolOutput, String> {
+/// A UTF-8 byte order mark is dropped. The text is capped at `max_chars`.
+pub(super) fn read_text_file(file: &Path, max_chars: usize) -> Result<ToolOutput, String> {
     if file.is_dir() {
         return Err(FOLDER_NOT_FILE.into());
     }
@@ -94,7 +94,7 @@ pub(super) fn read_text_file(file: &Path) -> Result<ToolOutput, String> {
             attachment: None,
         });
     }
-    Ok(capped_output(text, false))
+    Ok(capped_output(text, max_chars, false))
 }
 
 /// Check an image and hand it on as an attachment. `file` must already be canonical, as
@@ -289,7 +289,7 @@ mod tests {
         tree.folder("zeta");
         tree.folder("alpha");
 
-        let output = list_directory(tree.path()).expect("list");
+        let output = list_directory(tree.path(), CONTENT_MAX_CHARS).expect("list");
         assert_eq!(
             names_in_order(&output.content),
             [
@@ -312,8 +312,10 @@ mod tests {
         tree.file("b.txt", b"x");
         tree.file("c.txt", b"x");
 
-        let output = list_directory(tree.path()).expect("list");
-        assert!(output.content.starts_with("Contains 2 folders and 3 files.\n"));
+        let output = list_directory(tree.path(), CONTENT_MAX_CHARS).expect("list");
+        assert!(output
+            .content
+            .starts_with("Contains 2 folders and 3 files.\n"));
     }
 
     #[test]
@@ -322,7 +324,7 @@ mod tests {
         tree.folder("only");
         tree.file("only.txt", b"x");
 
-        let output = list_directory(tree.path()).expect("list");
+        let output = list_directory(tree.path(), CONTENT_MAX_CHARS).expect("list");
         assert_eq!(
             names_in_order(&output.content)[0],
             "Contains 1 folder and 1 file."
@@ -335,7 +337,7 @@ mod tests {
         tree.file("a.txt", b"x");
         tree.file("b.txt", b"x");
 
-        let output = list_directory(tree.path()).expect("list");
+        let output = list_directory(tree.path(), CONTENT_MAX_CHARS).expect("list");
         assert_eq!(
             names_in_order(&output.content)[0],
             "Contains 0 folders and 2 files."
@@ -352,7 +354,7 @@ mod tests {
             tree.file(&format!("f{index:03}.txt"), b"x");
         }
 
-        let output = list_directory(tree.path()).expect("list");
+        let output = list_directory(tree.path(), CONTENT_MAX_CHARS).expect("list");
         let lines = names_in_order(&output.content);
         assert_eq!(lines.len(), LIST_MAX_ENTRIES + 2);
         assert_eq!(lines[0], "Contains 3 folders and 202 files.");
@@ -368,7 +370,7 @@ mod tests {
             tree.file(&format!("f{index:03}.txt"), b"x");
         }
 
-        let output = list_directory(tree.path()).expect("list");
+        let output = list_directory(tree.path(), CONTENT_MAX_CHARS).expect("list");
         let lines = names_in_order(&output.content);
         assert_eq!(lines.len(), LIST_MAX_ENTRIES + 2);
         assert_eq!(lines[0], format!("Contains 0 folders and {total} files."));
@@ -379,7 +381,7 @@ mod tests {
     #[test]
     fn list_of_an_empty_folder_says_so() {
         let tree = TempTree::new("list-empty");
-        let output = list_directory(tree.path()).expect("list");
+        let output = list_directory(tree.path(), CONTENT_MAX_CHARS).expect("list");
         assert_eq!(output.content, "The folder is empty.");
     }
 
@@ -389,7 +391,7 @@ mod tests {
         let first = tree.folder("first");
         let second = tree.folder("second");
 
-        let output = list_allowed_folders(&[first.clone(), second.clone()]);
+        let output = list_allowed_folders(&[first.clone(), second.clone()], CONTENT_MAX_CHARS);
         assert_eq!(
             output.content,
             format!(
@@ -416,7 +418,7 @@ mod tests {
         if !set {
             return;
         }
-        let output = list_directory(tree.path()).expect("list");
+        let output = list_directory(tree.path(), CONTENT_MAX_CHARS).expect("list");
         assert!(output.content.contains("visible.txt"));
         assert!(!output.content.contains("hidden.txt"));
         assert!(output.content.starts_with("Contains 0 folders and 1 file."));
@@ -426,14 +428,14 @@ mod tests {
     fn list_refuses_a_file_path() {
         let tree = TempTree::new("list-file");
         let file = tree.file("notes.txt", b"x");
-        assert!(list_directory(&file).is_err());
+        assert!(list_directory(&file, CONTENT_MAX_CHARS).is_err());
     }
 
     #[test]
     fn reads_a_small_text_file() {
         let tree = TempTree::new("read-small");
         let file = tree.file("notes.txt", "hello there".as_bytes());
-        let output = read_text_file(&file).expect("read");
+        let output = read_text_file(&file, CONTENT_MAX_CHARS).expect("read");
         assert_eq!(output.content, "hello there");
         assert!(!output.truncated);
     }
@@ -442,7 +444,7 @@ mod tests {
     fn reads_an_empty_file_as_a_marker() {
         let tree = TempTree::new("read-empty");
         let file = tree.file("empty.txt", b"");
-        let output = read_text_file(&file).expect("read");
+        let output = read_text_file(&file, CONTENT_MAX_CHARS).expect("read");
         assert_eq!(output.content, "(empty file)");
     }
 
@@ -452,7 +454,7 @@ mod tests {
         let text = "é".repeat(CONTENT_MAX_CHARS + 500);
         let file = tree.file("long.txt", text.as_bytes());
 
-        let output = read_text_file(&file).expect("read");
+        let output = read_text_file(&file, CONTENT_MAX_CHARS).expect("read");
         assert!(output.truncated);
         let note = format!(
             "\n[truncated: showing {CONTENT_MAX_CHARS} of {} characters]",
@@ -464,8 +466,24 @@ mod tests {
     }
 
     #[test]
+    fn a_custom_budget_sets_the_cut_and_its_note() {
+        let tree = TempTree::new("read-budget");
+        let file = tree.file("long.txt", "a".repeat(3000).as_bytes());
+
+        let output = read_text_file(&file, 1200).expect("read");
+        assert!(output.truncated);
+        let note = "\n[truncated: showing 1200 of 3000 characters]";
+        let body = output.content.strip_suffix(note).expect("final note");
+        assert_eq!(body.chars().count(), 1200);
+
+        let whole = read_text_file(&tree.file("short.txt", b"0123456789"), 1000).expect("read");
+        assert_eq!(whole.content, "0123456789");
+        assert!(!whole.truncated);
+    }
+
+    #[test]
     fn capped_output_keeps_short_text_whole() {
-        let output = capped_output("short", false);
+        let output = capped_output("short", CONTENT_MAX_CHARS, false);
         assert_eq!(output.content, "short");
         assert!(!output.truncated);
     }
@@ -474,14 +492,20 @@ mod tests {
     fn binary_file_is_refused() {
         let tree = TempTree::new("read-binary");
         let file = tree.file("image.bin", &[0x89, b'P', b'N', b'G', 0, 1, 2]);
-        assert_eq!(read_text_file(&file).unwrap_err(), "not a text file");
+        assert_eq!(
+            read_text_file(&file, CONTENT_MAX_CHARS).unwrap_err(),
+            "not a text file"
+        );
     }
 
     #[test]
     fn non_utf8_file_is_refused() {
         let tree = TempTree::new("read-latin1");
         let file = tree.file("latin.txt", &[0x63, 0x61, 0x66, 0xe9]);
-        assert_eq!(read_text_file(&file).unwrap_err(), "not a text file");
+        assert_eq!(
+            read_text_file(&file, CONTENT_MAX_CHARS).unwrap_err(),
+            "not a text file"
+        );
     }
 
     #[test]
@@ -489,7 +513,7 @@ mod tests {
         let tree = TempTree::new("read-large");
         let size = READ_MAX_BYTES as usize + 1;
         let file = tree.file("big.txt", &vec![b'a'; size]);
-        let error = read_text_file(&file).unwrap_err();
+        let error = read_text_file(&file, CONTENT_MAX_CHARS).unwrap_err();
         assert!(error.contains("too large to read"), "{error}");
         assert!(error.contains(&size.to_string()), "{error}");
     }
@@ -498,7 +522,7 @@ mod tests {
     fn utf8_byte_order_mark_is_dropped() {
         let tree = TempTree::new("read-bom");
         let file = tree.file("bom.txt", b"\xEF\xBB\xBFhi");
-        let output = read_text_file(&file).expect("read");
+        let output = read_text_file(&file, CONTENT_MAX_CHARS).expect("read");
         assert_eq!(output.content, "hi");
     }
 
@@ -506,7 +530,7 @@ mod tests {
     fn reading_a_folder_is_refused() {
         let tree = TempTree::new("read-folder");
         let folder = tree.folder("docs");
-        assert!(read_text_file(&folder).is_err());
+        assert!(read_text_file(&folder, CONTENT_MAX_CHARS).is_err());
     }
 
     #[test]
@@ -514,7 +538,7 @@ mod tests {
         let tree = TempTree::new("read-image");
         let file = tree.file("photo.PNG", PNG_HEADER);
         assert_eq!(
-            read_text_file(&file).unwrap_err(),
+            read_text_file(&file, CONTENT_MAX_CHARS).unwrap_err(),
             "This is an image. Use read_image to look at it."
         );
     }

@@ -1,0 +1,10 @@
+/* Fluent gives the slider a fixed width; the card's slider fills its row. */
+.dispatch-sampling-card__slider {
+  width: 100%;
+}
+
+/* Keeps the value beside the slider from moving as its digits change. */
+.dispatch-sampling-card__value {
+  min-width: 3.5rem;
+  text-align: end;
+}

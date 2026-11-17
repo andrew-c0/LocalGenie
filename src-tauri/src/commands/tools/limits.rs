@@ -10,8 +10,15 @@ pub const READ_MAX_BYTES: u64 = 1024 * 1024;
 /// Largest image `read_image` will open. Bigger images are refused, not cut.
 pub const IMAGE_MAX_BYTES: u64 = 5 * 1024 * 1024;
 
-/// Most characters of tool output returned to the model. Longer output is cut and marked.
+/// Most characters of tool output returned to the model when the caller sets no budget. Longer
+/// output is cut and marked.
 pub const CONTENT_MAX_CHARS: usize = 8000;
+
+/// Smallest result budget a caller may ask for (`result_max_chars` of `tool_execute`).
+pub const RESULT_MAX_CHARS_MIN: usize = 1000;
+
+/// Largest result budget a caller may ask for (`result_max_chars` of `tool_execute`).
+pub const RESULT_MAX_CHARS_MAX: usize = 40_000;
 
 /// Longest time a `web_fetch` call may run: the robots check and the page, with redirects.
 pub const WEB_FETCH_TIMEOUT_SECS: u64 = 45;
@@ -59,3 +66,26 @@ pub const QUERY_MAX_CHARS: usize = 200;
 pub const SEARCH_LIMIT_MIN: usize = 1;
 pub const SEARCH_LIMIT_MAX: usize = 10;
 pub const SEARCH_LIMIT_DEFAULT: usize = 5;
+
+/// DuckDuckGo (unofficial, no API key): shortest gap between two requests to it. The fallback page
+/// waits for the same gap.
+pub const DUCKDUCKGO_MIN_INTERVAL_MS: u64 = 5000;
+
+/// Most requests to DuckDuckGo in one window, per app run. Each page request counts, so a search
+/// that reads the fallback page counts twice. A cache hit counts for nothing.
+pub const DUCKDUCKGO_WINDOW_LIMIT: usize = 20;
+
+/// The window the request limit counts over: one hour.
+pub const DUCKDUCKGO_WINDOW_SECS: u64 = 3600;
+
+/// How long DuckDuckGo is left alone after it limits or challenges the app.
+pub const DUCKDUCKGO_PAUSE_SECS: u64 = 900;
+
+/// How long a stored answer is reused.
+pub const DUCKDUCKGO_CACHE_TTL_SECS: u64 = 86_400;
+
+/// Most queries kept in the answer cache. The oldest answer goes first.
+pub const DUCKDUCKGO_CACHE_MAX_ENTRIES: usize = 100;
+
+/// Results on one DuckDuckGo page; a stored answer keeps all of them.
+pub const DUCKDUCKGO_PAGE_RESULTS: usize = 10;

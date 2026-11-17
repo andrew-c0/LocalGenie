@@ -36,6 +36,9 @@ url = "2"
 flate2 = "1"
 # Web tools: page text in the charset the page declares (already in the lockfile through reqwest).
 encoding_rs = "0.8"
+# Web tools: the main content of a page (Mozilla Readability port). Its Markdown comes from dom_query, the parser under dom_smoothie (same version, no extra crate).
+dom_smoothie = "0.19"
+dom_query = { version = "0.29", features = ["markdown"] }
 sysinfo = "0.33"
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }

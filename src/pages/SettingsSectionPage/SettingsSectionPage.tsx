@@ -21,7 +21,8 @@ export type SettingsRouteId =
 
 const PANELS: Record<SettingsRouteId, { subtitle: string; panel: ReactElement }> = {
   "settings-app": {
-    subtitle: "Configure the local GenieX server port, RAM headroom and conversation summaries.",
+    subtitle:
+      "Configure the local GenieX server port, RAM headroom, conversation summaries and the Dispatch sampling.",
     panel: <AppSettings />,
   },
   "settings-runtimes": {

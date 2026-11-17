@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
 import { exitApp, onExitRequested } from "../../services/background";
-import { useDispatchStore } from "../../stores/dispatchStore";
-import { useDownloadStore } from "../../stores/downloadStore";
 import { errorMessage } from "../../utils/errorMessage";
-import { exitBlockers } from "../../utils/exitBlockers";
+import { exitBlockers, trayExitAction } from "../../utils/exitBlockers";
 import { toast } from "../../utils/toast";
-import { ConfirmDialog } from "../ui/ConfirmDialog/ConfirmDialog";
+import { ExitConfirmDialog } from "./ExitConfirmDialog";
+import { readRunningWork } from "./readRunningWork";
 
 /**
  * Handles the tray's Exit item. Quits at once when nothing is running; otherwise lists what would be
- * interrupted and quits only when the user confirms. Cancel keeps the window open.
+ * interrupted and quits only when the user confirms. "Keep running" keeps the app open.
  */
 export default function ExitGuard() {
   const [blockers, setBlockers] = useState<string[] | null>(null);
@@ -18,12 +17,9 @@ export default function ExitGuard() {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     onExitRequested(() => {
-      const found = exitBlockers(
-        useDownloadStore.getState().downloads,
-        useDispatchStore.getState().tasks,
-      );
-      if (found.length === 0) void quit();
-      else setBlockers(found);
+      const lines = exitBlockers(readRunningWork());
+      if (trayExitAction(lines) === "quit") void quit();
+      else setBlockers(lines);
     }).then((fn) => {
       if (disposed) fn();
       else unlisten = fn;
@@ -37,21 +33,13 @@ export default function ExitGuard() {
   if (blockers === null) return null;
 
   return (
-    <ConfirmDialog
-      title="Exit LocalGenie?"
-      message={
-        <ul>
-          {blockers.map((reason) => (
-            <li key={reason}>{reason}</li>
-          ))}
-        </ul>
-      }
-      confirmLabel="Exit anyway"
-      onConfirm={() => {
+    <ExitConfirmDialog
+      blockers={blockers}
+      onExit={() => {
         setBlockers(null);
         void quit();
       }}
-      onCancel={() => setBlockers(null)}
+      onKeepRunning={() => setBlockers(null)}
     />
   );
 }

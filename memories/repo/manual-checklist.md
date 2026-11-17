@@ -5,16 +5,17 @@ Run through these checks manually after building or deploying the app. Automated
 ## Background running (Dispatch phase A, 2026-11-15; ticked = the user tested)
 - [x] Settings > Background > Keep running in the tray on: closing the window hides it to the tray and the app keeps running (confirmed in a dev run by the user, 2026-11-15; fixed after the first try, the close listener now blocks the close).
 - [ ] The first hide to the tray shows one notification ("LocalGenie is still running"); later hides show none. May not show in a dev build. Not run.
-- [ ] Tray: left click opens the window, right click shows Open LocalGenie and Exit. Not run.
-- [ ] Exit with a download running asks "Exit LocalGenie?" and Cancel keeps the app; with nothing running Exit quits at once and no geniex, node or MCP child process is left. Not run.
-- [ ] A second launch of the app shows the running window and starts no second copy. To be tested with Start with Windows.
+- [x] Tray: left click opens the window, right click shows Open LocalGenie and Exit. (confirmed in the app by the user, 2026-11-16)
+- [x] Exit with a download running asks "Exit LocalGenie?" and Cancel keeps the app; with nothing running Exit quits at once and no geniex, node or MCP child process is left. (confirmed in the app by the user, 2026-11-16)
+- [ ] Exit (tray) and window close with the tray setting off list every running kind: download, Dispatch, chat reply, benchmark, Playground job, runtime install.
+- [x] A second launch of the app shows the running window and starts no second copy. (confirmed in the app by the user, 2026-11-16)
 - [x] Keep running off (the default): closing the window quits as before, and with a download running the old "Close LocalGenie?" prompt shows (confirmed by the user, 2026-11-15). With it on, a running download keeps going in the tray (confirmed).
-- [ ] Start with Windows (installed build): after sign-in the app starts hidden in the tray; turning the switch off removes it. Not run.
+- [x] Start with Windows (installed build): after sign-in the app starts hidden in the tray; turning the switch off removes it. (confirmed in the app by the user, 2026-11-16)
 - [x] A chat reply left generating while the window is hidden for a few minutes finishes correctly when the window is reopened (the Dispatch spike: a frontend runner works while hidden; confirmed by the user, 2026-11-15).
 - [ ] Tray tooltip: while a model downloads, hovering the tray icon shows "Downloading <name> 42%" ("(+N more)" for several); it goes back to "LocalGenie" when nothing is active. Not run.
 - [ ] A download that finishes while the window is hidden or minimized shows a Windows notification "Download complete" with the model name; none when the window is on screen, none for cancelled or failed ones. Not run.
 - [ ] A runtime install (Settings > Runtimes) shows "Installing <name>" in the tooltip and "<name> was installed." when done and hidden. Not run.
-- [ ] An update install while the app is hidden in the tray restarts cleanly. Not run.
+- [x] An update install while the app is hidden in the tray restarts cleanly. (confirmed in the app by the user, 2026-11-16)
 
 ## MCP servers (phase 4 and its follow-up, 2026-11-13; ticked = the user tested)
 - [x] Remote HTTP server: Settings > Tools > MCP servers > Add server, transport Web address; it connects, its tools appear under its name, and a chat uses one of them (tested by the user, 2026-11-13).
@@ -543,7 +544,7 @@ Not yet run:
 ## Dispatch conversations (phase B, reworked 2026-11-16; none run in the app yet)
 
 - [ ] Migration: an existing database opens, chats are unchanged, no Dispatch conversation shows in the chat list, recent conversations or the new-chat draft.
-- [ ] Chat after the ChatArea and ChatInput refactors: the transcript scrolls with a streaming reply, the status line shows, retry and delete work, the tools chip in the chat input works as before, the textarea grows as before.
+- [x] Chat after the ChatArea and ChatInput refactors: the transcript scrolls with a streaming reply, the status line shows, retry and delete work, the tools chip in the chat input works as before, the textarea grows as before. (confirmed in the app by the user, 2026-11-16)
 - [ ] New conversation: the first message creates it, opens /dispatch/<id> and starts the turn; tool switches chosen before sending are kept on the conversation.
 - [ ] Tools popup (Dispatch and chat): a Dispatch tool that is Off in the Dispatch settings is disabled with "Off in the Dispatch settings. Change it in Settings > Tools"; a Request approval one is on and reads "Asks before each use"; the read plus web warning shows when both are enabled; switches survive a restart.
 - [ ] Request approval in Dispatch: a conversation with a tool set to Request approval asks in the approval dialog (Allow once, Allow for this conversation, Deny); while it asks the conversation shows Needs you, the chat input stays locked, a queued conversation waits, and a hidden window gets "Dispatch needs your approval" with "<tool> in <title>"; Deny gives the model the denied result and the turn goes on; Stop cancels the question and ends the turn as Stopped; the tray reads "Dispatch: waiting for your approval on <title>". Close the app while it asks: the conversation shows Interrupted after reopening (the startup sweep in `commands/dispatch.rs` moves needs_you to interrupted).
@@ -565,6 +566,35 @@ Not yet run:
 - [ ] Resume after an incomplete run: send a long message, close the app (Exit) while it works, reopen: one dialog "Dispatch was interrupted ... Continue it with the previously selected model?"; Continue starts the GenieX server, loads that model and carries on; "Not now" marks the conversation Stopped and the dialog does not return. With two interrupted conversations (also on different models) the dialog lists them and they run one after another, each on its own model.
 - [ ] Resume dialog with the model deleted or failing to load: an error toast names the model; the conversation stays Interrupted (queued ones show Failed with the reason).
 - [ ] Dispatch runs every tool call of one reply (no cap of 4); the chat still caps at 4 per reply.
-- [ ] The chat composer and the Dispatch composer look and behave alike (field, send/stop, attach in chat, tools chip, note line, wide windows); the header model selector still selects, reuses and switches compute as before; the speed list ignores Dispatch.
+- [x] The chat composer and the Dispatch composer look and behave alike (field, send/stop, attach in chat, tools chip, note line, wide windows); the header model selector still selects, reuses and switches compute as before; the speed list ignores Dispatch. (confirmed in the app by the user, 2026-11-16)
 - [ ] Dispatch layout: /dispatch looks like the Chat landing (hero, recent conversations with status badge and time, composer at the bottom); a conversation is full width like a chat, with the status badge, Elapsed, Continue and a Delete menu in the header row; at 1600 px and wider the composer and transcript match the chat. The chat landing, recent list, header and composer look unchanged after the shared-component extraction.
 - [ ] An empty model reply (no text, no tool call) in Dispatch is sent again twice as the same step, with no new message; a reply on a retry carries on silently; after three empty replies the turn fails with "The model returned an empty reply 3 times in a row. Send a message to continue, or try another model." and a new message continues it.
+- [ ] Dispatch sampling card (Settings > Application & Runtime, below Server runtime): the fields show 0.3, 0.90, 1.05 with Top K, Min P and Max tokens empty; a change saves ("Dispatch sampling saved"), survives a restart; "Reset to defaults" fills the draft and only Save stores it; the two help lines read as written.
+- [ ] A Dispatch conversation logs its sampling once per turn: the console shows `[dispatch] sampling:` with the saved temperature, top P and repetition penalty, whatever model is loaded. A chat on the same model is unchanged: its sampling is the model's own, and no Dispatch line is logged.
+- [ ] Per-step console line: every Dispatch request logs `[dispatch] step N: prompt_tokens=…, completion_tokens=…, ms=…`. On an engine with prompt caching (llama.cpp GGUF), prompt_tokens stays small as a long conversation grows (it counts only the new part), and it does not jump back to the whole history after a dispatch_notes update. On an engine without caching it grows with the history, which is expected.
+- [ ] Large page in Dispatch: web_fetch on a long page is cut to the window sized from the context. With a 4k-context model the result stops at about 2,150 characters, with the truncated note; with a 32k one at about 17,200. Calling again with start=N continues it. A chat with the same page is cut at the backend default (8,000 characters).
+- [ ] Stall guard: a model that repeats the same call (ask it to read one file five times) gets the nudge "You already made this exact call 3 times with the same result..." as the result of the 4th call and does not run it; after the third nudge the turn stops with "⚠️ Error: The model kept repeating the same tool call (read_text_file). Send a message to continue." and a notice "Dispatch stopped: ...". A new message continues it. A chat is not stopped by this guard.
+- [ ] Stall guard, errors: six failing calls in a row (for example read six missing file names) end the turn with "6 tool calls in a row failed. Last error: ..."; one successful call in between starts the count again.
+
+## Web fetch as Markdown (2026-11-16)
+
+- [x] Wikipedia article (e.g. https://en.wikipedia.org/wiki/Rust_(programming_language)) through a chat with web_fetch on: the answer starts with `# <title>` and `Source:`; headings are `#`, lists are `-` with nested levels, links read `[text](https://...)` with absolute addresses, and the navigation and "Jump to" menus are gone. (confirmed in the app by the user, 2026-11-16)
+- [ ] Documentation page (e.g. https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html): headings, inline code and fenced code blocks with their language (```rust) look right.
+- [ ] News article with heavy navigation (menus, related links, a cookie banner): only the headline and the article text remain.
+- [ ] GitHub README (e.g. https://github.com/tauri-apps/tauri): headings, code blocks and tables look right; badges appear as `![alt](url)` lines (expected, there are many).
+- [ ] JS-only page (an app shell that renders in the browser): little or no text, or only the title, or "(the page has no readable text)"; no error.
+- [ ] A table on a page (e.g. a comparison table on Wikipedia): a pipe table when it is regular and narrow; a line per row, cells joined with `; `, when it is irregular or wide.
+- [ ] A long page: the first answer ends with the `[truncated: showing characters ...; call again with start=N ...]` note, and calling again with `start=N` continues in the Markdown text.
+- [ ] Plain text, JSON or a Markdown file still comes back unchanged (no conversion).
+
+## Web search: DuckDuckGo (2026-11-16)
+
+- [ ] Settings > Tools: the DuckDuckGo source is off by default; its row reads "Contacts duckduckgo.com." and the description says it is best-effort, unofficial, may stop working, and that the query goes to DuckDuckGo; turning it on survives a restart.
+- [ ] Chat with web_search On and the DuckDuckGo source on: a query gives numbered results under "Web (DuckDuckGo)", each with a title, a web address (not a duckduckgo.com redirect) and a snippet.
+- [ ] The same search from Dispatch (a conversation that calls web_search).
+- [ ] Request approval on web_search: the approval dialog reads "This tool will send your search to: duckduckgo.com."
+- [ ] The same query again straight after: the answer comes back at once from the cache, with no 5 s wait.
+- [ ] A query with no results (a long nonsense string): "Web (DuckDuckGo): no results."
+- [ ] After 20 requests in an hour (different queries), the next one reads "DuckDuckGo search limit reached for now (20 per hour). Try again later or use another source." at once, with no wait and no request.
+- [ ] Network off: the search reads the offline wording ("Could not reach the web: ...", the chat's offline text), not an empty list; with another source on, that one still answers.
+- [ ] Only if DuckDuckGo challenges the app (a captcha page or HTTP 429; cannot be forced): the tool reads "... is paused for 15 minutes" and calls in that time send nothing.

@@ -7,8 +7,13 @@ import { TOOL_TEXT } from "../utils/toolLoop";
 
 const executeTool = vi.fn();
 vi.mock("./tools", () => ({
-  executeTool: (name: string, args: string, folders: string[], sources: string[] | null) =>
-    executeTool(name, args, folders, sources),
+  executeTool: (
+    name: string,
+    args: string,
+    folders: string[],
+    sources: string[] | null,
+    resultMaxChars?: number,
+  ) => executeTool(name, args, folders, sources, resultMaxChars),
   listTools: () => Promise.resolve([]),
   listSearchSources: () => Promise.resolve([]),
 }));
@@ -186,11 +191,13 @@ describe("runToolRounds", () => {
 
     await expect(runToolRounds(CHAT, run)).resolves.toBeNull();
 
+    // A chat sends no result budget: the fifth argument is undefined, so the backend default applies.
     expect(executeTool).toHaveBeenCalledWith(
       "list_directory",
       call("c1").arguments,
       ["C:\\notes"],
       [],
+      undefined,
     );
     expect(toolRows()).toHaveLength(1);
     expect(toolRows()[0]).toMatchObject({
@@ -612,6 +619,7 @@ describe("web_search sources", () => {
       searchCall("c1").arguments,
       ["C:\\notes"],
       ["hacker_news"],
+      undefined,
     );
   });
 

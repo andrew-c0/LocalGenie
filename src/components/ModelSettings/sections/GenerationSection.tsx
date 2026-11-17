@@ -2,6 +2,7 @@ import { SpinButton, Subtitle1, Switch, Textarea } from "@fluentui/react-compone
 import type { ModelCapabilities } from "../../../types";
 import { isRejected, rejectedReason } from "../../../utils/capabilityStatus";
 import { thinkingNote } from "../../../utils/modelCapabilities";
+import { SAMPLING_RANGES } from "../../../utils/modelSettings";
 import { spinNumber } from "../../../utils/spinValue";
 import SettingField from "../SettingField/SettingField";
 import type { ModelSettingsForm } from "../useModelSettingsForm";
@@ -30,12 +31,16 @@ export default function GenerationSection({ form, caps, capabilities }: Props) {
           disabled={isRejected(caps.maxTokens)}
           value={settings.maxTokens ?? null}
           placeholder="Unset (no limit)"
-          min={256}
-          max={32768}
-          step={256}
+          min={SAMPLING_RANGES.maxTokens.min}
+          max={SAMPLING_RANGES.maxTokens.max}
+          step={SAMPLING_RANGES.maxTokens.step}
           onChange={(_, data) => {
             // Clearing the field unsets the value so max_tokens is omitted.
-            update("maxTokens", spinNumber(data, 256, 32768) ?? undefined);
+            update(
+              "maxTokens",
+              spinNumber(data, SAMPLING_RANGES.maxTokens.min, SAMPLING_RANGES.maxTokens.max) ??
+                undefined,
+            );
           }}
         />
       </SettingField>

@@ -14,19 +14,22 @@ export async function listSearchSources(): Promise<SearchSourceInfo[]> {
 /**
  * Run one tool call. `args` is the raw JSON string the model sent. `allowedFolders` limits the file
  * tools to the folders the user allowed; `enabledSearchSources` limits `web_search` to the sources the
- * user turned on (null when not given). A failed call comes back as `ok: false`, not as a rejection.
+ * user turned on (null when not given). `resultMaxChars` (optional) caps the result's length; it is sent only when
+ * given, so the backend default applies otherwise. A failed call comes back as `ok: false`, not as a rejection.
  */
 export async function executeTool(
   name: string,
   args: string,
   allowedFolders: string[],
   enabledSearchSources: string[] | null = null,
+  resultMaxChars?: number,
 ): Promise<ToolResult> {
   const raw: RawToolResult = await invoke("tool_execute", {
     name,
     arguments: args,
     allowedFolders,
     enabledSearchSources,
+    ...(resultMaxChars === undefined ? {} : { resultMaxChars }),
   });
   return toToolResult(raw);
 }

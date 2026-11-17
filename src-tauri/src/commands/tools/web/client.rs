@@ -5,7 +5,7 @@
 use crate::commands::tools::limits::WEB_REQUEST_TIMEOUT_SECS;
 use flate2::read::GzDecoder;
 use reqwest::dns::{Addrs, Name, Resolve, Resolving};
-use reqwest::header::{ACCEPT_ENCODING, CONTENT_ENCODING, LOCATION};
+use reqwest::header::{ACCEPT_ENCODING, CONTENT_ENCODING, CONTENT_TYPE, LOCATION};
 use reqwest::{Client, Response, StatusCode};
 use std::io::{self, Read};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -203,6 +203,26 @@ pub(super) async fn send_get(client: &Client, url: Url) -> Result<Response, WebE
     client
         .get(url)
         .header(ACCEPT_ENCODING, "gzip")
+        .send()
+        .await
+        .map_err(|error| classify(&error))
+}
+
+/// One POST of form fields, without following redirects. Only the fields go in the body. The caller
+/// checks the URL before it calls this.
+pub(super) async fn send_form(
+    client: &Client,
+    url: Url,
+    fields: &[(&str, &str)],
+) -> Result<Response, WebError> {
+    let body = url::form_urlencoded::Serializer::new(String::new())
+        .extend_pairs(fields)
+        .finish();
+    client
+        .post(url)
+        .header(ACCEPT_ENCODING, "gzip")
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(body)
         .send()
         .await
         .map_err(|error| classify(&error))

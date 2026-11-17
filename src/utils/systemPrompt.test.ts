@@ -3,11 +3,15 @@ import type { SystemPromptBlock } from "../types";
 import {
   blocksOf,
   composeSystemPrompt,
+  dateSentence,
+  dateTimeSentence,
   estimateTokens,
   fileSection,
   formatSize,
+  localTimeZone,
   type PlatformSnapshot,
   platformLine,
+  promptTimeFor,
   withSystemBlocks,
 } from "./systemPrompt";
 
@@ -135,5 +139,55 @@ describe("helpers", () => {
 
   it("builds the file section", () => {
     expect(fileSection("a.md", "x\n")).toBe("--- file: a.md ---\nx\n--- end of file ---");
+  });
+});
+
+describe("promptTimeFor", () => {
+  const morning = new Date(2026, 9, 22, 8, 15, 0);
+  const lateEvening = new Date(2026, 9, 22, 23, 59, 30);
+
+  it("keeps the exact time for a chat", () => {
+    expect(promptTimeFor("chat", morning)).toBe(morning);
+  });
+
+  it("rounds a Dispatch conversation down to the start of the local day", () => {
+    expect(promptTimeFor("dispatch", morning)).toEqual(new Date(2026, 9, 22, 0, 0, 0));
+  });
+
+  it("gives a Dispatch date sentence that is the same at every time of the day", () => {
+    const zone = localTimeZone();
+    expect(dateTimeSentence(promptTimeFor("dispatch", morning), zone)).toBe(
+      dateTimeSentence(promptTimeFor("dispatch", lateEvening), zone),
+    );
+  });
+
+  it("changes the Dispatch date sentence on the next day", () => {
+    const zone = localTimeZone();
+    const nextDay = new Date(2026, 9, 23, 0, 0, 1);
+    expect(dateTimeSentence(promptTimeFor("dispatch", nextDay), zone)).not.toBe(
+      dateTimeSentence(promptTimeFor("dispatch", morning), zone),
+    );
+  });
+});
+
+describe("dateSentence", () => {
+  const zone = "Europe/Bucharest";
+
+  it("names the day and the time zone, with no clock time", () => {
+    const sentence = dateSentence(new Date(Date.UTC(2026, 9, 22, 14, 5, 9)), zone);
+    expect(sentence).toBe("Current date: Thursday, 22 October 2026 (Europe/Bucharest).");
+    expect(sentence).not.toMatch(/\d{2}:\d{2}/);
+  });
+
+  it("is used for a date block when the context asks for the date only", async () => {
+    const blocks: SystemPromptBlock[] = [{ id: "d", kind: "datetime" }];
+    const composed = await composeSystemPrompt(blocks, {
+      now: NOW,
+      timeZone: zone,
+      platform: null,
+      readFile: async () => "",
+      dateOnly: true,
+    });
+    expect(composed.prompt).toBe(dateSentence(NOW, zone));
   });
 });

@@ -77,7 +77,9 @@ pub async fn web_search_sources() -> Result<Vec<SearchSourceInfo>, String> {
 
 /// Run one tool call. `arguments` is the raw JSON string the model sent. `allowed_folders` are the
 /// folders the user allowed for file tools. `enabled_search_sources` are the source ids the user
-/// turned on for `web_search` (null or empty when none). Each call runs under its own time limit.
+/// turned on for `web_search` (null or empty when none). `result_max_chars` is the most characters
+/// of text one result carries, clamped to 1000 to 40000 (null is 8000); it applies to file, web and
+/// MCP results. Each call runs under its own time limit.
 #[tauri::command]
 pub async fn tool_execute(
     mcp: State<'_, McpManager>,
@@ -85,6 +87,7 @@ pub async fn tool_execute(
     arguments: String,
     allowed_folders: Vec<String>,
     enabled_search_sources: Option<Vec<String>>,
+    result_max_chars: Option<usize>,
 ) -> Result<ToolResult, String> {
     execute_tool(
         &mcp,
@@ -92,6 +95,7 @@ pub async fn tool_execute(
         arguments,
         allowed_folders,
         enabled_search_sources,
+        result_max_chars,
     )
     .await
 }
@@ -102,12 +106,21 @@ async fn execute_tool(
     arguments: String,
     allowed_folders: Vec<String>,
     enabled_search_sources: Option<Vec<String>>,
+    result_max_chars: Option<usize>,
 ) -> Result<ToolResult, String> {
     let started = Instant::now();
     let limit = Duration::from_secs(timeout_secs(&name));
     let timed_out = timed_out_message(&name);
     let enabled = enabled_search_sources.unwrap_or_default();
-    let call = run_call(manager, &name, &arguments, &allowed_folders, &enabled);
+    let budget = output::result_budget(result_max_chars);
+    let call = run_call(
+        manager,
+        &name,
+        &arguments,
+        &allowed_folders,
+        &enabled,
+        budget,
+    );
     let outcome = match tokio::time::timeout(limit, call).await {
         Err(_elapsed) => Err(timed_out),
         Ok(result) => result,
@@ -136,21 +149,24 @@ fn tool_result(outcome: Result<ToolOutput, String>, elapsed: Duration) -> ToolRe
     }
 }
 
-/// Route one call to its tool.
+/// Route one call to its tool. `max_chars` is the result budget of the call.
 async fn run_call(
     manager: &McpManager,
     name: &str,
     arguments: &str,
     allowed_folders: &[String],
     enabled_sources: &[String],
+    max_chars: usize,
 ) -> Result<ToolOutput, String> {
     match name {
         LIST_DIRECTORY | READ_TEXT_FILE | READ_IMAGE => {
-            run_file_call(name, arguments, allowed_folders).await
+            run_file_call(name, arguments, allowed_folders, max_chars).await
         }
-        WEB_FETCH => web::fetch_tool(arguments).await,
-        WEB_SEARCH => web::search_tool(arguments, enabled_sources).await,
-        other if mcp::is_mcp_name(other) => mcp::call_tool_output(manager, other, arguments).await,
+        WEB_FETCH => web::fetch_tool(arguments, max_chars).await,
+        WEB_SEARCH => web::search_tool(arguments, enabled_sources, max_chars).await,
+        other if mcp::is_mcp_name(other) => {
+            mcp::call_tool_output(manager, other, arguments, max_chars).await
+        }
         other => Err(unknown_tool(other)),
     }
 }
@@ -160,13 +176,14 @@ async fn run_file_call(
     name: &str,
     arguments: &str,
     allowed_folders: &[String],
+    max_chars: usize,
 ) -> Result<ToolOutput, String> {
     let (name, arguments, allowed) = (
         name.to_string(),
         arguments.to_string(),
         allowed_folders.to_vec(),
     );
-    tokio::task::spawn_blocking(move || file_call(&name, &arguments, &allowed))
+    tokio::task::spawn_blocking(move || file_call(&name, &arguments, &allowed, max_chars))
         .await
         .map_err(|error| format!("The tool could not run: {error}"))?
 }
@@ -176,22 +193,31 @@ fn file_call(
     name: &str,
     arguments: &str,
     allowed_folders: &[String],
+    max_chars: usize,
 ) -> Result<ToolOutput, String> {
     match name {
-        LIST_DIRECTORY => list_call(arguments, allowed_folders),
-        READ_TEXT_FILE => file_tools::read_text_file(&target_path(arguments, allowed_folders)?),
+        LIST_DIRECTORY => list_call(arguments, allowed_folders, max_chars),
+        READ_TEXT_FILE => {
+            file_tools::read_text_file(&target_path(arguments, allowed_folders)?, max_chars)
+        }
         READ_IMAGE => file_tools::read_image(&target_path(arguments, allowed_folders)?),
         other => Err(unknown_tool(other)),
     }
 }
 
 /// `list_directory`: the folder named by `path`, or the allowed folders when no path is given.
-fn list_call(arguments: &str, allowed_folders: &[String]) -> Result<ToolOutput, String> {
+fn list_call(
+    arguments: &str,
+    allowed_folders: &[String],
+    max_chars: usize,
+) -> Result<ToolOutput, String> {
     match path_argument(arguments)?.filter(|path| !path.is_empty()) {
-        Some(path) => file_tools::list_directory(&paths::resolve_allowed(&path, allowed_folders)?),
+        Some(path) => {
+            file_tools::list_directory(&paths::resolve_allowed(&path, allowed_folders)?, max_chars)
+        }
         None => {
             let folders = paths::usable_folders(allowed_folders)?;
-            Ok(file_tools::list_allowed_folders(&folders))
+            Ok(file_tools::list_allowed_folders(&folders, max_chars))
         }
     }
 }
@@ -263,6 +289,7 @@ mod tests {
             arguments.into(),
             allowed,
             None,
+            None,
         )
         .await
         .expect("execute_tool returns Ok for tool-level problems")
@@ -276,9 +303,45 @@ mod tests {
             arguments.into(),
             vec![],
             Some(sources),
+            None,
         )
         .await
         .expect("execute_tool returns Ok for tool-level problems")
+    }
+
+    #[tokio::test]
+    async fn result_max_chars_sets_the_size_of_a_file_result_and_is_clamped() {
+        let tree = TempTree::new("exec-budget");
+        let file = tree.file("long.txt", "a".repeat(40_000).as_bytes());
+        let arguments = serde_json::json!({ "path": file }).to_string();
+        let allowed = vec![tree.path().to_string_lossy().into_owned()];
+        let manager = McpManager::default();
+        let cases = [
+            (
+                Some(1200),
+                "\n[truncated: showing 1200 of 40000 characters]",
+            ),
+            (Some(10), "\n[truncated: showing 1000 of 40000 characters]"),
+            (None, "\n[truncated: showing 8000 of 40000 characters]"),
+        ];
+        for (budget, note) in cases {
+            let result = execute_tool(
+                &manager,
+                "read_text_file".into(),
+                arguments.clone(),
+                allowed.clone(),
+                None,
+                budget,
+            )
+            .await
+            .expect("execute_tool returns Ok");
+            assert!(result.truncated, "{budget:?}");
+            assert!(
+                result.content.ends_with(note),
+                "{budget:?}: {}",
+                result.content
+            );
+        }
     }
 
     #[test]
@@ -308,12 +371,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn web_search_sources_lists_the_five_sources_in_camel_case() {
+    async fn web_search_sources_lists_the_six_sources_in_camel_case() {
         let sources = super::web_search_sources().await.expect("sources");
         let ids: Vec<&str> = sources.iter().map(|source| source.id.as_str()).collect();
         assert_eq!(
             ids,
-            ["wikipedia", "hackernews", "stackoverflow", "npm", "crates"]
+            [
+                "wikipedia",
+                "hackernews",
+                "stackoverflow",
+                "npm",
+                "crates",
+                "duckduckgo"
+            ]
         );
         let json = serde_json::to_value(&sources[1]).expect("serialize");
         assert_eq!(json["label"], "Hacker News");

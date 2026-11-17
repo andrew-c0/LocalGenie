@@ -2,6 +2,8 @@
 //! address and parses its answer. This module does the I/O (paced, timed, size-capped, limited to the
 //! source's own host), picks the sources and merges their answers into the numbered list the model reads.
 mod crates_io;
+mod duckduckgo;
+mod duckduckgo_guard;
 mod hackernews;
 mod npm;
 mod stackoverflow;
@@ -17,6 +19,7 @@ use reqwest::{Client, StatusCode};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use url::Url;
@@ -32,6 +35,11 @@ pub(super) struct SearchHit {
     pub snippet: String,
 }
 
+/// The answer of one source to one query, as a boxed future so that sources can be called through
+/// the trait object.
+pub(super) type Answer<'a> =
+    Pin<Box<dyn Future<Output = Result<Vec<SearchHit>, WebError>> + Send + 'a>>;
+
 /// One public source of `web_search`.
 pub(super) trait SearchSource: Sync {
     /// The id the model and the settings use.
@@ -46,6 +54,15 @@ pub(super) trait SearchSource: Sync {
     fn build_request(&self, query: &str, limit: usize) -> Result<Url, String>;
     /// The hits in an answer body, at most `limit`. A body that is not an answer is an error.
     fn parse(&self, body: &str, limit: usize) -> Result<Vec<SearchHit>, String>;
+    /// The shortest gap between two requests to this source.
+    fn min_interval(&self) -> Duration {
+        Duration::from_millis(SEARCH_MIN_INTERVAL_MS)
+    }
+    /// The hits for `query`. The default is one paced GET of `build_request`, parsed by `parse`. A
+    /// source with its own rules (a form POST, a fallback page, its own limits) overrides it.
+    fn ask<'a>(&'a self, client: &'a Client, query: &'a str, limit: usize) -> Answer<'a> {
+        Box::pin(query_source(client, self, query, limit))
+    }
 }
 
 /// A source as the settings screen lists it.
@@ -59,13 +76,14 @@ pub struct SearchSourceInfo {
 }
 
 /// Every source, in the order they are listed and searched.
-fn all() -> [&'static dyn SearchSource; 5] {
+fn all() -> [&'static dyn SearchSource; 6] {
     [
         &wikipedia::Wikipedia,
         &hackernews::HackerNews,
         &stackoverflow::StackOverflow,
         &npm::Npm,
         &crates_io::CratesIo,
+        &duckduckgo::DuckDuckGo,
     ]
 }
 
@@ -139,8 +157,7 @@ fn reserve_slot(
 }
 
 /// Wait until the source's minimum interval since its last request has passed.
-async fn pace(source_id: &'static str) -> Result<(), WebError> {
-    let gap = Duration::from_millis(SEARCH_MIN_INTERVAL_MS);
+async fn pace(source_id: &'static str, gap: Duration) -> Result<(), WebError> {
     let wait = {
         let mut next_free = NEXT_REQUEST
             .lock()
@@ -157,9 +174,9 @@ async fn pace(source_id: &'static str) -> Result<(), WebError> {
 
 /// Ask one source. The request goes only to the source's own HTTPS host; the wait, the request, the
 /// body and the parse share one timeout.
-pub(super) async fn query_source(
+pub(super) async fn query_source<S: SearchSource + ?Sized>(
     client: &Client,
-    source: &dyn SearchSource,
+    source: &S,
     query: &str,
     limit: usize,
 ) -> Result<Vec<SearchHit>, WebError> {
@@ -170,7 +187,7 @@ pub(super) async fn query_source(
             source.label()
         )));
     }
-    pace(source.id()).await?;
+    pace(source.id(), source.min_interval()).await?;
     let limit_time = Duration::from_secs(SEARCH_TIMEOUT_SECS);
     let body = match tokio::time::timeout(limit_time, fetch_body(client, url)).await {
         Ok(result) => result?,
@@ -239,8 +256,8 @@ where
 
 /// The numbered list the model reads: one group per source, numbered across the groups. A source
 /// with no hits or a failure is one line. When nothing answered and the last source could not be
-/// reached, the result is the offline failure instead.
-pub(super) fn merged_output(outcomes: &[Outcome]) -> Result<ToolOutput, String> {
+/// reached, the result is the offline failure instead. The list is capped at `max_chars`.
+pub(super) fn merged_output(outcomes: &[Outcome], max_chars: usize) -> Result<ToolOutput, String> {
     let answered = outcomes.iter().any(|outcome| outcome.result.is_ok());
     if !answered {
         if let Some(Outcome {
@@ -278,7 +295,7 @@ pub(super) fn merged_output(outcomes: &[Outcome]) -> Result<ToolOutput, String> 
             }
         }
     }
-    Ok(capped_output(&lines.join("\n"), false))
+    Ok(capped_output(&lines.join("\n"), max_chars, false))
 }
 
 /// The lines of one hit: `1. Title`, its address, and its snippet when it has one.
@@ -334,6 +351,7 @@ pub(super) fn describe(description: Option<&str>, version: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::tools::limits::CONTENT_MAX_CHARS;
     use crate::commands::tools::web::client::web_client;
     use std::str::FromStr;
 
@@ -360,10 +378,17 @@ mod tests {
     fn the_sources_have_the_ids_and_order_the_settings_expect() {
         assert_eq!(
             source_ids(),
-            ["wikipedia", "hackernews", "stackoverflow", "npm", "crates"]
+            [
+                "wikipedia",
+                "hackernews",
+                "stackoverflow",
+                "npm",
+                "crates",
+                "duckduckgo"
+            ]
         );
         let infos = source_infos();
-        assert_eq!(infos.len(), 5);
+        assert_eq!(infos.len(), 6);
         assert_eq!(infos[0].label, "Wikipedia");
         assert_eq!(infos[0].host, "en.wikipedia.org");
         for info in &infos {
@@ -411,7 +436,7 @@ mod tests {
         let refusal = plan(Some("bing"), &enabled(&["wikipedia"])).err().expect("unknown");
         assert_eq!(
             refusal,
-            "Unknown search source 'bing'. The sources are: wikipedia, hackernews, stackoverflow, npm, crates."
+            "Unknown search source 'bing'. The sources are: wikipedia, hackernews, stackoverflow, npm, crates, duckduckgo."
         );
     }
 
@@ -494,7 +519,7 @@ mod tests {
             ok("Wikipedia", vec![hit("Rust", "A language.")]),
             ok("npm", vec![hit("left-pad", ""), hit("chalk", "Colors.")]),
         ];
-        let output = merged_output(&outcomes).expect("merged");
+        let output = merged_output(&outcomes, CONTENT_MAX_CHARS).expect("merged");
         assert_eq!(
             output.content,
             "Wikipedia\n1. Rust\n   https://example.test/Rust\n   A language.\n\nnpm\n2. left-pad\n   https://example.test/left-pad\n3. chalk\n   https://example.test/chalk\n   Colors."
@@ -512,7 +537,7 @@ mod tests {
             },
             ok("npm", vec![hit("chalk", "")]),
         ];
-        let output = merged_output(&outcomes).expect("merged");
+        let output = merged_output(&outcomes, CONTENT_MAX_CHARS).expect("merged");
         let lines: Vec<&str> = output.content.lines().collect();
         assert_eq!(lines[0], "Wikipedia: no results.");
         assert_eq!(lines[2], "Hacker News: the search failed (HTTP 503).");
@@ -529,7 +554,7 @@ mod tests {
                 result: Err(WebError::Unreachable("the request took too long".into())),
             },
         ];
-        let output = merged_output(&outcomes).expect("merged");
+        let output = merged_output(&outcomes, CONTENT_MAX_CHARS).expect("merged");
         assert!(output
             .content
             .ends_with("crates.io: could not reach the site (the request took too long)."));
@@ -541,7 +566,7 @@ mod tests {
             label: "Wikipedia",
             result: Err(WebError::Unreachable("the request took too long".into())),
         }];
-        let refusal = merged_output(&outcomes).expect_err("offline");
+        let refusal = merged_output(&outcomes, CONTENT_MAX_CHARS).expect_err("offline");
         assert_eq!(
             refusal,
             "Could not reach the web: Wikipedia did not answer (the request took too long)."
@@ -554,7 +579,7 @@ mod tests {
             label: "npm",
             result: Err(WebError::Failed("HTTP 500".into())),
         }];
-        let output = merged_output(&outcomes).expect("merged");
+        let output = merged_output(&outcomes, CONTENT_MAX_CHARS).expect("merged");
         assert_eq!(output.content, "npm: the search failed (HTTP 500).");
     }
 
@@ -562,7 +587,7 @@ mod tests {
     fn long_snippets_are_cut_to_the_snippet_limit() {
         let long = "é".repeat(SNIPPET_MAX_CHARS + 50);
         let outcomes = [ok("npm", vec![hit("pkg", &long)])];
-        let output = merged_output(&outcomes).expect("merged");
+        let output = merged_output(&outcomes, CONTENT_MAX_CHARS).expect("merged");
         let snippet = output.content.lines().last().expect("snippet line");
         assert_eq!(snippet.trim_start().chars().count(), SNIPPET_MAX_CHARS);
         assert!(snippet.trim_start().ends_with("..."));
@@ -574,7 +599,7 @@ mod tests {
             .map(|index| hit(&format!("title {index}"), &"s".repeat(SNIPPET_MAX_CHARS)))
             .collect();
         let outcomes = [ok("npm", hits.clone()), ok("crates.io", hits)];
-        let output = merged_output(&outcomes).expect("merged");
+        let output = merged_output(&outcomes, CONTENT_MAX_CHARS).expect("merged");
         assert!(output.truncated);
         assert!(output.content.contains("[truncated: showing 8000 of"));
     }

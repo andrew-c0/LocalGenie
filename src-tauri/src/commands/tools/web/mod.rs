@@ -5,6 +5,7 @@ mod charset;
 mod client;
 mod fetch;
 mod html_text;
+mod markdown;
 mod robots;
 pub(super) mod search;
 
@@ -12,19 +13,22 @@ use super::limits::{QUERY_MAX_CHARS, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEA
 use super::{parse_arguments, ToolOutput};
 use serde_json::Value;
 
-/// `web_fetch`: the page at the `url` argument, from the `start` character.
-pub(super) async fn fetch_tool(arguments: &str) -> Result<ToolOutput, String> {
+/// `web_fetch`: the page at the `url` argument, from the `start` character, in windows of
+/// `max_chars` characters.
+pub(super) async fn fetch_tool(arguments: &str, max_chars: usize) -> Result<ToolOutput, String> {
     let args = parse_arguments(arguments)?;
     let url = string_argument(&args, "url")?;
     let start = start_argument(&args)?;
     let client = client::web_client()?;
-    fetch::fetch_page(&url, start, &client, &robots::ROBOTS_CACHE).await
+    fetch::fetch_page(&url, start, max_chars, &client, &robots::ROBOTS_CACHE).await
 }
 
-/// `web_search`: the query on the enabled sources, or on the one `source` names.
+/// `web_search`: the query on the enabled sources, or on the one `source` names. The list is
+/// capped at `max_chars`.
 pub(super) async fn search_tool(
     arguments: &str,
     enabled: &[String],
+    max_chars: usize,
 ) -> Result<ToolOutput, String> {
     let args = parse_arguments(arguments)?;
     let query = query_argument(&args)?;
@@ -32,11 +36,9 @@ pub(super) async fn search_tool(
     let source = optional_string_argument(&args, "source")?;
     let sources = search::plan(source.as_deref(), enabled)?;
     let client = client::web_client()?;
-    let outcomes = search::search_all(&sources, |source| {
-        search::query_source(&client, source, &query, limit)
-    })
-    .await;
-    search::merged_output(&outcomes)
+    let outcomes =
+        search::search_all(&sources, |source| source.ask(&client, &query, limit)).await;
+    search::merged_output(&outcomes, max_chars)
 }
 
 /// The text of a web call that ran out of time: an unreachable site, in the shared offline form.
@@ -108,6 +110,7 @@ fn limit_argument(args: &Value) -> Result<usize, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::tools::limits::CONTENT_MAX_CHARS;
     use serde_json::json;
 
     #[test]
@@ -177,13 +180,18 @@ mod tests {
 
     #[tokio::test]
     async fn fetch_tool_checks_its_arguments_before_any_request() {
-        let missing = fetch_tool("{}").await.expect_err("missing url");
-        assert!(missing.contains("'url' is required"));
-        let negative = fetch_tool(r#"{"url":"https://example.com","start":-4}"#)
+        let missing = fetch_tool("{}", CONTENT_MAX_CHARS)
             .await
-            .expect_err("negative start");
+            .expect_err("missing url");
+        assert!(missing.contains("'url' is required"));
+        let negative = fetch_tool(
+            r#"{"url":"https://example.com","start":-4}"#,
+            CONTENT_MAX_CHARS,
+        )
+        .await
+        .expect_err("negative start");
         assert!(negative.contains("'start'"));
-        let refused = fetch_tool(r#"{"url":"http://169.254.169.254/"}"#)
+        let refused = fetch_tool(r#"{"url":"http://169.254.169.254/"}"#, CONTENT_MAX_CHARS)
             .await
             .expect_err("metadata address");
         assert_eq!(refused, client::NON_PUBLIC_ADDRESS);
@@ -191,17 +199,27 @@ mod tests {
 
     #[tokio::test]
     async fn search_tool_refuses_when_no_source_is_on_or_the_named_one_is_off() {
-        let none = search_tool(r#"{"query":"rust"}"#, &[]).await.expect_err("none on");
+        let none = search_tool(r#"{"query":"rust"}"#, &[], CONTENT_MAX_CHARS)
+            .await
+            .expect_err("none on");
         assert_eq!(none, "No search source is turned on in Settings > Tools.");
 
-        let off = search_tool(r#"{"query":"rust","source":"npm"}"#, &["wikipedia".into()])
-            .await
-            .expect_err("npm off");
+        let off = search_tool(
+            r#"{"query":"rust","source":"npm"}"#,
+            &["wikipedia".into()],
+            CONTENT_MAX_CHARS,
+        )
+        .await
+        .expect_err("npm off");
         assert_eq!(off, "The source 'npm' is not turned on. Turned on: wikipedia.");
 
-        let bad_limit = search_tool(r#"{"query":"rust","limit":50}"#, &["npm".into()])
-            .await
-            .expect_err("limit");
+        let bad_limit = search_tool(
+            r#"{"query":"rust","limit":50}"#,
+            &["npm".into()],
+            CONTENT_MAX_CHARS,
+        )
+        .await
+        .expect_err("limit");
         assert!(bad_limit.contains("'limit'"));
     }
 }

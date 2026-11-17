@@ -6,6 +6,7 @@ import type {
   ChatToolCall,
   Message,
   ReplyUsage,
+  SessionKind,
 } from "../types";
 import { canRemoveFrom } from "../utils/compaction";
 import { chatSessionsOf } from "../utils/conversations";
@@ -22,6 +23,11 @@ function calcContextChars(messages: Message[]): number {
 /** The messages of a conversation, or none when it is not in the store. */
 export function messagesOf(sessionId: string): Message[] {
   return useChatStore.getState().sessions.find((s) => s.id === sessionId)?.messages ?? [];
+}
+
+/** What a session is: a conversation (`chat`) or a Dispatch session. A session not in the store is a chat. */
+export function kindOf(sessionId: string): SessionKind {
+  return useChatStore.getState().sessions.find((s) => s.id === sessionId)?.kind ?? "chat";
 }
 
 /** The settings a conversation overrides, or undefined when it overrides none. */

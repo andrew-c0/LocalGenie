@@ -2,6 +2,7 @@ import { useChatStore } from "../../stores/chatStore";
 import { useDispatchStore } from "../../stores/dispatchStore";
 import { useModelStore } from "../../stores/modelStore";
 import type { DispatchTask } from "../../types";
+import type { StallState } from "../../utils/dispatchGuards";
 import { type OwnState, serverModelRefusal } from "../../utils/dispatchStart";
 
 /** The turn in progress: the conversation it belongs to and what it needs to run. */
@@ -13,6 +14,10 @@ export interface Turn {
   stopRequested: boolean;
   /** True once the failure was written into the transcript, so it is not written twice. */
   errorShown: boolean;
+  /** What the stall guard remembers of this turn's tool calls. */
+  guard: StallState;
+  /** True once the turn logged its sampling settings, so the log has one line per turn. */
+  samplingLogged: boolean;
 }
 
 /** The turn in progress, or null when none runs. Only the runner changes it, through the functions below. */

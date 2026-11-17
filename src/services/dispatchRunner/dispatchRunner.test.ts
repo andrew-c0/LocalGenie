@@ -14,10 +14,12 @@ import type {
   ToolDefinition,
   ToolSpec,
 } from "../../types";
-import { DISPATCH_BLOCK_ID } from "../../utils/dispatchPrompt";
+import { REPEAT_NUDGE_TEXT } from "../../utils/dispatchGuards";
+import { DISPATCH_BLOCK_ID, NOTES_HEADING } from "../../utils/dispatchPrompt";
 import type { TurnEnd } from "../../utils/dispatchTask";
 import type { ToolState } from "../../utils/toolAccess";
 import type { ModelRun, SendFailure } from "../chatRun";
+import type { ChatMessage } from "../geniex";
 import { continueTask, sendMessage, stopTask, turnBlockReason } from "./index";
 
 // The service boundary: the conversations live in this fake table, updated the way the backend does.
@@ -39,8 +41,13 @@ vi.mock("../chatRun", () => ({
   showChatError: (...args: unknown[]) => showChatError(...args),
 }));
 
+// The history is the stored messages in order, so a test can compare what two requests sent.
 vi.mock("../chatHistory", () => ({
-  historyFor: () => Promise.resolve({ history: [], unavailable: [] }),
+  historyFor: (messages: Message[]) =>
+    Promise.resolve({
+      history: messages.map((m) => ({ role: m.role, content: m.content })),
+      unavailable: [],
+    }),
   warnUnavailable: () => undefined,
 }));
 
@@ -197,6 +204,7 @@ function call(name: string, args: Record<string, string>): ChatToolCall {
 
 let script: Step[] = [];
 let runs: ModelRun[] = [];
+let histories: ChatMessage[][] = [];
 let offered: (ToolDefinition[] | undefined)[] = [];
 let requestedSessions: string[] = [];
 
@@ -274,6 +282,7 @@ beforeEach(() => {
   endWriteFailure = null;
   script = [];
   runs = [];
+  histories = [];
   offered = [];
   requestedSessions = [];
   useModelStore.setState({
@@ -308,8 +317,9 @@ beforeEach(() => {
     }),
   );
   streamReply.mockImplementation(
-    async (sessionId: string, _history: unknown, run: ModelRun, tools?: ToolDefinition[]) => {
+    async (sessionId: string, history: ChatMessage[], run: ModelRun, tools?: ToolDefinition[]) => {
       runs.push(run);
+      histories.push(history);
       offered.push(tools);
       requestedSessions.push(sessionId);
       const result = await script.shift()?.(sessionId);
@@ -384,7 +394,7 @@ describe("sendMessage", () => {
     expect(userMessages).toHaveLength(1);
   });
 
-  it("runs the same call again when the model repeats it: there is no repeat check", async () => {
+  it("runs the same call up to three times in a row: the guard acts on the fourth", async () => {
     setUp();
     const same = () => reply([call("read_text_file", { path: "a.txt" })]);
     script = [same(), same(), same(), reply([], "done")];
@@ -404,7 +414,7 @@ describe("sendMessage", () => {
     expect(notifyIfHidden).toHaveBeenCalledWith("Dispatch replied", "The reply has no text.");
   });
 
-  it("gives each request the notes in a dispatch system block", async () => {
+  it("gives each request the static Dispatch prompt block, with no goal and no notes", async () => {
     setUp({ notes: "plan: read" });
     script = [reply([], "ok")];
     await sendMessage("t1", "hi");
@@ -413,11 +423,11 @@ describe("sendMessage", () => {
     const blocks = runs[0].systemBlocks;
     const dispatchBlock = blocks[blocks.length - 1];
     expect(dispatchBlock).toMatchObject({ id: DISPATCH_BLOCK_ID, kind: "text" });
-    expect(dispatchBlock.kind === "text" && dispatchBlock.text).toContain("plan: read");
+    expect(dispatchBlock.kind === "text" && dispatchBlock.text).not.toContain("plan: read");
     expect(dispatchBlock.kind === "text" && dispatchBlock.text).not.toContain("Goal:");
   });
 
-  it("saves dispatch_notes and gives the next request the new notes", async () => {
+  it("saves dispatch_notes and sends the new notes on the next request, not in the system prompt", async () => {
     setUp();
     script = [reply([call("dispatch_notes", { text: "1. read the file" })]), reply([], "done")];
     await sendMessage("t1", "plan it");
@@ -425,8 +435,11 @@ describe("sendMessage", () => {
 
     expect(savedTask().notes).toBe("1. read the file");
     expect(toolRowsOf("s1")[0]?.content).toBe("Notes saved.");
-    const lastBlock = runs[1].systemBlocks[runs[1].systemBlocks.length - 1];
-    expect(lastBlock.kind === "text" && lastBlock.text).toContain("1. read the file");
+    const lastHistoryMessage = histories[1][histories[1].length - 1];
+    expect(lastHistoryMessage).toMatchObject({ role: "user" });
+    expect(lastHistoryMessage.content).toBe(`${NOTES_HEADING}\n1. read the file`);
+    const systemText = JSON.stringify(runs[1].systemBlocks);
+    expect(systemText).not.toContain("1. read the file");
   });
 
   it("fails the turn with the stream's error and shows it in the transcript", async () => {
@@ -1231,7 +1244,14 @@ describe("which state decides a Dispatch call", () => {
 
     expect(offered[0]?.map((tool) => tool.function.name)).toContain(mcpName);
     expect(useToolApprovalStore.getState().pending).toHaveLength(0);
-    expect(executeTool).toHaveBeenCalledWith(mcpName, expect.anything(), [], expect.anything());
+    // No window is known in this test, so no result budget is sent.
+    expect(executeTool).toHaveBeenCalledWith(
+      mcpName,
+      expect.anything(),
+      [],
+      expect.anything(),
+      undefined,
+    );
   });
 });
 
@@ -1382,5 +1402,264 @@ describe("a message after the model unloaded", () => {
     setUp();
     useModelStore.setState({ activeModelId: null });
     expect(turnBlockReason("t1")).toBe("Load a model to run a conversation.");
+  });
+});
+
+/** A scripted reply with its usage and time, as the chat stores them when the stream ends. */
+function timedReply(
+  calls: ChatToolCall[],
+  text: string,
+  usage: { promptTokens: number; completionTokens: number },
+  totalTime: number,
+): Step {
+  return (sessionId) => {
+    useChatStore.getState().addMessage(sessionId, {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: text,
+      timestamp: Date.now(),
+      toolCalls: calls.length > 0 ? calls : undefined,
+      usage,
+      stats: {
+        timeToFirstToken: 100,
+        totalTime,
+        tokenCount: usage.completionTokens,
+        promptChars: 10,
+      },
+    });
+  };
+}
+
+/** The console.info calls whose first argument starts with the given prefix. */
+function infoCallsStarting(info: { mock: { calls: unknown[][] } }, prefix: string): unknown[][] {
+  return info.mock.calls.filter(
+    (args) => typeof args[0] === "string" && args[0].startsWith(prefix),
+  );
+}
+
+describe("the sampling log", () => {
+  it("logs the sampling once per turn, with the effective temperature, top P and repetition penalty", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    setUp();
+    resolveModelRun.mockImplementation(() =>
+      Promise.resolve({
+        modelId: "m",
+        settings: { temperature: 0.3, topP: 0.9, repetitionPenalty: 1.05 },
+        load: {},
+        systemBlocks: [],
+        contextWindow: null,
+      }),
+    );
+    script = [reply([call("read_text_file", { path: "a.txt" })]), reply([], "done")];
+    await sendMessage("t1", "read it");
+    await settle();
+
+    expect(infoCallsStarting(info, "[dispatch] sampling:")).toEqual([
+      ["[dispatch] sampling:", { temperature: 0.3, topP: 0.9, repetitionPenalty: 1.05 }],
+    ]);
+    info.mockRestore();
+  });
+});
+
+describe("the step log", () => {
+  it("logs each request with the tokens and time its reply carries", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    setUp();
+    script = [
+      timedReply(
+        [call("read_text_file", { path: "a.txt" })],
+        "",
+        { promptTokens: 120, completionTokens: 5 },
+        900,
+      ),
+      timedReply([], "done", { promptTokens: 130, completionTokens: 7 }, 400),
+    ];
+    await sendMessage("t1", "read it");
+    await settle();
+
+    expect(infoCallsStarting(info, "[dispatch] step ").map((args) => args[0])).toEqual([
+      "[dispatch] step 1: prompt_tokens=120, completion_tokens=5, ms=900",
+      "[dispatch] step 2: prompt_tokens=130, completion_tokens=7, ms=400",
+    ]);
+    info.mockRestore();
+  });
+
+  it("logs n/a for a value the reply does not carry", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    setUp();
+    script = [reply([], "done")];
+    await sendMessage("t1", "hi");
+    await settle();
+
+    expect(infoCallsStarting(info, "[dispatch] step ").map((args) => args[0])).toEqual([
+      "[dispatch] step 1: prompt_tokens=n/a, completion_tokens=n/a, ms=n/a",
+    ]);
+    info.mockRestore();
+  });
+});
+
+describe("the notes message", () => {
+  it("sends the notes last, for one request: the prompt and the stored history before them stay the same", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    setUp({ notes: "plan A" });
+    script = [
+      reply([
+        call("read_text_file", { path: "a.txt" }),
+        call("dispatch_notes", { text: "plan B" }),
+      ]),
+      reply([], "done"),
+    ];
+    await sendMessage("t1", "plan it");
+    await settle();
+
+    expect(histories).toHaveLength(2);
+    const [first, second] = histories;
+    expect(runs[1].systemBlocks).toEqual(runs[0].systemBlocks);
+    const storedFirst = first.slice(0, -1);
+    const storedSecond = second.slice(0, -1);
+    expect(storedSecond.slice(0, storedFirst.length)).toEqual(storedFirst);
+    expect(first[first.length - 1]).toEqual({ role: "user", content: `${NOTES_HEADING}\nplan A` });
+    expect(second[second.length - 1]).toEqual({
+      role: "user",
+      content: `${NOTES_HEADING}\nplan B`,
+    });
+    expect(messagesOf("s1").some((m) => m.content.includes(NOTES_HEADING))).toBe(false);
+    info.mockRestore();
+  });
+
+  it("adds no notes message when the notes are empty", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    setUp();
+    script = [reply([], "ok")];
+    await sendMessage("t1", "hi");
+    await settle();
+
+    expect(histories[0]).toEqual([{ role: "user", content: "hi" }]);
+    info.mockRestore();
+  });
+});
+
+describe("the result budget", () => {
+  it("passes the model's result budget to each Dispatch tool call", async () => {
+    setUp();
+    resolveModelRun.mockImplementation(() =>
+      Promise.resolve({
+        modelId: "m",
+        settings: {},
+        load: {},
+        systemBlocks: [],
+        contextWindow: 8192,
+      }),
+    );
+    script = [reply([call("read_text_file", { path: "a.txt" })]), reply([], "done")];
+    await sendMessage("t1", "read it");
+    await settle();
+
+    // 8192 tokens * 0.15 * 3.5 = 4301 characters.
+    expect(executeTool.mock.calls[0][4]).toBe(4301);
+  });
+
+  it("sends no budget when the model's window is not known", async () => {
+    setUp();
+    script = [reply([call("read_text_file", { path: "a.txt" })]), reply([], "done")];
+    await sendMessage("t1", "read it");
+    await settle();
+
+    expect(executeTool.mock.calls[0][4]).toBeUndefined();
+  });
+});
+
+describe("the stall guard", () => {
+  const same = () => reply([call("read_text_file", { path: "a.txt" })]);
+
+  it("does not run the fourth identical call: the model gets the nudge, and the turn goes on", async () => {
+    setUp();
+    script = [same(), same(), same(), same(), reply([], "done")];
+    await sendMessage("t1", "read it");
+    await settle();
+
+    expect(executeTool).toHaveBeenCalledTimes(3);
+    const rows = toolRowsOf("s1");
+    expect(rows).toHaveLength(4);
+    expect(rows[3]).toMatchObject({
+      content: REPEAT_NUDGE_TEXT,
+      toolRecord: { status: "denied" },
+    });
+    expect(savedTask()).toMatchObject({ status: "done", report: "done" });
+  });
+
+  it("ends the turn as failed on the third nudge, shows the reason and notifies", async () => {
+    setUp();
+    script = [same(), same(), same(), same(), same(), same()];
+    await sendMessage("t1", "read it");
+    await settle();
+
+    const reason =
+      "The model kept repeating the same tool call (read_text_file). Send a message to continue.";
+    expect(executeTool).toHaveBeenCalledTimes(3);
+    expect(streamReply).toHaveBeenCalledTimes(6);
+    expect(savedTask()).toMatchObject({ status: "failed", error: reason });
+    expect(showChatError).toHaveBeenCalledWith("s1", { error: reason });
+    expect(notifyIfHidden).toHaveBeenCalledWith("Dispatch replied", `Dispatch stopped: ${reason}`);
+  });
+
+  it("a different call between identical ones resets the repeat count, so they run again", async () => {
+    setUp();
+    const other = () => reply([call("read_text_file", { path: "b.txt" })]);
+    script = [same(), same(), same(), other(), same(), same(), same(), reply([], "done")];
+    await sendMessage("t1", "read it");
+    await settle();
+
+    expect(executeTool).toHaveBeenCalledTimes(7);
+    expect(savedTask()).toMatchObject({ status: "done" });
+  });
+
+  it("ends the turn after six failed calls in a row, quoting the last error", async () => {
+    setUp();
+    executeTool.mockResolvedValue({
+      ok: false,
+      content: "Connection refused",
+      truncated: false,
+      durationMs: 1,
+    });
+    script = Array.from({ length: 6 }, (_, i) =>
+      reply([call("read_text_file", { path: `f${i}.txt` })]),
+    );
+    await sendMessage("t1", "read them");
+    await settle();
+
+    const reason =
+      "6 tool calls in a row failed. Last error: Connection refused. Send a message to continue.";
+    expect(executeTool).toHaveBeenCalledTimes(6);
+    expect(savedTask()).toMatchObject({ status: "failed", error: reason });
+    expect(notifyIfHidden).toHaveBeenCalledWith("Dispatch replied", `Dispatch stopped: ${reason}`);
+  });
+
+  it("a successful call in the middle of failures resets the error streak, so the turn goes on", async () => {
+    setUp();
+    executeTool.mockImplementation(async (_name: string, args: string) => {
+      const { path } = JSON.parse(args) as { path: string };
+      const ok = path === "ok.txt";
+      return { ok, content: ok ? "fine" : "nope", truncated: false, durationMs: 1 };
+    });
+    const paths = [
+      "f0.txt",
+      "f1.txt",
+      "f2.txt",
+      "f3.txt",
+      "f4.txt",
+      "ok.txt",
+      "g0.txt",
+      "g1.txt",
+      "g2.txt",
+      "g3.txt",
+      "g4.txt",
+    ];
+    script = [...paths.map((path) => reply([call("read_text_file", { path })])), reply([], "done")];
+    await sendMessage("t1", "read them");
+    await settle();
+
+    expect(executeTool).toHaveBeenCalledTimes(11);
+    expect(savedTask()).toMatchObject({ status: "done", report: "done" });
   });
 });
