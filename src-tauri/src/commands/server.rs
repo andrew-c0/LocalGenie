@@ -1,3 +1,4 @@
+use super::process::hide_console_tokio;
 use super::AppState;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -16,9 +17,10 @@ pub struct ServerStatus {
 pub fn kill_process_sync(pid: u32) {
     #[cfg(target_os = "windows")]
     {
-        let _ = std::process::Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/F", "/T"])
-            .output();
+        let mut command = std::process::Command::new("taskkill");
+        command.args(["/PID", &pid.to_string(), "/F", "/T"]);
+        super::process::hide_console(&mut command);
+        let _ = command.output();
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -33,10 +35,10 @@ pub fn kill_process_sync(pid: u32) {
 pub(super) async fn kill_process(pid: u32) {
     #[cfg(target_os = "windows")]
     {
-        let _ = Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/F", "/T"])
-            .output()
-            .await;
+        let mut command = Command::new("taskkill");
+        command.args(["/PID", &pid.to_string(), "/F", "/T"]);
+        hide_console_tokio(&mut command);
+        let _ = command.output().await;
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -146,18 +148,19 @@ pub async fn start_server(
         args.push(k.to_string());
     }
 
-    let mut child = Command::new(super::cli::resolve_geniex_executable())
+    let mut command = Command::new(super::cli::resolve_geniex_executable());
+    command
         .args(&args)
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                "GenieX CLI not found. Ensure `geniex` is installed and in your PATH.".to_string()
-            } else {
-                format!("Failed to start `geniex serve`: {e}")
-            }
-        })?;
+        .stderr(std::process::Stdio::piped());
+    hide_console_tokio(&mut command);
+    let mut child = command.spawn().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            "GenieX CLI not found. Ensure `geniex` is installed and in your PATH.".to_string()
+        } else {
+            format!("Failed to start `geniex serve`: {e}")
+        }
+    })?;
 
     let pid = child.id().unwrap_or(0);
     {

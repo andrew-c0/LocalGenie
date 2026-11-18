@@ -4,9 +4,6 @@ Run through these checks manually after building or deploying the app. Automated
 
 Only untested items are kept (tested ones were removed 2026-11-18; see git history and known-issues.md). Tags: **[needs you]** = needs your hands or machine (installer, updater, offline, notifications, tray, hardware); **[needs download/network]** = needs a model, runtime or the internet. Untagged items can be checked in the app with a loaded model.
 
-## Background running (Dispatch phase A, 2026-11-15; ticked = the user tested)
-- [ ] The first hide to the tray shows one notification ("LocalGenie is still running"); later hides show none. May not show in a dev build. Not run. **[needs you]**
-
 ## GGUF projector matching and the drawer warning (2026-11-12 working tree; ticked = the user tested)
 - [ ] After that import the model's settings scan confirms vision (the chat Image attach is then enabled). **[needs download/network]**
 - [ ] A repo with only BF16 and Q8_0 projectors downloads the BF16 file (check the Downloads folder). **[needs download/network]**

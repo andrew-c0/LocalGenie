@@ -7,16 +7,19 @@ use tokio::process::Command;
 use tokio::time::timeout;
 
 use super::constants::GENIEX_COMMAND_TIMEOUT_SECS;
+use super::process::hide_console_tokio;
 
 /// Run a `geniex <args>` command to completion, returning its stdout.
 /// Maps spawn, exit and timeout failures to a descriptive error string.
 async fn run_geniex(args: &[&str], what: &str) -> Result<String, String> {
-    let run = Command::new(super::cli::resolve_geniex_executable())
+    let mut command = Command::new(super::cli::resolve_geniex_executable());
+    command
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .output();
+        .kill_on_drop(true);
+    hide_console_tokio(&mut command);
+    let run = command.output();
     let output = timeout(Duration::from_secs(GENIEX_COMMAND_TIMEOUT_SECS), run)
         .await
         .map_err(|_| format!("`geniex {}` timed out: {what}", args.join(" ")))?

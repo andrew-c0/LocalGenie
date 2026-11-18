@@ -277,9 +277,9 @@ mod tests {
         };
         shell
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::piped())
-            .spawn()
-            .expect("spawn the test shell")
+            .stderr(std::process::Stdio::piped());
+        crate::commands::process::hide_console_tokio(&mut shell);
+        shell.spawn().expect("spawn the test shell")
     }
 
     #[tokio::test]

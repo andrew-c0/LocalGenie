@@ -23,6 +23,7 @@ use crate::commands::cli::{
 use crate::commands::constants::{
     CLI_PROBE_TIMEOUT_SECS, UPDATE_POLL_ATTEMPTS, UPDATE_POLL_INTERVAL_SECS,
 };
+use crate::commands::process::hide_console_tokio;
 use crate::commands::server::kill_process;
 use crate::commands::AppState;
 
@@ -51,9 +52,6 @@ const SETUP_REMOVE_RETRY_DELAY: Duration = Duration::from_secs(1);
 const SETUP_FILE_PREFIX: &str = "geniex-cli-setup-";
 const SETUP_EXE_SUFFIX: &str = ".exe";
 const SETUP_PARTIAL_SUFFIX: &str = ".exe.part";
-/// Windows flag that keeps the setup programs from opening a console window.
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// The installed GenieX CLI version, or None when it is missing or the platform is unsupported.
 pub(super) async fn installed_version() -> Option<String> {
@@ -152,10 +150,7 @@ fn find_arm64_installer(assets: &[ReleaseAsset]) -> Option<&ReleaseAsset> {
 fn silent_command(program: &Path, args: &[&str]) -> Command {
     let mut command = Command::new(program);
     command.args(args).stdin(Stdio::null());
-    #[cfg(target_os = "windows")]
-    {
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
+    hide_console_tokio(&mut command);
     command
 }
 

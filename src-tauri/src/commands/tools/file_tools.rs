@@ -410,11 +410,10 @@ mod tests {
         let tree = TempTree::new("list-hidden");
         tree.file("visible.txt", b"x");
         let hidden = tree.file("hidden.txt", b"x");
-        let set = std::process::Command::new("attrib")
-            .arg("+h")
-            .arg(&hidden)
-            .status()
-            .is_ok_and(|status| status.success());
+        let mut attrib = std::process::Command::new("attrib");
+        attrib.arg("+h").arg(&hidden);
+        crate::commands::process::hide_console(&mut attrib);
+        let set = attrib.status().is_ok_and(|status| status.success());
         if !set {
             return;
         }

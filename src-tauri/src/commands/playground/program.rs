@@ -8,9 +8,7 @@ use std::process::Stdio;
 
 use tokio::process::Command;
 
-/// Windows flag that keeps a runtime program from opening a console window.
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+use crate::commands::process::hide_console_tokio;
 
 /// The folder a program sits in, which is where it runs from.
 pub(super) fn folder_of(program: &Path) -> Result<&Path, String> {
@@ -27,9 +25,6 @@ pub(super) fn command(program: &Path, folder: &Path) -> Command {
         .current_dir(folder)
         .stdin(Stdio::null())
         .kill_on_drop(true);
-    #[cfg(target_os = "windows")]
-    {
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
+    hide_console_tokio(&mut command);
     command
 }

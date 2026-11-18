@@ -304,10 +304,9 @@ mod tests {
 
     #[cfg(windows)]
     fn set_hidden(path: &Path) -> bool {
-        std::process::Command::new("attrib")
-            .arg("+h")
-            .arg(path)
-            .status()
-            .is_ok_and(|status| status.success())
+        let mut attrib = std::process::Command::new("attrib");
+        attrib.arg("+h").arg(path);
+        crate::commands::process::hide_console(&mut attrib);
+        attrib.status().is_ok_and(|status| status.success())
     }
 }

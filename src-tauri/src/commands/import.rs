@@ -233,7 +233,8 @@ pub async fn import_aihub_zip(
 /// folder (HF GGUF or extracted AI Hub) or an AI Hub `.zip`. A failure returns GenieX's stderr.
 async fn pull_local(local_path: &Path, model_name: &str, precision: &str) -> Result<(), String> {
     let exe = super::cli::resolve_geniex_executable();
-    let output = tokio::process::Command::new(&exe)
+    let mut command = tokio::process::Command::new(&exe);
+    command
         .args([
             "pull",
             &format!("{model_name}:{precision}"),
@@ -243,7 +244,9 @@ async fn pull_local(local_path: &Path, model_name: &str, precision: &str) -> Res
             &local_path.to_string_lossy(),
         ])
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    super::process::hide_console_tokio(&mut command);
+    let output = command
         .output()
         .await
         .map_err(|e| format!("Failed to spawn `geniex pull`: {e}"))?;

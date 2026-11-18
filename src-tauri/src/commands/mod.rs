@@ -24,6 +24,7 @@ pub mod model_ram;
 pub mod models;
 pub mod playground;
 pub mod power;
+pub mod process;
 pub mod ram_store;
 pub mod runtimes;
 pub mod server;

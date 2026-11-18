@@ -7,6 +7,7 @@ use tokio::process::Command;
 use tokio::time::timeout;
 
 use super::constants::{CLI_CONFIG_SET_TIMEOUT_SECS, CLI_PROBE_TIMEOUT_SECS};
+use super::process::hide_console_tokio;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ConfigEntry {
@@ -99,6 +100,7 @@ pub(super) async fn get_installed_version_timeout(secs: u64) -> Option<String> {
     cmd.args(["version"])
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
+    hide_console_tokio(&mut cmd);
 
     match timeout(Duration::from_secs(secs), cmd.output()).await {
         Ok(Ok(output)) => {
@@ -122,12 +124,10 @@ pub(super) async fn get_installed_version_timeout(secs: u64) -> Option<String> {
 
 /// Run a `geniex config` style command with a timeout and return its stdout.
 async fn run_config(args: &[&str], secs: u64, what: &str) -> Result<String, String> {
-    let exe = resolve_geniex_executable();
-    let output = timeout(
-        Duration::from_secs(secs),
-        Command::new(exe).args(args).output(),
-    )
-    .await;
+    let mut command = Command::new(resolve_geniex_executable());
+    command.args(args);
+    hide_console_tokio(&mut command);
+    let output = timeout(Duration::from_secs(secs), command.output()).await;
     match output {
         Ok(Ok(out)) if out.status.success() => {
             Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
@@ -235,11 +235,12 @@ pub async fn get_runtime_versions() -> Result<RuntimeVersions, String> {
     if !platform_supported() {
         return Err(platform_unsupported_err());
     }
+    let mut command = Command::new(resolve_geniex_executable());
+    command.args(["version"]);
+    hide_console_tokio(&mut command);
     let output = timeout(
         Duration::from_secs(CLI_PROBE_TIMEOUT_SECS),
-        Command::new(resolve_geniex_executable())
-            .args(["version"])
-            .output(),
+        command.output(),
     )
     .await
     .map_err(|_| "geniex version timed out".to_string())?

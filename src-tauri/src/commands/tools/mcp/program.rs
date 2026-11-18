@@ -7,9 +7,8 @@ use std::path::{Path, PathBuf};
 
 use tokio::process::Command;
 
-/// Windows flag that keeps a child process from opening a console window.
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+use crate::commands::process::hide_console_tokio;
+
 /// The extensions Windows tries when PATHEXT is not set.
 const DEFAULT_PATHEXT: &str = ".COM;.EXE;.BAT;.CMD";
 
@@ -99,10 +98,7 @@ pub fn working_folder(cwd: Option<&str>) -> Result<Option<PathBuf>, String> {
 pub fn command(program: &Path) -> Command {
     let mut command = Command::new(program);
     command.kill_on_drop(true);
-    #[cfg(target_os = "windows")]
-    {
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
+    hide_console_tokio(&mut command);
     command
 }
 

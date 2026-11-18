@@ -20,13 +20,10 @@ pub(super) fn read_power_state() -> PowerState {
 
 #[cfg(target_os = "windows")]
 fn active_plan_name() -> Option<String> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let output = std::process::Command::new("powercfg")
-        .arg("/getactivescheme")
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .ok()?;
+    let mut command = std::process::Command::new("powercfg");
+    command.arg("/getactivescheme");
+    super::process::hide_console(&mut command);
+    let output = command.output().ok()?;
     parse_active_plan(&String::from_utf8_lossy(&output.stdout))
 }
 
@@ -37,17 +34,14 @@ fn active_plan_name() -> Option<String> {
 
 #[cfg(target_os = "windows")]
 fn on_battery() -> Option<bool> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let output = std::process::Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-Command",
-            "(Get-CimInstance Win32_Battery | Select-Object -First 1).BatteryStatus",
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .ok()?;
+    let mut command = std::process::Command::new("powershell");
+    command.args([
+        "-NoProfile",
+        "-Command",
+        "(Get-CimInstance Win32_Battery | Select-Object -First 1).BatteryStatus",
+    ]);
+    super::process::hide_console(&mut command);
+    let output = command.output().ok()?;
     parse_battery_status(&String::from_utf8_lossy(&output.stdout))
 }
 
