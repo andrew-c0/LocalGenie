@@ -6,10 +6,6 @@ Only untested items are kept (tested ones were removed 2026-11-18; see git histo
 
 ## Background running (Dispatch phase A, 2026-11-15; ticked = the user tested)
 - [ ] The first hide to the tray shows one notification ("LocalGenie is still running"); later hides show none. May not show in a dev build. Not run. **[needs you]**
-- [ ] Exit (tray) and window close with the tray setting off list every running kind: download, Dispatch, chat reply, benchmark, Playground job, runtime install. **[needs you]**
-- [ ] Tray tooltip: while a model downloads, hovering the tray icon shows "Downloading <name> 42%" ("(+N more)" for several); it goes back to "LocalGenie" when nothing is active. Not run. **[needs you]**
-- [ ] A download that finishes while the window is hidden or minimized shows a Windows notification "Download complete" with the model name; none when the window is on screen, none for cancelled or failed ones. Not run. **[needs you]**
-- [ ] A runtime install (Settings > Runtimes) shows "Installing <name>" in the tooltip and "<name> was installed." when done and hidden. Not run. **[needs you]**
 
 ## GGUF projector matching and the drawer warning (2026-11-12 working tree; ticked = the user tested)
 - [ ] After that import the model's settings scan confirms vision (the chat Image attach is then enabled). **[needs download/network]**
