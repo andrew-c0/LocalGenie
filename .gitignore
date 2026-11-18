@@ -48,3 +48,4 @@ npm-debug.log*
 *.pem
 coverage/
 tasks.md
+tasks-ordered.md

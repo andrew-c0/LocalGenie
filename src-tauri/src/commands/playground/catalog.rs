@@ -177,7 +177,8 @@ const SD15_Q4: ImageRecipe = ImageRecipe {
 };
 
 // The Turbo models are distilled to run in one to four steps at CFG 1.0 with no negative prompt, so
-// their defaults are fixed the same way as the other distilled recipes. Their default is two steps.
+// their defaults are fixed the same way as the other distilled recipes. SD-Turbo defaults to four
+// steps: on sd-cli arm64-1f8133a, two steps gives pure noise and four gives a clean image.
 const SD_TURBO_Q4: ImageRecipe = ImageRecipe {
     id: "sd-turbo-q4",
     name: "SD-Turbo (Q4)",
@@ -194,7 +195,7 @@ const SD_TURBO_Q4: ImageRecipe = ImageRecipe {
     defaults: ImageDefaults {
         width: 512,
         height: 512,
-        steps: 2,
+        steps: 4,
         cfg_scale: 1.0,
     },
     supports_negative_prompt: false,
@@ -236,7 +237,8 @@ const SDXL_BASE_Q4: ImageRecipe = ImageRecipe {
     },
 };
 
-// SDXL-Turbo runs at 512 px like SD-Turbo, with the same fixed one-to-four-step defaults.
+// SDXL-Turbo runs at 512 px like SD-Turbo and takes one to four steps. Its default stays at two
+// steps: the four-step default was only measured on SD-Turbo, so SDXL-Turbo is not retested.
 const SDXL_TURBO_Q8: ImageRecipe = ImageRecipe {
     id: "sdxl-turbo-q8",
     name: "SDXL-Turbo (Q8)",
@@ -856,7 +858,8 @@ mod tests {
 
     #[test]
     fn sd_and_sdxl_turbo_are_single_checkpoints_with_fixed_turbo_defaults() {
-        for (id, tier) in [("sd-turbo-q4", "Fast"), ("sdxl-turbo-q8", "Balanced")] {
+        // SD-Turbo needs four steps on sd-cli arm64-1f8133a (two gives noise); SDXL-Turbo stays at two.
+        for (id, tier, steps) in [("sd-turbo-q4", "Fast", 4), ("sdxl-turbo-q8", "Balanced", 2)] {
             let recipe = find_recipe(id).expect("turbo recipe");
             assert_eq!(recipe.files.len(), 1, "{id} is one checkpoint");
             assert_eq!(recipe.files[0].role, ModelRole::Model, "{id}");
@@ -864,7 +867,7 @@ mod tests {
             assert!(recipe.description.starts_with(tier), "{id}");
             assert_eq!(recipe.defaults.width, 512, "{id}");
             assert_eq!(recipe.defaults.height, 512, "{id}");
-            assert_eq!(recipe.defaults.steps, 2, "{id}");
+            assert_eq!(recipe.defaults.steps, steps, "{id}");
             assert_eq!(recipe.defaults.cfg_scale, 1.0, "{id}");
             assert_eq!(
                 recipe.license, "Stability AI Community License Agreement",

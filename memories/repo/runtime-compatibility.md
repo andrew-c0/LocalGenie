@@ -40,5 +40,6 @@ Legend: **yes** = works and is offered in the app. **works, not offered** = runs
 ## Notes on reading this table
 
 - Timings are one run on one machine; treat them as rough. OCR figures are for a 900x520 test page.
+- SD-Turbo (Q4) needs 4 steps on sd-cli arm64-1f8133a (CPU, 512 px, CFG 1): 2 steps gives pure noise, 4 gives a clean image.
 - The NPU/GPU cells for OCR come from `geniex infer` runs; the app sends the same settings per request to the server (`compute`, `vit_compute`), which is not verified end to end yet.
 - Update this file when a runtime, a model or a compute path changes. Keep reasons here and the details in `known-issues.md`.

@@ -2,48 +2,16 @@
 
 Run through these checks manually after building or deploying the app. Automated checks cannot fully verify installer behavior, filesystem permissions, or OS-level interactions.
 
+Only untested items are kept (tested ones were removed 2026-11-18; see git history and known-issues.md). Tags: **[needs you]** = needs your hands or machine (installer, updater, offline, notifications, tray, hardware); **[needs download/network]** = needs a model, runtime or the internet. Untagged items can be checked in the app with a loaded model.
+
 ## Background running (Dispatch phase A, 2026-11-15; ticked = the user tested)
-- [x] Settings > Background > Keep running in the tray on: closing the window hides it to the tray and the app keeps running (confirmed in a dev run by the user, 2026-11-15; fixed after the first try, the close listener now blocks the close).
 - [ ] The first hide to the tray shows one notification ("LocalGenie is still running"); later hides show none. May not show in a dev build. Not run. **[needs you]**
-- [x] Tray: left click opens the window, right click shows Open LocalGenie and Exit. (confirmed in the app by the user, 2026-11-16)
-- [x] Exit with a download running asks "Exit LocalGenie?" and Cancel keeps the app; with nothing running Exit quits at once and no geniex, node or MCP child process is left. (confirmed in the app by the user, 2026-11-16)
 - [ ] Exit (tray) and window close with the tray setting off list every running kind: download, Dispatch, chat reply, benchmark, Playground job, runtime install. **[needs you]**
-- [x] A second launch of the app shows the running window and starts no second copy. (confirmed in the app by the user, 2026-11-16)
-- [x] Keep running off (the default): closing the window quits as before, and with a download running the old "Close LocalGenie?" prompt shows (confirmed by the user, 2026-11-15). With it on, a running download keeps going in the tray (confirmed).
-- [x] Start with Windows (installed build): after sign-in the app starts hidden in the tray; turning the switch off removes it. (confirmed in the app by the user, 2026-11-16)
-- [x] A chat reply left generating while the window is hidden for a few minutes finishes correctly when the window is reopened (the Dispatch spike: a frontend runner works while hidden; confirmed by the user, 2026-11-15).
 - [ ] Tray tooltip: while a model downloads, hovering the tray icon shows "Downloading <name> 42%" ("(+N more)" for several); it goes back to "LocalGenie" when nothing is active. Not run. **[needs you]**
 - [ ] A download that finishes while the window is hidden or minimized shows a Windows notification "Download complete" with the model name; none when the window is on screen, none for cancelled or failed ones. Not run. **[needs you]**
 - [ ] A runtime install (Settings > Runtimes) shows "Installing <name>" in the tooltip and "<name> was installed." when done and hidden. Not run. **[needs you]**
-- [x] An update install while the app is hidden in the tray restarts cleanly. (confirmed in the app by the user, 2026-11-16)
-
-## MCP servers (phase 4 and its follow-up, 2026-11-13; ticked = the user tested)
-- [x] Remote HTTP server: Settings > Tools > MCP servers > Add server, transport Web address; it connects, its tools appear under its name, and a chat uses one of them (tested by the user, 2026-11-13).
-- [x] Stdio server: a node program running a local demo, added with the Program transport (the command and the script path in the arguments, both absolute), started, its tools listed and one used in a chat (tested by the user, 2026-11-13).
-- [x] A missing command (for example `no-such-program`): the row reads Failed with "Cannot find ..."; the other servers and the chat keep working. (confirmed in the app by the user, 2026-11-15).
-- [x] Stop on a running server: the row reads Stopped, its tools leave the tool list and its child process is gone (Task Manager). (confirmed in the app by the user, 2026-11-15).
-- [x] Closing the app leaves no child process (node, npx) running. (confirmed in the app by the user, 2026-11-15).
-- [x] `npx` on Windows: a stdio server with the command `npx` starts (npx.cmd is found through PATH). (confirmed in the app by the user, 2026-11-15).
-- [x] A server with "Connect when LocalGenie starts" on connects after a restart without a click, and a server that fails at start does not delay the window. (confirmed in the app by the user, 2026-11-15).
-- [x] An HTTP server that is down: Failed with "Failed to reach the MCP server at ..." (not "did not start"). (confirmed in the app by the user, 2026-11-15).
-- [x] Edit a connection setting (the command or an argument) of a running server and Save: it restarts and its tool list follows. (confirmed in the app by the user, 2026-11-15).
-- [x] Request approval on an MCP tool: the dialog shows the external-server note; the tool line reads "<server> · <tool>". (confirmed in the app by the user, 2026-11-15).
-- [x] Remove a server: its tools leave the list and the chat's tools chip; the other tools are unchanged. (confirmed in the app by the user, 2026-11-15).
-- [x] Refresh on a running server re-lists its tools (confirmed in the app by the user, 2026-11-13).
-- [x] Switch "Connect when LocalGenie starts": turning it on or off does not start or stop a running server (confirmed in the app by the user, 2026-11-13).
-- [x] Rename keeps tool states: after a rename a tool keeps its name and its Off, Request approval or On state (confirmed in the app by the user, 2026-11-13).
-- [x] Working folder: a stdio server with a folder set starts in it; Browse fills the field; the command line preview reads "in <folder>" (confirmed in the app by the user, 2026-11-13).
-- [x] Test button: a server that connects shows "Connected" with its tools; one that does not shows the reason (confirmed in the app by the user, 2026-11-13).
-- [x] Error display: a long error shows its first lines; Show more and Show less switch between them (confirmed in the app by the user, 2026-11-13).
-- [x] Test saves nothing: after a Test (passing or failing) the server list and the saved settings are as they were; changing the form hides the result. (confirmed in the app by the user, 2026-11-15).
-- [x] A stdio server that fails with output: the error shows the server's own stderr lines after "Server output:"; an env value or header of 6 or more characters shows as [redacted]. (confirmed in the app by the user, 2026-11-15).
-- [x] A working folder that does not exist: the row reads Failed with "The working folder '...' does not exist."; saving the server is not refused. (confirmed in the app by the user, 2026-11-15).
-- [x] Two servers with the same name: the second one's tool names use `_2` (for example `mcp__docs_2__<tool>`), and they keep it after a rename. (confirmed in the app by the user, 2026-11-15).
-- [x] A database with servers saved before this change: each server keeps its tool names and their saved states after the app starts. (confirmed in the app by the user, 2026-11-15).
-- [x] Test on a stdio server whose first start is slow (a first `npx` download): the result is either Connected or "did not answer within 30 seconds". (confirmed in the app by the user, 2026-11-15).
 
 ## GGUF projector matching and the drawer warning (2026-11-12 working tree; ticked = the user tested)
-- [x] A download of a UD repo (for example `unsloth/Qwen3.5-4B-GGUF`) gets its projector: the projector is downloaded and imported (tested by the user, 2026-11-12).
 - [ ] After that import the model's settings scan confirms vision (the chat Image attach is then enabled). **[needs download/network]**
 - [ ] A repo with only BF16 and Q8_0 projectors downloads the BF16 file (check the Downloads folder). **[needs download/network]**
 - [ ] A projector that fails with a 404 (not a network error): the card shows "Projector not downloaded: <name>. Vision will not work for this model." in the warning colour, in the active state and after the download ends (history state); the model still imports and the toast appears. Not run. **[needs download/network]**
@@ -51,7 +19,6 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] A model imported from an affected repo before the fix has no projector (expected); a re-download gives it one. **[needs download/network]**
 
 ## Native tools for chat models (2026-11-11 working tree, phases 1-3; the user tested the approval dialog and the Tools list; the items are not ticked one by one)
-- [ ] A tool call with a real tool-capable model: turn one tool On in Settings > Tools, ask for something it can answer, and check the call line appears before the answer.
 - [ ] Approval dialog with Request approval: Approve once, Allow for this chat (the next call runs without asking) and Deny (the model gets the denied result and carries on).
 - [ ] Stop while an approval prompt is open: the prompt closes, the call is recorded as cancelled and no request follows.
 - [ ] Reload a chat whose reply only made tool calls (no text): the chat and its tool lines come back.
@@ -59,20 +26,14 @@ Run through these checks manually after building or deploying the app. Automated
 - [ ] `web_fetch` of a non-UTF-8 page (for example windows-1252 or Shift_JIS): the text reads correctly, with no replacement marks. **[needs download/network]**
 - [ ] Settings > Tools: the states, the allowed folders and the search sources survive a restart; the folder picker adds a folder.
 - [ ] Plain chat with no tools on, after the change to how a send waits for the end of a reply: the reply is saved and the next send works.
-- [x] `read_image` with a model that has vision confirmed (tested by the user, 2026-11-12).
 - [ ] `read_image` with a model that does not have vision (the result says so); after a restart (the saved picture still opens); after deleting the picture file (a failed result, no crash).
 - [ ] `list_directory` without a path lists the allowed folders.
-- [x] `web_search` with Wikipedia on returns results (tested by the user, 2026-11-12).
 - [ ] Real `web_fetch` and `web_search` against live sites, one check for each enabled source. **[needs download/network]**
 
 ## Native tools: per-chat tools chip and image preview (2026-11-12, phase 5; ticked = the user tested)
-- [x] `read_image` row: expanding the line shows the thumbnail with the file name; clicking it opens the picture (tested by the user, 2026-11-12).
 - [ ] A deleted picture file on an expanded `read_image` row shows "File no longer on this device"; re-expanding after the file returns shows it again (no cache).
-- [ ] The "Tools N" chip sits under the field when a chat is open and some tool is On or Request approval; it is hidden with no chat open and when every tool is Off.
-- [ ] The popover lists only the tools that are not Off, each with its global state text; placement and width are right in a narrow window.
 - [ ] "Use in this chat" off for a tool: the count drops, and a send in that chat does not offer the tool; another chat still has it.
 - [ ] A model that calls a tool switched off for the chat gets "This tool is turned off." on that line.
-- [ ] "Tool settings" opens Settings > Tools.
 - [ ] Switch a tool off in a chat, delete the chat, open a new chat: the new chat's switches are all on.
 - [ ] Allow for this chat on a call, then delete that chat: a new chat asks for that tool again.
 - [ ] `web_search` On with no search source on: the chip count leaves it out, and its row reads "No search source on" with its switch disabled. Turning a source on brings the count and the switch back.
@@ -83,12 +44,9 @@ Run through these checks manually after building or deploying the app. Automated
 Limits are in `known-issues.md` ("Image upscaling and Image to image redesign").
 
 Empty and first step:
-- [ ] Before a result the card header shows "Scale 4x" with its info icon and no Compare button. The body shows the dashed "Choose a picture to upscale it here." frame.
-- [ ] The controls row: "Choose image" with an info icon (hover: the PNG or JPG hint) on the left; Upscale on the right.
 - [ ] With no model or no picture, Upscale is disabled and still focusable: hover or Tab to it shows the reason.
 
 Input and job:
-- [ ] Choosing a picture shows it large across the card width, with its file name under it. A tall picture is not capped in height.
 - [ ] A PNG or JPG over the limits shows the size warning above the controls.
 - [ ] Upscale: the input preview is replaced by the centred progress block (phase, bar, elapsed) with Cancel under it. After Cancel the input preview returns with the cancelled message under it. **[needs download/network]**
 
@@ -110,10 +68,8 @@ Shared pieces:
 Limits are in `known-issues.md` ("Image upscaling and Image to image redesign").
 
 Empty and input:
-- [ ] One card, "Edit image": the header has the "W x H" size button and no Compare button. The body shows the dashed "Choose a picture to edit it here." frame, with Choose image and its info icon (hover: the PNG or JPG hint) on the left and Generate with its info icon (hover: the time note) on the right.
 - [ ] With no model or no picture, Generate is disabled and still focusable: hover or Tab to it shows the reason.
 - [ ] The size button opens the size popover; the button text follows the width and height.
-- [ ] Choosing a picture shows it large across the card with its file name under it. A tall picture is not capped in height. Choose image and Generate stay on the controls row.
 
 Settings:
 - [ ] Advanced settings is collapsed at first. Opened: the negative prompt, then one row with Steps, CFG scale and Seed (the Random seed switch beside the seed box). For SD 1.5 (re-draw) Strength comes last in the row. The boxes line up; the row wraps in a narrow window.
@@ -144,13 +100,8 @@ Shared with Text to image and Image upscaling:
 Limits are in `known-issues.md` ("Text to image redesign, tab reset and rail").
 
 Text to image:
-- [ ] One card, "Generate": the header has the "W x H" size button; a click opens the size popover, with the step of 8 and the native-size hint.
-- [ ] Before a job the picture area shows the dashed "The generated picture appears here." frame. Below it: the Prompt, the collapsed "Advanced settings", and the controls row with Generate and its info icon (hover: the time note) on the right.
 - [ ] With no model or no prompt, Generate is disabled and still focusable: hover or Tab to it shows the reason.
-- [ ] Advanced settings opened: the negative prompt, then Steps, CFG scale and Seed in one row (no Strength). A locked field shows its reason on hover. **[needs download/network]**
-- [ ] While a job runs, the picture area shows the progress with Cancel; the prompt, settings and controls are hidden. Advanced settings is closed after the job (expected from code). **[needs download/network]**
 - [ ] After a success: the picture shows large and opens larger on click; there is no Compare. The controls row shows the time, device icon, seed with Use seed and folder icon on the left; Show in folder and Use this image as input on the right; no Clear. The prompt and settings are visible below. **[needs download/network]**
-- [ ] Use this image as input: Image to image opens with the picture as its input, and its settings are kept. **[needs download/network]**
 - [ ] After Cancel or a failure, the message shows in the picture area and the previous picture is gone (expected from code). **[needs download/network]**
 - [ ] Changing the size during a job does not change the running job (expected from code). **[needs download/network]**
 
@@ -164,15 +115,12 @@ Tab reset:
 - [ ] Audio: a file chosen for Speech to text is still there after switching to Text to speech and back (each task keeps its own input).
 
 Sidebar rail:
-- [ ] Collapsed rail: the icons sit in one column, centred, level with the brand and toggle buttons.
-- [ ] Collapse and expand several times, and after a rail click on another page: the selection indicator sits on the selected page each time.
 
 ## Playground selector, Playground downloads and installed Playground models (31a9e7c, 2026-11-05; not run, none ticked)
 
 Limits are in `known-issues.md` ("Playground selector and downloads").
 
 Selector (header, on the Playground pages):
-- [ ] On a Playground page the header shows the Playground selector (beaker icon, "Switch Playground model"); on Overview, Models, Chat and Benchmarks the chat selector shows.
 - [ ] No preselection: with installed Playground models and no pick yet, no row reads Selected and the tool page shows "Pick a model in the selector above". Nothing runs until a model is picked. **[needs download/network]**
 - [ ] Select an installed model: its row reads Selected and the page's hint goes away. Click Selected again: it clears and the hint returns. **[needs download/network]**
 - [ ] Select an OCR model: the header's server badge turns Running. Picking a second OCR model while it runs does not start a second server; clearing the OCR model leaves the server running. **[needs download/network]**
@@ -200,13 +148,9 @@ Installed models (Models > Local):
 Limits are in `known-issues.md` ("Runtime status of the Playground").
 
 Layout:
-- [ ] Wide window (more than 900 px): the input card is on the left and the progress or result column on the right; both reach the same bottom edge.
-- [ ] Before any job: the right column shows "Recognised text" with "The recognised text appears here."
 - [ ] Narrow window (900 px or less): the columns stack, the input first and the result under it.
-- [ ] After a read: the result card's Copy and Save as .txt sit right-aligned in its bottom row; long text scrolls inside the box instead of growing the page. **[needs download/network]**
 
 Running and result:
-- [ ] A running job shows a centred spinner with "Elapsed" and the time under it, and Cancel; there is no progress bar and no time note. **[needs download/network]**
 - [ ] The Generate button has no note line under it on the OCR tab.
 - [ ] Markdown switch on: headings, lists and a table render; a wide table scrolls sideways inside the box, and its header is bold and shaded. Switch off: the plain text field returns. **[needs download/network]**
 - [ ] Copy and Save as .txt write the raw text (the Markdown symbols are kept) even while the Markdown view is on. **[needs download/network]**
@@ -215,7 +159,6 @@ Running and result:
 Input picture and chat preview:
 - [ ] The input preview is larger; clicking it opens the picture in a dialog with the file name in the title (a long name is clipped with an ellipsis). Close and Escape close it; Open location shows the file in Explorer.
 - [ ] A chat image attachment opens in the same dialog, with Open location. Audio and text attachments open as before.
-- [ ] On every Playground tool with no model picked, an info bar reads "Pick a model in the selector above" at the top of the page.
 
 ## Runtime update notifications (f1e5543, 2026-11-04)
 
@@ -264,16 +207,12 @@ How: start a download online, then turn off the network adapter (as in "Offline 
 - [ ] An HTTP 404 or 403 download failure: no countdown and no retry; one error toast; the card shows the friendly text (not the offline text). **[needs download/network]**
 - [ ] Retry or Resume by hand after "used up": the retry budget starts again. **[needs you]**
 - [ ] Playground image or speech model with the adapter off: the same wait, reconnect and countdown; the drawer entry shows no per-attempt start toast. **[needs you]**
-- [x] Resume from `.part` (HTTP Range) after a cancel or failure: tested by the user in the app, 2026-11-06.
-- [x] GGUF projector (sidecar) download with the adapter off: the entry retries by itself and resumes from its `.part`; the network failure shows no "Projector not downloaded" toast (tested by the user in the app, 2026-11-06).
-- [x] While the entry waits for the connection or counts down, the badge reads "Retrying soon" (clock icon), not "Error" (tested by the user in the app, 2026-11-06).
 - [ ] Models landing (`/models`): the installed count is the GenieX models plus the Playground models except OCR (OCR models are already GenieX models, so they are counted once). **[needs download/network]**
 - [ ] The Playground chip on the Local models page labels the audio group "Clean up and split" (not "Audio to audio"). **[needs download/network]**
 
 ## Playground: more models, the Playground models page and model cards (2026-11-07 working tree; ticked = approved by the user, "all good")
 
 Not run: download each model and run it once.
-- [ ] SD-Turbo (Q4) **[needs download/network]**
 - [ ] SDXL base (Q4) **[needs download/network]**
 - [ ] SDXL-Turbo (Q8) **[needs download/network]**
 - [ ] FLUX.1 schnell **[needs download/network]**
@@ -284,24 +223,13 @@ Not run: download each model and run it once.
 - [ ] dots.ocr (OCR) **[needs download/network]**
 - [ ] DeepSeek-OCR (OCR) **[needs download/network]**
 - [ ] Whisper base.en, base, small.en and turbo **[needs download/network]**
-- [ ] Moonshine tiny **[needs download/network]**
 - [ ] Piper voices (Lessac, GLaDOS, LibriTTS-R) **[needs download/network]**
 - [ ] Matcha LJSpeech **[needs download/network]**
 - [ ] Kitten nano **[needs download/network]**
 
 Approved by the user (run in the app):
-- [x] FLUX.2 klein 9B
-- [x] Z-Image base
-- [x] SenseVoice
-- [x] Parakeet v3
-- [x] Supertonic 3 (English)
-- [x] DPDFNet (clean up)
-- [x] GLM-OCR
 
 Pages and cards (approved):
-- [x] Models > Playground models page and its per-model detail pages (facts, capabilities, specifications, files)
-- [x] Header Playground dropdown lists installed models only
-- [x] Model card: Hugging Face README as Model Card, and its images
 
 Not run:
 - [ ] Offline, with the adapter off: the Model Card README shows a skeleton while it loads, a Try again block on failure, and the images stay hidden when they fail. **[needs you]**
@@ -312,7 +240,6 @@ Not run:
 The user looked at the page in the app on 2026-11-04 and said it looked good. The items below were not run; none is ticked.
 
 - [ ] Links: the LocalGenie source link and each runtime's "Source code" link open in the system browser, not in the app window. **[needs download/network]**
-- [ ] Runtimes list: opening About first (before the runtime list is loaded) fills in the runtime lines; a runtime not installed reads "Not installed".
 
 ## Navigation redesign (committed 24528c2, 2026-11-04/05)
 
@@ -327,12 +254,6 @@ The user looked at the landings, the breadcrumbs, Recent conversations, the item
 - [ ] Breadcrumbs on a narrow window: the trail and the actions (chat's context ring and menus) wrap without overlapping.
 
 ## Installer, uninstall and Storage (phase 1, 2026-11-07; ticked = the user tested on own machine with a debug installer)
-- [x] The installer runs per user, with no admin prompt.
-- [x] The app runs from the installed copy with styles applied (nonce fix).
-- [x] Settings > Application & Runtime > Storage shows its rows (database 1.1 MB, Playground models, GenieX models); rows for missing folders are hidden.
-- [x] The database file is named `localGenie.db`.
-- [x] Uninstall cleanup without `--delete-data`: GenieX CLI uninstalled, runtimes removed, 0 failed steps.
-- [x] Uninstall cleanup with `--delete-data`: database, Playground models, GenieX model cache and legacy images removed, 0 failed steps. (The user reports three runs; only these two variants were recorded.)
 - [ ] Uninstaller checkbox for the application data: its label reads correctly; ticked and unticked behave as described. **[needs you]**
 - [ ] Silent uninstall (`/S`) of LocalGenie runs without a window. **[needs you]**
 - [ ] Update-mode install (`/UPDATE`) keeps the data and skips the cleanup. **[needs you]**
@@ -342,20 +263,13 @@ The user looked at the landings, the breadcrumbs, Recent conversations, the item
 - [ ] Release (non-debug) installer: installs per user and shows styles. **[needs you]**
 
 ## App updater and release (2026-11-10 to 11; ticked = the user tested; the rest not run)
-- [x] A debug build starts with the updater (no startup error).
-- [x] Settings > Application & Runtime shows the App updates card with the running version (0.1.0).
-- [x] A failed check shows the Try again block.
-- [x] Update from the local feed (`scripts/updater-test/`): 0.1.0 downloads 0.1.1, installs and restarts as 0.1.1.
 - [ ] Going online after a failed check retries the check without a click. **[needs you]**
 - [ ] Install with work running (a chat reply, a download, a Playground or OCR job, a benchmark): the confirm lists each item; Cancel installs nothing. **[needs you]**
 - [ ] Install with nothing running: no confirm; progress shows; the app restarts into the new version. **[needs you]**
 - [ ] A newer published version sends one desktop notice for that version; a restart with the same version sends none. **[needs you]**
 - [ ] Runtime update switch off with an app update known: no app notice; switch on: the pending notice is sent without a restart. **[needs you]**
 - [ ] The Settings sidebar item shows a dot while an update is known; Settings > About shows the version line and the update note. **[needs you]**
-- [x] CI: the job runs on `windows-11-arm` and the checks pass (2026-11-10/11).
-- [x] Repository secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` are set (2026-11-11).
 - [ ] The private key and its password are backed up outside GitHub. **[needs you]**
-- [x] Release workflow on tag `v0.1.1`: the draft had the installer, its `.sig` and `latest.json`; it was published and is Latest (2026-11-11).
 - [ ] A tag that does not match the version files fails at the first step (not run). **[needs you]**
 - [ ] Non-debug installer: its update check reads the published latest release. (The installed 0.1.1 app reads the real feed over TLS, 2026-11-11; which installer it is was not recorded, so this stays open.) **[needs you]**
 - [ ] Publish a draft: an installed older build offers it, installs, and restarts into the new version. **[needs you]**
@@ -394,10 +308,8 @@ The user looked at the cards and the detail pages in the app on 2026-11-04 and s
 ## Sidebar usage chart with Playground jobs (committed 9a18c4f; text to image and OCR lines confirmed by the user)
 
 - [ ] No model loaded and no job: no usage card in the sidebar.
-- [x] Text to image with device Auto: the card appears with CPU, GPU and NPU lines; with a GPU device chosen, only the GPU line. (run by Claude, 2026-11-18)
 - [ ] Same job with no model loaded: the RAM section shows System only, with no "Model / context" row. **[needs download/network]**
 - [ ] Image to image and upscaling: CPU line only. Speech: CPU line only. **[needs download/network]**
-- [x] OCR with compute Auto and vision encoder NPU: CPU, GPU and NPU lines. With compute CPU and vision GPU: CPU and GPU lines only, even if a model is loaded on another target. (run by Claude, 2026-11-18)
 - [ ] Legend latest % matches the last point of its line. A target this device gives no counter for is not listed. **[needs download/network]**
 - [ ] Leave the Playground tab during a job and come back: the lines are still plotted. **[needs download/network]**
 - [ ] The card disappears after a job ends when no model is loaded, and stays while a model is loaded. **[needs download/network]**
@@ -412,10 +324,7 @@ The user looked at the cards and the detail pages in the app on 2026-11-04 and s
 
 ## Chat attachments (not yet run)
 
-- [ ] Attach menu: Image and Audio are disabled until the model's settings scan confirms vision or audio; Text file is always enabled. Up to 4 files per message.
 - [ ] Send an image and an mp3 clip (mp3 is not verified with the server; see known-issues). The reply uses the content; a wav clip is the verified path.
-- [ ] Send a text file, then a second message: the model still has the file, and the context ring shows the file arc.
-- [ ] Move a sent file, then send again: the send goes ahead without that file, and a "Files not sent" toast names it. The toast repeats on each send.
 - [ ] Delete that message (hover the bubble, trash icon, confirm): the message and every later one leave the chat and do not come back after a reload. The next send has no warning and the model no longer gets the file.
 - [ ] Delete a user message in the middle of a chat, then an assistant message: each confirm removes it and all after it, and the context ring drops accordingly. A cancelled confirm changes nothing.
 - [ ] Retry and Delete buttons appear only on hover or keyboard focus, and Retry is absent on a message whose file has no stored path.
@@ -426,7 +335,6 @@ The user looked at the cards and the detail pages in the app on 2026-11-04 and s
 
 - [ ] All views render and switch via the sidebar: Overview, Models, Chat, Benchmarks, Settings — without losing active session or server status.
 - [ ] Chat: streaming updates in place, `chat-done` records generation stats, retry removes later messages in both Zustand and SQLite.
-- [ ] Chat welcome: `/chat` with no open conversation shows the status (Running/Stopped) and Recent conversations (10 a page); New conversation twice opens the same empty draft; leaving an empty draft leaves nothing in the list after a reload; the first send stores it.
 - [ ] Pin: a pinned conversation lists first and keeps its place after a reload; unpin returns it to recency order.
 - [ ] Models: search → download → import → progress → completion refresh; cancel and resume from the drawer; duplicate click is ignored; Load & Chat sets active model; remove confirmation works; repo filter chips behave. **[needs download/network]**
 - [ ] Settings: port save/probe persists.
@@ -520,7 +428,6 @@ Not yet run:
 ## Conversation compaction (tested by the user on 2026-11-02: the main flow with a 2048 window, the summary row and a second summary; the items below were not ticked one by one)
 - [ ] Settings > Compact long conversations: off by default; the threshold slider (50 to 90, default 70) appears only when the switch is on; Save persists after a restart.
 - [ ] With it off, a prompt over the context shows the usual error. No summary, no button.
-- [ ] With it on, a small context (for example nctx 2048) and a chat that passes the threshold: "Summarising the conversation…" shows, input is disabled, then a "Conversation summarised" line appears just before the prompt and the reply arrives.
 - [ ] Clicking that line (mouse and keyboard) opens and closes the summary text. The summary has no thinking text and reads as bullet points.
 - [ ] Delete and Retry are gone on the summarised messages and on the summary line; messages after it keep Delete; Retry is only on the last user message.
 - [ ] Deleting or retrying the prompt that triggered the summary keeps the summary.
@@ -530,33 +437,15 @@ Not yet run:
 - [ ] Turning the setting off keeps existing summaries in effect and stops new ones.
 - [ ] Check the server logs: the request after a summary carries the summary in the system prompt and the model does not reload.
 
-## Conversation compaction follow-ups (committed after febb07b, 2026-11-13; tested by the user, 2026-11-15)
-- [x] Error rows: after a reply that failed, send another prompt. The server log's request has no error text, and the context ring does not count the error line. (confirmed in the app by the user, 2026-11-15).
-- [x] Stripped thinking: with thinking on, a reply with a think block, then a second prompt. In the server log the earlier assistant turn has only its answer, and the new reply still shows its own thinking. The reply after the change may be slower (the server re-reads earlier history). (confirmed in the app by the user, 2026-11-15).
-- [x] Per-chat switch: chat settings > Conversation compaction. "On" summarises that chat at its threshold even when the app setting is off; "Off" never summarises that chat while the app setting is on; "Use app setting" shows the app's current state in its hint. Save and reopen the chat: the choice stays. (confirmed in the app by the user, 2026-11-15).
-- [x] Per-chat threshold: with "On", untick "Use the app threshold" and set 50; the chat summarises earlier than with the app's 70 (use a small nctx). Ticking the box again follows the app threshold. (confirmed in the app by the user, 2026-11-15).
-- [x] Reset to model settings clears the compaction choice back to "Use app setting". (confirmed in the app by the user, 2026-11-15).
-- [x] Compact now, with the switch off: a model loaded, the server running and new messages since the last summary. The confirm dialog shows; Compact writes a "Conversation summarised" line at the end of the chat; the covered messages show no Delete. (confirmed in the app by the user, 2026-11-15).
-- [x] Compact now is disabled, with its reason as the tooltip, when there is no model, the server is stopped, a reply is streaming, or nothing is new since the last summary. (confirmed in the app by the user, 2026-11-15).
-- [x] Compact now fails (for example the server stops) or is stopped with the Stop button: a failure shows "Summary failed"; either way the conversation is unchanged. (confirmed in the app by the user, 2026-11-15).
-- [x] After a restart, the summary line stays at the end and the transcript order matches the order before the restart. The database refusal of a covered message is not reachable from the UI; it is covered by `cargo test` (`delete_refuses_covered_rows_and_keeps_later_ones`), not run in this sync. (confirmed in the app by the user, 2026-11-15).
-
 ## Dispatch conversations (phase B, reworked 2026-11-16; none run in the app yet)
 
 - [ ] Migration: an existing database opens, chats are unchanged, no Dispatch conversation shows in the chat list, recent conversations or the new-chat draft.
-- [x] Chat after the ChatArea and ChatInput refactors: the transcript scrolls with a streaming reply, the status line shows, retry and delete work, the tools chip in the chat input works as before, the textarea grows as before. (confirmed in the app by the user, 2026-11-16)
-- [x] New conversation: the first message creates it, opens /dispatch/<id> and starts the turn; tool switches chosen before sending are kept on the conversation. (run by Claude, 2026-11-18)
 - [ ] Tools popup (Dispatch and chat): a Dispatch tool that is Off in the Dispatch settings is disabled with "Off in the Dispatch settings. Change it in Settings > Tools"; a Request approval one is on and reads "Asks before each use"; the read plus web warning shows when both are enabled; switches survive a restart.
 - [ ] Request approval in Dispatch: a conversation with a tool set to Request approval asks in the approval dialog (Allow once, Allow for this conversation, Deny); while it asks the conversation shows Needs you, the chat input stays locked, a queued conversation waits, and a hidden window gets "Dispatch needs your approval" with "<tool> in <title>"; Deny gives the model the denied result and the turn goes on; Stop cancels the question and ends the turn as Stopped; the tray reads "Dispatch: waiting for your approval on <title>". Close the app while it asks: the conversation shows Interrupted after reopening (the startup sweep in `commands/dispatch.rs` moves needs_you to interrupted). **[needs you]**
 - [ ] Separate Dispatch tool settings: set one tool to On under Dispatch while Chat stays on Request approval; the chat still asks for it, the Dispatch conversation runs it without asking; set Dispatch back to Request approval or Off and the chat is unchanged. A tool never set under Dispatch is On there whatever its chat state (Off or Request approval too), and a new or MCP tool with no Dispatch state is On; an explicit Dispatch Off or Request approval wins over the default.
 - [ ] No model or server stopped: the field says why it cannot send.
 - [ ] A real multi-step request (list a folder, read files, summarise): the model calls tools, the transcript follows, the answer ends the turn as "Ready", a notification "Dispatch replied" shows when the window is hidden. **[needs you]**
-- [x] A follow-up message on a Ready conversation continues it with the earlier context. (run by Claude, 2026-11-18)
-- [x] While a turn runs the chat input is disabled ("Dispatch is using the model"), also between steps; it unlocks afterwards. (run by Claude, 2026-11-18)
-- [x] A second conversation messaged while the first works shows Queued and starts when the first ends; a message to a working or queued conversation is refused with the reason. (run by Claude, 2026-11-18)
-- [x] Stop during a reply and during a tool call (working and queued): the turn ends as Stopped, nothing keeps running; Continue resumes; a new message also continues. (run by Claude, 2026-11-18)
 - [ ] Restart while a turn runs: the conversation shows Interrupted; Continue works. A queued one left over does not start by itself; sending a message starts it.
-- [x] Long conversation: compaction at the threshold carries on; a context overflow summarises and retries once. (run by Claude, 2026-11-18)
 - [ ] A long run with a real model (60+ tool rounds): it neither stops by itself nor loops without end; note how the model behaves (no step, time or repeat limit exists, Stop is the only guard).
 - [ ] dispatch_notes: the model keeps notes, they show in the collapsible section and are used in the next request.
 - [ ] Tray: the tooltip shows "Dispatch: working on <title>"; Exit asks "A Dispatch conversation is still working. Exit and stop it?". **[needs you]**
@@ -566,28 +455,19 @@ Not yet run:
 - [ ] Resume after an incomplete run: send a long message, close the app (Exit) while it works, reopen: one dialog "Dispatch was interrupted ... Continue it with the previously selected model?"; Continue starts the GenieX server, loads that model and carries on; "Not now" marks the conversation Stopped and the dialog does not return. With two interrupted conversations (also on different models) the dialog lists them and they run one after another, each on its own model. **[needs you]**
 - [ ] Resume dialog with the model deleted or failing to load: an error toast names the model; the conversation stays Interrupted (queued ones show Failed with the reason).
 - [ ] Dispatch runs every tool call of one reply (no cap of 4); the chat still caps at 4 per reply.
-- [x] The chat composer and the Dispatch composer look and behave alike (field, send/stop, attach in chat, tools chip, note line, wide windows); the header model selector still selects, reuses and switches compute as before; the speed list ignores Dispatch. (confirmed in the app by the user, 2026-11-16)
-- [ ] Dispatch layout: /dispatch looks like the Chat landing (hero, recent conversations with status badge and time, composer at the bottom); a conversation is full width like a chat, with the status badge, Elapsed, Continue and a Delete menu in the header row; at 1600 px and wider the composer and transcript match the chat. The chat landing, recent list, header and composer look unchanged after the shared-component extraction.
 - [ ] An empty model reply (no text, no tool call) in Dispatch is sent again twice as the same step, with no new message; a reply on a retry carries on silently; after three empty replies the turn fails with "The model returned an empty reply 3 times in a row. Send a message to continue, or try another model." and a new message continues it.
 - [ ] Dispatch sampling card (Settings > Application & Runtime, below Server runtime): the fields show 0.3, 0.90, 1.05 with Top K, Min P and Max tokens empty; a change saves ("Dispatch sampling saved"), survives a restart; "Reset to defaults" fills the draft and only Save stores it; the two help lines read as written.
 - [ ] A Dispatch conversation logs its sampling once per turn: the console shows `[dispatch] sampling:` with the saved temperature, top P and repetition penalty, whatever model is loaded. A chat on the same model is unchanged: its sampling is the model's own, and no Dispatch line is logged.
 - [ ] Per-step console line: every Dispatch request logs `[dispatch] step N: prompt_tokens=…, completion_tokens=…, ms=…`. On an engine with prompt caching (llama.cpp GGUF), prompt_tokens stays small as a long conversation grows (it counts only the new part), and it does not jump back to the whole history after a dispatch_notes update. On an engine without caching it grows with the history, which is expected.
 - [ ] Large page in Dispatch: web_fetch on a long page is cut to the window sized from the context. With a 4k-context model the result stops at about 2,150 characters, with the truncated note; with a 32k one at about 17,200. Calling again with start=N continues it. A chat with the same page is cut at the backend default (8,000 characters). **[needs download/network]**
-- [x] Stall guard: a model that repeats the same call (ask it to read one file five times) gets the nudge "You already made this exact call 3 times with the same result..." as the result of the 4th call and does not run it; after the third nudge the turn stops with "⚠️ Error: The model kept repeating the same tool call (read_text_file). Send a message to continue." and a notice "Dispatch stopped: ...". A new message continues it. A chat is not stopped by this guard. (run by Claude, 2026-11-18)
 - [ ] Stall guard, errors: six failing calls in a row (for example read six missing file names) end the turn with "6 tool calls in a row failed. Last error: ..."; one successful call in between starts the count again.
 - [ ] Continue on a finished conversation: Stop (or restart) after a full answer, then Continue (header or the resume dialog) ends it as Ready at once, with no error, no "Loading model" toast and no model request; a Stopped conversation whose last message is the user's still continues.
-- [x] Status text and Stop belong to their conversation: with a Dispatch turn running, open a chat and a queued conversation; neither shows "Prefilling prompt…", "Outputting…" or "Summarising the conversation…", and neither shows Stop (the chat field reads "Dispatch is using the model" with Send disabled). The running conversation keeps its own status and Stop. A chat reply in one chat shows nothing in another chat, and Stop in a chat never stops a Dispatch turn. (run by Claude, 2026-11-18)
-- [x] After a summary (Dispatch threshold, or a chat with Compact now then a send) the model carries on with the original request: the line "Continue with my request: "<request>"…" is in the transcript, the model does the remaining work and does not say it is finished unless it is; a second summary does not nest the line. (run by Claude, 2026-11-18)
-- [x] Settings > Application & Runtime > Dispatch: the repetition penalty shows 1.05 by default and 1.10 for 1.1; typing 1.05 keeps 1.05; the arrow keys step by 0.01. The model settings' repetition penalty reads the same way. (run by Claude, 2026-11-18)
-- [x] Settings > Tools: the intro reads "Let models use tools. Chat tools start off, so a model only sees the tools you turn on." and "Dispatch conversations use their own tool settings, which start On. Set them under Dispatch on each tool."; no tool's Chat group repeats the Dispatch line, and under each Dispatch group "Dispatch conversations use this unless you change it." shows once. (run by Claude, 2026-11-18)
 
 ## Web fetch as Markdown (2026-11-16)
 
-- [x] Wikipedia article (e.g. https://en.wikipedia.org/wiki/Rust_(programming_language)) through a chat with web_fetch on: the answer starts with `# <title>` and `Source:`; headings are `#`, lists are `-` with nested levels, links read `[text](https://...)` with absolute addresses, and the navigation and "Jump to" menus are gone. (confirmed in the app by the user, 2026-11-16)
 - [ ] Documentation page (e.g. https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html): headings, inline code and fenced code blocks with their language (```rust) look right. **[needs download/network]**
 - [ ] News article with heavy navigation (menus, related links, a cookie banner): only the headline and the article text remain. **[needs download/network]**
 - [ ] GitHub README (e.g. https://github.com/tauri-apps/tauri): headings, code blocks and tables look right; the title has no repeated ` · GitHub`; badges and linked pictures write nothing; no image address appears, and a standalone image with alt text of 8+ characters reads `(Image: alt)`. **[needs download/network]**
-- [x] Table-heavy page (e.g. https://en.wikipedia.org/wiki/Comparison_of_programming_languages): the big comparison tables are in the answer (after the article, so read on with `start=`), each row a line with cells joined `; `; no table row is missing. (run by Claude, 2026-11-18)
 - [ ] Guardian index (e.g. https://www.theguardian.com/world): no bare `-` lines; each story reads `(Image: …)` then its headline, with no image address. **[needs download/network]**
 - [ ] Wikipedia noise (e.g. https://en.wikipedia.org/wiki/Rust_(programming_language)): no `[edit]` links and no `[1]`-style citation markers in the answer. **[needs download/network]**
 - [ ] JS-only page (an app shell that renders in the browser): little or no text, or only the title, or "(the page has no readable text)"; no error. **[needs download/network]**
@@ -607,17 +487,3 @@ Not yet run:
 - [ ] Network off: the search reads the offline wording ("Could not reach the web: ...", the chat's offline text), not an empty list; with another source on, that one still answers. **[needs you]**
 - [ ] Only if DuckDuckGo challenges the app (a captcha page or HTTP 429; cannot be forced): the tool reads "... is paused for 15 minutes" and calls in that time send nothing. **[needs download/network]**
 
-## Run by Claude in the dev app, 2026-11-18 (results; the user still confirms by hand)
-
-Model Qwen3.5-4B-GGUF on the NPU, default context, the user's own database. Observed working: Dispatch landing and conversation layout; first message creates and starts a conversation; a multi-step request (web_search with DuckDuckGo, two web_fetch calls, summary) ends "Ready" and a follow-up continues with the context; chat input locked ("Dispatch is using the model"); a second conversation messaged while one works is "Queued" and starts after it; Stop keeps the partial text, shows "Stopped" with Continue, and a new message continues; a Request approval tool in Dispatch shows "Needs you", the dialog with "Allow for this conversation", and the turn carries on after Allow once; the Dispatch Settings card and the Chat/Dispatch controls on each tool render; the tools popup shows five tools On with the read-plus-web warning; stall guard (three calls ran, three nudges, the turn stopped with the message); compaction ran in a long conversation; window close with the tray setting on hides and the turn finishes hidden; second launch shows the running window (one process); window close with the tray setting off lists the working conversation, Keep running keeps the app, Exit quits with no geniex, node or app process left; after an incomplete run the "Dispatch was interrupted" dialog appears with the server stopped, and Continue starts the server and loads the model; web_fetch Markdown for a documentation page, a blog post, a long page (window continues with start), plain text, JSON and raw Markdown (unchanged) and a JS-only shell (little text, no error); results are cut to the size limit in Dispatch.
-Found, not fixed: Continue on an interrupted conversation whose last message is a finished reply fails with three empty replies; the transcript status line ("Prefilling prompt...", "Summarising the conversation...") and a Stop button show in unrelated chats and in a queued conversation while a Dispatch turn runs; after compaction the model can declare the task done ("Continue from the summary above." is too weak); Markdown fetch spends many tokens on image and badge URLs (GitHub README, Wikipedia logo, news index), keeps empty list items, `\[edit\]` links and `\[1\]` markers, and drops the large tables of a table-heavy Wikipedia page; the repetition penalty field shows 1.1 for 1.05; the Tools page says "Every tool starts off" next to "Dispatch tools are On unless you change them here" and repeats that line under the Chat group.
-Not checked by Claude: notifications and the tray tooltip, the console lines (`[dispatch] sampling:` and `step N`), prompt caching, Not now in the resume dialog, offline wording, deletion and unknown-id pages, 1600 px layout, a 32k-context model, the 20-per-hour DuckDuckGo limit, old checklist sections.
-
-Retest by Claude after the fixes (2026-11-18, same dev app): fixed and seen working: the transcript status line and the Stop button no longer leak into an open chat or a queued conversation (the chat composer shows a disabled Send with "Dispatch is using the model"); the repetition penalty field reads 1.05; the Tools page intro and group lines read right; after a summary the continuation line quotes the original request and the model carries on with the work instead of declaring it done; DuckDuckGo results come back from the cache at 0 ms for a repeated query; GitHub README Markdown is clean (4,069 characters, 17 URLs, no badges) and the comparison page's tables now sit under a "## Tables" heading about 23,000 to 31,000 characters in. Not verified in the app: Continue on a finished conversation (covered by tests only).
-New finding, not fixed: with the default 8k context a long web task falls into a loop (search, fetch, summary, search again) because each summary drops the page text and the stall guard only catches consecutive identical calls; the user stopped it by hand. A larger model context (16k or 32k) reduces it; a guard for repeated cycles or a summary that keeps findings would help.
-
-## Second pass, 2026-11-18 (run by Claude in the dev app; the user still confirms by hand)
-- **Loop on an 8k context (Qwen3.5-4B, NPU), tested:** the cycle guard fires (a repeated fetch came back Denied with "You already made this exact call 2 times in this turn…") but the model then paged the same pages with other `start` values and was summarised four times without answering. The wrap-up rule (after 2 summaries in a turn: no tools, the continuation line says to write the final result) ended the same task as Ready with a full comparison, about 4.5 minutes. The model never called `dispatch_notes` (notes stayed empty), so the guard and the wrap-up rule are what stop the loop on small models. Not tested: a model that emits a tool call anyway when no tools are offered (the call would still run).
-- **Triage of the unticked items by who can check them** (362 items, counted 2026-11-18): 66 on screen only (UI), 51 need a loaded model (MODEL), 164 need downloads or the network (DOWNLOAD), 79 need the user's hands or machine (USER: installer, updater, offline mode, OS notifications, tray, reboot, hardware, release and signing), 2 already confirmed. The UI and MODEL groups were not driven one by one in this pass beyond the Dispatch items above and the earlier run; they are still open.
-- **Needs the user (grouped):** Background running (all 5), Runtime update notifications (8), Offline mode (16), Downloads retry (5), Installer and Storage (6), App updater and release (all 10), GenieX CLI runtime install/uninstall (7), General build sanity (5), Dispatch notifications/tray/restart items (5).
-- **Marks in this file (2026-11-18):** unticked items now carry **[needs you]** (79) or **[needs download/network]** (163); 14 items are ticked as run by Claude (12 Dispatch/Markdown items observed in the app, 2 already confirmed). Untagged unticked items (UI and loaded-model) are still open. Ticked by Claude means observed in the dev app, not signed off by the user.

@@ -365,7 +365,7 @@ mod tests {
     #[test]
     fn turbo_and_sdxl_checkpoints_pass_only_the_checkpoint() {
         for (model_id, steps, cfg) in [
-            ("sd-turbo-q4", "2", "1"),
+            ("sd-turbo-q4", "4", "1"),
             ("sdxl-turbo-q8", "2", "1"),
             ("sdxl-base-q4", "20", "7"),
         ] {
