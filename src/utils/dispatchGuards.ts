@@ -13,6 +13,17 @@ export const NUDGE_LIMIT = 3;
 /** Error results in a row, in one turn, that end the turn as failed. */
 export const FAILURE_LIMIT = 6;
 
+/**
+ * Summaries stored in one turn. Once the turn has this many, research stops: its requests offer no tools and the
+ * model writes the result from what it has. A small context summarises again and again while paging the same pages.
+ */
+export const SUMMARY_LIMIT = 2;
+
+/** True when a turn that has stored this many summaries must answer now, with no tools. */
+export function mustAnswerNow(summaries: number): boolean {
+  return summaries >= SUMMARY_LIMIT;
+}
+
 /** The longest error text the stop message quotes. */
 export const ERROR_SNIPPET_CHARS = 160;
 

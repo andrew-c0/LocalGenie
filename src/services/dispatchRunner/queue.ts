@@ -61,6 +61,7 @@ async function beginTurn(task: DispatchTask, plan: StartPlan): Promise<void> {
     errorShown: false,
     guard: freshStallState(),
     samplingLogged: false,
+    summaries: 0,
   };
   setCurrentTurn(turn);
   // Running from the start, so the chat input stays off while the recorded model loads.

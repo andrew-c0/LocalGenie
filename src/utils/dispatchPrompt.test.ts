@@ -180,3 +180,37 @@ describe("isGeneratedContinuation", () => {
     expect(isGeneratedContinuation("Continue the essay about rivers.")).toBe(false);
   });
 });
+
+describe("continuationText answer-now variant", () => {
+  const ANSWER_NOW_REST =
+    "The summary above says what is done so far. Do not use tools now: write the final result from what you have, and say what you could not find.";
+
+  it("restates the request and asks for the result with no tools, in place of the normal ask", () => {
+    const messages = [
+      user("Write a 2000-word essay on rivers."),
+      assistant("Notes."),
+      summaryRow(),
+    ];
+    expect(continuationText(messages, true)).toBe(
+      `${CONTINUATION_LEAD}: "Write a 2000-word essay on rivers.". ${ANSWER_NOW_REST}`,
+    );
+  });
+
+  it("uses the generic line with the answer-now ask when there is no earlier request", () => {
+    expect(continuationText([assistant("Hello."), summaryRow()], true)).toBe(
+      `${CONTINUATION_LEAD}. ${ANSWER_NOW_REST}`,
+    );
+  });
+
+  it("keeps the normal line when the argument is left out or false", () => {
+    const messages = [user("Write the essay."), summaryRow()];
+    expect(continuationText(messages, false)).toBe(continuationText(messages));
+    expect(continuationText(messages)).not.toContain("Do not use tools now");
+  });
+
+  it("is recognised as a generated line, like the normal one", () => {
+    expect(isGeneratedContinuation(continuationText([user("Write."), summaryRow()], true))).toBe(
+      true,
+    );
+  });
+});

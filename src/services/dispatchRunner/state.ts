@@ -18,6 +18,8 @@ export interface Turn {
   guard: StallState;
   /** True once the turn logged its sampling settings, so the log has one line per turn. */
   samplingLogged: boolean;
+  /** Summaries stored in this turn. At SUMMARY_LIMIT the turn must answer: its requests offer no tools. */
+  summaries: number;
 }
 
 /** The turn in progress, or null when none runs. Only the runner changes it, through the functions below. */

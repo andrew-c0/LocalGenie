@@ -15,7 +15,7 @@ import type {
   ToolSpec,
 } from "../../types";
 import { CYCLE_NUDGE_TEXT, REPEAT_NUDGE_TEXT } from "../../utils/dispatchGuards";
-import { DISPATCH_BLOCK_ID, NOTES_HEADING } from "../../utils/dispatchPrompt";
+import { CONTINUATION_LEAD, DISPATCH_BLOCK_ID, NOTES_HEADING } from "../../utils/dispatchPrompt";
 import type { TurnEnd } from "../../utils/dispatchTask";
 import type { ToolState } from "../../utils/toolAccess";
 import type { ModelRun, SendFailure } from "../chatRun";
@@ -51,9 +51,16 @@ vi.mock("../chatHistory", () => ({
   warnUnavailable: () => undefined,
 }));
 
+// A summary is stored ("done") unless a test says otherwise. The trigger is faked: a test says when a step is due.
+const summariseConversation = vi.fn(() => Promise.resolve({ status: "skipped" }));
 vi.mock("../chatCompaction", () => ({
-  summariseConversation: () => Promise.resolve({ status: "skipped" }),
+  summariseConversation: () => summariseConversation(),
   stopSummary: () => Promise.resolve(),
+}));
+
+const compactionDue = vi.fn(() => false);
+vi.mock("../../utils/compactionTrigger", () => ({
+  compactionDue: () => compactionDue(),
 }));
 
 vi.mock("../compaction", () => ({
@@ -281,6 +288,8 @@ function setUp(...overrides: Partial<DispatchTask>[]): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  compactionDue.mockReturnValue(false);
+  summariseConversation.mockImplementation(() => Promise.resolve({ status: "skipped" }));
   endWriteFailure = null;
   script = [];
   runs = [];
@@ -1714,5 +1723,73 @@ describe("the stall guard", () => {
 
     expect(executeTool).toHaveBeenCalledTimes(11);
     expect(savedTask()).toMatchObject({ status: "done", report: "done" });
+  });
+});
+
+describe("the wrap-up rule", () => {
+  /** The user lines the runner wrote after summaries, in order. */
+  function continuationsOf(sessionId: string): string[] {
+    return messagesOf(sessionId)
+      .filter((m) => m.role === "user" && m.content.startsWith(CONTINUATION_LEAD))
+      .map((m) => m.content);
+  }
+
+  it("after two summaries in a turn, the next request carries no tools and the turn ends on a plain reply", async () => {
+    setUp();
+    summariseConversation.mockImplementation(() => Promise.resolve({ status: "done" }));
+    compactionDue.mockReturnValue(true);
+    script = [
+      reply([call("read_text_file", { path: "a.txt" })]),
+      reply([], "Here is what I have."),
+    ];
+    await sendMessage("t1", "read it");
+    await settle();
+
+    expect(summariseConversation).toHaveBeenCalledTimes(2);
+    expect(streamReply).toHaveBeenCalledTimes(2);
+    expect(offered[0]?.length).toBeGreaterThan(0);
+    expect(offered[1]).toEqual([]);
+    expect(savedTask()).toMatchObject({ status: "done", report: "Here is what I have." });
+  });
+
+  it("writes the normal continuation after the first summary and the answer-now one after the second", async () => {
+    setUp();
+    summariseConversation.mockImplementation(() => Promise.resolve({ status: "done" }));
+    compactionDue.mockReturnValue(true);
+    script = [reply([call("read_text_file", { path: "a.txt" })]), reply([], "done")];
+    await sendMessage("t1", "read it");
+    await settle();
+
+    const [first, second] = continuationsOf("s1");
+    expect(first).toContain("Do the remaining work now");
+    expect(second).toContain("Do not use tools now");
+    expect(second).toContain('"read it"');
+  });
+
+  it("a turn with one summary keeps its tools", async () => {
+    setUp();
+    summariseConversation.mockImplementation(() => Promise.resolve({ status: "done" }));
+    compactionDue.mockReturnValueOnce(true).mockReturnValue(false);
+    script = [reply([call("read_text_file", { path: "a.txt" })]), reply([], "done")];
+    await sendMessage("t1", "read it");
+    await settle();
+
+    expect(summariseConversation).toHaveBeenCalledTimes(1);
+    expect(offered[1]?.length).toBeGreaterThan(0);
+    expect(savedTask()).toMatchObject({ status: "done", report: "done" });
+  });
+
+  it("a summary that is not stored does not count towards the limit", async () => {
+    setUp();
+    summariseConversation.mockImplementation(() =>
+      Promise.resolve({ status: "failed", reason: "x" }),
+    );
+    compactionDue.mockReturnValueOnce(true).mockReturnValueOnce(true).mockReturnValue(false);
+    script = [reply([call("read_text_file", { path: "a.txt" })]), reply([], "done")];
+    await sendMessage("t1", "read it");
+    await settle();
+
+    expect(offered[1]?.length).toBeGreaterThan(0);
+    expect(continuationsOf("s1")).toEqual([]);
   });
 });

@@ -16,6 +16,10 @@ export const CONTINUATION_REQUEST_MAX_CHARS = 600;
 const CONTINUATION_REST =
   "The summary above says what is done so far. Do the remaining work now and give me the result; do not say it is finished unless it is.";
 
+/** The continuation's ask once the turn has summarised too often: no tools, write the result from what there is. */
+const ANSWER_NOW_REST =
+  "The summary above says what is done so far. Do not use tools now: write the final result from what you have, and say what you could not find.";
+
 /** The first line of the notes message a Dispatch request ends with. The notes are not the user's words. */
 export const NOTES_HEADING =
   "Your notes so far (written by you with dispatch_notes, not by the user):";
@@ -56,12 +60,14 @@ export function isGeneratedContinuation(content: string): boolean {
 /**
  * The user line after a summary. It restates the last request the user made, so the model keeps the task in view
  * and does not take the summary for the finished work. Generated lines are skipped when looking for that request, so
- * a second summary does not nest them. With no earlier request, a short generic line.
+ * a second summary does not nest them. With no earlier request, a short generic line. `answerNow` gives the line
+ * that stops research: no tools, the result from what there is.
  */
-export function continuationText(messages: readonly Message[]): string {
+export function continuationText(messages: readonly Message[], answerNow = false): string {
+  const rest = answerNow ? ANSWER_NOW_REST : CONTINUATION_REST;
   const request = lastUserRequest(messages);
-  if (request === null) return `${CONTINUATION_LEAD}. ${CONTINUATION_REST}`;
-  return `${CONTINUATION_LEAD}: "${quotedRequest(request)}". ${CONTINUATION_REST}`;
+  if (request === null) return `${CONTINUATION_LEAD}. ${rest}`;
+  return `${CONTINUATION_LEAD}: "${quotedRequest(request)}". ${rest}`;
 }
 
 /** The newest user message that is the user's own words: not a generated line, not empty. Null when there is none. */

@@ -7,10 +7,12 @@ import {
   freshStallState,
   judgeCall,
   judgeResult,
+  mustAnswerNow,
   NUDGE_LIMIT,
   REPEAT_LIMIT,
   REPEAT_NUDGE_TEXT,
   type StallState,
+  SUMMARY_LIMIT,
 } from "./dispatchGuards";
 
 const READ = { name: "read_text_file", arguments: '{"path":"a.txt"}' };
@@ -210,5 +212,18 @@ describe("judgeResult", () => {
     for (let i = 0; i < FAILURE_LIMIT - 1; i++) state = failing(state).state;
     state = judgeResult(state, "denied", "The user denied this call.").state;
     expect(state.failures).toBe(0);
+  });
+});
+
+describe("mustAnswerNow", () => {
+  it("is set to two summaries per turn", () => {
+    expect(SUMMARY_LIMIT).toBe(2);
+  });
+
+  it("is false below the limit and true from it on", () => {
+    expect(mustAnswerNow(0)).toBe(false);
+    expect(mustAnswerNow(SUMMARY_LIMIT - 1)).toBe(false);
+    expect(mustAnswerNow(SUMMARY_LIMIT)).toBe(true);
+    expect(mustAnswerNow(SUMMARY_LIMIT + 1)).toBe(true);
   });
 });

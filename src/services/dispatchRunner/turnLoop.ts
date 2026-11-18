@@ -1,9 +1,10 @@
 import { messagesOf, overridesOf } from "../../stores/chatStore";
 import { useDispatchStore } from "../../stores/dispatchStore";
-import type { Message } from "../../types";
+import type { Message, ToolDefinition } from "../../types";
 import { isContextOverflow } from "../../utils/chatError";
 import { effectiveCompaction } from "../../utils/compactionSettings";
 import { compactionDue } from "../../utils/compactionTrigger";
+import { mustAnswerNow } from "../../utils/dispatchGuards";
 import { stepLogLine } from "../../utils/dispatchLog";
 import {
   continuationText,
@@ -113,13 +114,14 @@ async function compactIfDue(turn: Turn, model: ModelRun): Promise<void> {
 }
 
 /**
- * Summarises the conversation and adds the line after the summary, which restates the user's last request. True
- * when the summary was stored.
+ * Summarises the conversation and adds the line after the summary, which restates the user's last request. The
+ * summary that reaches the limit gets the answer-now line. True when the summary was stored.
  */
 async function summarise(turn: Turn, model: ModelRun): Promise<boolean> {
   const outcome = await summariseConversation(turn.sessionId, model);
   if (outcome.status === "done") {
-    const line = continuationText(messagesOf(turn.sessionId));
+    turn.summaries += 1;
+    const line = continuationText(messagesOf(turn.sessionId), mustAnswerNow(turn.summaries));
     addMessage(turn.sessionId, userMessage(line));
     return true;
   }
@@ -182,12 +184,7 @@ async function requestStep(
   };
   const sent = historyWithNotes(history, taskNamed(turn.taskId).notes);
   const messageCountBefore = messagesOf(turn.sessionId).length;
-  const failure = await streamReply(
-    turn.sessionId,
-    sent,
-    request,
-    conversationTools(turn.sessionId),
-  );
+  const failure = await streamReply(turn.sessionId, sent, request, toolsFor(turn));
   finishStreaming();
   const reply = lastReply(messagesOf(turn.sessionId).slice(messageCountBefore));
   console.info(stepLogLine(attempt.step, reply));
@@ -200,6 +197,14 @@ async function requestStep(
     return retryRequest(turn, overflowRetried, { ...attempt, emptyRetries: retry });
   }
   return handleReply(turn, reply, model);
+}
+
+/**
+ * The tools a request offers. A turn that must answer offers none: an empty list adds no `tools` to the request
+ * (see apply_tools in src-tauri/src/commands/chat_helpers.rs). Otherwise the conversation's tools.
+ */
+function toolsFor(turn: Turn): ToolDefinition[] {
+  return mustAnswerNow(turn.summaries) ? [] : conversationTools(turn.sessionId);
 }
 
 /**
