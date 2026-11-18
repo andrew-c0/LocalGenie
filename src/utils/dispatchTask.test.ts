@@ -154,6 +154,7 @@ describe("patchForEnd", () => {
     expect(patchForEnd({ status: "done", answer: "All done." }, 9)).toEqual({
       status: "done",
       report: "All done.",
+      error: null,
       finishedAt: 9,
     });
   });

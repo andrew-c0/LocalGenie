@@ -107,7 +107,7 @@ export function dispatchActivityOf(task: DispatchTask): TrayActivity | null {
 export function patchForEnd(end: TurnEnd, finishedAt: number): DispatchPatch {
   switch (end.status) {
     case "done":
-      return { status: "done", report: end.answer, finishedAt };
+      return { status: "done", report: end.answer, error: null, finishedAt };
     case "failed":
       return { status: "failed", error: end.error, finishedAt };
     case "stopped":

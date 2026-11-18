@@ -24,3 +24,12 @@ export function spinNumber(
   if (max != null && value > max) value = max;
   return value;
 }
+
+/**
+ * The text a SpinButton shows for a number, with a fixed count of decimals. Fluent rounds a SpinButton's shown value
+ * to the decimals of its `step`, so a field with a 0.1 step would read 1.05 as 1.1; passing this as `displayValue`
+ * keeps every decimal the field's step allows.
+ */
+export function spinDisplayValue(value: number, decimals: number): string {
+  return value.toFixed(decimals);
+}

@@ -29,6 +29,7 @@ import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   type PendingAttachment,
 } from "../../utils/attachments";
+import { replyBelongsTo, summaryBelongsTo } from "../../utils/streamOwner";
 import { toast } from "../../utils/toast";
 import { AttachmentList, KIND_ICON } from "../chat/AttachmentList/AttachmentList";
 import { MessageComposer } from "../ui/MessageComposer/MessageComposer";
@@ -39,6 +40,15 @@ import "./ChatInput.css";
 /** Attach menu entries, in menu order. */
 const ATTACH_KINDS: AttachmentKind[] = ["image", "audio", "text"];
 
+/**
+ * The line under the field while the model is busy. A Dispatch turn names itself; a reply or summary of another
+ * chat is named too, so the locked field says why it cannot send.
+ */
+function busyNoteFor(dispatchRunning: boolean, otherChatBusy: boolean): string | null {
+  if (dispatchRunning) return "Dispatch is using the model";
+  return otherChatBusy ? "Another chat is using the model." : null;
+}
+
 export default function ChatInput() {
   const [text, setText] = useState("");
   /** Files picked for the next message. Sent with it, then cleared. */
@@ -46,16 +56,24 @@ export default function ChatInput() {
   const activeSessionId = useChatStore((s) => s.activeSessionId);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const compacting = useChatStore((s) => s.compacting);
+  const activeStream = useChatStore((s) => s.activeStream);
+  const toolRunSessionId = useChatStore((s) => s.toolRunSessionId);
+  const compactingSessionId = useChatStore((s) => s.compactingSessionId);
   const serverStatus = useModelStore((s) => s.serverStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
   const modelEntries = useActiveModelEntries(activeModelId);
   const retryFromMessageId = useChatStore((s) => s.retryFromMessageId);
   const setRetryFromMessageId = useChatStore((s) => s.setRetryFromMessageId);
-  /** A reply or a summary is in progress. The input waits, and stop ends whichever runs. */
+  /** A reply or a summary is in progress, in this chat or another. The input waits. */
   const busy = isStreaming || compacting;
   /** A Dispatch conversation's turn uses the model. The input stays off until that turn ends. */
   const dispatchRunning = useDispatchStore((s) => s.runningTaskId !== null);
   const locked = busy || dispatchRunning;
+  /** Stop is offered only for work this chat owns: its reply (or its tool run) or its summary. */
+  const ownsReply = replyBelongsTo(activeStream, toolRunSessionId, activeSessionId);
+  const ownsSummary =
+    activeSessionId !== null && summaryBelongsTo(compactingSessionId, activeSessionId);
+  const showStop = ownsReply || ownsSummary;
 
   /** Pick a file of one kind from the attach menu and read it for the next message. */
   const handleAttach = useCallback(
@@ -107,23 +125,25 @@ export default function ChatInput() {
   }, [text, pending, activeSessionId, locked, serverStatus.running]);
 
   /**
-   * Stop the reply being streamed, or the summary being written, whichever is running. A reply's tool
-   * loop stops too, so no further request or tool call runs. The stream's session is used when it has
-   * one; between requests (while a tool runs) the open chat is the loop's chat.
+   * Stops the reply or the summary this chat owns. A reply's tool loop stops too, so no further request or tool
+   * call runs. The ownership is read from the store now, so a stream of another conversation (a Dispatch turn, or
+   * another chat) is never cancelled from here.
    */
   const handleStop = useCallback(async () => {
+    if (activeSessionId === null) return;
+    const chat = useChatStore.getState();
     try {
-      if (compacting) {
+      if (summaryBelongsTo(chat.compactingSessionId, activeSessionId)) {
         await stopSummary();
         return;
       }
-      const loopSessionId = useChatStore.getState().activeStream?.sessionId ?? activeSessionId;
-      if (loopSessionId) abortToolLoop(loopSessionId);
+      if (!replyBelongsTo(chat.activeStream, chat.toolRunSessionId, activeSessionId)) return;
+      abortToolLoop(activeSessionId);
       await geniex.cancelChatCompletion();
     } catch (err) {
       console.error("Failed to stop generation:", err);
     }
-  }, [compacting, activeSessionId]);
+  }, [activeSessionId]);
 
   /** Handle retry. The request is cleared at once, so it runs once. */
   useEffect(() => {
@@ -134,7 +154,8 @@ export default function ChatInput() {
   }, [retryFromMessageId, activeSessionId, locked, setRetryFromMessageId]);
 
   const isDisabled = (!text.trim() && pending.length === 0) || locked || !serverStatus.running;
-  const stopLabel = compacting ? "Stop summarising" : "Stop generation";
+  const stopLabel = ownsSummary ? "Stop summarising" : "Stop generation";
+  const note = busyNoteFor(dispatchRunning, busy && !showStop);
 
   /** Kinds the active model cannot take are left out, not shown disabled. */
   const attachMenu = (
@@ -189,11 +210,11 @@ export default function ChatInput() {
         disabled={locked}
         leading={attachMenu}
         action={
-          busy
+          showStop
             ? { kind: "stop", label: stopLabel, onStop: handleStop }
             : { kind: "send", disabled: isDisabled, onSend: handleSend }
         }
-        note={dispatchRunning ? "Dispatch is using the model" : null}
+        note={note}
         tools={activeSessionId ? <ToolsChip mode="chat" sessionId={activeSessionId} /> : null}
       />
     </div>

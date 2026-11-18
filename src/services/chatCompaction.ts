@@ -63,7 +63,7 @@ async function summariseInto(
 ): Promise<SummaryOutcome> {
   const jobId = crypto.randomUUID();
   const chat = useChatStore.getState();
-  chat.setCompacting(jobId);
+  chat.setCompacting(jobId, sessionId);
   try {
     const result = await compactConversation({
       jobId,

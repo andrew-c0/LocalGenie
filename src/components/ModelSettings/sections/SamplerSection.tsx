@@ -1,7 +1,7 @@
 import { Slider, SpinButton, Subtitle1 } from "@fluentui/react-components";
 import { isRejected, rejectedReason } from "../../../utils/capabilityStatus";
-import { SAMPLING_RANGES } from "../../../utils/modelSettings";
-import { spinNumber } from "../../../utils/spinValue";
+import { REPETITION_PENALTY_DECIMALS, SAMPLING_RANGES } from "../../../utils/modelSettings";
+import { spinDisplayValue, spinNumber } from "../../../utils/spinValue";
 import { Body } from "../../ui/Typography/Typography";
 import SettingField from "../SettingField/SettingField";
 import type { ModelSettingsForm } from "../useModelSettingsForm";
@@ -18,6 +18,7 @@ export default function SamplerSection({ form, caps }: Props) {
   const temperature = settings.temperature ?? 0.7;
   const topP = settings.topP ?? 0.9;
   const minP = settings.minP ?? 0.05;
+  const repetitionPenalty = settings.repetitionPenalty ?? 1.1;
 
   return (
     <section className="model-settings__section">
@@ -104,7 +105,8 @@ export default function SamplerSection({ form, caps }: Props) {
       >
         <SpinButton
           disabled={isRejected(caps.repetitionPenalty)}
-          value={settings.repetitionPenalty ?? 1.1}
+          value={repetitionPenalty}
+          displayValue={spinDisplayValue(repetitionPenalty, REPETITION_PENALTY_DECIMALS)}
           min={SAMPLING_RANGES.repetitionPenalty.min}
           max={SAMPLING_RANGES.repetitionPenalty.max}
           step={SAMPLING_RANGES.repetitionPenalty.step}

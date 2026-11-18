@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  CYCLE_LIMIT,
+  CYCLE_NUDGE_TEXT,
   ERROR_SNIPPET_CHARS,
   FAILURE_LIMIT,
   freshStallState,
@@ -13,6 +15,12 @@ import {
 
 const READ = { name: "read_text_file", arguments: '{"path":"a.txt"}' };
 const LIST = { name: "list_directory", arguments: '{"path":"C:/notes"}' };
+const OTHER_READ = { name: READ.name, arguments: '{"path":"b.txt"}' };
+
+/** A list call for a folder no other call uses, so it never repeats. */
+function freshList(index: number) {
+  return { name: LIST.name, arguments: JSON.stringify({ path: `dir${index}` }) };
+}
 
 /** Runs calls through the guard one after another, keeping the state, and returns each verdict's kind. */
 function kindsOf(calls: { name: string; arguments: string }[]): string[] {
@@ -25,8 +33,9 @@ function kindsOf(calls: { name: string; arguments: string }[]): string[] {
 }
 
 describe("limits", () => {
-  it("are named and set to 3 repeats, 3 nudges and 6 failures", () => {
+  it("are named and set to 3 repeats in a row, 2 runs per turn, 3 nudges and 6 failures", () => {
     expect(REPEAT_LIMIT).toBe(3);
+    expect(CYCLE_LIMIT).toBe(2);
     expect(NUDGE_LIMIT).toBe(3);
     expect(FAILURE_LIMIT).toBe(6);
   });
@@ -61,42 +70,101 @@ describe("judgeCall", () => {
     ]);
   });
 
-  it("resets the repeat count when a different call comes, so a repeat later runs again", () => {
-    expect(kindsOf([READ, READ, READ, LIST, READ, READ, READ])).toEqual([
-      "run",
-      "run",
-      "run",
-      "run",
-      "run",
-      "run",
-      "run",
-    ]);
-  });
-
   it("does not count the same name with other arguments as a repeat", () => {
-    const other = { name: READ.name, arguments: '{"path":"b.txt"}' };
-    expect(kindsOf([READ, READ, READ, other, READ])).toEqual(["run", "run", "run", "run", "run"]);
+    expect(kindsOf([READ, OTHER_READ, READ, OTHER_READ])).toEqual(["run", "run", "run", "run"]);
   });
 
   it("keeps the nudge count for the whole turn, so a different call in between does not reset it", () => {
-    // Four repeats: the fourth is nudged. A different call runs. Then READ again is nudged a second time.
-    const calls = [READ, READ, READ, READ, LIST, READ, READ, READ, READ];
-    expect(kindsOf(calls)).toEqual([
-      "run",
-      "run",
-      "run",
-      "repeat",
-      "run",
-      "run",
-      "run",
-      "run",
-      "repeat",
-    ]);
+    // Four repeats: the fourth is nudged. A different call runs. Then READ is nudged again: it ran twice before.
+    const calls = [READ, READ, READ, READ, LIST, READ, READ];
+    expect(kindsOf(calls)).toEqual(["run", "run", "run", "repeat", "run", "repeat", "repeat"]);
     let state = freshStallState();
     for (const call of calls.slice(0, 4)) state = judgeCall(state, call).state;
     expect(state.nudges).toBe(1);
     for (const call of calls.slice(4)) state = judgeCall(state, call).state;
-    expect(state.nudges).toBe(2);
+    expect(state.nudges).toBe(3);
+  });
+});
+
+describe("judgeCall cycle", () => {
+  it("does not run a call the third time when it ran twice, not in a row", () => {
+    expect(kindsOf([READ, LIST, READ, LIST, READ])).toEqual(["run", "run", "run", "run", "repeat"]);
+  });
+
+  it("gives the cycle nudge text for a non-consecutive repeat, with no stop yet", () => {
+    let state = freshStallState();
+    for (const call of [READ, LIST, READ, LIST]) state = judgeCall(state, call).state;
+    expect(judgeCall(state, READ)).toMatchObject({
+      kind: "repeat",
+      nudge: CYCLE_NUDGE_TEXT,
+      stop: null,
+    });
+    expect(CYCLE_NUDGE_TEXT).toContain(`You already made this exact call ${CYCLE_LIMIT} times`);
+    expect(CYCLE_NUDGE_TEXT).toContain("dispatch_notes");
+  });
+
+  it("counts cycle nudges toward the nudge limit and ends the turn on the third", () => {
+    // READ runs twice, then is nudged three times, each time with a different call in between.
+    const calls = [
+      READ,
+      freshList(0),
+      READ,
+      freshList(1),
+      READ,
+      freshList(2),
+      READ,
+      freshList(3),
+      READ,
+    ];
+    let state = freshStallState();
+    const verdicts = calls.map((call) => {
+      const verdict = judgeCall(state, call);
+      state = verdict.state;
+      return verdict;
+    });
+    expect(verdicts.map((verdict) => verdict.kind)).toEqual([
+      "run",
+      "run",
+      "run",
+      "run",
+      "repeat",
+      "run",
+      "repeat",
+      "run",
+      "repeat",
+    ]);
+    const stops = verdicts.flatMap((verdict) => (verdict.kind === "repeat" ? [verdict.stop] : []));
+    expect(stops).toEqual([
+      null,
+      null,
+      "The model kept repeating the same tool call (read_text_file). Send a message to continue.",
+    ]);
+  });
+
+  it("does not count a call with other arguments toward the cycle of the first", () => {
+    expect(kindsOf([READ, LIST, READ, LIST, OTHER_READ])).toEqual([
+      "run",
+      "run",
+      "run",
+      "run",
+      "run",
+    ]);
+  });
+
+  it("does not let a call that was not run start a streak, so the next identical call is still judged", () => {
+    expect(kindsOf([READ, LIST, READ, LIST, READ, READ])).toEqual([
+      "run",
+      "run",
+      "run",
+      "run",
+      "repeat",
+      "repeat",
+    ]);
+  });
+
+  it("a streak still runs up to the repeat limit, even after the call ran twice before", () => {
+    // READ ran once, then LIST, then READ runs again (twice in all), then READ runs a third time in a row.
+    expect(kindsOf([READ, LIST, READ, READ, READ])).toEqual(["run", "run", "run", "run", "run"]);
   });
 });
 

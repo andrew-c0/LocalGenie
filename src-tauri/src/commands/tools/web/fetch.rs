@@ -477,13 +477,30 @@ mod tests {
     async fn live_pages_read_as_markdown() {
         let client = web_client().expect("client");
         let robots = RobotsCache::new();
-        let pages = [
-            "https://github.com/tauri-apps/tauri",
-            "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html",
-        ];
-        for url in pages {
-            let head = match fetch_page(url, 0, CONTENT_MAX_CHARS, &client, &robots).await {
-                Ok(output) => output.content.chars().take(4000).collect::<String>(),
+        // `LIVE_FETCH_URLS` (comma separated) replaces the default pages; `LIVE_FETCH_START` is the first
+        // character of the window; `LIVE_FETCH_SHOW` is how many characters of each page are printed.
+        let urls: Vec<String> = match std::env::var("LIVE_FETCH_URLS") {
+            Ok(list) => list.split(',').map(|url| url.trim().to_string()).collect(),
+            Err(_) => vec![
+                "https://github.com/tauri-apps/tauri".to_string(),
+                "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html".to_string(),
+            ],
+        };
+        let start = std::env::var("LIVE_FETCH_START")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(0);
+        let show = std::env::var("LIVE_FETCH_SHOW")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(4000);
+        for url in urls {
+            let head = match fetch_page(&url, start, CONTENT_MAX_CHARS, &client, &robots).await {
+                Ok(output) => {
+                    let total = output.content.chars().count();
+                    let shown = output.content.chars().take(show).collect::<String>();
+                    format!("[{total} characters in this window]\n{shown}")
+                }
                 Err(refusal) => refusal,
             };
             eprintln!("===== {url}\n{head}\n");

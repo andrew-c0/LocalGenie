@@ -68,7 +68,6 @@ export function ToolCard({ tool, children }: ToolCardProps) {
           </RadioGroup>
         </Field>
         <Meta>{TOOL_STATE_HELP[state]}</Meta>
-        <Meta>Dispatch tools are On unless you change them here.</Meta>
         <Field label="Dispatch">
           <RadioGroup
             layout="horizontal"
@@ -82,6 +81,7 @@ export function ToolCard({ tool, children }: ToolCardProps) {
           </RadioGroup>
         </Field>
         <Meta>{TOOL_STATE_HELP[dispatchState]}</Meta>
+        <Meta>Dispatch conversations use this unless you change it.</Meta>
         {children}
       </Flex>
     </SurfaceCard>

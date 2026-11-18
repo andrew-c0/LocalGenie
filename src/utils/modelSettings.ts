@@ -56,9 +56,15 @@ export const SAMPLING_RANGES = {
   topP: { min: 0, max: 1, step: 0.05 },
   topK: { min: 1, max: 100, step: 1 },
   minP: { min: 0, max: 1, step: 0.01 },
-  repetitionPenalty: { min: 1, max: 2, step: 0.1 },
+  repetitionPenalty: { min: 1, max: 2, step: 0.01 },
   maxTokens: { min: 256, max: 32768, step: 256 },
 } as const;
+
+/**
+ * Decimals a repetition penalty is shown with. Its step is 0.01, so the field shows two: the default 1.05 reads as
+ * 1.05, not 1.1 (see `spinDisplayValue`).
+ */
+export const REPETITION_PENALTY_DECIMALS = 2;
 
 /** Speculative decoding types accepted by `geniex serve --spec-type` (one at a time in the UI). */
 export const SPEC_TYPES = [

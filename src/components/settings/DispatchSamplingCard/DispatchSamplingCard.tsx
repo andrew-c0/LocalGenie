@@ -1,7 +1,7 @@
 import { Button, Card, Field, Slider, SpinButton, Spinner } from "@fluentui/react-components";
 import { ArrowResetRegular, SaveRegular } from "@fluentui/react-icons";
-import { SAMPLING_RANGES } from "../../../utils/modelSettings";
-import { spinNumber } from "../../../utils/spinValue";
+import { REPETITION_PENALTY_DECIMALS, SAMPLING_RANGES } from "../../../utils/modelSettings";
+import { spinDisplayValue, spinNumber } from "../../../utils/spinValue";
 import { Flex } from "../../ui/Flex/Flex";
 import { BodyStrong, Meta, SectionTitle } from "../../ui/Typography/Typography";
 import "./DispatchSamplingCard.css";
@@ -77,6 +77,7 @@ export default function DispatchSamplingCard() {
         >
           <SpinButton
             value={draft.repetitionPenalty}
+            displayValue={spinDisplayValue(draft.repetitionPenalty, REPETITION_PENALTY_DECIMALS)}
             min={SAMPLING_RANGES.repetitionPenalty.min}
             max={SAMPLING_RANGES.repetitionPenalty.max}
             step={SAMPLING_RANGES.repetitionPenalty.step}

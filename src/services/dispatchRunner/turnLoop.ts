@@ -5,7 +5,11 @@ import { isContextOverflow } from "../../utils/chatError";
 import { effectiveCompaction } from "../../utils/compactionSettings";
 import { compactionDue } from "../../utils/compactionTrigger";
 import { stepLogLine } from "../../utils/dispatchLog";
-import { CONTINUE_TEXT, dispatchPromptBlock, notesMessageText } from "../../utils/dispatchPrompt";
+import {
+  continuationText,
+  dispatchPromptBlock,
+  notesMessageText,
+} from "../../utils/dispatchPrompt";
 import { modelChangeFault } from "../../utils/dispatchStart";
 import type { TurnEnd } from "../../utils/dispatchTask";
 import { errorMessage } from "../../utils/errorMessage";
@@ -108,11 +112,15 @@ async function compactIfDue(turn: Turn, model: ModelRun): Promise<void> {
   if (due) await summarise(turn, model);
 }
 
-/** Summarises the conversation and adds the line after the summary. True when the summary was stored. */
+/**
+ * Summarises the conversation and adds the line after the summary, which restates the user's last request. True
+ * when the summary was stored.
+ */
 async function summarise(turn: Turn, model: ModelRun): Promise<boolean> {
   const outcome = await summariseConversation(turn.sessionId, model);
   if (outcome.status === "done") {
-    addMessage(turn.sessionId, userMessage(CONTINUE_TEXT));
+    const line = continuationText(messagesOf(turn.sessionId));
+    addMessage(turn.sessionId, userMessage(line));
     return true;
   }
   if (outcome.status === "failed") toast.error("Summary failed", outcome.reason);

@@ -1,7 +1,8 @@
-import { useChatStore } from "../stores/chatStore";
+import { messagesOf, useChatStore } from "../stores/chatStore";
 import { useDispatchStore } from "../stores/dispatchStore";
 import { useModelStore } from "../stores/modelStore";
 import type { DispatchTask } from "../types";
+import { continueAction } from "../utils/dispatchContinue";
 import { cutChars, patchForEnd, TITLE_MAX_CHARS } from "../utils/dispatchTask";
 import { errorMessage } from "../utils/errorMessage";
 import { shortModelKey } from "../utils/modelKey";
@@ -11,12 +12,14 @@ import { continueTask } from "./dispatchRunner";
 /**
  * Continues the interrupted conversations in the order given. The first one loads the model it recorded (the
  * runner does that, and a load shows a progress toast since the user is waiting); the others queue behind it,
- * each loading its own model when its turn starts. A conversation that cannot continue keeps its status, and an
- * error toast names the reason.
+ * each loading its own model when its turn starts. A conversation whose last reply already answers it is only
+ * ended, so it loads nothing. A conversation that cannot continue keeps its status, and an error toast names the
+ * reason.
  */
 export async function continueInterrupted(tasks: readonly DispatchTask[]): Promise<void> {
   const first = tasks[0];
-  const model = first ? recordedModelOf(first) : null;
+  const model =
+    first && continueAction(messagesOf(first.sessionId)) === "run" ? recordedModelOf(first) : null;
   if (model !== null && !isActive(model)) toast.info("Loading model", model);
   for (const task of tasks) {
     try {

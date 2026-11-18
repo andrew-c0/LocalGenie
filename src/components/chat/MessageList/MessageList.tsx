@@ -14,9 +14,14 @@ export interface MessageListProps {
   /** Names the view. A new value (another conversation or task) starts at the newest message. */
   viewKey: string;
   messages: Message[];
+  /** A reply is streaming in any conversation. It locks the message field and the message actions. */
   isStreaming: boolean;
-  /** A summary is being written. */
+  /** A summary is being written in any conversation. */
   compacting?: boolean;
+  /** The streaming reply is this conversation's. Only then the status line reads the stream. */
+  replyOwned: boolean;
+  /** The running summary is this conversation's. Only then the status line reads the summary. */
+  summaryOwned: boolean;
   /** No retry or delete on the messages (a Dispatch task's transcript). */
   readOnly?: boolean;
   /** The messages are a Dispatch conversation's transcript. */
@@ -35,6 +40,8 @@ export default function MessageList({
   messages,
   isStreaming,
   compacting = false,
+  replyOwned,
+  summaryOwned,
   readOnly = false,
   inDispatch = false,
   className,
@@ -48,7 +55,12 @@ export default function MessageList({
     last?.role === "user",
   );
 
-  const statusLabel = streamingStatusLabel(messages, isStreaming, compacting);
+  // The status line reads the reply and the summary of this conversation only; another one's work is not shown here.
+  const statusLabel = streamingStatusLabel(
+    messages,
+    isStreaming && replyOwned,
+    compacting && summaryOwned,
+  );
   // Messages a summary stands in for: they cannot be deleted or retried.
   const coveredIds = coveredMessageIds(messages);
   const lastUserMsgId = findLast(messages, (message) => message.role === "user")?.id;

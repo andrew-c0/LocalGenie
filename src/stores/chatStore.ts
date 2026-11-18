@@ -45,6 +45,13 @@ interface ChatState {
   compacting: boolean;
   /** Job of the running summary, for cancelling it. Null when none runs. */
   compactionJobId: string | null;
+  /** The conversation the running summary belongs to. Null when none runs. */
+  compactingSessionId: string | null;
+  /**
+   * The chat whose tool run is in progress. Between two requests of the run no stream is open, so this names the
+   * chat that holds the model. Null when no chat tool run is in progress.
+   */
+  toolRunSessionId: string | null;
   retryFromMessageId: string | null;
   /** Timestamp when the last send was triggered — used for generation stats. */
   lastSendTime: number;
@@ -68,8 +75,9 @@ interface ChatState {
   removeMessagesAfter: (sessionId: string, messageId: string) => void;
   setStreaming: (streaming: boolean) => void;
   setActiveStream: (stream: ActiveStream | null) => void;
-  /** Marks a summary as running under `jobId`, or clears the mark with null. */
-  setCompacting: (jobId: string | null) => void;
+  /** Marks a summary as running under `jobId` for `sessionId`, or clears the mark with null. */
+  setCompacting: (jobId: string | null, sessionId?: string) => void;
+  setToolRunSessionId: (sessionId: string | null) => void;
   setRetryFromMessageId: (id: string | null) => void;
   setLastSendTime: (time: number) => void;
   loadSessions: (sessions: ChatSession[]) => void;
@@ -91,6 +99,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeStream: null,
   compacting: false,
   compactionJobId: null,
+  compactingSessionId: null,
+  toolRunSessionId: null,
   retryFromMessageId: null,
   lastSendTime: 0,
 
@@ -295,8 +305,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ retryFromMessageId: id });
   },
 
-  setCompacting: (jobId: string | null) => {
-    set({ compacting: jobId !== null, compactionJobId: jobId });
+  setCompacting: (jobId: string | null, sessionId?: string) => {
+    set({
+      compacting: jobId !== null,
+      compactionJobId: jobId,
+      compactingSessionId: jobId === null ? null : (sessionId ?? null),
+    });
+  },
+
+  setToolRunSessionId: (sessionId: string | null) => {
+    set({ toolRunSessionId: sessionId });
   },
 
   setLastSendTime: (time: number) => {

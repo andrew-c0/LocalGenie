@@ -88,6 +88,24 @@ describe("setCompacting", () => {
     expect(useChatStore.getState().compacting).toBe(false);
     expect(useChatStore.getState().compactionJobId).toBeNull();
   });
+
+  it("records the session the summary belongs to, and forgets it when the mark clears", () => {
+    useChatStore.getState().setCompacting("job-2", "chat");
+    expect(useChatStore.getState().compactingSessionId).toBe("chat");
+
+    useChatStore.getState().setCompacting(null);
+    expect(useChatStore.getState().compactingSessionId).toBeNull();
+  });
+});
+
+describe("setToolRunSessionId", () => {
+  it("names the chat whose tool run is in progress, and clears it with null", () => {
+    useChatStore.getState().setToolRunSessionId("chat");
+    expect(useChatStore.getState().toolRunSessionId).toBe("chat");
+
+    useChatStore.getState().setToolRunSessionId(null);
+    expect(useChatStore.getState().toolRunSessionId).toBeNull();
+  });
 });
 
 describe("updateMessageToolCalls", () => {

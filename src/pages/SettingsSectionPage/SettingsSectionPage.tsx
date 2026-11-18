@@ -35,7 +35,7 @@ const PANELS: Record<SettingsRouteId, { subtitle: string; panel: ReactElement }>
   },
   "settings-tools": {
     subtitle:
-      "Tools a chat model may call, and the folders the file tools may read. All are off to start.",
+      "Tools a chat model may call, and the folders the file tools may read. Chat tools start off.",
     panel: <ToolsSettings />,
   },
   "settings-logs": {

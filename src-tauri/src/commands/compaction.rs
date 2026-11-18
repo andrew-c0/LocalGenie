@@ -41,6 +41,7 @@ Write plain text as bullet points, one per line, each starting with \"- \". Cove
 - what the user asked for;
 - what was answered or decided;
 - results and conclusions;
+- facts found, the URLs already read or searched, and what remains;
 - names, numbers, file names and identifiers, exactly as written;
 - open tasks.
 
@@ -477,6 +478,7 @@ mod tests {
             "300 words",
             "merge it with the newer messages",
             "no thinking",
+            "the URLs already read or searched, and what remains;",
         ] {
             assert!(SUMMARY_PROMPT.contains(rule), "prompt lacks: {rule}");
         }

@@ -7,13 +7,18 @@
  * `state.ts`. The other modules: `turnLoop` (the steps), `toolCalls` (a reply's calls), `queue` (start, queue
  * and end), `modelSwitch` (the model a conversation recorded), `records` (writes), `notices` and `chatGate`.
  */
-import { useChatStore } from "../../stores/chatStore";
+import { messagesOf, useChatStore } from "../../stores/chatStore";
 import { useDispatchStore } from "../../stores/dispatchStore";
 import { useToolApprovalStore } from "../../stores/toolApprovalStore";
+import {
+  continueAction,
+  FINISHED_REPORT_MAX_CHARS,
+  finalAnswerOf,
+} from "../../utils/dispatchContinue";
 import { turnRefusal } from "../../utils/dispatchStart";
-import { canContinue } from "../../utils/dispatchTask";
+import { canContinue, cutChars } from "../../utils/dispatchTask";
 import { startOrQueue } from "./queue";
-import { userMessage } from "./records";
+import { recordEnd, userMessage } from "./records";
 import {
   currentTurn,
   isQueued,
@@ -63,7 +68,8 @@ export async function sendMessage(taskId: string, text: string): Promise<void> {
 /**
  * Continues a stopped or interrupted conversation from its stored messages, without a new message. The model it
  * recorded is loaded first when another is loaded. A conversation behind a running turn is queued. Rejects with
- * the reason when it cannot continue; it then keeps its status.
+ * the reason when it cannot continue; it then keeps its status. A conversation whose last reply already answers it
+ * is only ended as done: no request is made, the model is not loaded and no notice is sent.
  */
 export async function continueTask(taskId: string): Promise<void> {
   const task = taskNamed(taskId);
@@ -71,6 +77,14 @@ export async function continueTask(taskId: string): Promise<void> {
     throw new Error(
       `Only a stopped or interrupted conversation can continue. This one is ${task.status}.`,
     );
+  }
+  const messages = messagesOf(task.sessionId);
+  if (continueAction(messages) === "finished") {
+    await recordEnd(taskId, {
+      status: "done",
+      answer: cutChars(finalAnswerOf(messages), FINISHED_REPORT_MAX_CHARS),
+    });
+    return;
   }
   const refusal = turnRefusal({
     own: ownStateOf(taskId),

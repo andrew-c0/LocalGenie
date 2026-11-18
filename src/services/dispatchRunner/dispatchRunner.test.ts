@@ -14,7 +14,7 @@ import type {
   ToolDefinition,
   ToolSpec,
 } from "../../types";
-import { REPEAT_NUDGE_TEXT } from "../../utils/dispatchGuards";
+import { CYCLE_NUDGE_TEXT, REPEAT_NUDGE_TEXT } from "../../utils/dispatchGuards";
 import { DISPATCH_BLOCK_ID, NOTES_HEADING } from "../../utils/dispatchPrompt";
 import type { TurnEnd } from "../../utils/dispatchTask";
 import type { ToolState } from "../../utils/toolAccess";
@@ -273,7 +273,9 @@ function setUp(...overrides: Partial<DispatchTask>[]): void {
     activeSessionId: null,
     isStreaming: false,
     compacting: false,
+    compactingSessionId: null,
     activeStream: null,
+    toolRunSessionId: null,
   });
 }
 
@@ -715,6 +717,53 @@ describe("continueTask", () => {
   it("refuses to continue a conversation that is not stopped or interrupted", async () => {
     setUp({ status: "done" });
     await expect(continueTask("t1")).rejects.toThrow("Only a stopped or interrupted conversation");
+  });
+
+  it("ends a conversation whose last reply already answers it: no request, no model load, no notice", async () => {
+    setUp({ status: "interrupted", error: "old error" });
+    useChatStore.getState().addMessage("s1", {
+      id: "u",
+      role: "user",
+      content: "Write it",
+      timestamp: 1,
+    });
+    useChatStore.getState().addMessage("s1", {
+      id: "a",
+      role: "assistant",
+      content: "Here it is.",
+      timestamp: 2,
+    });
+
+    await continueTask("t1");
+    await settle();
+
+    expect(streamReply).not.toHaveBeenCalled();
+    expect(activateModelMock).not.toHaveBeenCalled();
+    expect(notifyIfHidden).not.toHaveBeenCalled();
+    expect(showChatError).not.toHaveBeenCalled();
+    expect(savedTask()).toMatchObject({
+      status: "done",
+      report: "Here it is.",
+      error: null,
+    });
+    expect(savedTask().finishedAt).not.toBeNull();
+  });
+
+  it("keeps only the start of a long final reply as the report", async () => {
+    setUp({ status: "stopped" });
+    const long = "a".repeat(250);
+    useChatStore.getState().addMessage("s1", {
+      id: "a",
+      role: "assistant",
+      content: long,
+      timestamp: 2,
+    });
+
+    await continueTask("t1");
+    await settle();
+
+    expect(streamReply).not.toHaveBeenCalled();
+    expect(savedTask().report).toBe("a".repeat(200));
   });
 });
 
@@ -1603,15 +1652,19 @@ describe("the stall guard", () => {
     expect(notifyIfHidden).toHaveBeenCalledWith("Dispatch replied", `Dispatch stopped: ${reason}`);
   });
 
-  it("a different call between identical ones resets the repeat count, so they run again", async () => {
+  it("a different call between identical ones does not reset the run count: the repeat is not run", async () => {
     setUp();
     const other = () => reply([call("read_text_file", { path: "b.txt" })]);
-    script = [same(), same(), same(), other(), same(), same(), same(), reply([], "done")];
+    script = [same(), same(), same(), other(), same(), reply([], "done")];
     await sendMessage("t1", "read it");
     await settle();
 
-    expect(executeTool).toHaveBeenCalledTimes(7);
-    expect(savedTask()).toMatchObject({ status: "done" });
+    expect(executeTool).toHaveBeenCalledTimes(4);
+    expect(toolRowsOf("s1")[4]).toMatchObject({
+      content: CYCLE_NUDGE_TEXT,
+      toolRecord: { status: "denied" },
+    });
+    expect(savedTask()).toMatchObject({ status: "done", report: "done" });
   });
 
   it("ends the turn after six failed calls in a row, quoting the last error", async () => {

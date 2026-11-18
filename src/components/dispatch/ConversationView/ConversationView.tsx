@@ -3,6 +3,7 @@ import { useTurnAvailability } from "../../../hooks/useTurnAvailability";
 import { useChatStore } from "../../../stores/chatStore";
 import type { DispatchTask } from "../../../types";
 import { isBusy } from "../../../utils/dispatchTask";
+import { streamBelongsTo, summaryBelongsTo } from "../../../utils/streamOwner";
 import MessageList from "../../chat/MessageList/MessageList";
 import { Secondary } from "../../ui/Typography/Typography";
 import { ConversationNotes } from "../ConversationNotes/ConversationNotes";
@@ -25,6 +26,8 @@ export function ConversationView({ task }: ConversationViewProps) {
   const messages = useSessionMessages(task.sessionId);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const compacting = useChatStore((s) => s.compacting);
+  const activeStream = useChatStore((s) => s.activeStream);
+  const compactingSessionId = useChatStore((s) => s.compactingSessionId);
   const { blocker, queuedNote } = useTurnAvailability(task.id);
   const actions = useConversationActions(task.id);
   const switches = useSessionToolSwitches(task.sessionId);
@@ -48,6 +51,8 @@ export function ConversationView({ task }: ConversationViewProps) {
         messages={messages}
         isStreaming={isStreaming}
         compacting={compacting}
+        replyOwned={streamBelongsTo(activeStream, task.sessionId)}
+        summaryOwned={summaryBelongsTo(compactingSessionId, task.sessionId)}
         readOnly
         inDispatch
         className="conversation-canvas__transcript"

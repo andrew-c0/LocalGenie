@@ -62,12 +62,15 @@ function isStopped(sessionId: string): boolean {
  * Streaming state is cleared at the end, however the run ended.
  */
 export async function runToolRounds(sessionId: string, run: ModelRun): Promise<SendFailure | null> {
+  // The run owns the model between its requests too, when no stream is open (see `replyBelongsTo`).
+  useChatStore.getState().setToolRunSessionId(sessionId);
   try {
     return await loopRounds(sessionId, run);
   } finally {
     const chat = useChatStore.getState();
     chat.setStreaming(false);
     chat.setActiveStream(null);
+    chat.setToolRunSessionId(null);
   }
 }
 

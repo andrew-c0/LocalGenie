@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { spinNumber } from "./spinValue";
+import { spinDisplayValue, spinNumber } from "./spinValue";
 
 describe("spinNumber", () => {
   it("returns the value an arrow button reports", () => {
@@ -21,5 +21,20 @@ describe("spinNumber", () => {
     expect(spinNumber({ value: undefined, displayValue: "999999" }, 512, 32768)).toBe(32768);
     expect(spinNumber({ value: undefined, displayValue: "10" }, 512, 32768)).toBe(512);
     expect(spinNumber({ value: 700 }, 512, 600)).toBe(600);
+  });
+});
+
+describe("spinDisplayValue", () => {
+  it("shows the given number of decimals, so the default repetition penalty reads 1.05", () => {
+    expect(spinDisplayValue(1.05, 2)).toBe("1.05");
+  });
+
+  it("keeps a trailing zero to the decimal count", () => {
+    expect(spinDisplayValue(1.1, 2)).toBe("1.10");
+    expect(spinDisplayValue(0.3, 1)).toBe("0.3");
+  });
+
+  it("shows a whole number with no decimal point when there are none", () => {
+    expect(spinDisplayValue(2, 0)).toBe("2");
   });
 });
