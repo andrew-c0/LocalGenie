@@ -4,6 +4,9 @@ Run through these checks manually after building or deploying the app. Automated
 
 Only untested items are kept (tested ones were removed 2026-11-18; see git history and known-issues.md). Tags: **[needs you]** = needs your hands or machine (installer, updater, offline, notifications, tray, hardware); **[needs download/network]** = needs a model, runtime or the internet. Untagged items can be checked in the app with a loaded model.
 
+## Hub in a release build (2026-11-19 working tree, CSP host; not run)
+- [ ] The Hub browser and the download drawer load from Hugging Face in a release build (no "You appear to be offline"); then the GGUF projector matching group below can be tested. **[needs you]**
+
 ## GGUF projector matching and the drawer warning (2026-11-12 working tree; ticked = the user tested)
 - [ ] After that import the model's settings scan confirms vision (the chat Image attach is then enabled). **[needs download/network]**
 - [ ] A repo with only BF16 and Q8_0 projectors downloads the BF16 file (check the Downloads folder). **[needs download/network]**
