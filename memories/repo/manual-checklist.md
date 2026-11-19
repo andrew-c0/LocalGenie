@@ -7,21 +7,15 @@ Only untested items are kept (tested ones were removed 2026-11-18; see git histo
 ## Overview
 
 - [ ] Overview: with GenieX removed, Browse Models and Start Local Chat are disabled with the tooltip; "Models Installed" shows "—"; the "Open Runtimes" block opens Settings > Runtimes. **[needs you]**
-- [ ] Overview "Recent Generation Speeds" shows chat-based figures only.
 
 ## Models
 
 ### Landing
 
-- [ ] Models landing (`/models`): the installed count is the GenieX models plus the Playground models except OCR (OCR models are already GenieX models, so they are counted once). **[needs download/network]**
 
 ### Local
 
-- [ ] The Playground chip is last in the chip row and shows only while a Playground model is installed. It lists the models grouped by tool (Image generation, Image to image, Upscaling, Speech to text, Text to speech, Clean up and split, OCR). The audio group is labelled "Clean up and split" (not "Audio to audio"). **[needs download/network]**
-- [ ] The name filter applies to the Playground list; the Search button and Enter do not search Hugging Face there. **[needs download/network]**
-- [ ] Delete from that list: the dialog shows the size; the model leaves the list and the tool's selector; a file shared with another downloaded model (the Qwen3-4B encoder) is kept while the other model is installed. **[needs download/network]**
-- [ ] An OCR model listed here also appears under the GenieX models list after the import. **[needs download/network]**
-- [ ] Local page, Hugging Face search online: a search returns GGUF results (the search no longer comes back empty; this is the fixed bug). **[needs download/network]**
+- [ ] Delete from the Playground models page: the model leaves the list and the tool's selector; a file shared with another downloaded model (the Qwen3-4B encoder) is kept while the other model is installed. (The dialog showing the size and the shared-files note was seen, and cancelled.) **[needs download/network]**
 
 ### Hugging Face
 
@@ -59,21 +53,18 @@ Download each model and run it once.
 
 - [ ] Card layout and clipping: at narrow widths (down to the 860 px sidebar collapse) titles, capability icons, fact items and the RAM badge wrap or truncate without overlapping. Long model names truncate with the full name in the tooltip. **[needs download/network]**
 - [ ] Tooltips: hover and keyboard focus on each info icon (updated, details), each fact (task, params, quantisation, context, licence, disk), the RAM badge and the Hub downloads and likes; the text matches the card. **[needs download/network]**
-- [ ] Capability icons on a Hugging Face card: a known vision model, a tool-calling model and a thinking model show the matching icon, and the detail page says "(inferred)". On an installed model the icons match the confirmed scan (not the Hub guess). **[needs download/network]**
-- [ ] RAM verdicts: a small model shows a fit and a large one (for example 70B) shows "May not fit" on this PC; "estimate" appears when the parameter count is approximate. **[needs download/network]**
 - [ ] AI Hub card for a model whose info file cannot be read: the row shows with the `QAIRT · N chipsets` line. **[needs download/network]**
-- [ ] Search results: no variant list on the card (the quantisation picker is on the detail page), and no Installed pill on any card. **[needs download/network]**
-- [ ] AI Hub detail: Capabilities & compatibility, Specifications and About show for a model that has them and hide when empty; TTFT and Response Rate are not listed; the research paper link opens in the browser. **[needs download/network]**
-- [ ] Hugging Face detail: Specifications shows Created, Updated, Downloads (30 days and all time), Likes, Quantised versions and the Base model link. With the second (`expand[]`) request blocked, the page still loads and the two counts are missing. **[needs download/network]**
-- [ ] Installed model page: Specifications shows precision, context window, parameters and RAM needed from the stored row; the card's info tooltip reads "Source: Hugging Face" for `hf` and "Source: Qualcomm AI Hub" for `aihub`. **[needs download/network]**
+- [ ] AI Hub detail: the sections hide when a model has nothing for them; the research paper link opens in the browser. (Capabilities, Specifications and About showing for Gemma-4-E2B-it, with no TTFT or Response Rate, were seen.) **[needs download/network]**
+- [ ] Hugging Face detail: with the second (`expand[]`) request blocked, the page still loads and the two counts are missing. (The Specifications fields were seen.) **[needs download/network]**
+- [ ] The installed model card's info tooltip reads "Source: Hugging Face" for `hf` and "Source: Qualcomm AI Hub" for `aihub`. (The stored Specifications were seen.) **[needs download/network]**
 - [ ] Hugging Face page link on a model detail opens in the system browser (through `openExternal`), not in the app window. **[needs download/network]**
 
 ## Chat
 
 ### Messages and conversations
 
-- [ ] Chat: streaming updates in place, `chat-done` records generation stats, retry removes later messages in both Zustand and SQLite.
-- [ ] Pin: a pinned conversation lists first and keeps its place after a reload; unpin returns it to recency order.
+- [ ] Chat: retry removes later messages in both Zustand and SQLite. (Streaming and the generation stats under a reply were seen.)
+- [ ] Pin: a pinned conversation keeps its place after a reload. (Listing first, and unpin returning it to recency order, were seen.)
 
 ### Attachments
 
@@ -128,12 +119,11 @@ Download each model and run it once.
 - [ ] Migration: an existing database opens, chats are unchanged, no Dispatch conversation shows in the chat list, recent conversations or the new-chat draft.
 - [ ] Request approval in Dispatch: a conversation with a tool set to Request approval asks in the approval dialog (Allow once, Allow for this conversation, Deny); while it asks the conversation shows Needs you, the chat input stays locked, a queued conversation waits, and a hidden window gets "Dispatch needs your approval" with "<tool> in <title>"; Deny gives the model the denied result and the turn goes on; Stop cancels the question and ends the turn as Stopped; the tray reads "Dispatch: waiting for your approval on <title>". Close the app while it asks: the conversation shows Interrupted after reopening (the startup sweep in `commands/dispatch.rs` moves needs_you to interrupted). **[needs you]**
 - [ ] Separate Dispatch tool settings: set one tool to On under Dispatch while Chat stays on Request approval; the chat still asks for it, the Dispatch conversation runs it without asking; set Dispatch back to Request approval or Off and the chat is unchanged. A tool never set under Dispatch is On there whatever its chat state (Off or Request approval too), and a new or MCP tool with no Dispatch state is On; an explicit Dispatch Off or Request approval wins over the default.
-- [ ] No model or server stopped: the field says why it cannot send.
 - [ ] A real multi-step request (list a folder, read files, summarise): the model calls tools, the transcript follows, the answer ends the turn as "Ready", a notification "Dispatch replied" shows when the window is hidden. **[needs you]**
 - [ ] Restart while a turn runs: the conversation shows Interrupted; Continue works. A queued one left over does not start by itself; sending a message starts it.
 - [ ] A long run with a real model (60+ tool rounds): it neither stops by itself nor loops without end; note how the model behaves (no step, time or repeat limit exists, Stop is the only guard).
 - [ ] dispatch_notes: the model keeps notes, they show in the collapsible section and are used in the next request.
-- [ ] Delete: confirmation first; a working or queued conversation cannot be deleted from the header; the transcript is gone after.
+- [ ] Delete: a working or queued conversation cannot be deleted from the header. (The confirmation first, and the transcript gone after, were seen.)
 - [ ] /dispatch/<unknown id> shows "This conversation no longer exists." with a way back; the breadcrumb shows the title.
 - [ ] Offline: with the network off, a web_search call becomes an error row and the turn carries on. **[needs you]**
 - [ ] Resume after an incomplete run: send a long message, close the app (Exit) while it works, reopen: one dialog "Dispatch was interrupted ... Continue it with the previously selected model?"; Continue starts the GenieX server, loads that model and carries on; "Not now" marks the conversation Stopped and the dialog does not return. With two interrupted conversations (also on different models) the dialog lists them and they run one after another, each on its own model. **[needs you]**
@@ -151,12 +141,12 @@ Download each model and run it once.
 
 ### Lists
 
-- [ ] Benchmarks, Prompt Library and Test Runs: a row opens its item page; the row's "…" menu deletes after a confirm; a prompt used by a suite is refused with the reason; an empty list shows its empty state.
+- [ ] Benchmarks, Prompt Library and Test Runs: a row opens its item page; the row's "…" menu deletes an unused prompt or suite after a confirm. (The empty states, the confirm dialog and the refusal for a prompt used by a suite, "This prompt is used by LG suite. Remove it from those suites first.", were seen.)
 
 ### Run
 
 - [ ] Benchmarks, Run: start a suite, go to Chat or Overview, come back: the progress and the end of the run are shown.
-- [ ] Benchmarks, Run: with a model loaded, start a suite; each step appears as it finishes; the run appears in Runs; Cancel keeps the finished steps; chat and model load are refused until the run ends. Compute and the Windows power plan/battery are recorded for the run (not yet verified against a live model).
+- [ ] Benchmarks, Run: Cancel keeps the finished steps; chat and model load are refused until the run ends; the Windows power plan and battery are recorded for the run. (A one-step suite on LFM2.5-1.2B on the NPU ran after the consent dialog, showed its step and appeared in Runs with compute NPU, TTFT 51 ms and 23.5 tokens/s.)
 
 ### Runs
 
@@ -279,9 +269,9 @@ Limits are in `known-issues.md` ("Playground selector and downloads").
 
 ### App
 
-- [ ] Settings > Compact long conversations: off by default; the threshold slider (50 to 90, default 70) appears only when the switch is on; Save persists after a restart.
+- [ ] Settings > Compact long conversations: the threshold slider runs from 50 to 90, and Save persists after a restart. (Off by default, and the slider (default 70) only appearing with the switch on, were seen.)
 - [ ] Settings: port save/probe persists.
-- [ ] Dispatch sampling card (Settings > Application & Runtime, below Server runtime): the fields show 0.3, 0.90, 1.05 with Top K, Min P and Max tokens empty; a change saves ("Dispatch sampling saved"), survives a restart; "Reset to defaults" fills the draft and only Save stores it; the two help lines read as written.
+- [ ] Dispatch sampling card: the saved values survive a restart. (The defaults 0.3, 0.90, 1.05 with the other fields empty, the "Dispatch sampling saved" toast, and Reset to defaults only filling the draft until Save were seen.)
 
 ### Runtimes: GenieX CLI
 
@@ -306,7 +296,7 @@ Limits are in `known-issues.md` ("Playground selector and downloads").
 
 ### Tools
 
-- [ ] Settings > Tools: the DuckDuckGo source is off by default; its row reads "Contacts duckduckgo.com." and the description says it is best-effort, unofficial, may stop working, and that the query goes to DuckDuckGo; turning it on survives a restart.
+- [ ] Settings > Tools: turning the DuckDuckGo source on survives a restart. (Off by default and its wording were seen.)
 
 ### About
 
@@ -328,7 +318,6 @@ Limits are in `known-issues.md` ("Playground selector and downloads").
 
 ### Sidebar usage chart
 
-- [ ] No model loaded and no job: no usage card in the sidebar.
 - [ ] Same job with no model loaded: the RAM section shows System only, with no "Model / context" row. **[needs download/network]**
 - [ ] Image to image and upscaling: CPU line only. Speech: CPU line only. **[needs download/network]**
 - [ ] Legend latest % matches the last point of its line. A target this device gives no counter for is not listed. **[needs download/network]**
