@@ -51,6 +51,9 @@ export const UPSCALE_NO_MODEL_REASON = "Choose an upscaling model first.";
 
 export const UPSCALE_DOWNLOAD_FIRST_REASON = "Download the model first.";
 
+/** The Upscale button's reason for a picture over the limit; the full size warning shows under the picker. */
+export const UPSCALE_OVERSIZE_REASON = "Resize the picture first.";
+
 export const UPSCALE_JOB_RUNNING_REASON = "An image is already being processed.";
 
 export const UPSCALE_DONE_TITLE = "Image upscaled";

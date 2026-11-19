@@ -18,6 +18,7 @@ import {
   UPSCALE_DOWNLOAD_FIRST_REASON,
   UPSCALE_JOB_RUNNING_REASON,
   UPSCALE_NO_MODEL_REASON,
+  UPSCALE_OVERSIZE_REASON,
   UPSCALE_PHASE_LABELS,
   upscalePartLabel,
 } from "./upscaleText";
@@ -47,11 +48,15 @@ export function buildUpscaleRequest(
   return { jobId, modelId: model.id, inputPath };
 }
 
-/** What stops Upscale, in the order the user can fix it. Null when it can run. A too-large picture does not block: the warning shows and the backend has the final say. */
+/**
+ * What stops Upscale, in the order the user can fix it. Null when it can run. A picture whose size is not known yet
+ * does not block; once it is known, a picture over the limit blocks. The size warning under the picker says why in full; the button's reason is short.
+ */
 export function upscaleBlockedReason(gate: {
   runtime: RuntimeStatus;
   model: UpscaleModel | null;
   inputPath: string | null;
+  inputSize: ImageSize | null;
   jobRunning: boolean;
 }): string | null {
   if (gate.jobRunning) return UPSCALE_JOB_RUNNING_REASON;
@@ -60,7 +65,7 @@ export function upscaleBlockedReason(gate: {
   if (!gate.model) return UPSCALE_NO_MODEL_REASON;
   if (!gate.model.downloaded) return UPSCALE_DOWNLOAD_FIRST_REASON;
   if (!gate.inputPath) return NO_INPUT_REASON;
-  return null;
+  return gate.inputSize && isOversizedInput(gate.inputSize) ? UPSCALE_OVERSIZE_REASON : null;
 }
 
 /** The running job when it is of the given kind, else null. Each Playground image tab shows only its own jobs. */

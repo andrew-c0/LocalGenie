@@ -4,25 +4,9 @@ Run through these checks manually after building or deploying the app. Automated
 
 Only untested items are kept (tested ones were removed 2026-11-18; see git history and known-issues.md). Tags: **[needs you]** = needs your hands or machine (installer, updater, offline, notifications, tray, hardware); **[needs download/network]** = needs a model, runtime or the internet. Untagged items can be checked in the app with a loaded model.
 
-## Playground: Image upscaling redesign (2026-11-05; not run, none ticked)
+## Playground: Image upscaling redesign (2026-11-05; the user tested all but the shared pieces)
 
 Limits are in `known-issues.md` ("Image upscaling and Image to image redesign").
-
-Empty and first step:
-- [ ] With no model or no picture, Upscale is disabled and still focusable: hover or Tab to it shows the reason.
-
-Input and job:
-- [ ] A PNG or JPG over the limits shows the size warning above the controls.
-- [ ] Upscale: the input preview is replaced by the centred progress block (phase, bar, elapsed) with Cancel under it. After Cancel the input preview returns with the cancelled message under it. **[needs download/network]**
-
-Result:
-- [ ] After a success the upscaled picture fills the stage. The controls row shows a timer icon with the duration (hover: "Upscaled in ...") and a folder icon (hover: the saved path) on the left, and Show in folder and Clear on the right. **[needs download/network]**
-- [ ] Click the upscaled picture: it opens larger; Open location works. **[needs download/network]**
-- [ ] Compare is off until both pictures have loaded, then enabled. Compare shows Before and After (4x) labels. Dragging anywhere in the box moves the divider; Tab to the handle, then the arrows move it 2 percent and Shift+arrows 10 percent; Home and End go to the edges. **[needs download/network]**
-- [ ] Turning Compare on does not change the box's shape (no jump). Compare off returns to the single picture. **[needs download/network]**
-- [ ] Clear returns to the first step with the picker and Upscale. Choosing the same file again shows its saved result again (expected from code). **[needs download/network]**
-- [ ] Leave the Playground tab and come back during and after a job: the stage matches the job or the saved result. **[needs download/network]**
-- [ ] A failed or cancelled job shows its message in the stage with the input preview above it. **[needs download/network]**
 
 Shared pieces:
 - [ ] Help labels (compute and generate fields) show their text on hover and focus.

@@ -60,6 +60,7 @@ export default function ImageUpscalingPanel() {
     runtime: runtime.status,
     model: selected,
     inputPath: input?.path ?? null,
+    inputSize: input?.sourceSize ?? null,
     jobRunning: anyJob !== null,
   });
 

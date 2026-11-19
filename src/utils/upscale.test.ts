@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ImageJob, ImageResult, UpscaleModel } from "../types";
+import { NO_INPUT_REASON } from "./imageToImageText";
 import {
   buildUpscaleRequest,
   isOversizedInput,
@@ -10,6 +11,12 @@ import {
   upscaleBlockedReason,
   upscalePhaseLabel,
 } from "./upscale";
+import {
+  UPSCALE_DOWNLOAD_FIRST_REASON,
+  UPSCALE_JOB_RUNNING_REASON,
+  UPSCALE_NO_MODEL_REASON,
+  UPSCALE_OVERSIZE_REASON,
+} from "./upscaleText";
 
 const model = (overrides: Partial<UpscaleModel> = {}): UpscaleModel => ({
   id: "realesrgan-x4plus-anime-6b",
@@ -77,11 +84,17 @@ describe("upscaleBlockedReason", () => {
     runtime: "installed" as const,
     model: model(),
     inputPath: "C:/in.png",
+    inputSize: { width: 512, height: 512 },
     jobRunning: false,
   };
+  const oversized = { width: 1920, height: 1080 };
 
   it("is null when everything is in place", () => {
     expect(upscaleBlockedReason(ready)).toBeNull();
+  });
+
+  it("does not block while the picture's size is still unknown", () => {
+    expect(upscaleBlockedReason({ ...ready, inputSize: null })).toBeNull();
   });
 
   it("names the first thing to fix", () => {
@@ -92,6 +105,25 @@ describe("upscaleBlockedReason", () => {
       /Download/,
     );
     expect(upscaleBlockedReason({ ...ready, inputPath: null })).toMatch(/input image/);
+  });
+
+  it("blocks a picture over the limit with a short reason", () => {
+    expect(upscaleBlockedReason({ ...ready, inputSize: oversized })).toBe(UPSCALE_OVERSIZE_REASON);
+  });
+
+  it("puts the size check after the picture and model checks", () => {
+    const tooLarge = { ...ready, inputSize: oversized };
+    expect(upscaleBlockedReason({ ...tooLarge, model: null })).toBe(UPSCALE_NO_MODEL_REASON);
+    expect(upscaleBlockedReason({ ...tooLarge, model: model({ downloaded: false }) })).toBe(
+      UPSCALE_DOWNLOAD_FIRST_REASON,
+    );
+    expect(upscaleBlockedReason({ ...tooLarge, inputPath: null })).toBe(NO_INPUT_REASON);
+    expect(upscaleBlockedReason({ ...tooLarge, runtime: "missing" })).toMatch(
+      /Settings > Runtimes/,
+    );
+    expect(upscaleBlockedReason({ ...tooLarge, jobRunning: true })).toBe(
+      UPSCALE_JOB_RUNNING_REASON,
+    );
   });
 });
 
