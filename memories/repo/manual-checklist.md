@@ -4,31 +4,6 @@ Run through these checks manually after building or deploying the app. Automated
 
 Only untested items are kept (tested ones were removed 2026-11-18; see git history and known-issues.md). Tags: **[needs you]** = needs your hands or machine (installer, updater, offline, notifications, tray, hardware); **[needs download/network]** = needs a model, runtime or the internet. Untagged items can be checked in the app with a loaded model.
 
-## GGUF projector matching and the drawer warning (2026-11-12 working tree; ticked = the user tested)
-- [ ] After that import the model's settings scan confirms vision (the chat Image attach is then enabled). **[needs download/network]**
-- [ ] After a Hugging Face download the "Model ready" toast ends with the Reload & Scan hint (not for AI Hub or OCR downloads); after the scan the selector shows the icons. **[needs download/network]**
-
-## Native tools for chat models (2026-11-11 working tree, phases 1-3; the user tested the approval dialog and the Tools list; the items are not ticked one by one)
-- [ ] Approval dialog with Request approval: Approve once, Allow for this chat (the next call runs without asking) and Deny (the model gets the denied result and carries on).
-- [ ] Stop while an approval prompt is open: the prompt closes, the call is recorded as cancelled and no request follows.
-- [ ] Reload a chat whose reply only made tool calls (no text): the chat and its tool lines come back.
-- [ ] Offline `web_fetch` shows Failed on its line, and the reply goes on. **[needs you]**
-- [ ] `web_fetch` of a non-UTF-8 page (for example windows-1252 or Shift_JIS): the text reads correctly, with no replacement marks. **[needs download/network]**
-- [ ] Settings > Tools: the states, the allowed folders and the search sources survive a restart; the folder picker adds a folder.
-- [ ] Plain chat with no tools on, after the change to how a send waits for the end of a reply: the reply is saved and the next send works.
-- [ ] `read_image` with a model that does not have vision (the result says so); after a restart (the saved picture still opens); after deleting the picture file (a failed result, no crash).
-- [ ] `list_directory` without a path lists the allowed folders.
-- [ ] Real `web_fetch` and `web_search` against live sites, one check for each enabled source. **[needs download/network]**
-
-## Native tools: per-chat tools chip and image preview (2026-11-12, phase 5; ticked = the user tested)
-- [ ] A deleted picture file on an expanded `read_image` row shows "File no longer on this device"; re-expanding after the file returns shows it again (no cache).
-- [ ] "Use in this chat" off for a tool: the count drops, and a send in that chat does not offer the tool; another chat still has it.
-- [ ] A model that calls a tool switched off for the chat gets "This tool is turned off." on that line.
-- [ ] Switch a tool off in a chat, delete the chat, open a new chat: the new chat's switches are all on.
-- [ ] Allow for this chat on a call, then delete that chat: a new chat asks for that tool again.
-- [ ] `web_search` On with no search source on: the chip count leaves it out, and its row reads "No search source on" with its switch disabled. Turning a source on brings the count and the switch back.
-- [ ] After a restart the per-chat switches are on again (expected: memory only).
-
 ## Playground: Image upscaling redesign (2026-11-05; not run, none ticked)
 
 Limits are in `known-issues.md` ("Image upscaling and Image to image redesign").

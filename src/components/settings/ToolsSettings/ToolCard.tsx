@@ -9,6 +9,7 @@ import {
   TOOL_STATE_LABEL,
   TOOL_STATES,
 } from "../../../utils/toolAccess";
+import { toolCardLock } from "../../../utils/toolCardLock";
 import { toolLabel } from "../../../utils/toolLines";
 import { Flex } from "../../ui/Flex/Flex";
 import { SurfaceCard } from "../../ui/SurfaceCard/SurfaceCard";
@@ -38,7 +39,10 @@ export function ToolCard({ tool, children }: ToolCardProps) {
   const setState = useToolStore((s) => s.setState);
   const dispatchState = useToolStore((s) => dispatchStateOf(tool.name, s.dispatchStates));
   const setDispatchState = useToolStore((s) => s.setDispatchState);
+  const enabledSearchSources = useToolStore((s) => s.enabledSearchSources);
+  const searchSources = useToolStore((s) => s.searchSources);
   const note = TOOL_NOTES[tool.name];
+  const lock = toolCardLock(tool, enabledSearchSources, searchSources);
   const isMcp = tool.source === "mcp";
 
   return (
@@ -54,11 +58,13 @@ export function ToolCard({ tool, children }: ToolCardProps) {
         )}
         {tool.risk === "network" && <Meta>Uses the internet</Meta>}
         <Secondary>{tool.description}</Secondary>
+        {lock.note && <Meta>{lock.note}</Meta>}
         {note && <Secondary>{note}</Secondary>}
         <Field label="Chat">
           <RadioGroup
             layout="horizontal"
             aria-label={`Chat access to ${label}`}
+            disabled={lock.locked}
             value={state}
             onChange={(_, data) => void setState(tool.name, parseToolState(data.value))}
           >
@@ -72,6 +78,7 @@ export function ToolCard({ tool, children }: ToolCardProps) {
           <RadioGroup
             layout="horizontal"
             aria-label={`Dispatch access to ${label}`}
+            disabled={lock.locked}
             value={dispatchState}
             onChange={(_, data) => void setDispatchState(tool.name, parseToolState(data.value))}
           >
