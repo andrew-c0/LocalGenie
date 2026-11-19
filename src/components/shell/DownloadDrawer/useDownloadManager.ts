@@ -10,6 +10,7 @@ import {
   useDownloadStore,
 } from "../../../stores/downloadStore";
 import type { RuntimeInstallProgress } from "../../../types";
+import { modelReadyMessage } from "../../../utils/modelReadyMessage";
 import { installStepOf, type SpeedSample, sampleSpeed } from "../../../utils/runtimeInstall";
 import { runtimeStageLabel } from "../../../utils/runtimeProgress";
 import { refreshModelList } from "../../../utils/runtimeUsage";
@@ -85,7 +86,10 @@ export function useDownloadManager() {
     const target = importTargetOf(downloads, payload.model) ?? payload.model;
     const isAihub = downloads.some((d) => d.id === target && d.aihub);
     setStatus(target, "finished");
-    toast.success("Model ready", `${payload.model} is imported and available to load.`);
+    // An import the Models tab started (not an AI Hub zip, not an OCR model on its own entry) has no confirmed
+    // capabilities yet, so the toast says how to get the selector icons.
+    const scanHint = !isAihub && target === payload.model;
+    toast.success("Model ready", modelReadyMessage(payload.model, scanHint));
     // The Rust import writes the AI Hub model's row itself, so only the library list refreshes.
     if (isAihub) void refreshModelList();
     else void refreshAfterImport(payload.model);

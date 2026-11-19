@@ -4,15 +4,9 @@ Run through these checks manually after building or deploying the app. Automated
 
 Only untested items are kept (tested ones were removed 2026-11-18; see git history and known-issues.md). Tags: **[needs you]** = needs your hands or machine (installer, updater, offline, notifications, tray, hardware); **[needs download/network]** = needs a model, runtime or the internet. Untagged items can be checked in the app with a loaded model.
 
-## Hub in a release build (2026-11-19 working tree, CSP host; not run)
-- [ ] The Hub browser and the download drawer load from Hugging Face in a release build (no "You appear to be offline"); then the GGUF projector matching group below can be tested. **[needs you]**
-
 ## GGUF projector matching and the drawer warning (2026-11-12 working tree; ticked = the user tested)
 - [ ] After that import the model's settings scan confirms vision (the chat Image attach is then enabled). **[needs download/network]**
-- [ ] A repo with only BF16 and Q8_0 projectors downloads the BF16 file (check the Downloads folder). **[needs download/network]**
-- [ ] A projector that fails with a 404 (not a network error): the card shows "Projector not downloaded: <name>. Vision will not work for this model." in the warning colour, in the active state and after the download ends (history state); the model still imports and the toast appears. Not run. **[needs download/network]**
-- [ ] The warning line wraps without overlapping the buttons in a narrow window. Not run. **[needs download/network]**
-- [ ] A model imported from an affected repo before the fix has no projector (expected); a re-download gives it one. **[needs download/network]**
+- [ ] After a Hugging Face download the "Model ready" toast ends with the Reload & Scan hint (not for AI Hub or OCR downloads); after the scan the selector shows the icons. **[needs download/network]**
 
 ## Native tools for chat models (2026-11-11 working tree, phases 1-3; the user tested the approval dialog and the Tools list; the items are not ticked one by one)
 - [ ] Approval dialog with Request approval: Approve once, Allow for this chat (the next call runs without asking) and Deny (the model gets the denied result and carries on).
