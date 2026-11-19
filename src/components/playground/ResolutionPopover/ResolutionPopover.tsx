@@ -15,11 +15,14 @@ interface ResolutionPopoverProps {
   step?: number;
   /** Replaces the native-size hint. Left out to show the model's native size. */
   hint?: string;
+  /** True while a job runs: the button is off and no size editor is mounted. */
+  disabled?: boolean;
 }
 
 /**
  * The picture size as a button that shows "width x height". It opens the size editor in a popover, so the size is
- * out of the way until it is needed. The button stays usable while a job runs, as the size is editable then.
+ * out of the way until it is needed. While `disabled` (a job runs) the button is off and no popover is mounted: an
+ * editor that was open closes, and the size cannot be edited until the job ends (success, failure or cancel).
  */
 export function ResolutionPopover({
   width,
@@ -28,14 +31,19 @@ export function ResolutionPopover({
   onChange,
   step,
   hint,
+  disabled = false,
 }: ResolutionPopoverProps) {
+  const trigger = (
+    <Button appearance="secondary" icon={<ResizeRegular />} disabled={disabled}>
+      {sizeLabel(width, height)}
+    </Button>
+  );
+
+  if (disabled) return trigger;
+
   return (
     <Popover positioning="below-end">
-      <PopoverTrigger disableButtonEnhancement>
-        <Button appearance="secondary" icon={<ResizeRegular />}>
-          {sizeLabel(width, height)}
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger disableButtonEnhancement>{trigger}</PopoverTrigger>
       <PopoverSurface>
         <div className="resolution-popover__body">
           <ImageSizeSection

@@ -16,6 +16,8 @@ interface EditHeaderActionProps {
   comparing: boolean;
   compareReady: boolean;
   onToggleCompare: () => void;
+  /** True while an edit runs. The size button is off then. */
+  jobRunning: boolean;
 }
 
 /** The card header of image to image: the picture size button and, once there is a result, Compare. */
@@ -28,6 +30,7 @@ export function EditHeaderAction({
   comparing,
   compareReady,
   onToggleCompare,
+  jobRunning,
 }: EditHeaderActionProps) {
   return (
     <Flex gap="m" align="center">
@@ -38,6 +41,7 @@ export function EditHeaderAction({
         onChange={onSizeChange}
         step={EDIT_SIZE_STEP}
         hint={EDIT_SIZE_HINT}
+        disabled={jobRunning}
       />
       {pictureShown && (
         <CompareToggle checked={comparing} disabled={!compareReady} onToggle={onToggleCompare} />

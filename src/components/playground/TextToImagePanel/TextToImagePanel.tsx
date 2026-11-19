@@ -95,6 +95,7 @@ export default function TextToImagePanel({ onOpenImageToImage }: TextToImagePane
               height={form.height}
               nativeSize={selected?.defaults ?? null}
               onChange={setForm}
+              disabled={job !== null}
             />
           }
         >

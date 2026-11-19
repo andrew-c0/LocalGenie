@@ -58,15 +58,15 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - The hidden input preview still mounts and loads, so its `onLoad` reports the picture size. Assumed to work in WebView2; not checked.
 - Clear returns to the first step and keeps the result in the store (`clearInputImage`, `clearUpscaleInput`). Picking the same file again brings the saved result back (code-read).
 - Image to image: Advanced settings is unmounted while a job runs (its settings are hidden then), so it closes after each job (code-read).
-- Image to image: the size popover has no disabled state, so it can be changed during a job. The job keeps the size it started with (`startEdit` builds the request when it starts; code-read).
+- Image to image: the size button is off while a job runs (`jobRunning` in `EditHeaderAction` -> `ResolutionPopover` `disabled`; an open size editor closes). User-verified 2026-11-20 (release/dev build).
 - Locked fields (CFG on a fixed-CFG model, negative prompt on a model without one) show their reason in a tooltip on a span (`LockedTooltip`), because a disabled control does not react to the pointer. Hover in WebView2 is not checked.
-- Unchecked: the controls row and the stage at narrow widths, Compare at the large size in dark and light themes, the hover and focus tooltips on a blocked Generate or Upscale button (`BlockedReasonButton`, `disabledFocusable`), the Advanced grid alignment, Compare and enlarge on an edit result, Clear and "Use this image as input", and the upscale empty state.
+- Unchecked: the controls row and the stage at narrow widths, the hover and focus tooltips on a blocked Generate or Upscale button (`BlockedReasonButton`, `disabledFocusable`), the Advanced grid alignment, Compare and enlarge on an edit result, Clear and "Use this image as input", and the upscale empty state.
 
 ## Text to image redesign, tab reset and rail (2026-11-05; code-read, not run in the app)
 - The text to image card (picture stage, prompt and settings, controls) is not run. Steps: `manual-checklist.md`, section "Playground: Text to image redesign, tab reset and the rail". The text tab was run by the user before this change (see "Runtime status of the Playground").
 - Advanced settings closes after each text to image job: the form is not rendered while a job runs (`TextToImagePanel`), as on Image to image. Expected from code.
 - A new job clears the previous result in the store (`startJob`), so after a cancel or a failure no earlier text picture shows. Expected from code.
-- The size button stays usable during a job; the job keeps the size it started with, because the request is built when Generate is pressed (code-read).
+- The size button is off while a job runs (`disabled={job !== null}` -> `ResolutionPopover`; an open size editor closes). User-verified 2026-11-20 (release/dev build).
 - Tab reset: `usePlaygroundTabReset` runs from effects. `PlaygroundSectionPage` has one route element per tool with no key, so React is expected to keep one instance across tools (the reset then runs from the tool-change effect). Not checked in the app; the Audio tool's reset depends on it too.
 - Tab reset tests cover the store actions and the tables (`stores/playgroundReset.test.ts`, `utils/playgroundReset.test.ts`). The hook itself (effect order, StrictMode, leaving to Chat and back) has no test.
 - A running job is not stopped. Its input (image, OCR picture) is kept, and the Audio tool keeps its inputs and results while a job runs (`resetAudioWork` does nothing then).

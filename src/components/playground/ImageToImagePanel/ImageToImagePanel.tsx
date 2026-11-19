@@ -104,6 +104,7 @@ export default function ImageToImagePanel() {
               comparing={stage.comparing}
               compareReady={stage.compareReady}
               onToggleCompare={stage.toggleCompare}
+              jobRunning={job !== null}
             />
           }
         >
