@@ -4,10 +4,6 @@ Run through these checks manually after building or deploying the app. Automated
 
 Only untested items are kept (tested ones were removed 2026-11-18; see git history and known-issues.md). Items are grouped by page and sub-page. Tags: **[needs you]** = needs your hands or machine (installer, updater, offline, notifications, tray, hardware); **[needs download/network]** = needs a model, runtime or the internet. Untagged items can be checked in the app with a loaded model.
 
-## Overview
-
-- [ ] Overview: with GenieX removed, Browse Models and Start Local Chat are enabled (both pages open; the actions there say why they are off); "Models Installed" shows "—"; the "Open Runtimes" block opens Settings > Runtimes. **[needs you]**
-
 ## Models
 
 ### Landing
