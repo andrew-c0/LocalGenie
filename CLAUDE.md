@@ -5,7 +5,7 @@ Tauri 2 desktop UI (React 19 + TS frontend in `src/`, Rust backend in `src-tauri
 ## Read first
 - `memories/repo/codebase-map.md` - architecture, commands, events, DB, flows (start here)
 - `memories/geniex-cli-reference.md` - full `geniex` CLI flags (kept as written; updated when the CLI changes)
-- `memories/repo/` - the one source for repo knowledge and explanations of changes: `known-issues.md`, `cli-update.md`, `db-architecture.md`, `manual-checklist.md`, `code-quality.md`, `geniex-server-behaviour.md` (GenieX server facts LocalGenie depends on)
+- `memories/repo/` - the one source for repo knowledge and explanations of changes: `known-issues.md`, `cli-update.md`, `db-architecture.md`, `code-quality.md`, `geniex-server-behaviour.md` (GenieX server facts LocalGenie depends on)
 - Rules and agents live in `.claude/` (former `.github/` copies are in `.claude/archive/github/`, not loaded)
 
 ## Agents and routing
@@ -15,7 +15,7 @@ Working agents: `.claude/agents/` (`rust-expert`, `react-expert`, `geniex-specia
 - Docs sync goes to `knowledge-sync`.
 - For a change in one area, delegate to that agent. Do not hand back a change that spans both halves without saying so.
 - `memories/external/` - HF Hub OpenAPI and GGUF spec; large, read on demand only
-- `tasks.md` - current backlog
+- `tasks.md` - current backlog. `tasks.md`, `tasks-ordered.md` and `manual-checklist.md` (the manual tests, ordered by effort, each with a stable ID `Tnnn`) live at the repo root, are gitignored and stay local: never commit or push them; docs in the repo only name them
 
 ## Commands
 `npm run dev` (tauri dev) - `npm run check` (tsc) - `npm run lint` (biome) - `npm test` (vitest) - `cargo check` / `cargo clippy` / `cargo test` in `src-tauri/` - `npm run build`.

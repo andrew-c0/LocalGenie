@@ -102,4 +102,4 @@ Design:
 4. Permission per tool: Off / Request approval / On.
 5. Tracking: `tool` messages drawn like system lines, parameters shown on click.
 
-Next: the manual checklist (`memories/repo/manual-checklist.md`, "Native tools"), then phase 4 (MCP) and the rest of phase 5 (polish).
+Next: the manual checklist (`manual-checklist.md`, "Native tools"), then phase 4 (MCP) and the rest of phase 5 (polish).

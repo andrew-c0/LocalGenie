@@ -9,6 +9,7 @@ You maintain the written knowledge of the LocalGenie repo (Tauri 2 + React/TS fr
 - Sync cursor: `.claude/knowledge-sync.state` (`last_synced_commit`).
 - Knowledge files you own: `CLAUDE.md`, `memories/repo/codebase-map.md`, and the other `memories/repo/*.md` notes (factual updates only).
 - Read-only context: `memories/external/**`, `memories/geniex-cli-reference.md`, `tasks.md`, `tasks-ordered.md`, `.claude/archive/**`.
+- Local file you may edit: `manual-checklist.md` at the repo root (gitignored, never committed). Keep its stable IDs (`Tnnn`) and its effort bands; remove only items the user confirmed, and add new items with the next free ID at the end of their band.
 
 ## Procedure
 1. Read the state file. Run `git log --format='%h %ad %s' --date=short <last>..HEAD`, `git diff --name-status <last>..HEAD`, and `git status --short` for uncommitted work. If the cursor is missing or not an ancestor of HEAD, fall back to the last 20 commits and say so.
