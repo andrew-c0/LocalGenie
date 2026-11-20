@@ -7,6 +7,7 @@ import { ChatWelcome } from "../../components/chat/ChatWelcome/ChatWelcome";
 import MissingFileBanner from "../../components/chat/MissingFileBanner/MissingFileBanner";
 import { ConversationCanvas } from "../../components/ui/ConversationCanvas/ConversationCanvas";
 import { StateBlock } from "../../components/ui/StateBlock/StateBlock";
+import { useCliLock } from "../../hooks/useCliLock";
 import { useBreadcrumbLabel } from "../../navigation/useBreadcrumbLabel";
 import { useChatStore } from "../../stores/chatStore";
 import { useModelStore } from "../../stores/modelStore";
@@ -27,6 +28,7 @@ export default function ChatPage() {
   const discardEmptySessions = useChatStore((s) => s.discardEmptySessions);
   const sessions = useChatStore((s) => s.sessions);
   const serverStatus = useModelStore((s) => s.serverStatus);
+  const cliLock = useCliLock();
 
   // Sessions may still be loading when the page opens, so a missing id is shown, not redirected. A Dispatch
   // task's session is not a chat, so its id reads as a missing conversation here.
@@ -66,6 +68,7 @@ export default function ChatPage() {
       <ChatWelcome
         serverRunning={serverStatus.running}
         modelCount={serverStatus.models.length}
+        cliLock={cliLock}
         onNewConversation={() => navigate(`/chat/${createSession()}`)}
       />
     );

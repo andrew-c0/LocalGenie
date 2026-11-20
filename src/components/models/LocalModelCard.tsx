@@ -1,3 +1,4 @@
+import { useCliLock } from "../../hooks/useCliLock";
 import { useModelCapabilityBadges } from "../../hooks/useModelCapabilityBadges";
 import type { DbDownloadedModel } from "../../services/database";
 import type { ModelInfo } from "../../types";
@@ -29,6 +30,8 @@ export function LocalModelCard({
   onDetails,
 }: LocalModelCardProps) {
   const capabilityBadges = useModelCapabilityBadges(model.name);
+  // Load and Remove need the GenieX CLI: while it is missing they are off, with its reason as the tooltip.
+  const cliLock = useCliLock();
   return (
     <ModelCard
       model={localCardData(model, stored, capabilityBadges)}
@@ -37,6 +40,8 @@ export function LocalModelCard({
       onOpenSelector={onOpenSelector}
       onRemove={onRemove}
       onDetails={onDetails}
+      loadLock={cliLock}
+      removeLock={cliLock}
     />
   );
 }

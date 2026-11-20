@@ -39,17 +39,20 @@ const FEATURES: { icon: ReactNode; title: string; text: string }[] = [
 export function ChatWelcome({
   serverRunning,
   modelCount,
+  cliLock,
   onNewConversation,
 }: {
   serverRunning: boolean;
   modelCount: number;
+  /** Why chat cannot run without the GenieX CLI, or null. Shown in place of the server hint. */
+  cliLock: string | null;
   onNewConversation: () => void;
 }) {
   return (
     <WelcomeLanding
       serverRunning={serverRunning}
       modelCount={modelCount}
-      stoppedHint="Start the server from the model selector to chat"
+      stoppedHint={cliLock ?? "Start the server from the model selector to chat"}
       title="Chat with models running on your PC"
       text="Start a conversation below, or pick up where you left off. Nothing leaves your machine."
       action={

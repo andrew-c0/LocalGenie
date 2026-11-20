@@ -647,15 +647,22 @@ pub(super) async fn forget_downloaded_model(
         .map_err(|e| e.to_string())
 }
 
+/// Every downloaded-model metadata row, in no particular order.
+pub(super) async fn downloaded_model_rows(
+    db: &DatabaseConnection,
+) -> Result<Vec<downloaded_model::Model>, String> {
+    downloaded_model::Entity::find()
+        .all(db)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// All downloaded-model metadata rows.
 #[tauri::command]
 pub async fn list_downloaded_models(
     db: tauri::State<'_, DatabaseConnection>,
 ) -> Result<Vec<downloaded_model::Model>, String> {
-    downloaded_model::Entity::find()
-        .all(&*db)
-        .await
-        .map_err(|e| e.to_string())
+    downloaded_model_rows(&db).await
 }
 
 /// Forget metadata for a removed model.
@@ -706,7 +713,7 @@ pub(super) fn facets_with_source(facets: Option<&str>, source: &str) -> Result<S
 
 /// The stored source in a facets JSON text, or None when there is none (rows from before the
 /// source was kept, or an unknown value).
-fn source_of_facets(facets: Option<&str>) -> Option<String> {
+pub(super) fn source_of_facets(facets: Option<&str>) -> Option<String> {
     let value: serde_json::Value = serde_json::from_str(facets?).ok()?;
     match value.get("source")?.as_str()? {
         s @ (SOURCE_HF | SOURCE_AIHUB) => Some(s.to_owned()),

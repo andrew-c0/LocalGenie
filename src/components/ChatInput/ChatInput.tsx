@@ -8,6 +8,7 @@ import {
 } from "@fluentui/react-components";
 import { AttachRegular } from "@fluentui/react-icons";
 import { useCallback, useEffect, useState } from "react";
+import { useCliLock } from "../../hooks/useCliLock";
 import { pickAttachment, readAttachment } from "../../services/attachments";
 import { stopSummary } from "../../services/chatCompaction";
 import {
@@ -49,6 +50,14 @@ function busyNoteFor(dispatchRunning: boolean, otherChatBusy: boolean): string |
   return otherChatBusy ? "Another chat is using the model." : null;
 }
 
+/** The message field's placeholder: what to type, or why nothing can be typed yet. */
+function placeholderFor(cliLock: string | null, serverRunning: boolean): string {
+  if (cliLock !== null) return "Install the GenieX CLI to chat";
+  return serverRunning
+    ? "Type a message… (Shift+Enter for new line)"
+    : "Start the GenieX server to chat";
+}
+
 export default function ChatInput() {
   const [text, setText] = useState("");
   /** Files picked for the next message. Sent with it, then cleared. */
@@ -62,6 +71,8 @@ export default function ChatInput() {
   const serverStatus = useModelStore((s) => s.serverStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
   const modelEntries = useActiveModelEntries(activeModelId);
+  /** Without the GenieX CLI nothing can be sent. The reason is the note under the field. */
+  const cliLock = useCliLock();
   const retryFromMessageId = useChatStore((s) => s.retryFromMessageId);
   const setRetryFromMessageId = useChatStore((s) => s.setRetryFromMessageId);
   /** A reply or a summary is in progress, in this chat or another. The input waits. */
@@ -104,7 +115,7 @@ export default function ChatInput() {
   /** Handle a normal new-message send. */
   const handleSend = useCallback(async () => {
     const content = text.trim();
-    if ((!content && pending.length === 0) || !activeSessionId || locked) return;
+    if ((!content && pending.length === 0) || !activeSessionId || locked || cliLock) return;
     if (!serverStatus.running) return;
 
     const files = pending;
@@ -122,7 +133,7 @@ export default function ChatInput() {
     setPending([]);
     await recordPrompt(activeSessionId, prompt);
     await sendPrompt(activeSessionId, prompt, history, files);
-  }, [text, pending, activeSessionId, locked, serverStatus.running]);
+  }, [text, pending, activeSessionId, locked, cliLock, serverStatus.running]);
 
   /**
    * Stops the reply or the summary this chat owns. A reply's tool loop stops too, so no further request or tool
@@ -153,9 +164,11 @@ export default function ChatInput() {
     void retryPrompt(activeSessionId, messageId);
   }, [retryFromMessageId, activeSessionId, locked, setRetryFromMessageId]);
 
-  const isDisabled = (!text.trim() && pending.length === 0) || locked || !serverStatus.running;
+  const isDisabled =
+    (!text.trim() && pending.length === 0) || locked || cliLock !== null || !serverStatus.running;
   const stopLabel = ownsSummary ? "Stop summarising" : "Stop generation";
-  const note = busyNoteFor(dispatchRunning, busy && !showStop);
+  const note = cliLock ?? busyNoteFor(dispatchRunning, busy && !showStop);
+  const placeholder = placeholderFor(cliLock, serverStatus.running);
 
   /** Kinds the active model cannot take are left out, not shown disabled. */
   const attachMenu = (
@@ -202,11 +215,7 @@ export default function ChatInput() {
         value={text}
         onChange={setText}
         onSubmit={handleSend}
-        placeholder={
-          serverStatus.running
-            ? "Type a message… (Shift+Enter for new line)"
-            : "Start the GenieX server to chat"
-        }
+        placeholder={placeholder}
         disabled={locked}
         leading={attachMenu}
         action={

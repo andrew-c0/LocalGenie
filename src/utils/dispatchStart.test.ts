@@ -7,7 +7,13 @@ import {
   turnRefusal,
 } from "./dispatchStart";
 
-const READY: TurnState = { own: "idle", chatBusy: false, serverRunning: true, modelLoaded: true };
+const READY: TurnState = {
+  own: "idle",
+  chatBusy: false,
+  cliInstalled: true,
+  serverRunning: true,
+  modelLoaded: true,
+};
 
 describe("turnRefusal", () => {
   it("allows a message when the server runs, a model is loaded and nothing else is busy", () => {
@@ -43,14 +49,40 @@ describe("turnRefusal", () => {
 
   it("checks the conversation before the chat, the server and the model", () => {
     expect(
-      turnRefusal({ own: "working", chatBusy: true, serverRunning: false, modelLoaded: false }),
+      turnRefusal({
+        own: "working",
+        chatBusy: true,
+        cliInstalled: false,
+        serverRunning: false,
+        modelLoaded: false,
+      }),
     ).toBe("This conversation is working. Wait for its reply, or stop it.");
+  });
+
+  it("says the GenieX CLI is missing, not that the server is stopped", () => {
+    expect(turnRefusal({ ...READY, cliInstalled: false, serverRunning: false })).toBe(
+      "Needs the GenieX CLI. Install it in Settings > Runtimes.",
+    );
   });
 });
 
 describe("serverModelRefusal", () => {
   it("is null when the server runs and a model is loaded", () => {
-    expect(serverModelRefusal({ serverRunning: true, modelLoaded: true })).toBeNull();
+    expect(
+      serverModelRefusal({ cliInstalled: true, serverRunning: true, modelLoaded: true }),
+    ).toBeNull();
+  });
+
+  it("does not refuse before the CLI state is read", () => {
+    expect(
+      serverModelRefusal({ cliInstalled: null, serverRunning: true, modelLoaded: true }),
+    ).toBeNull();
+  });
+
+  it("refuses with the CLI reason first, even when the server and a model are also missing", () => {
+    expect(
+      serverModelRefusal({ cliInstalled: false, serverRunning: false, modelLoaded: false }),
+    ).toBe("Needs the GenieX CLI. Install it in Settings > Runtimes.");
   });
 });
 

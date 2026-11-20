@@ -29,3 +29,11 @@ export function lockedReason(need: RuntimeNeed, installed: InstalledRuntimes): s
   if (isMet(need, installed)) return null;
   return `Needs ${needName(need)}. Install it in Settings > Runtimes.`;
 }
+
+/**
+ * The reason an action that needs the GenieX CLI cannot run (loading, downloading, deleting, running a
+ * benchmark or a conversation), or null when it can. The same text as a locked area. Null until the CLI state is read.
+ */
+export function cliActionReason(cliInstalled: boolean | null): string | null {
+  return lockedReason("cli", { cliInstalled, runtimeIds: null });
+}

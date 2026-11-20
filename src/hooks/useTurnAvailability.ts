@@ -23,6 +23,7 @@ export function useTurnAvailability(taskId: string | null): TurnAvailability {
   useDispatchStore((s) => s.tasks.find((task) => task.id === taskId)?.status);
   useChatStore((s) => s.isStreaming || s.compacting);
   useChatStore((s) => s.sessions.find((session) => session.id === sessionId)?.modelId);
+  useModelStore((s) => s.cliInstalled);
   useModelStore((s) => s.serverStatus.running);
   useModelStore((s) => s.activeModelId);
   return {

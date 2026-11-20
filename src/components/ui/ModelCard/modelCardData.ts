@@ -125,6 +125,14 @@ export function aihubCardData(
   };
 }
 
+/** The size the backend gives an installed model while the GenieX CLI is missing: an em dash. */
+export const UNKNOWN_MODEL_SIZE = "—";
+
+/** The disk size to show for an installed model, or null when its size is not known (no disk fact then). */
+export function diskSizeOf(size: string): string | null {
+  return size.trim() === "" || size === UNKNOWN_MODEL_SIZE ? null : size;
+}
+
 /**
  * Card of a downloaded model. The stored row supplies the facets, the precision, the context window
  * and the RAM figure; a row from before those were kept shows only what it has. The capability icons
@@ -152,7 +160,7 @@ export function localCardData(
       ...fact("quant", precision, "precision of the downloaded file"),
       ...fact("ctx", formatContextLength(stored?.context_size), "saved for the model"),
       ...fact("licence", facets?.license),
-      ...fact("disk", model.size),
+      ...fact("disk", diskSizeOf(model.size)),
     ],
     ramVerdict: ram && {
       label: storedRamLabel(ram),

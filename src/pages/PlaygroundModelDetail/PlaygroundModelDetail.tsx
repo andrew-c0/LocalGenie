@@ -10,6 +10,8 @@ import { ModelSpecSection } from "../../components/models/ModelSpecSection/Model
 import { downloadCatalogModel } from "../../components/playground/playgroundSelection";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog/ConfirmDialog";
 import { ExternalLink } from "../../components/ui/ExternalLink/ExternalLink";
+import { LockedTooltip } from "../../components/ui/LockedTooltip/LockedTooltip";
+import { useCliLock } from "../../hooks/useCliLock";
 import { useBreadcrumbLabel } from "../../navigation/useBreadcrumbLabel";
 import { downloadButtonLabelOf } from "../../utils/modelRecommendations";
 import type { SpecCell } from "../../utils/modelSpecs";
@@ -56,6 +58,9 @@ export default function PlaygroundModelDetail() {
   const detailState = usePlaygroundModelDetail(groupOfParam(group), modelId);
   const { entry, download, installed, deletion } = detailState;
   useBreadcrumbLabel(entry?.model.name ?? null);
+  // An OCR model is downloaded, deleted and run through the GenieX CLI, so its actions wait for it.
+  const cliLock = useCliLock();
+  const ocrLock = entry?.kind === "ocr" ? cliLock : null;
 
   if (!entry)
     return (
@@ -81,29 +86,40 @@ export default function PlaygroundModelDetail() {
         <div className="model-detail__actions">
           {installed ? (
             <>
-              <Button
-                appearance="secondary"
-                icon={<DeleteRegular />}
-                disabled={deletion.deletingModelId === installed.id}
-                onClick={() => deletion.requestDelete(installed)}
-              >
-                Delete
-              </Button>
-              {detailState.toolTitle && (
-                <Button appearance="primary" icon={<OpenRegular />} onClick={openInTool}>
-                  Open in {detailState.toolTitle}
+              <LockedTooltip reason={ocrLock}>
+                <Button
+                  appearance="secondary"
+                  icon={<DeleteRegular />}
+                  disabled={deletion.deletingModelId === installed.id || ocrLock !== null}
+                  onClick={() => deletion.requestDelete(installed)}
+                >
+                  Delete
                 </Button>
+              </LockedTooltip>
+              {detailState.toolTitle && (
+                <LockedTooltip reason={ocrLock}>
+                  <Button
+                    appearance="primary"
+                    icon={<OpenRegular />}
+                    disabled={ocrLock !== null}
+                    onClick={openInTool}
+                  >
+                    Open in {detailState.toolTitle}
+                  </Button>
+                </LockedTooltip>
               )}
             </>
           ) : (
-            <Button
-              appearance="secondary"
-              icon={<ArrowDownloadRegular />}
-              disabled={isDownloading || detailState.isAnyDownloading}
-              onClick={() => downloadCatalogModel(entry.kind, entry.model)}
-            >
-              {downloadButtonLabelOf(download)}
-            </Button>
+            <LockedTooltip reason={ocrLock}>
+              <Button
+                appearance="secondary"
+                icon={<ArrowDownloadRegular />}
+                disabled={isDownloading || detailState.isAnyDownloading || ocrLock !== null}
+                onClick={() => downloadCatalogModel(entry.kind, entry.model)}
+              >
+                {downloadButtonLabelOf(download)}
+              </Button>
+            </LockedTooltip>
           )}
         </div>
       }

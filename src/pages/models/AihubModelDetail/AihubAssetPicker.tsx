@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Flex } from "../../../components/ui/Flex/Flex";
 import { OptionDropdown } from "../../../components/ui/OptionDropdown/OptionDropdown";
 import { Meta } from "../../../components/ui/Typography/Typography";
+import { useCliLock } from "../../../hooks/useCliLock";
 import type { AihubAsset, AihubModelDetail } from "../../../services/aihub";
 import { isDownloadActive, useDownloadStore } from "../../../stores/downloadStore";
 import { useModelStore } from "../../../stores/modelStore";
@@ -74,6 +75,8 @@ export function AihubAssetPicker({ model, assets }: Props) {
   const downloads = useDownloadStore((s) => s.downloads);
   const enqueueAihub = useDownloadStore((s) => s.enqueueAihub);
   const enqueueGGUF = useDownloadStore((s) => s.enqueue);
+  /** A download imports into GenieX, so it waits for the CLI. Its reason is shown under the field. */
+  const cliLock = useCliLock();
   const [chosenKey, setChosenKey] = useState<string | null>(null);
 
   const selected =
@@ -154,11 +157,12 @@ export function AihubAssetPicker({ model, assets }: Props) {
           {deviceChipset ?? "not set to a chipset"}.
         </Meta>
       )}
-      <Flex justify="end">
+      <Flex justify="end" align="center" gap="s" wrap>
+        {cliLock && <Meta>{cliLock}</Meta>}
         <Button
           appearance="primary"
           icon={busy ? <Spinner size="tiny" /> : <ArrowDownloadRegular />}
-          disabled={busy || !allowed || downloaded}
+          disabled={busy || !allowed || downloaded || cliLock !== null}
           onClick={handleDownload}
         >
           {busy ? "Pulling…" : downloaded ? "Downloaded" : "Download"}

@@ -11,6 +11,7 @@ import { ModelFilesCard } from "../../../components/models/ModelFilesCard/ModelF
 import { ModelSpecSection } from "../../../components/models/ModelSpecSection/ModelSpecSection";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog/ConfirmDialog";
 import { Flex } from "../../../components/ui/Flex/Flex";
+import { LockedTooltip } from "../../../components/ui/LockedTooltip/LockedTooltip";
 import { MarkdownContent } from "../../../components/ui/MarkdownContent/MarkdownContent";
 import { RetryBlock } from "../../../components/ui/RetryBlock/RetryBlock";
 import { SkeletonBlock } from "../../../components/ui/Skeletons/SkeletonBlock";
@@ -20,6 +21,7 @@ import { StateBlock } from "../../../components/ui/StateBlock/StateBlock";
 import { StatusBadge } from "../../../components/ui/StatusBadge/StatusBadge";
 import { Meta } from "../../../components/ui/Typography/Typography";
 import type { AsyncData } from "../../../hooks/useAsyncData";
+import { useCliLock } from "../../../hooks/useCliLock";
 import { useModelCapabilityBadges } from "../../../hooks/useModelCapabilityBadges";
 import { useSystemMemory } from "../../../hooks/useSystemMemory";
 import * as db from "../../../services/database";
@@ -96,6 +98,8 @@ export default function HubModelDetail({ isLocal }: Props) {
       s.downloads.find((d) => d.id === repoId && isDownloadActive(d.status))?.variant?.main
         .filename ?? null,
   );
+  /** Load, delete and download need the GenieX CLI. Its reason is the tooltip while the CLI is missing. */
+  const cliLock = useCliLock();
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -214,23 +218,29 @@ export default function HubModelDetail({ isLocal }: Props) {
       actions={
         <div className="model-detail__actions">
           {isLocal && (
-            <Button
-              appearance="primary"
-              icon={<ChatRegular />}
-              onClick={() => setSelectorOpen(true)}
-            >
-              Load & Chat
-            </Button>
+            <LockedTooltip reason={cliLock}>
+              <Button
+                appearance="primary"
+                icon={<ChatRegular />}
+                disabled={cliLock !== null}
+                onClick={() => setSelectorOpen(true)}
+              >
+                Load & Chat
+              </Button>
+            </LockedTooltip>
           )}
           {isLocal && (
-            <Button
-              appearance="secondary"
-              icon={<DeleteRegular />}
-              title="Remove model"
-              onClick={() => setConfirmDelete(model.id)}
-            >
-              Delete
-            </Button>
+            <LockedTooltip reason={cliLock}>
+              <Button
+                appearance="secondary"
+                icon={<DeleteRegular />}
+                title="Remove model"
+                disabled={cliLock !== null}
+                onClick={() => setConfirmDelete(model.id)}
+              >
+                Delete
+              </Button>
+            </LockedTooltip>
           )}
           <Button
             appearance="secondary"
@@ -283,6 +293,7 @@ export default function HubModelDetail({ isLocal }: Props) {
           }
           activeFilename={activeFilename}
           busy={busy}
+          cliLock={cliLock}
           onDownload={handleDownload}
           onLoad={() => setSelectorOpen(true)}
         />

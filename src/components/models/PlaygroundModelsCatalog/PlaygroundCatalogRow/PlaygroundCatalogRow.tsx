@@ -8,6 +8,7 @@ import {
 } from "@fluentui/react-icons";
 import type { MouseEvent, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { useCliLock } from "../../../../hooks/useCliLock";
 import { usePlaygroundDownload } from "../../../../hooks/usePlaygroundDownload";
 import { downloadButtonLabelOf } from "../../../../utils/modelRecommendations";
 import { playgroundModelPathOf } from "../../../../utils/playgroundModelDetail";
@@ -15,6 +16,7 @@ import type { CatalogModelRow } from "../../../../utils/playgroundModelsCatalog"
 import { downloadCatalogModel } from "../../../playground/playgroundSelection";
 import { ExternalLink } from "../../../ui/ExternalLink/ExternalLink";
 import { Flex } from "../../../ui/Flex/Flex";
+import { LockedTooltip } from "../../../ui/LockedTooltip/LockedTooltip";
 import { StatusBadge } from "../../../ui/StatusBadge/StatusBadge";
 import { BodyStrong, Meta } from "../../../ui/Typography/Typography";
 import "./PlaygroundCatalogRow.css";
@@ -54,6 +56,9 @@ export function PlaygroundCatalogRow({
   const download = usePlaygroundDownload(row.id);
   const isDownloading = download?.status === "downloading";
   const detailPath = playgroundModelPathOf(row.group, row.id);
+  // OCR models are downloaded and deleted through the GenieX CLI; the other tools' files need no CLI.
+  const cliLock = useCliLock();
+  const ocrLock = row.catalog === "ocr" ? cliLock : null;
 
   const openDetail = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -90,22 +95,26 @@ export function PlaygroundCatalogRow({
           </Flex>
         </Flex>
         {row.installed ? (
-          <Button
-            appearance="secondary"
-            icon={<DeleteRegular />}
-            disabled={isDeleteBusy}
-            onClick={() => onDelete(row.id)}
-          >
-            Delete
-          </Button>
+          <LockedTooltip reason={ocrLock}>
+            <Button
+              appearance="secondary"
+              icon={<DeleteRegular />}
+              disabled={isDeleteBusy || ocrLock !== null}
+              onClick={() => onDelete(row.id)}
+            >
+              Delete
+            </Button>
+          </LockedTooltip>
         ) : (
-          <Button
-            appearance="secondary"
-            disabled={isDownloading || isAnyDownloading}
-            onClick={() => downloadCatalogModel(row.catalog, row)}
-          >
-            {downloadButtonLabelOf(download)}
-          </Button>
+          <LockedTooltip reason={ocrLock}>
+            <Button
+              appearance="secondary"
+              disabled={isDownloading || isAnyDownloading || ocrLock !== null}
+              onClick={() => downloadCatalogModel(row.catalog, row)}
+            >
+              {downloadButtonLabelOf(download)}
+            </Button>
+          </LockedTooltip>
         )}
       </Flex>
     </Card>

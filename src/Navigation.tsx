@@ -1,6 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { MainLayout } from "./components/shell/Layouts/Layouts";
-import RuntimeGuard from "./components/shell/RuntimeGuard/RuntimeGuard";
 import AihubModelsPage from "./pages/AihubModelsPage/AihubModelsPage";
 import BenchmarkPage from "./pages/BenchmarkPage/BenchmarkPage";
 import BenchmarksLandingPage from "./pages/BenchmarksLandingPage/BenchmarksLandingPage";
@@ -41,7 +40,7 @@ import { audioTaskUrl } from "./utils/audioTask";
  * - `/models/huggingface` Hugging Face browser, `/models/huggingface/:repoId` its detail
  * - `/models/aihub` Qualcomm AI Hub catalog, `/models/aihub/:id` its detail
  * - `/chat` default content, `/chat/:sessionId` one conversation
- * - `/dispatch` the landing (recent conversations and the message field that starts one), `/dispatch/:taskId` one conversation (both need the GenieX CLI)
+ * - `/dispatch` the landing (recent conversations and the message field that starts one), `/dispatch/:taskId` one conversation
  * - `/playground` landing, `/playground/text-to-image|image-to-image|image-upscaling|ocr|audio` one tool each; the old
  *   `speech-to-text|text-to-speech|audio-to-audio` paths redirect to `audio` with `?task=`
  * - `/settings` landing, `/settings/app|runtimes|inference|tools|logs|about` one page each
@@ -56,39 +55,36 @@ export default function Navigation() {
     <Routes>
       <Route element={<MainLayout />}>
         <Route path="/" element={<OverviewPage />} />
-        {/* Chat, Benchmarks and the GenieX Models pages need the GenieX CLI; RuntimeGuard redirects to Settings > Runtimes without it. */}
-        {/* The Models landing and the Playground models page need no runtime; the GenieX pages below need the CLI. */}
+        {/* The pages below open without the GenieX CLI. The actions that need it (load, download, delete, run, send) are disabled on them. */}
         <Route path="/models" element={<ModelsLandingPage />} />
         <Route path="/models/playground" element={<PlaygroundModelsPage />} />
         <Route path="/models/playground/:group/:modelId" element={<PlaygroundModelDetail />} />
-        <Route element={<RuntimeGuard needs="cli" />}>
-          <Route path="/models/local" element={<LocalModelsBrowserPage />} />
-          <Route path="/models/local/:repoId" element={<HubModelDetail isLocal />} />
-          <Route path="/models/huggingface" element={<HubModelsPage />} />
-          <Route path="/models/huggingface/:repoId" element={<HubModelDetail isLocal={false} />} />
-          <Route path="/models/aihub" element={<AihubModelsPage />} />
-          <Route path="/models/aihub/:id" element={<AihubModelDetail />} />
-          <Route path="/chat" element={<ChatPage />} />
-          <Route path="/chat/:sessionId" element={<ChatPage />} />
-          <Route path="/dispatch" element={<DispatchPage />} />
-          <Route path="/dispatch/:taskId" element={<DispatchPage />} />
-          <Route path="/benchmarks">
-            <Route index element={<BenchmarksLandingPage />} />
-            {/* The sub-pages share one frame (padding, scrolling); the landing sits outside it. */}
-            <Route element={<BenchmarkPage />}>
-              <Route path="/benchmarks/prompts" element={<BenchmarkPrompts />} />
-              {/* One item page for both: `new` has no id, so its params are empty. */}
-              <Route path="/benchmarks/prompts/new" element={<BenchmarkPromptItem />} />
-              <Route path="/benchmarks/prompts/:promptId" element={<BenchmarkPromptItem />} />
-              <Route path="/benchmarks/suites" element={<BenchmarkSuites />} />
-              <Route path="/benchmarks/suites/new" element={<BenchmarkSuiteItem />} />
-              <Route path="/benchmarks/suites/:suiteId" element={<BenchmarkSuiteItem />} />
-              <Route path="/benchmarks/run" element={<BenchmarkRun />} />
-              <Route path="/benchmarks/run/:suiteId" element={<BenchmarkRunItem />} />
-              <Route path="/benchmarks/runs" element={<BenchmarkRuns />} />
-              <Route path="/benchmarks/runs/:runId" element={<BenchmarkRunDetail />} />
-              <Route path="/benchmarks/compare" element={<BenchmarkCompare />} />
-            </Route>
+        <Route path="/models/local" element={<LocalModelsBrowserPage />} />
+        <Route path="/models/local/:repoId" element={<HubModelDetail isLocal />} />
+        <Route path="/models/huggingface" element={<HubModelsPage />} />
+        <Route path="/models/huggingface/:repoId" element={<HubModelDetail isLocal={false} />} />
+        <Route path="/models/aihub" element={<AihubModelsPage />} />
+        <Route path="/models/aihub/:id" element={<AihubModelDetail />} />
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/chat/:sessionId" element={<ChatPage />} />
+        <Route path="/dispatch" element={<DispatchPage />} />
+        <Route path="/dispatch/:taskId" element={<DispatchPage />} />
+        <Route path="/benchmarks">
+          <Route index element={<BenchmarksLandingPage />} />
+          {/* The sub-pages share one frame (padding, scrolling); the landing sits outside it. */}
+          <Route element={<BenchmarkPage />}>
+            <Route path="/benchmarks/prompts" element={<BenchmarkPrompts />} />
+            {/* One item page for both: `new` has no id, so its params are empty. */}
+            <Route path="/benchmarks/prompts/new" element={<BenchmarkPromptItem />} />
+            <Route path="/benchmarks/prompts/:promptId" element={<BenchmarkPromptItem />} />
+            <Route path="/benchmarks/suites" element={<BenchmarkSuites />} />
+            <Route path="/benchmarks/suites/new" element={<BenchmarkSuiteItem />} />
+            <Route path="/benchmarks/suites/:suiteId" element={<BenchmarkSuiteItem />} />
+            <Route path="/benchmarks/run" element={<BenchmarkRun />} />
+            <Route path="/benchmarks/run/:suiteId" element={<BenchmarkRunItem />} />
+            <Route path="/benchmarks/runs" element={<BenchmarkRuns />} />
+            <Route path="/benchmarks/runs/:runId" element={<BenchmarkRunDetail />} />
+            <Route path="/benchmarks/compare" element={<BenchmarkCompare />} />
           </Route>
         </Route>
         <Route path="/playground" element={<PlaygroundLandingPage />} />

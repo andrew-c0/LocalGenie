@@ -3,7 +3,7 @@ import { useDispatchStore } from "../../stores/dispatchStore";
 import { useModelStore } from "../../stores/modelStore";
 import type { DispatchTask } from "../../types";
 import type { StallState } from "../../utils/dispatchGuards";
-import { type OwnState, serverModelRefusal } from "../../utils/dispatchStart";
+import { type ModelTurnState, type OwnState, serverModelRefusal } from "../../utils/dispatchStart";
 
 /** The turn in progress: the conversation it belongs to and what it needs to run. */
 export interface Turn {
@@ -70,10 +70,14 @@ export function ownStateOf(taskId: string): OwnState {
   return "idle";
 }
 
-/** The model side of a start check: the server runs and a model is loaded. */
-export function modelState(): { serverRunning: boolean; modelLoaded: boolean } {
+/** The model side of a start check: the CLI is installed, the server runs and a model is loaded. */
+export function modelState(): ModelTurnState {
   const model = useModelStore.getState();
-  return { serverRunning: model.serverStatus.running, modelLoaded: model.activeModelId !== null };
+  return {
+    cliInstalled: model.cliInstalled,
+    serverRunning: model.serverStatus.running,
+    modelLoaded: model.activeModelId !== null,
+  };
 }
 
 /**
@@ -81,13 +85,11 @@ export function modelState(): { serverRunning: boolean; modelLoaded: boolean } {
  * recorded model passes: the load starts the server if it is stopped and loads the model, so neither needs to be
  * up beforehand. Without a recorded model the server and a loaded model are required, as for a new message.
  */
-export function loadableState(task: DispatchTask): {
-  serverRunning: boolean;
-  modelLoaded: boolean;
-} {
+export function loadableState(task: DispatchTask): ModelTurnState {
+  const model = modelState();
   if (recordedModelOf(task.sessionId) !== undefined)
-    return { serverRunning: true, modelLoaded: true };
-  return modelState();
+    return { ...model, serverRunning: true, modelLoaded: true };
+  return model;
 }
 
 /**
@@ -95,10 +97,7 @@ export function loadableState(task: DispatchTask): {
  * that model first, as a continue or a queued start does. Without one (or a new conversation) the server and a
  * loaded model are required.
  */
-export function sendModelState(taskId: string | null): {
-  serverRunning: boolean;
-  modelLoaded: boolean;
-} {
+export function sendModelState(taskId: string | null): ModelTurnState {
   const task = taskId === null ? undefined : findTask(taskId);
   return task ? loadableState(task) : modelState();
 }

@@ -19,7 +19,7 @@ import {
 import { PlugDisconnectedRegular, SearchRegular } from "@fluentui/react-icons";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useRuntimeLocks } from "../../../../hooks/useRuntimeLocks";
+import { useCliLock } from "../../../../hooks/useCliLock";
 import { COMPUTE_TARGETS, type ComputeChoice, useModelStore } from "../../../../stores/modelStore";
 import type { ModelInfo } from "../../../../types";
 import { FAMILY_ALL, familyFilterOptions, matchesFamily } from "../../../../utils/modelFamily";
@@ -32,6 +32,15 @@ import { CapabilityModelOption } from "./CapabilityModelOption/CapabilityModelOp
 import type { ModelOptionButtonProps } from "./ModelOptionButton/ModelOptionButton";
 import { useRamSnapshot } from "./useRamSnapshot";
 import "./ModelSelectorPopover.css";
+
+/**
+ * The text of an empty list: no match for the filter, else no models yet. With no CLI the reason bar says why,
+ * so no text is given then.
+ */
+function emptyListText(query: string, cliLocked: boolean): string | null {
+  if (query) return `No models match "${query}".`;
+  return cliLocked ? null : "No models installed yet.";
+}
 
 /** Label + description for each compute target. */
 const COMPUTE_META: Record<ComputeChoice, { label: string; hint: string }> = {
@@ -62,8 +71,8 @@ export default function ModelSelectorPopover({
 }: ModelSelectorPopoverProps) {
   const navigate = useNavigate();
   const models = useModelStore((s) => s.models);
-  // Without the GenieX CLI the list is empty because it cannot be read; the models are still on disk.
-  const cliLock = useRuntimeLocks()("cli");
+  // Without the GenieX CLI the models are listed but cannot be loaded: the rows and the compute target are off.
+  const cliLock = useCliLock();
   const serverStatus = useModelStore((s) => s.serverStatus);
   const activeModelId = useModelStore((s) => s.activeModelId);
   const selectorOpen = useModelStore((s) => s.selectorOpen);
@@ -101,6 +110,7 @@ export default function ModelSelectorPopover({
   }, [models, serverStatus.models, query, activeFamily]);
 
   const hasRows = loadedModels.length > 0 || readyModels.length > 0;
+  const emptyText = emptyListText(query, cliLock !== null);
 
   // The header shows the first loaded model when none is chosen explicitly; match that here.
   // The store keeps short names from server status, so compare base names.
@@ -118,13 +128,15 @@ export default function ModelSelectorPopover({
     return serverStatus.models.some((lm) => shortModelKey(lm) === key);
   };
 
+  const isSelectionLocked = loading !== null || cliLock !== null;
+
   const optionProps = (m: ModelInfo): ModelOptionButtonProps => {
     const loadedHere = isLoadedOnServer(m);
     return {
       model: m,
       isActive: activeBase !== null && activeBase === (m.name.split("/").pop() ?? m.name),
       loadedHere,
-      disabled: loading !== null,
+      disabled: isSelectionLocked,
       onSelect,
       ram: modelRamLine(ramSnapshot, m, loadedHere),
     };
@@ -167,6 +179,12 @@ export default function ModelSelectorPopover({
         </MessageBar>
       )}
 
+      {cliLock && (
+        <MessageBar intent="warning">
+          <MessageBarBody>{cliLock}</MessageBarBody>
+        </MessageBar>
+      )}
+
       <Flex direction="column" align="stretch">
         <Flex direction="column" gap="xxs" align="stretch">
           <Flex align="center" justify="between" gap="m">
@@ -175,7 +193,7 @@ export default function ModelSelectorPopover({
               className="model-selector__run-on"
               layout="horizontal"
               value={compute}
-              disabled={loading !== null}
+              disabled={isSelectionLocked}
               onChange={handleComputeSelect}
               aria-label="Compute target"
             >
@@ -220,11 +238,7 @@ export default function ModelSelectorPopover({
         </MenuList>
       </Flex>
 
-      {!hasRows && (
-        <Caption1>
-          {query ? `No models match "${query}".` : (cliLock ?? "No models installed yet.")}
-        </Caption1>
-      )}
+      {!hasRows && emptyText && <Caption1>{emptyText}</Caption1>}
 
       <Divider />
 

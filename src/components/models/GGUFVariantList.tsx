@@ -30,6 +30,8 @@ interface GGUFVariantListProps {
   activeFilename: string | null;
   /** True while this repo has a download in progress. */
   busy: boolean;
+  /** Why download and load are off (the GenieX CLI is missing), or null. Shown beside the action. */
+  cliLock: string | null;
   onDownload: (group: GGUFGroup) => void;
   onLoad: () => void;
 }
@@ -44,6 +46,7 @@ export function GGUFVariantList({
   fitFor,
   activeFilename,
   busy,
+  cliLock,
   onDownload,
   onLoad,
 }: GGUFVariantListProps) {
@@ -101,19 +104,26 @@ export function GGUFVariantList({
     };
   });
 
+  // Download imports into GenieX and Load runs on it, so both wait for the CLI.
+  const isCliLocked = cliLock !== null;
   const action = downloading ? (
     <Button appearance="secondary" disabled icon={<Spinner size="tiny" />}>
       Pulling…
     </Button>
   ) : downloaded ? (
-    <Button appearance="primary" icon={<ChatRegular />} disabled={busy} onClick={onLoad}>
+    <Button
+      appearance="primary"
+      icon={<ChatRegular />}
+      disabled={busy || isCliLocked}
+      onClick={onLoad}
+    >
       Load & Chat
     </Button>
   ) : (
     <Button
       appearance="primary"
       icon={<ArrowDownloadRegular />}
-      disabled={busy}
+      disabled={busy || isCliLocked}
       onClick={() => onDownload(selected)}
     >
       Download
@@ -130,7 +140,10 @@ export function GGUFVariantList({
         onChange={setChosenFile}
         disabled={busy}
       />
-      <Flex justify="end">{action}</Flex>
+      <Flex justify="end" align="center" gap="s" wrap>
+        {cliLock && <Meta>{cliLock}</Meta>}
+        {action}
+      </Flex>
     </Flex>
   );
 }

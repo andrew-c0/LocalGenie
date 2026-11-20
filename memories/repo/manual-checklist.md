@@ -6,7 +6,7 @@ Only untested items are kept (tested ones were removed 2026-11-18; see git histo
 
 ## Overview
 
-- [ ] Overview: with GenieX removed, Browse Models and Start Local Chat are disabled with the tooltip; "Models Installed" shows "—"; the "Open Runtimes" block opens Settings > Runtimes. **[needs you]**
+- [ ] Overview: with GenieX removed, Browse Models and Start Local Chat are enabled (both pages open; the actions there say why they are off); "Models Installed" shows "—"; the "Open Runtimes" block opens Settings > Runtimes. **[needs you]**
 
 ## Models
 
@@ -15,11 +15,13 @@ Only untested items are kept (tested ones were removed 2026-11-18; see git histo
 
 ### Local
 
+- [ ] Installed models without the CLI (GenieX removed): the list shows the models from the database with size "—"; Details opens; Load & Chat, Remove and Clean cache are disabled with the reason tooltip ("Needs the GenieX CLI. Install it in Settings > Runtimes."). **[needs you]**
 - [ ] Delete from the Playground models page: the model leaves the list and the tool's selector; a file shared with another downloaded model (the Qwen3-4B encoder) is kept while the other model is installed. (The dialog showing the size and the shared-files note was seen, and cancelled.) **[needs download/network]**
 
 ### Hugging Face
 
 - [ ] Models: search → download → import → progress → completion refresh; cancel and resume from the drawer; duplicate click is ignored; Load & Chat sets active model; remove confirmation works; repo filter chips behave. **[needs download/network]**
+- [ ] Hugging Face and AI Hub browsing without the CLI (GenieX removed): both lists, the search, the filters and the detail pages open; each Download button (Hugging Face GGUF variants, AI Hub asset picker) is disabled with the reason tooltip. **[needs you]**
 
 ### AI Hub
 
@@ -60,6 +62,10 @@ Download each model and run it once.
 - [ ] Hugging Face page link on a model detail opens in the system browser (through `openExternal`), not in the app window. **[needs download/network]**
 
 ## Chat
+
+### Without the GenieX CLI
+
+- [ ] Chat and Dispatch without the CLI (GenieX removed): old conversations open and read; the chat input reads "Install the GenieX CLI to chat" and Send is off; a Dispatch conversation shows its transcript with Send and Continue disabled and the same reason. **[needs you]**
 
 ### Messages and conversations
 
@@ -146,6 +152,7 @@ Download each model and run it once.
 ### Run
 
 - [ ] Benchmarks, Run: start a suite, go to Chat or Overview, come back: the progress and the end of the run are shown.
+- [ ] Benchmarks without the CLI (GenieX removed): the landing, the lists, the prompt and suite pages, Runs and Compare all open; on the Run page the reason shows and Run suite is disabled with the same reason. **[needs you]**
 - [ ] Benchmarks, Run: Cancel keeps the finished steps; chat and model load are refused until the run ends; the Windows power plan and battery are recorded for the run. (A one-step suite on LFM2.5-1.2B on the NPU ran after the consent dialog, showed its step and appeared in Runs with compute NPU, TTFT 51 ms and 23.5 tokens/s.)
 
 ### Runs
@@ -276,12 +283,12 @@ Limits are in `known-issues.md` ("Playground selector and downloads").
 ### Runtimes: GenieX CLI
 
 - [ ] Settings > Runtimes lists GenieX CLI first, with its logo, installed version or "Not installed", latest version and repo. The "…" menu has Release notes, Uninstall (disabled when not installed) and, when not installed, Check again. **[needs download/network]**
-- [ ] Install GenieX (not installed): Install queues an entry in the Downloads drawer. Stages: Checking release, Downloading (with bytes), Verifying, Installing…, Done. No installer window appears (the setup runs silently). Toast "GenieX CLI installed"; the card shows the version; Models, Chat and Benchmarks unlock without a restart. **[needs download/network]**
+- [ ] Install GenieX (not installed): Install queues an entry in the Downloads drawer. Stages: Checking release, Downloading (with bytes), Verifying, Installing…, Done. No installer window appears (the setup runs silently). Toast "GenieX CLI installed"; the card shows the version; the disabled CLI actions (model load, chat send, Dispatch, Run suite, Download, Remove, Clean cache, OCR download) enable without a restart; the pages stay open during the install. **[needs download/network]**
 - [ ] After success the setup `geniex-cli-setup-windows-arm64-v<version>.exe` is gone from the app data folder (`%APPDATA%\com.localgenie.app\`). After a failed or cancelled install it stays there. **[needs download/network]**
 - [ ] Update: with an older GenieX installed, the card offers Update; the drawer runs it and the card shows the new version. **[needs download/network]**
 - [ ] While an install or update of a runtime is queued or running, its card's "…" menu is disabled. **[needs download/network]**
 - [ ] Cancel during Downloading: the entry shows cancelled; Resume downloads again. Cancel during Installing: the drawer stops waiting. If the setup was running, it finishes with no window (check Task Manager and the version afterwards). **[needs download/network]**
-- [ ] Uninstall: "…" > Uninstall, then confirm. The confirm text names what stays locked. The card shows a spinner; no uninstaller window appears; the server started by the app stops; toast "GenieX CLI removed"; the card shows Not installed. **[needs you]**
+- [ ] Uninstall: "…" > Uninstall, then confirm. The confirm text is checked against the new behaviour (it still says Chat, Models and Benchmarks stay locked; that copy is stale, see `codebase-map.md`, drift). The card shows a spinner; no uninstaller window appears; the server started by the app stops; toast "GenieX CLI removed"; the card shows Not installed. **[needs you]**
 
 ### Runtimes: optional (stable-diffusion.cpp, sherpa-onnx)
 
@@ -312,9 +319,9 @@ Limits are in `known-issues.md` ("Playground selector and downloads").
 
 - [ ] Sidebar rail: the toggle collapses to the icon rail and expands again; each rail icon has a tooltip with its name; Models shows its installed count on the icon; the usage chart is hidden in the rail; the state is kept after a restart.
 - [ ] Breadcrumbs on a narrow window: the trail and the actions (chat's context ring and menus) wrap without overlapping.
-- [ ] Lock tooltips: with GenieX removed, the sidebar's Models, Chat and Benchmarks are disabled, with the reason in a tooltip, in both the expanded and the rail view; the tooltip reads "Needs the GenieX CLI. Install it in Settings > Runtimes."; the Playground landing's OCR row is disabled with the same reason. **[needs you]**
-- [ ] Route guard: with GenieX removed, a navigation to /models, /chat or /benchmarks (for example from the dev console) lands on Settings > Runtimes with the toast "This area is unavailable". **[needs you]**
-- [ ] Start with GenieX missing: Models, Chat and Benchmarks show locked once the runtime list has been read (nothing is locked before that). **[needs you]**
+- [ ] Lock tooltips: with GenieX removed, the sidebar's Models, Chat, Benchmarks and Playground items stay enabled (no lock, no tooltip, in both the expanded and the rail view). The actions listed under "Without the GenieX CLI" and the sections above are disabled, each with the tooltip "Needs the GenieX CLI. Install it in Settings > Runtimes."; the Playground landing's OCR row is disabled with the same reason. **[needs you]**
+- [ ] Route guard: with GenieX removed, a navigation to /models, /chat, /dispatch or /benchmarks (for example from the dev console) opens that page with no redirect and no toast; a navigation to /playground/ocr goes to the Playground landing with no toast. **[needs you]**
+- [ ] Start with GenieX missing: nothing is locked in the sidebar or the landings once the runtime list has been read (nothing is locked before that); only OCR is disabled. **[needs you]**
 
 ### Sidebar usage chart
 

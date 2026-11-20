@@ -92,6 +92,18 @@ pub(super) fn resolve_geniex_executable() -> PathBuf {
     }
 }
 
+/// Error for any command that needs the GenieX CLI while it is not installed. The text starts with
+/// "GenieX CLI is not installed" so the frontend can tell this case apart from a failed run.
+pub(super) const CLI_NOT_INSTALLED: &str =
+    "GenieX CLI is not installed. Install it from Settings > Runtimes.";
+
+/// True when the resolved GenieX binary is an absolute path to an existing file. The bare fallback
+/// name means nothing was found. Checks the file only; no process is started.
+pub(super) fn cli_installed() -> bool {
+    let binary = resolve_geniex_executable();
+    binary.is_absolute() && binary.is_file()
+}
+
 /// Run `geniex version` with a timeout and return parsed version string
 /// (e.g. "0.3.17") on success.
 pub(super) async fn get_installed_version_timeout(secs: u64) -> Option<String> {

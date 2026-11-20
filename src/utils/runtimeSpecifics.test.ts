@@ -4,7 +4,7 @@ import { GENIEX_RUNTIME_ID, uninstallMessage } from "./runtimeSpecifics";
 describe("uninstallMessage", () => {
   it("says the GenieX CLI locks Chat, Models and Benchmarks until it is installed again", () => {
     const message = uninstallMessage(GENIEX_RUNTIME_ID);
-    expect(message).toContain("Chat, Models and Benchmarks stay locked");
+    expect(message).toContain("saved chats, benchmarks and the model list stay viewable");
   });
 
   it("names the Playground tabs each optional runtime locks", () => {

@@ -1,3 +1,5 @@
+import { cliActionReason } from "./runtimeGuards";
+
 /** Where a conversation stands in the Dispatch runner: working, queued, or neither. */
 export type OwnState = "idle" | "queued" | "working";
 
@@ -6,9 +8,14 @@ export interface TurnState {
   own: OwnState;
   /** A chat reply or summary is in progress (not a Dispatch turn of its own). */
   chatBusy: boolean;
+  /** The GenieX CLI is installed. Null until the state is read, which does not refuse. */
+  cliInstalled: boolean | null;
   serverRunning: boolean;
   modelLoaded: boolean;
 }
+
+/** The model side of a turn: the CLI, the server and the loaded model. */
+export type ModelTurnState = Pick<TurnState, "cliInstalled" | "serverRunning" | "modelLoaded">;
 
 /**
  * Why a message cannot be sent to a conversation now, as the text to show, or null when it can. The
@@ -27,12 +34,12 @@ export function turnRefusal(state: TurnState): string | null {
 }
 
 /**
- * Why a turn cannot run on the model now: the server is stopped or no model is loaded. Null when it can.
- * A queued turn that starts later is checked with this too.
+ * Why a turn cannot run on the model now: the GenieX CLI is missing, the server is stopped or no model is
+ * loaded. Null when it can. A queued turn that starts later is checked with this too.
  */
-export function serverModelRefusal(
-  state: Pick<TurnState, "serverRunning" | "modelLoaded">,
-): string | null {
+export function serverModelRefusal(state: ModelTurnState): string | null {
+  const cliReason = cliActionReason(state.cliInstalled);
+  if (cliReason) return cliReason;
   if (!state.serverRunning) return "Start the GenieX server to run a conversation.";
   if (!state.modelLoaded) return "Load a model to run a conversation.";
   return null;

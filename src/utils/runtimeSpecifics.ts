@@ -10,7 +10,7 @@ export const GENIEX_RUNTIME_ID = "geniex";
 /** What an uninstall locks or leaves behind, beyond the runtime's own files, by runtime id. */
 const UNINSTALL_NOTES: Partial<Record<string, string>> = {
   [GENIEX_RUNTIME_ID]:
-    "Chat, Models and Benchmarks stay locked until it is installed again. Downloaded model files are not deleted by this app.",
+    "Loading models, sending messages, running benchmarks and downloading or deleting models stop working until it is installed again; saved chats, benchmarks and the model list stay viewable. Downloaded model files are not deleted by this app.",
   [SD_CPP_RUNTIME_ID]:
     "The Playground's Text to image, Image to image and Image upscaling tabs stay locked until it is installed again. Downloaded image models are not deleted.",
   [SHERPA_RUNTIME_ID]:

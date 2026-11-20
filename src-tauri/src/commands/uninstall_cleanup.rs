@@ -11,7 +11,7 @@ use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::cli::resolve_geniex_executable;
+use super::cli::cli_installed;
 use super::playground::paths::legacy_images_root;
 use super::runtimes::geniex::{sweep_setup_files, uninstall_cli, SetupLeftovers};
 use super::storage::{self, is_link, plan, Locations, PlannedItem, Uninstall};
@@ -329,13 +329,6 @@ fn app_data_folder() -> Result<PathBuf, String> {
         .filter(|value| !value.is_empty())
         .ok_or_else(|| "APPDATA is not set".to_string())?;
     Ok(PathBuf::from(roaming).join(APP_IDENTIFIER))
-}
-
-/// The GenieX CLI is present when the resolved binary is an absolute path to an existing file.
-/// A bare name means nothing was found.
-fn cli_installed() -> bool {
-    let binary = resolve_geniex_executable();
-    binary.is_absolute() && binary.is_file()
 }
 
 /// Run the cleanup and return the process exit code.

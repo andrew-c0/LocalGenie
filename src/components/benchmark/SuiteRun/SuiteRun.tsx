@@ -1,6 +1,7 @@
 import { Button, ProgressBar } from "@fluentui/react-components";
 import { PlayRegular, StopRegular } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
+import { useCliLock } from "../../../hooks/useCliLock";
 import * as db from "../../../services/database";
 import * as geniex from "../../../services/geniex";
 import { reloadModel, savedLoadParams } from "../../../services/modelLoad";
@@ -11,6 +12,7 @@ import { shortModelKey } from "../../../utils/modelKey";
 import { toast } from "../../../utils/toast";
 import { ConfirmDialog } from "../../ui/ConfirmDialog/ConfirmDialog";
 import { ErrorBanner } from "../../ui/ErrorBanner/ErrorBanner";
+import { LockedTooltip } from "../../ui/LockedTooltip/LockedTooltip";
 import { BodyStrong, Meta } from "../../ui/Typography/Typography";
 import { RunConsentDialog } from "./RunConsentDialog";
 import { useSuiteRun } from "./useSuiteRun";
@@ -106,6 +108,8 @@ export function SuiteRun({ suiteId }: { suiteId: string }) {
   const [confirmReload, setConfirmReload] = useState(false);
   const [reloading, setReloading] = useState(false);
   const run = useSuiteRun(suiteId);
+  /** A run loads and drives the model through the GenieX CLI, so it waits for the CLI. */
+  const cliLock = useCliLock();
 
   // The store learns about loaded models only at startup and after some actions, so ask the server
   // again when the panel opens. Otherwise a model loaded since then looks unloaded here.
@@ -132,7 +136,12 @@ export function SuiteRun({ suiteId }: { suiteId: string }) {
 
   const busy = run.phase === "running" || reloading;
   const needsReload = loadedCompute !== compute;
-  const canStart = activeModel !== null && !busy && !run.busyElsewhere;
+  const runNote =
+    cliLock ??
+    (activeModel === null
+      ? "No model is loaded. Choose and load a model in the top bar first."
+      : `Runs the active model on ${COMPUTE_LABELS[compute]} with its saved settings.`);
+  const canStart = cliLock === null && activeModel !== null && !busy && !run.busyElsewhere;
 
   // The same load settings chat sends: the model's saved settings with the selected compute target.
   const startNow = async (model: string) => {
@@ -194,11 +203,7 @@ export function SuiteRun({ suiteId }: { suiteId: string }) {
   return (
     <section className="suite-run">
       <BodyStrong>Run</BodyStrong>
-      {activeModel === null ? (
-        <Meta>No model is loaded. Choose and load a model in the top bar first.</Meta>
-      ) : (
-        <Meta>Runs the active model on {COMPUTE_LABELS[compute]} with its saved settings.</Meta>
-      )}
+      <Meta>{runNote}</Meta>
       {run.busyElsewhere && (
         <Meta>Another suite is running. Wait for it to finish, or cancel it on its own page.</Meta>
       )}
@@ -209,14 +214,16 @@ export function SuiteRun({ suiteId }: { suiteId: string }) {
             Cancel run
           </Button>
         ) : (
-          <Button
-            appearance="primary"
-            icon={<PlayRegular />}
-            disabled={!canStart}
-            onClick={handleStart}
-          >
-            {reloading ? "Reloading model…" : "Run suite"}
-          </Button>
+          <LockedTooltip reason={cliLock}>
+            <Button
+              appearance="primary"
+              icon={<PlayRegular />}
+              disabled={!canStart}
+              onClick={handleStart}
+            >
+              {reloading ? "Reloading model…" : "Run suite"}
+            </Button>
+          </LockedTooltip>
         )}
       </div>
 

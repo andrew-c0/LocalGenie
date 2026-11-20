@@ -22,6 +22,11 @@ Status labels: **code-verified** = read in the source (committed up to 694a036, 
 - Already-downloaded models are not repaired by the matching fix (2026-11-12). A model from an affected repo imported before it has no projector and no vision; re-download it to get one. There is no "download just the projector" action.
 - Vision and audio probes match whole words only (`has_word`), so a reply that names the colour or number only inside another word does not count (`capability_scan.rs` tests `names_match_whole_words_only`).
 
+## GenieX CLI missing: per-action locks (2026-11-20 working tree; code-read and unit tests, not run in the app)
+- **OCR remains CLI-locked.** Its models are GenieX models run by the GenieX server, so without the CLI `/playground/ocr` goes to `/playground` and the OCR row's and detail page's Download and Delete are disabled. Code-read (`PlaygroundSectionPage`; `routes.ts` sets `needs: "cli"` on `playground-ocr` only).
+- **No disk size in the installed list without the CLI.** Rows come from `downloaded_models`, so `list_models` gives size "—" (`SIZE_UNKNOWN`) and the card leaves out the disk fact. The size comes from `geniex list` only.
+- **Capability reading only sees the default cache folder or `GENIEX_DATADIR`.** `commands/capabilities.rs` reads `GENIEX_DATADIR\models`, else `~\.cache\geniex\models`, with or without the CLI. A cache folder set some other way (for example through the CLI's config) is not read. Code-read.
+
 ## RAM estimate (committed ae6e31a to 0cc9a85; tested in the app by the user, 2026-10-31)
 - The RAM figures are stored per downloaded model (migration `m20261036`, `commands/ram_store.rs`; bbe159f; tested by the user 2026-11-03). A figure is written at import and when the saved `nctx` changes; a row without one is filled at startup by `backfill_model_ram`, and a row that fails stays null until the next start.
 - RAM estimate constants are not validated: the 10% compute buffer with a 256 MiB floor, the 120% and 110% flat factors, the 8192 context cap and the 4096 fallback (`ram_estimate.rs`, `model_ram.rs`) are not checked against the measured memory of a loaded model.

@@ -3,7 +3,14 @@ import type { AihubCardInfo, AihubCatalogEntry } from "../../../services/aihub";
 import type { DbDownloadedModel } from "../../../services/database";
 import type { ModelInfo } from "../../../types";
 import { serializeFacets } from "../../../utils/hubModelInfo";
-import { aihubCardData, factTooltipText, hubCardData, localCardData } from "./modelCardData";
+import {
+  aihubCardData,
+  diskSizeOf,
+  factTooltipText,
+  hubCardData,
+  localCardData,
+  UNKNOWN_MODEL_SIZE,
+} from "./modelCardData";
 
 const GB = 1_073_741_824;
 
@@ -48,6 +55,17 @@ describe("factTooltipText", () => {
   });
 });
 
+describe("diskSizeOf", () => {
+  it("gives the size when the model has one", () => {
+    expect(diskSizeOf("4.0 GB")).toBe("4.0 GB");
+  });
+
+  it("gives null for the em dash the backend writes without the GenieX CLI, and for an empty size", () => {
+    expect(diskSizeOf(UNKNOWN_MODEL_SIZE)).toBeNull();
+    expect(diskSizeOf("  ")).toBeNull();
+  });
+});
+
 describe("localCardData", () => {
   it("shows the facts of a stored row in order, with the RAM badge and the source", () => {
     const card = localCardData(MODEL, row(), []);
@@ -89,6 +107,12 @@ describe("localCardData", () => {
   it("passes the capability icons through", () => {
     const badges = [{ id: "tools" as const, label: "Tools" }];
     expect(localCardData(MODEL, row(), badges).capabilityBadges).toEqual(badges);
+  });
+  it("omits the disk fact when the size is the em dash, and keeps the stored facts", () => {
+    const card = localCardData({ ...MODEL, size: UNKNOWN_MODEL_SIZE }, row(), []);
+    expect(card.facts.find((f) => f.kind === "disk")).toBeUndefined();
+    expect(card.facts.find((f) => f.kind === "params")?.text).toBe("7.6B");
+    expect(card.ramVerdict).not.toBeNull();
   });
 });
 

@@ -20,6 +20,7 @@ import type { CardRamVerdict } from "../../../utils/cardRam";
 import { formatCount } from "../../../utils/format";
 import type { CapabilityBadge } from "../../../utils/modelCapabilities";
 import { Flex } from "../Flex/Flex";
+import { LockedTooltip } from "../LockedTooltip/LockedTooltip";
 import { ModelCapabilityIcons } from "../ModelCapabilityIcons/ModelCapabilityIcons";
 import { StatusBadge } from "../StatusBadge/StatusBadge";
 import { CardTitle, Meta } from "../Typography/Typography";
@@ -99,6 +100,10 @@ interface ModelCardProps {
   onRemove?: (name: string) => void;
   /** Open the model's detail page. The caller picks the route for its source. */
   onDetails?: (name: string) => void;
+  /** Why Load & Chat is off (the GenieX CLI is missing), or null. Shown as the button's tooltip. */
+  loadLock?: string | null;
+  /** Why Remove is off (the GenieX CLI is missing), or null. Shown as the button's tooltip. */
+  removeLock?: string | null;
 }
 
 /** One model as a row: the content on the left, the actions on the right. */
@@ -109,6 +114,8 @@ export function ModelCard({
   onOpenSelector,
   onRemove,
   onDetails,
+  loadLock = null,
+  removeLock = null,
 }: ModelCardProps) {
   const openDetails = () => onDetails?.(model.name);
   const { updated, stats, details, ramVerdict } = model;
@@ -195,25 +202,30 @@ export function ModelCard({
             </Button>
           ) : model.installed ? (
             <>
-              <Button
-                appearance="primary"
-                icon={<ChatRegular />}
-                onClick={onOpenSelector}
-                disabled={isLoaded}
-              >
-                {isLoaded ? "Active" : "Load & Chat"}
-              </Button>
+              <LockedTooltip reason={isLoaded ? null : loadLock}>
+                <Button
+                  appearance="primary"
+                  icon={<ChatRegular />}
+                  onClick={onOpenSelector}
+                  disabled={isLoaded || loadLock !== null}
+                >
+                  {isLoaded ? "Active" : "Load & Chat"}
+                </Button>
+              </LockedTooltip>
               <Button appearance="secondary" icon={<InfoRegular />} onClick={openDetails}>
                 Details
               </Button>
               {onRemove && (
-                <Button
-                  appearance="secondary"
-                  icon={<DeleteRegular />}
-                  title="Remove model"
-                  aria-label={`Remove ${model.name}`}
-                  onClick={() => onRemove(model.name)}
-                />
+                <LockedTooltip reason={removeLock}>
+                  <Button
+                    appearance="secondary"
+                    icon={<DeleteRegular />}
+                    title="Remove model"
+                    aria-label={`Remove ${model.name}`}
+                    disabled={removeLock !== null}
+                    onClick={() => onRemove(model.name)}
+                  />
+                </LockedTooltip>
               )}
             </>
           ) : (

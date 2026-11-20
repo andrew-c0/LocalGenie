@@ -221,14 +221,29 @@ describe("childrenOf", () => {
     ]);
   });
 
-  it("gives the Playground models page no runtime need, and the GenieX pages the CLI", () => {
+  it("gives no Models page a runtime need: the CLI actions are disabled on the pages, not locked", () => {
     const needs = Object.fromEntries(childrenOf("models").map((route) => [route.id, route.needs]));
     expect(needs).toEqual({
-      "models-local": "cli",
+      "models-local": undefined,
       "models-playground": undefined,
-      "models-huggingface": "cli",
-      "models-aihub": "cli",
+      "models-huggingface": undefined,
+      "models-aihub": undefined,
     });
+  });
+
+  it("gives no Chat, Dispatch or Benchmarks page a runtime need", () => {
+    const sections = ["chat", "dispatch", "benchmarks"].map((id) => routeById(id));
+    expect(sections.map((route) => route?.needs)).toEqual([undefined, undefined, undefined]);
+    const allNeeds = [
+      ...childrenOf("chat"),
+      ...childrenOf("dispatch"),
+      ...childrenOf("benchmarks"),
+      ...childrenOf("benchmarks-prompts"),
+      ...childrenOf("benchmarks-suites"),
+      ...childrenOf("benchmarks-run"),
+      ...childrenOf("benchmarks-runs"),
+    ].map((route) => route.needs);
+    expect(allNeeds.every((need) => need === undefined)).toBe(true);
   });
 
   it("gives an empty list for a route without children or an unknown id", () => {
@@ -276,6 +291,13 @@ describe("childrenOf", () => {
       "cli",
       SHERPA_RUNTIME_ID,
     ]);
+  });
+
+  it("keeps the CLI lock on the Playground OCR tool only, the one tool served by the GenieX server", () => {
+    const cliRoutes = allRoutes(ROUTES)
+      .filter((route) => route.needs === "cli")
+      .map((route) => route.id);
+    expect(cliRoutes).toEqual(["playground-ocr"]);
   });
 
   it("lists the benchmark pages in order", () => {

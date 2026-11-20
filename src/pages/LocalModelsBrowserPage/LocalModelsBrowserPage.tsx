@@ -13,6 +13,7 @@ import { ChipRow } from "../../components/ui/ChipRow/ChipRow";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog/ConfirmDialog";
 import { ErrorBanner } from "../../components/ui/ErrorBanner/ErrorBanner";
 import { Flex } from "../../components/ui/Flex/Flex";
+import { LockedTooltip } from "../../components/ui/LockedTooltip/LockedTooltip";
 import { ModelCard } from "../../components/ui/ModelCard/ModelCard";
 import { hubCardData } from "../../components/ui/ModelCard/modelCardData";
 import { PageHeader } from "../../components/ui/PageHeader/PageHeader";
@@ -20,6 +21,7 @@ import { RetryBlock } from "../../components/ui/RetryBlock/RetryBlock";
 import { SkeletonRows } from "../../components/ui/Skeletons/SkeletonRows";
 import { StateBlock } from "../../components/ui/StateBlock/StateBlock";
 import { Body, Meta } from "../../components/ui/Typography/Typography";
+import { useCliLock } from "../../hooks/useCliLock";
 import { useSystemMemory } from "../../hooks/useSystemMemory";
 import * as db from "../../services/database";
 import * as geniex from "../../services/geniex";
@@ -51,6 +53,8 @@ export default function LocalModelsBrowserPage() {
   const serverStatus = useModelStore((s) => s.serverStatus);
   // Read once for every result card on this page; each card's RAM verdict is derived from it.
   const systemMemory = useSystemMemory();
+  /** Clean Cache needs the GenieX CLI. Its reason is the tooltip while the CLI is missing. */
+  const cliLock = useCliLock();
 
   const setSelectorOpen = useModelStore((s) => s.setSelectorOpen);
   const [query, setQuery] = useState("");
@@ -169,12 +173,15 @@ export default function LocalModelsBrowserPage() {
           title="Installed models"
           subtitle={SUBTITLE}
           actions={
-            <Button
-              appearance="secondary"
-              onClick={() => geniex.cleanModels().catch((err: Error) => setError(String(err)))}
-            >
-              Clean Cache
-            </Button>
+            <LockedTooltip reason={cliLock}>
+              <Button
+                appearance="secondary"
+                disabled={cliLock !== null}
+                onClick={() => geniex.cleanModels().catch((err: Error) => setError(String(err)))}
+              >
+                Clean Cache
+              </Button>
+            </LockedTooltip>
           }
         />
 
