@@ -26,6 +26,7 @@ export function ChipRow<T extends string>({
   return (
     <div className="chip-row__row">
       <TabList
+        className="chip-row__tabs"
         size="small"
         appearance="subtle"
         aria-label={ariaLabel}

@@ -4,3 +4,10 @@
   gap: var(--spacingHorizontalS);
   align-items: center;
 }
+
+/* Fluent's TabList does not wrap: in a narrow window its tabs overflowed and the page scrolled sideways. */
+.chip-row__row .chip-row__tabs {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
