@@ -37,6 +37,12 @@
   overflow-wrap: anywhere;
 }
 
+/*
+ * The waveform needs room to draw its bars. The dialog content is a centred flex row, so the wrapper is given a
+ * width and a minimum. The minimum is 80vw, not 90vw: the dialog surface is 92vw less its padding, and 90vw would
+ * overflow on a narrow window.
+ */
 .attachment-preview__audio {
   width: 100%;
+  min-width: min(640px, 80vw);
 }

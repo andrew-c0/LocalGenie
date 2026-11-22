@@ -13,6 +13,8 @@ import {
   aihubFolder,
   aihubModelName,
   aihubZipName,
+  chipsetUnknownHint,
+  deviceMatchLabel,
   hfFileOf,
   isAssetForDevice,
 } from "../../../utils/aihub";
@@ -37,28 +39,24 @@ function precisionOf(asset: AihubAsset): string {
   return (gguf && parseGGUFFilename(gguf.filename)?.encoding) || asset.precision;
 }
 
-/** Whether an asset is universal, for this device, or for another chipset. */
+/** Whether an asset is universal, for this device, for another chipset, or the device is not known. */
 function DeviceMatchBadge({
   chipset,
   deviceChipset,
+  cliInstalled,
 }: {
   chipset: string | null;
   deviceChipset: string | null;
+  cliInstalled: boolean | null;
 }) {
-  if (chipset === null) {
-    return (
-      <Badge appearance="tint" color="subtle">
-        Any chipset
-      </Badge>
-    );
-  }
-  return isAssetForDevice(chipset, deviceChipset) ? (
-    <Badge appearance="tint" color="success">
-      This device
-    </Badge>
-  ) : (
-    <Badge appearance="tint" color="subtle">
-      Other chipset
+  const label = deviceMatchLabel(chipset, deviceChipset);
+  return (
+    <Badge
+      appearance="tint"
+      color={label === "This device" ? "success" : "subtle"}
+      title={label === "Device unknown" ? chipsetUnknownHint(cliInstalled) : undefined}
+    >
+      {label}
     </Badge>
   );
 }
@@ -71,6 +69,7 @@ function DeviceMatchBadge({
  */
 export function AihubAssetPicker({ model, assets }: Props) {
   const deviceChipset = useModelStore((s) => s.chipset);
+  const cliInstalled = useModelStore((s) => s.cliInstalled);
   const modelName = aihubModelName(model.name);
   const downloads = useDownloadStore((s) => s.downloads);
   const enqueueAihub = useDownloadStore((s) => s.enqueueAihub);
@@ -111,7 +110,11 @@ export function AihubAssetPicker({ model, assets }: Props) {
             </Badge>
           )}
         </Flex>
-        <DeviceMatchBadge chipset={asset.chipset} deviceChipset={deviceChipset} />
+        <DeviceMatchBadge
+          chipset={asset.chipset}
+          deviceChipset={deviceChipset}
+          cliInstalled={cliInstalled}
+        />
       </Flex>
     ),
   }));
@@ -153,8 +156,9 @@ export function AihubAssetPicker({ model, assets }: Props) {
       />
       {!allowed && (
         <Meta>
-          This asset is for {selected.chipset}, and this device is{" "}
-          {deviceChipset ?? "not set to a chipset"}.
+          {deviceChipset
+            ? `This asset is for ${selected.chipset}, and this device is ${deviceChipset}.`
+            : `This asset is for ${selected.chipset}. ${chipsetUnknownHint(cliInstalled)}`}
         </Meta>
       )}
       <Flex justify="end" align="center" gap="s" wrap>

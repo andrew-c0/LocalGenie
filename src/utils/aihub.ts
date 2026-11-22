@@ -144,3 +144,29 @@ export function isAssetForDevice(
   const samePrefix = asset.every((word, i) => device[i] === word);
   return samePrefix && (device.length === asset.length || device.length === asset.length + 1);
 }
+
+const CHIPSET_NEEDS_GENIEX_HINT =
+  "GenieX is needed to detect this device's chipset. Install it in Settings > Runtimes.";
+const CHIPSET_NOT_SET_HINT =
+  "GenieX did not report a chipset for this device. Set it with `geniex config set chipset`.";
+
+/**
+ * Why a chipset asset cannot be checked against the device when the device's chipset is unknown: GenieX
+ * is missing (it detects the chipset), or it is installed but reports none.
+ */
+export function chipsetUnknownHint(cliInstalled: boolean | null): string {
+  return cliInstalled === false ? CHIPSET_NEEDS_GENIEX_HINT : CHIPSET_NOT_SET_HINT;
+}
+
+/**
+ * The badge text for an asset's chipset: `Any chipset` for a universal asset, `This device` for a
+ * chipset asset that matches, `Device unknown` when the device's chipset is not read, else `Other chipset`.
+ */
+export function deviceMatchLabel(
+  assetChipset: string | null,
+  deviceChipset: string | null,
+): string {
+  if (assetChipset === null) return "Any chipset";
+  if (isAssetForDevice(assetChipset, deviceChipset)) return "This device";
+  return deviceChipset === null ? "Device unknown" : "Other chipset";
+}

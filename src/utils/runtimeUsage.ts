@@ -1,6 +1,7 @@
 import * as geniex from "../services/geniex";
 import { useModelStore } from "../stores/modelStore";
 import { useRuntimeStore } from "../stores/runtimeStore";
+import { refreshChipset } from "./deviceChipset";
 import { GENIEX_RUNTIME_ID } from "./runtimeSpecifics";
 
 /**
@@ -15,9 +16,15 @@ export async function refreshModelList(): Promise<void> {
   }
 }
 
+/** The GenieX state beyond the runtime list: the model library and the device chipset the CLI reports. */
+async function refreshGeniexUsage(): Promise<void> {
+  await refreshModelList();
+  await refreshChipset();
+}
+
 /** The state each runtime keeps beyond the runtime list, by runtime id. A runtime with none has no entry. */
 const USAGE_SYNC: Partial<Record<string, () => Promise<void>>> = {
-  [GENIEX_RUNTIME_ID]: refreshModelList,
+  [GENIEX_RUNTIME_ID]: refreshGeniexUsage,
 };
 
 /**

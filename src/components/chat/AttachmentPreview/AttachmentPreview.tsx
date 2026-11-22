@@ -7,9 +7,12 @@ import {
   DialogSurface,
   DialogTitle,
 } from "@fluentui/react-components";
+import { useCallback } from "react";
 import { revealAttachment } from "../../../services/attachments";
 import type { AttachmentFile } from "../../../types";
+import { attachmentAudioUrl } from "../../../utils/attachmentAudio";
 import { toast } from "../../../utils/toast";
+import { AudioWaveformPlayer } from "../../playground/AudioWaveformPlayer/AudioWaveformPlayer";
 import { ImagePreviewDialog } from "../../ui/ImagePreviewDialog/ImagePreviewDialog";
 import "./AttachmentPreview.css";
 
@@ -20,9 +23,9 @@ interface AttachmentPreviewProps {
 }
 
 /**
- * Modal preview of an image, text file or audio clip. Closes with Close or Escape. Open location
- * shows the file in Explorer; if the file is gone, a toast says so. Images use the shared
- * ImagePreviewDialog.
+ * Modal preview of an image, text file or audio clip. Audio plays in the Playground's waveform player.
+ * Closes with Close or Escape. Open location shows the file in Explorer; if the file is gone, a toast
+ * says so. Images use the shared ImagePreviewDialog.
  */
 export function AttachmentPreview({ file, onClose }: AttachmentPreviewProps) {
   if (file?.kind === "image" && file.data && file.mime) {
@@ -73,13 +76,34 @@ async function openLocation(file: AttachmentFile) {
   }
 }
 
-/** Text or audio. Images never reach here; they use ImagePreviewDialog. */
+/**
+ * The body of the dialog: the text of a text file, or the waveform player of an audio clip. Images never reach here;
+ * they use ImagePreviewDialog.
+ */
 function PreviewBody({ file }: { file: AttachmentFile }) {
   if (file.kind === "text") {
     return <pre className="attachment-preview__text">{file.text}</pre>;
   }
-  if (file.kind !== "audio" || !file.data || !file.mime) return null;
-  const url = `data:${file.mime};base64,${file.data}`;
-  // biome-ignore lint/a11y/useMediaCaption: the clip is the user's own file and has no captions to show
-  return <audio className="attachment-preview__audio" controls preload="metadata" src={url} />;
+  if (file.kind !== "audio") return null;
+  return <AudioClipPreview path={file.path} url={attachmentAudioUrl(file)} />;
+}
+
+interface AudioClipPreviewProps {
+  path: string;
+  /** The clip as a data URL built from the bytes already read with the attachment; null when it has none. */
+  url: string | null;
+}
+
+/**
+ * The Playground's waveform player for the clip. Its reader returns the data URL already in hand, so the file is not
+ * read from disk again. The reader is memoised on the URL, so the player loads once per clip.
+ */
+function AudioClipPreview({ path, url }: AudioClipPreviewProps) {
+  const read = useCallback(() => Promise.resolve(url ?? ""), [url]);
+  if (!url) return null;
+  return (
+    <div className="attachment-preview__audio">
+      <AudioWaveformPlayer path={path} read={read} />
+    </div>
+  );
 }

@@ -10,6 +10,8 @@ import {
   aihubFolder,
   aihubModelName,
   aihubZipName,
+  chipsetUnknownHint,
+  deviceMatchLabel,
   hfFileOf,
   humanLabel,
   isAssetForDevice,
@@ -64,6 +66,29 @@ describe("isAssetForDevice", () => {
 
   it("refuses a chipset asset when the device has no chipset set", () => {
     expect(isAssetForDevice("qualcomm-snapdragon-x-elite", null)).toBe(false);
+  });
+});
+
+describe("deviceMatchLabel", () => {
+  it("labels a universal asset as any chipset, whatever the device", () => {
+    expect(deviceMatchLabel(null, "Snapdragon X Elite CRD")).toBe("Any chipset");
+    expect(deviceMatchLabel(null, null)).toBe("Any chipset");
+  });
+
+  it("labels a chipset asset for this device when the chipset matches", () => {
+    expect(deviceMatchLabel("qualcomm-snapdragon-x-elite", "Snapdragon X Elite CRD")).toBe(
+      "This device",
+    );
+  });
+
+  it("labels a chipset asset for another chipset when the device chipset is known", () => {
+    expect(deviceMatchLabel("qualcomm-snapdragon-x-elite", "Snapdragon X2 Elite")).toBe(
+      "Other chipset",
+    );
+  });
+
+  it("labels a chipset asset as device unknown when the device chipset is not read", () => {
+    expect(deviceMatchLabel("qualcomm-snapdragon-x-elite", null)).toBe("Device unknown");
   });
 });
 
@@ -214,5 +239,16 @@ describe("aihubCapabilityBadges", () => {
     for (const badge of aihubCapabilityBadges(withInputs(["image", "audio"]))) {
       expect(badge.label).toMatch(/\(from the AI Hub model info\)$/);
     }
+  });
+});
+
+describe("chipsetUnknownHint", () => {
+  it("says GenieX is needed when the CLI is missing", () => {
+    expect(chipsetUnknownHint(false)).toContain("Install it in Settings > Runtimes");
+  });
+
+  it("says the chipset is not set when GenieX is installed or not read yet", () => {
+    expect(chipsetUnknownHint(true)).toContain("geniex config set chipset");
+    expect(chipsetUnknownHint(null)).toContain("geniex config set chipset");
   });
 });

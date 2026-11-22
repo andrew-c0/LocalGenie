@@ -13,6 +13,7 @@ import { useRuntimeNoticeStore } from "../stores/runtimeNoticeStore";
 import { useRuntimeStore } from "../stores/runtimeStore";
 import { useSidebarStore } from "../stores/sidebarStore";
 import { useToolStore } from "../stores/toolStore";
+import { readChipset } from "../utils/deviceChipset";
 
 /**
  * Startup only: loads the runtime list (which also sets the CLI state), saved sessions, installed
@@ -63,8 +64,8 @@ export default function AppBootstrap({ children }: { children: ReactNode }) {
         }),
         geniex.listModels().catch(() => null), // CLI may not be installed
         db.getPreference<number>("server_port").catch(() => null),
-        // Chipset comes from the CLI host probe. It is null when the CLI is missing.
-        geniex.configGet("chipset").catch(() => null),
+        // Chipset comes from the CLI host probe. It is null when the CLI is missing; runtime changes re-read it.
+        readChipset(),
       ]);
 
       if (saved) loadSessions(saved);
