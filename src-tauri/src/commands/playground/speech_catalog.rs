@@ -4,7 +4,8 @@
 //!
 //! Each model is one release asset from `k2-fsa/sherpa-onnx`: a `.tar.bz2` archive unpacked into its
 //! own folder, or a single `.onnx` file saved into it. The folder is
-//! `<models root>/k2-fsa--sherpa-onnx/<model id>/`, so models never share files.
+//! `<models root>/k2-fsa--sherpa-onnx/<model id>/`. The one file models share is the English lexicon
+//! that Piper, Matcha and Kitten read; it is kept once in `<models root>/k2-fsa--sherpa-onnx/`.
 
 use std::path::{Path, PathBuf};
 
@@ -42,7 +43,7 @@ const VOCODER_TAG: &str = "vocoder-models";
 /// Anything else is refused.
 const ALLOWED_RELEASES: &[(&str, &[&str])] = &[
     (SPEECH_RECOGNITION_TAG, &[ARCHIVE_ENDING]),
-    (SPEECH_SYNTHESIS_TAG, &[ARCHIVE_ENDING]),
+    (SPEECH_SYNTHESIS_TAG, &[ARCHIVE_ENDING, TEXT_ENDING]),
     (
         audio_catalog::SPEECH_ENHANCEMENT_TAG,
         &[ONNX_ENDING, ARCHIVE_ENDING],
@@ -55,6 +56,8 @@ const ALLOWED_RELEASES: &[(&str, &[&str])] = &[
 ];
 const ARCHIVE_ENDING: &str = ".tar.bz2";
 const ONNX_ENDING: &str = ".onnx";
+/// A plain text file, such as the lexicon a Kitten model reads.
+const TEXT_ENDING: &str = ".txt";
 
 /// Supertonic speakers by speaker id. The model's docs give no names, so each is "Voice N". The
 /// sherpa-onnx example says the model has ten speakers, ids 0 to 9.
@@ -203,8 +206,8 @@ pub(super) enum SttEngine {
     },
 }
 
-/// A second release asset a model needs, saved into the model's folder under its own name. Only a
-/// Matcha model has one: its vocoder.
+/// A second release asset a model needs, saved into the model's folder under its own name. A Matcha
+/// model has one (its vocoder) and a Kitten model has one (its lexicon).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Companion {
     pub release_tag: &'static str,
@@ -219,31 +222,39 @@ const VOCOS_22KHZ: Companion = Companion {
     size_bytes: 53_884_024,
 };
 
+/// The English lexicon a Kitten model is run with, from the `tts-models` release. sherpa-onnx 2.x
+/// reads it in place of the espeak-ng data the Kitten archive used to need.
+const LEXICON_EN_US: Companion = Companion {
+    release_tag: SPEECH_SYNTHESIS_TAG,
+    file_name: "lexicon-en-us.txt",
+    size_bytes: 6_305_773,
+};
+
 /// A text to speech model and the sherpa-onnx flags that load it.
 #[derive(Debug, Clone, Copy)]
 pub(super) enum TtsEngine {
-    /// Piper, run as VITS: the model, the tokens and the espeak-ng data folder. The speakers are
-    /// chosen by id, and the speed is the inverse of the length scale.
+    /// Piper, run as VITS: the model, the tokens and the shared lexicon. The speakers are chosen by
+    /// id, and the speed is the inverse of the length scale.
     Vits {
         model: &'static str,
         tokens: &'static str,
-        data_dir: &'static str,
+        lexicon: Companion,
     },
-    /// Matcha: an acoustic model, a vocoder that is a separate download, the tokens and the
-    /// espeak-ng data folder.
+    /// Matcha: an acoustic model, a vocoder that is a separate download, the tokens and the shared
+    /// lexicon.
     Matcha {
         acoustic_model: &'static str,
         vocoder: Companion,
         tokens: &'static str,
-        data_dir: &'static str,
+        lexicon: Companion,
     },
-    /// Kitten: the model, the voice table, the tokens and the espeak-ng data folder. The speakers
-    /// are chosen by id.
+    /// Kitten: the model, the voice table, the tokens and the lexicon, which is a separate download.
+    /// The speakers are chosen by id.
     Kitten {
         model: &'static str,
         voices: &'static str,
         tokens: &'static str,
-        data_dir: &'static str,
+        lexicon: Companion,
     },
     /// Kokoro: the model, the voice table, the tokens, a lexicon and a dictionary folder.
     Kokoro {
@@ -296,8 +307,19 @@ impl Engine {
         }
     }
 
+    /// The lexicon the engine reads from the shared folder, when it has one. Piper, Matcha and Kitten
+    /// do.
+    pub(super) fn shared_lexicon(&self) -> Option<Companion> {
+        match *self {
+            Engine::Tts(TtsEngine::Vits { lexicon, .. })
+            | Engine::Tts(TtsEngine::Matcha { lexicon, .. })
+            | Engine::Tts(TtsEngine::Kitten { lexicon, .. }) => Some(lexicon),
+            _ => None,
+        }
+    }
+
     /// The files and folders the engine reads, relative to the model folder. A model is downloaded
-    /// when all of them are on disk.
+    /// when all of them are on disk and its shared lexicon, if any, is too.
     pub(super) fn entries(&self) -> Vec<&'static str> {
         match *self {
             Engine::Stt(SttEngine::Whisper {
@@ -359,23 +381,19 @@ impl Engine {
                 vocab_json,
                 token_scores_json,
             ],
-            Engine::Tts(TtsEngine::Vits {
-                model,
-                tokens,
-                data_dir,
-            }) => vec![model, tokens, data_dir],
+            Engine::Tts(TtsEngine::Vits { model, tokens, .. }) => vec![model, tokens],
             Engine::Tts(TtsEngine::Matcha {
                 acoustic_model,
                 vocoder,
                 tokens,
-                data_dir,
-            }) => vec![acoustic_model, vocoder.file_name, tokens, data_dir],
+                ..
+            }) => vec![acoustic_model, vocoder.file_name, tokens],
             Engine::Tts(TtsEngine::Kitten {
                 model,
                 voices,
                 tokens,
-                data_dir,
-            }) => vec![model, voices, tokens, data_dir],
+                ..
+            }) => vec![model, voices, tokens],
             Engine::Denoise(engine) => vec![engine.model_file()],
             Engine::Separate(engine) => engine.model_files().to_vec(),
         }
@@ -421,7 +439,8 @@ pub(super) struct SpeechRecipe {
     pub delivery: Delivery,
     /// The GitHub release tag the asset is published under.
     pub release_tag: &'static str,
-    /// Size of the download on GitHub, in bytes. Checked after each download.
+    /// Size of the main release asset on GitHub, in bytes. Checked after it is downloaded. The
+    /// companion file, when there is one, has its own size; `download_bytes` is the whole download.
     pub size_bytes: u64,
     pub languages: &'static [&'static str],
     pub engine: Engine,
@@ -749,7 +768,7 @@ const POCKET_TTS_INT8: SpeechRecipe = SpeechRecipe {
 const KITTEN_NANO_V02_FP16: SpeechRecipe = SpeechRecipe {
     id: "kitten-nano-en-v0-2-fp16",
     name: "Kitten nano 0.2 (fp16, English)",
-    description: "Fast, a tiny English text to speech model with eight voices, four male and four female. English only, about 27 MB download.",
+    description: "Fast, a tiny English text to speech model with eight voices, four male and four female. English only, about 33 MB download.",
     license: "Apache-2.0",
     license_url: KITTEN_LICENSE_URL,
     delivery: Delivery::Archive {
@@ -762,7 +781,7 @@ const KITTEN_NANO_V02_FP16: SpeechRecipe = SpeechRecipe {
         model: "model.fp16.onnx",
         voices: "voices.bin",
         tokens: "tokens.txt",
-        data_dir: "espeak-ng-data",
+        lexicon: LEXICON_EN_US,
     }),
     speakers: KITTEN_NANO_V02_SPEAKERS,
     links: ModelLinks {
@@ -775,7 +794,7 @@ const KITTEN_NANO_V02_FP16: SpeechRecipe = SpeechRecipe {
 const PIPER_LESSAC_MEDIUM: SpeechRecipe = SpeechRecipe {
     id: "piper-lessac-medium",
     name: "Piper Lessac medium (US English)",
-    description: "Fast, a single US English voice from Piper, for quick read-aloud. English only, about 67 MB download.",
+    description: "Fast, a single US English voice from Piper, for quick read-aloud. English only, about 74 MB download.",
     license: "Unclear: Blizzard 2013 Lessac research licence",
     license_url: BLIZZARD_LESSAC_LICENSE_URL,
     delivery: Delivery::Archive {
@@ -787,7 +806,7 @@ const PIPER_LESSAC_MEDIUM: SpeechRecipe = SpeechRecipe {
     engine: Engine::Tts(TtsEngine::Vits {
         model: "en_US-lessac-medium.onnx",
         tokens: "tokens.txt",
-        data_dir: "espeak-ng-data",
+        lexicon: LEXICON_EN_US,
     }),
     speakers: &[(0, "Lessac")],
     links: ModelLinks {
@@ -800,7 +819,7 @@ const PIPER_LESSAC_MEDIUM: SpeechRecipe = SpeechRecipe {
 const PIPER_GLADOS: SpeechRecipe = SpeechRecipe {
     id: "piper-glados",
     name: "Piper GLaDOS (English)",
-    description: "Fast, Piper's GLaDOS voice, a single English voice in the style of the Portal character. English only, about 67 MB download.",
+    description: "Fast, Piper's GLaDOS voice, a single English voice in the style of the Portal character. English only, about 74 MB download.",
     license: "Unclear: the GLaDOS project has no licence file and says the voice belongs to Valve",
     license_url: GLADOS_LICENSE_URL,
     delivery: Delivery::Archive {
@@ -812,7 +831,7 @@ const PIPER_GLADOS: SpeechRecipe = SpeechRecipe {
     engine: Engine::Tts(TtsEngine::Vits {
         model: "en_US-glados.onnx",
         tokens: "tokens.txt",
-        data_dir: "espeak-ng-data",
+        lexicon: LEXICON_EN_US,
     }),
     speakers: &[(0, "GLaDOS")],
     links: ModelLinks {
@@ -825,7 +844,7 @@ const PIPER_GLADOS: SpeechRecipe = SpeechRecipe {
 const MATCHA_LJSPEECH: SpeechRecipe = SpeechRecipe {
     id: "matcha-ljspeech",
     name: "Matcha LJSpeech (US English)",
-    description: "Balanced, a single female US English voice from Matcha. It also needs a 54 MB vocoder, so the whole download is about 131 MB. English only.",
+    description: "Balanced, a single female US English voice from Matcha. It also needs a 54 MB vocoder and a 6 MB lexicon, so the whole download is about 137 MB. English only.",
     license: "Unclear: the sherpa-onnx docs do not state the licence of these weights",
     license_url: MATCHA_DOCS_URL,
     delivery: Delivery::Archive {
@@ -838,7 +857,7 @@ const MATCHA_LJSPEECH: SpeechRecipe = SpeechRecipe {
         acoustic_model: "model-steps-3.onnx",
         vocoder: VOCOS_22KHZ,
         tokens: "tokens.txt",
-        data_dir: "espeak-ng-data",
+        lexicon: LEXICON_EN_US,
     }),
     speakers: &[(0, "LJSpeech")],
     links: ModelLinks {
@@ -851,7 +870,7 @@ const MATCHA_LJSPEECH: SpeechRecipe = SpeechRecipe {
 const PIPER_LIBRITTS_R_MEDIUM: SpeechRecipe = SpeechRecipe {
     id: "piper-libritts-r-medium",
     name: "Piper LibriTTS-R medium (US English)",
-    description: "Balanced, Piper's LibriTTS-R model with 904 speakers, of which the first 40 are offered. English only, about 82 MB download.",
+    description: "Balanced, Piper's LibriTTS-R model with 904 speakers, of which the first 40 are offered. English only, about 88 MB download.",
     license: "CC-BY-4.0",
     license_url: CC_BY_LICENSE_URL,
     delivery: Delivery::Archive {
@@ -863,7 +882,7 @@ const PIPER_LIBRITTS_R_MEDIUM: SpeechRecipe = SpeechRecipe {
     engine: Engine::Tts(TtsEngine::Vits {
         model: "en_US-libritts_r-medium.onnx",
         tokens: "tokens.txt",
-        data_dir: "espeak-ng-data",
+        lexicon: LEXICON_EN_US,
     }),
     speakers: LIBRITTS_SPEAKERS,
     links: ModelLinks {
@@ -938,6 +957,7 @@ pub struct SpeechModel {
     pub description: &'static str,
     pub license: &'static str,
     pub license_url: &'static str,
+    /// The whole download in bytes, the companion file included.
     pub size_bytes: u64,
     pub languages: Vec<&'static str>,
     pub downloaded: bool,
@@ -953,12 +973,28 @@ impl SpeechRecipe {
         matches!(self.engine, Engine::Tts(TtsEngine::PocketTts { .. }))
     }
 
-    /// The second release asset the model needs, when it has one: a Matcha model's vocoder.
+    /// The second release asset saved in the model's folder, when the model has one: a Matcha
+    /// model's vocoder.
     pub(super) fn companion(&self) -> Option<Companion> {
         match self.engine {
             Engine::Tts(TtsEngine::Matcha { vocoder, .. }) => Some(vocoder),
             _ => None,
         }
+    }
+
+    /// The lexicon the model reads from the shared folder, when it has one.
+    pub(super) fn shared_lexicon(&self) -> Option<Companion> {
+        self.engine.shared_lexicon()
+    }
+
+    /// The whole download in bytes: the main release asset, the companion file and the shared
+    /// lexicon, each when the model has it.
+    pub(super) fn download_bytes(&self) -> u64 {
+        self.size_bytes
+            + self.companion().map_or(0, |companion| companion.size_bytes)
+            + self
+                .shared_lexicon()
+                .map_or(0, |lexicon| lexicon.size_bytes)
     }
 
     pub(super) fn kind(&self) -> SpeechKind {
@@ -1042,7 +1078,7 @@ pub(super) fn describe(recipe: &SpeechRecipe, models_root: &Path) -> SpeechModel
         description: recipe.description,
         license: recipe.license,
         license_url: recipe.license_url,
-        size_bytes: recipe.size_bytes,
+        size_bytes: recipe.download_bytes(),
         languages: recipe.languages.to_vec(),
         downloaded: is_downloaded(recipe, models_root),
         voices: recipe.voices(),
@@ -1051,13 +1087,40 @@ pub(super) fn describe(recipe: &SpeechRecipe, models_root: &Path) -> SpeechModel
     }
 }
 
-/// True when every file the engine reads is on disk.
+/// True when every file the engine reads is on disk: the model folder's entries, the companion file
+/// and the shared lexicon.
 pub(super) fn is_downloaded(recipe: &SpeechRecipe, models_root: &Path) -> bool {
+    folder_entries_on_disk(recipe, models_root)
+        && recipe
+            .shared_lexicon()
+            .is_none_or(|lexicon| shared_file_path(models_root, lexicon).exists())
+}
+
+/// True when every entry in the model folder is on disk, the companion file included.
+fn folder_entries_on_disk(recipe: &SpeechRecipe, models_root: &Path) -> bool {
     let folder = model_dir(models_root, recipe);
     recipe
         .engine
         .entries()
         .iter()
+        .all(|entry| folder.join(entry).exists())
+}
+
+/// Where a file shared by several models is kept: `<repo folder>/<file name>`.
+pub(super) fn shared_file_path(models_root: &Path, shared: Companion) -> PathBuf {
+    repo_dir(models_root).join(shared.file_name)
+}
+
+/// True when the files of the model's main release asset are on disk: every entry except the
+/// companion file's. A model without a companion has only these, so this equals `is_downloaded`.
+pub(super) fn main_files_on_disk(recipe: &SpeechRecipe, models_root: &Path) -> bool {
+    let folder = model_dir(models_root, recipe);
+    let companion_file = recipe.companion().map(|companion| companion.file_name);
+    recipe
+        .engine
+        .entries()
+        .iter()
+        .filter(|entry| Some(**entry) != companion_file)
         .all(|entry| folder.join(entry).exists())
 }
 
@@ -1137,6 +1200,11 @@ mod tests {
             let url = download_url(recipe);
             assert!(is_allowed_speech_url(&url), "{url} is not allowed");
             assert!(url.ends_with(recipe.asset_name()), "{url}");
+            if let Some(companion) = recipe.companion() {
+                let url = companion_url(companion);
+                assert!(is_allowed_speech_url(&url), "{url} is not allowed");
+                assert!(url.ends_with(companion.file_name), "{url}");
+            }
         }
         assert_eq!(
             download_url(&WHISPER_TINY_EN),
@@ -1157,6 +1225,7 @@ mod tests {
         let allowed = [
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/a.tar.bz2",
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/b_c.tar.bz2",
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/lexicon-en-us.txt",
         ];
         for url in allowed {
             assert!(is_allowed_speech_url(url), "{url}");
@@ -1166,6 +1235,9 @@ mod tests {
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/other-tag/a.tar.bz2",
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/a.zip",
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/a.onnx",
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/a.txt",
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/lexicon.zip",
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/lexicon.txt.exe",
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/../x.tar.bz2",
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sub/a.tar.bz2",
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/",
@@ -1543,43 +1615,30 @@ mod tests {
     fn piper_kitten_and_matcha_name_their_files_and_sizes() {
         assert_eq!(
             PIPER_LESSAC_MEDIUM.engine.entries(),
-            vec!["en_US-lessac-medium.onnx", "tokens.txt", "espeak-ng-data"]
+            vec!["en_US-lessac-medium.onnx", "tokens.txt"]
         );
         assert_eq!(
             PIPER_GLADOS.engine.entries(),
-            vec!["en_US-glados.onnx", "tokens.txt", "espeak-ng-data"]
+            vec!["en_US-glados.onnx", "tokens.txt"]
         );
         assert_eq!(
             PIPER_LIBRITTS_R_MEDIUM.engine.entries(),
-            vec![
-                "en_US-libritts_r-medium.onnx",
-                "tokens.txt",
-                "espeak-ng-data"
-            ]
+            vec!["en_US-libritts_r-medium.onnx", "tokens.txt"]
         );
         assert_eq!(
             KITTEN_NANO_V02_FP16.engine.entries(),
-            vec![
-                "model.fp16.onnx",
-                "voices.bin",
-                "tokens.txt",
-                "espeak-ng-data"
-            ]
+            vec!["model.fp16.onnx", "voices.bin", "tokens.txt"]
         );
         assert_eq!(
             MATCHA_LJSPEECH.engine.entries(),
-            vec![
-                "model-steps-3.onnx",
-                "vocos-22khz-univ.onnx",
-                "tokens.txt",
-                "espeak-ng-data"
-            ]
+            vec!["model-steps-3.onnx", "vocos-22khz-univ.onnx", "tokens.txt"]
         );
         assert_eq!(PIPER_LESSAC_MEDIUM.size_bytes, 67_230_653);
         assert_eq!(PIPER_GLADOS.size_bytes, 67_208_137);
         assert_eq!(PIPER_LIBRITTS_R_MEDIUM.size_bytes, 82_038_311);
         assert_eq!(MATCHA_LJSPEECH.size_bytes, 76_757_969);
         assert_eq!(KITTEN_NANO_V02_FP16.size_bytes, 26_586_708);
+        assert_eq!(LEXICON_EN_US.size_bytes, 6_305_773);
         for recipe in [
             &PIPER_LESSAC_MEDIUM,
             &PIPER_GLADOS,
@@ -1618,6 +1677,119 @@ mod tests {
     }
 
     #[test]
+    fn the_lexicon_is_one_shared_file_for_piper_matcha_and_kitten() {
+        for recipe in [
+            &PIPER_LESSAC_MEDIUM,
+            &PIPER_GLADOS,
+            &PIPER_LIBRITTS_R_MEDIUM,
+            &MATCHA_LJSPEECH,
+            &KITTEN_NANO_V02_FP16,
+        ] {
+            assert_eq!(
+                recipe.shared_lexicon(),
+                Some(LEXICON_EN_US),
+                "{}",
+                recipe.id
+            );
+            assert!(
+                !recipe.engine.entries().contains(&"lexicon-en-us.txt"),
+                "{} keeps the lexicon out of its folder",
+                recipe.id
+            );
+        }
+        assert_eq!(WHISPER_TINY_EN.shared_lexicon(), None);
+        assert_eq!(KOKORO_MULTI_V1.shared_lexicon(), None);
+        let root = Path::new("models");
+        assert_eq!(
+            shared_file_path(root, LEXICON_EN_US),
+            root.join(REPO_DIR).join("lexicon-en-us.txt")
+        );
+        assert_eq!(
+            LEXICON_EN_US.release_tag, SPEECH_SYNTHESIS_TAG,
+            "the lexicon is on the tts-models release"
+        );
+        assert_eq!(
+            companion_url(LEXICON_EN_US),
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/lexicon-en-us.txt"
+        );
+        assert!(is_allowed_speech_url(&companion_url(LEXICON_EN_US)));
+    }
+
+    #[test]
+    fn the_whole_download_counts_the_shared_lexicon_and_the_vocoder() {
+        assert_eq!(KITTEN_NANO_V02_FP16.download_bytes(), 32_892_481);
+        assert_eq!(PIPER_LESSAC_MEDIUM.download_bytes(), 73_536_426);
+        assert_eq!(PIPER_GLADOS.download_bytes(), 73_513_910);
+        assert_eq!(PIPER_LIBRITTS_R_MEDIUM.download_bytes(), 88_344_084);
+        assert_eq!(MATCHA_LJSPEECH.download_bytes(), 136_947_766);
+        assert_eq!(KOKORO_MULTI_V1.download_bytes(), 132_353_410);
+        assert!(KITTEN_NANO_V02_FP16.description.contains("about 33 MB"));
+        assert!(!KITTEN_NANO_V02_FP16.description.contains("27 MB"));
+        assert!(PIPER_LESSAC_MEDIUM.description.contains("about 74 MB"));
+        assert!(PIPER_LIBRITTS_R_MEDIUM.description.contains("about 88 MB"));
+        assert!(MATCHA_LJSPEECH.description.contains("about 137 MB"));
+    }
+
+    #[test]
+    fn the_listing_shows_the_whole_download() {
+        let scratch = Scratch::new("speech-whole-size");
+        let kitten = describe(&KITTEN_NANO_V02_FP16, scratch.path());
+        assert_eq!(kitten.size_bytes, 32_892_481);
+        let matcha = describe(&MATCHA_LJSPEECH, scratch.path());
+        assert_eq!(matcha.size_bytes, 136_947_766);
+        let kokoro = describe(&KOKORO_MULTI_V1, scratch.path());
+        assert_eq!(kokoro.size_bytes, 132_353_410);
+    }
+
+    #[test]
+    fn kitten_is_not_downloaded_until_the_shared_lexicon_is_on_disk() {
+        let scratch = Scratch::new("speech-kitten");
+        let root = scratch.path();
+        let folder = model_dir(root, &KITTEN_NANO_V02_FP16);
+        std::fs::create_dir_all(&folder).expect("folder");
+        for entry in ["model.fp16.onnx", "voices.bin", "tokens.txt"] {
+            std::fs::write(folder.join(entry), b"x").expect("file");
+        }
+        assert!(main_files_on_disk(&KITTEN_NANO_V02_FP16, root));
+        assert!(
+            !is_downloaded(&KITTEN_NANO_V02_FP16, root),
+            "the lexicon is missing"
+        );
+        assert!(!describe(&KITTEN_NANO_V02_FP16, root).downloaded);
+        assert!(require_downloaded(&KITTEN_NANO_V02_FP16, root).is_err());
+
+        std::fs::create_dir_all(repo_dir(root)).expect("repo");
+        std::fs::write(shared_file_path(root, LEXICON_EN_US), b"x").expect("lexicon");
+        assert!(is_downloaded(&KITTEN_NANO_V02_FP16, root));
+        assert!(describe(&KITTEN_NANO_V02_FP16, root).downloaded);
+    }
+
+    #[test]
+    fn a_piper_model_is_downloaded_only_with_the_shared_lexicon() {
+        let scratch = Scratch::new("speech-piper-lexicon");
+        let root = scratch.path();
+        let folder = model_dir(root, &PIPER_GLADOS);
+        std::fs::create_dir_all(&folder).expect("folder");
+        for entry in ["en_US-glados.onnx", "tokens.txt"] {
+            std::fs::write(folder.join(entry), b"x").expect("file");
+        }
+        assert!(main_files_on_disk(&PIPER_GLADOS, root));
+        assert!(!is_downloaded(&PIPER_GLADOS, root));
+        std::fs::create_dir_all(repo_dir(root)).expect("repo");
+        std::fs::write(shared_file_path(root, LEXICON_EN_US), b"x").expect("lexicon");
+        assert!(is_downloaded(&PIPER_GLADOS, root));
+    }
+
+    #[test]
+    fn a_model_without_a_companion_has_only_its_main_files() {
+        let scratch = Scratch::new("speech-main-files");
+        let root = scratch.path();
+        assert!(!main_files_on_disk(&WHISPER_TINY_EN, root));
+        assert_eq!(WHISPER_TINY_EN.download_bytes(), WHISPER_TINY_EN.size_bytes);
+        assert_eq!(WHISPER_TINY_EN.shared_lexicon(), None);
+    }
+
+    #[test]
     fn kitten_offers_eight_named_voices_with_their_gender() {
         let voices = KITTEN_NANO_V02_FP16.voices();
         assert_eq!(voices.len(), 8);
@@ -1634,6 +1806,7 @@ mod tests {
     fn matcha_needs_its_vocoder_from_the_vocoder_release() {
         assert_eq!(MATCHA_LJSPEECH.companion(), Some(VOCOS_22KHZ));
         assert_eq!(PIPER_LESSAC_MEDIUM.companion(), None);
+        assert_eq!(KITTEN_NANO_V02_FP16.companion(), None);
         assert_eq!(
             companion_url(VOCOS_22KHZ),
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos-22khz-univ.onnx"
@@ -1654,10 +1827,16 @@ mod tests {
         for entry in ["model-steps-3.onnx", "tokens.txt"] {
             std::fs::write(folder.join(entry), b"x").expect("file");
         }
-        std::fs::create_dir_all(folder.join("espeak-ng-data")).expect("data");
+        std::fs::create_dir_all(repo_dir(root)).expect("repo");
+        std::fs::write(shared_file_path(root, LEXICON_EN_US), b"x").expect("lexicon");
         assert!(!is_downloaded(&MATCHA_LJSPEECH, root), "no vocoder yet");
         std::fs::write(folder.join("vocos-22khz-univ.onnx"), b"x").expect("vocoder");
         assert!(is_downloaded(&MATCHA_LJSPEECH, root));
+        std::fs::remove_file(shared_file_path(root, LEXICON_EN_US)).expect("remove");
+        assert!(
+            !is_downloaded(&MATCHA_LJSPEECH, root),
+            "no lexicon any more"
+        );
     }
 
     #[test]

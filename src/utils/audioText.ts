@@ -68,10 +68,6 @@ export const TRANSCRIBE_RESULT_TITLE = "Transcript";
 export const SPEAK_RESULT_TITLE = "Speech";
 export const ENHANCE_RESULT_TITLE = "Result";
 
-export const TRANSCRIBE_FAILED_MESSAGE = "The audio could not be transcribed.";
-export const SPEAK_FAILED_MESSAGE = "The speech could not be generated.";
-export const ENHANCE_FAILED_MESSAGE = "The audio could not be processed.";
-
 export const USE_AS_INPUT_LABEL = "Use as input";
 export const AUDIO_TIME_INFO_LABEL = "About the time";
 export const AUDIO_SAVED_PATH_LABEL = "Where the audio was saved";

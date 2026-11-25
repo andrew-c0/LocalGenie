@@ -11,7 +11,12 @@ import type {
 } from "../../../types";
 import { audioTaskBlockedReason, speechKindOfTask } from "../../../utils/audioTask";
 import type { RuntimeStatus } from "../../../utils/playground";
-import { fileNameOf, resolveVoiceId, SHERPA_RUNTIME_ID } from "../../../utils/speech";
+import {
+  fileNameOf,
+  resolveVoiceId,
+  SHERPA_RUNTIME_ID,
+  shownSpeechResult,
+} from "../../../utils/speech";
 import { useSpeechJobCancel } from "../SpeechJobProgress/useSpeechJobCancel";
 import { useRuntimeCheck } from "../useRuntimeCheck";
 import { useEnhancement } from "./useEnhancement";
@@ -38,7 +43,10 @@ export interface AudioPanelState {
   needsReference: boolean;
   /** The running speech job of any task, or null. */
   job: SpeechJob | null;
-  /** The finished job of the task's kind, shown only while no job runs. */
+  /**
+   * The result the stage shows for the task's kind: a finished or cancelled job, only while no job runs. A failed job
+   * shows no result here; its toast carries the reason.
+   */
   shownResult: SpeechResult | null;
   blockedReason: string | null;
   cancel: () => void;
@@ -117,8 +125,7 @@ export function useAudioPanel(): AudioPanelState {
     voiceId,
     needsReference: selected?.needsReference ?? false,
     job,
-    /** The finished job of the task's kind, shown only while no job runs. */
-    shownResult: job === null ? result : null,
+    shownResult: shownSpeechResult(result, job !== null),
     blockedReason,
     cancel,
     run,

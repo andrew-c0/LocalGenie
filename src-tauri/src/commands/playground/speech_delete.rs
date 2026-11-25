@@ -1,12 +1,13 @@
-//! Deletes a speech model's folder, its archive and its partial download. Each speech model has its
-//! own folder, so nothing else is kept. Every path is checked to be inside the models folder before
-//! anything is removed, and the walk runs on a blocking thread.
+//! Deletes a speech model's folder, its archive and its partial download. The shared lexicon of
+//! Piper, Matcha and Kitten goes too, unless another downloaded speech model still reads it. Every
+//! path is checked to be inside the models folder before anything is removed, and the walk runs on
+//! a blocking thread.
 
 use std::path::{Path, PathBuf};
 
 use super::model_delete::{partial_path, ModelDeletion};
 use super::paths;
-use super::speech_catalog::{self, SpeechRecipe};
+use super::speech_catalog::{self, Companion, SpeechRecipe};
 
 /// Delete the files of `recipe` under `models_root` and return the bytes freed. Nothing is removed
 /// when any path is outside `models_root`.
@@ -36,7 +37,25 @@ fn delete_files(models_root: &Path, recipe: &SpeechRecipe) -> Result<ModelDeleti
         std::fs::remove_dir_all(&inside)
             .map_err(|e| format!("Failed to delete {}: {e}", folder.display()))?;
     }
+    let unneeded_lexicon = recipe
+        .shared_lexicon()
+        .filter(|lexicon| !lexicon_needed_by_others(recipe, *lexicon, models_root));
+    if let Some(lexicon) = unneeded_lexicon {
+        let file = speech_catalog::shared_file_path(models_root, lexicon);
+        for path in [partial_path(&file), file] {
+            freed_bytes += remove_file_if_present(&path, models_root)?;
+        }
+    }
     Ok(ModelDeletion { freed_bytes })
+}
+
+/// True when another downloaded speech model reads the same shared lexicon, which must then be kept.
+fn lexicon_needed_by_others(recipe: &SpeechRecipe, lexicon: Companion, models_root: &Path) -> bool {
+    speech_catalog::all_recipes().any(|other| {
+        other.id != recipe.id
+            && other.shared_lexicon() == Some(lexicon)
+            && speech_catalog::is_downloaded(other, models_root)
+    })
 }
 
 /// Remove `file` when it is there, after checking it is inside `models_root`. Returns the bytes
@@ -111,6 +130,32 @@ mod tests {
             speech_catalog::is_downloaded(other, &root),
             "another speech model is kept"
         );
+    }
+
+    #[tokio::test]
+    async fn the_shared_lexicon_stays_while_another_model_needs_it() {
+        let scratch = Scratch::new("speech-delete-lexicon");
+        let root = scratch.path().join("playground-models");
+        let kitten = speech_catalog::find_recipe("kitten-nano-en-v0-2-fp16").expect("kitten");
+        let piper = speech_catalog::find_recipe("piper-glados").expect("piper");
+        let lexicon = kitten.shared_lexicon().expect("lexicon");
+        write_model(kitten, &root);
+        write_model(piper, &root);
+        std::fs::create_dir_all(speech_catalog::repo_dir(&root)).expect("repo");
+        let shared = speech_catalog::shared_file_path(&root, lexicon);
+        std::fs::write(&shared, b"0123456789").expect("lexicon file");
+
+        let first = delete_speech_model_files(&root, kitten)
+            .await
+            .expect("delete kitten");
+        assert_eq!(first.freed_bytes, 30, "three Kitten files, lexicon kept");
+        assert!(shared.is_file(), "Piper still reads the lexicon");
+
+        let second = delete_speech_model_files(&root, piper)
+            .await
+            .expect("delete piper");
+        assert_eq!(second.freed_bytes, 30, "two Piper files and the lexicon");
+        assert!(!shared.exists(), "no model reads the lexicon any more");
     }
 
     #[tokio::test]

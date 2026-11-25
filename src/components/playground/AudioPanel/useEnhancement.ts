@@ -2,18 +2,17 @@ import { enhanceAudio } from "../../../services/playground";
 import { useSpeechStore } from "../../../stores/speechStore";
 import type { SpeechAudioInput, SpeechModel } from "../../../types";
 import { buildEnhanceRequest } from "../../../utils/audioEnhance";
-import { errorMessage } from "../../../utils/errorMessage";
-import { failedSpeechResult } from "../../../utils/speech";
+import { useSpeechStartFailure } from "./useSpeechStartFailure";
 
 /**
  * Start a clean up or split job. Progress and the saved files come from the `PlaygroundRuntime` listeners.
- * A failed start is recorded here as the job's result.
+ * A failed start is reported by `useSpeechStartFailure`.
  */
 export function useEnhancement(): {
   enhance: (model: SpeechModel, audio: SpeechAudioInput) => void;
 } {
   const startJob = useSpeechStore((s) => s.startJob);
-  const finishJob = useSpeechStore((s) => s.finishJob);
+  const startFailed = useSpeechStartFailure();
 
   const enhance = (model: SpeechModel, audio: SpeechAudioInput) => {
     const request = buildEnhanceRequest(crypto.randomUUID(), model, audio);
@@ -25,13 +24,7 @@ export function useEnhancement(): {
       phase: "loading",
     });
     enhanceAudio(request).catch((err: unknown) => {
-      finishJob(
-        failedSpeechResult(
-          request.jobId,
-          model.kind,
-          errorMessage(err, "The audio could not be processed."),
-        ),
-      );
+      startFailed(request.jobId, model.kind, err, "The audio could not be processed.");
     });
   };
 

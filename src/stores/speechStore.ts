@@ -57,7 +57,10 @@ interface SpeechState {
   enhanceKind: EnhanceKind;
   /** The running speech job of any task. There is one job slot. */
   job: SpeechJob | null;
-  /** The last job of each kind that ended, kept until the next job of that kind starts. */
+  /**
+   * The last job of each kind that ended, kept until the next job of that kind starts. A failed job's result is kept
+   * too, but the Audio stage does not show it (its toast carries the reason).
+   */
   results: Record<SpeechKind, SpeechResult | null>;
 
   /** Replace the catalog. Each selection stays while its model is still installed, else it is cleared. */

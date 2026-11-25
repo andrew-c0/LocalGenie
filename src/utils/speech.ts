@@ -239,7 +239,10 @@ export function buildSynthesizeRequest(
   };
 }
 
-/** The result of a job that never started, so the panel can show why. */
+/**
+ * The result of a job that never started. It is stored so the job's state ends, and its reason is raised as a toast
+ * (`useSpeechStartFailure`), the same as a job that fails once running. The stage does not show it.
+ */
 export function failedSpeechResult(jobId: string, kind: SpeechKind, error: string): SpeechResult {
   return {
     jobId,
@@ -252,6 +255,18 @@ export function failedSpeechResult(jobId: string, kind: SpeechKind, error: strin
     elapsedSeconds: null,
     error,
   };
+}
+
+/**
+ * The result the Audio stage shows for a kind: the finished job's result, or null while a job runs. A failed job
+ * (including one that never started) is not shown, because its toast carries the reason. A cancelled job's line is shown.
+ */
+export function shownSpeechResult(
+  result: SpeechResult | null,
+  jobRunning: boolean,
+): SpeechResult | null {
+  if (jobRunning || result === null || result.status === "error") return null;
+  return result;
 }
 
 /** The store's result for a finished job, from its `playground-speech-done` event. A payload without outputs has none. */

@@ -159,7 +159,10 @@ function handleOcrDone(payload: PlaygroundOcrDone) {
   }
 }
 
-/** A finished speech job: store its result. Toasts only for the job the store is waiting on. */
+/**
+ * A finished speech job: store its result. Toasts only for the job the store is waiting on. A failure's reason is this
+ * toast alone; the Audio stage does not show a failed result.
+ */
 function handleSpeechDone(payload: PlaygroundSpeechDone) {
   const store = useSpeechStore.getState();
   const isCurrentJob = store.job?.jobId === payload.jobId;

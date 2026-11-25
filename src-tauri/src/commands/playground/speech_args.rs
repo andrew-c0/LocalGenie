@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use super::speech_catalog::{SttEngine, TtsEngine};
+use super::speech_catalog::{Companion, SttEngine, TtsEngine};
 
 /// Longest text to speech request, in characters after whitespace is collapsed.
 pub(super) const MAX_TTS_CHARS: usize = 2000;
@@ -208,6 +208,7 @@ pub(super) enum VoiceChoice<'a> {
 pub(super) fn synthesize_args(
     engine: TtsEngine,
     model_dir: &Path,
+    shared_dir: &Path,
     text: &str,
     voice: VoiceChoice<'_>,
     output: &Path,
@@ -219,15 +220,15 @@ pub(super) fn synthesize_args(
         (TtsEngine::Supertonic { .. }, VoiceChoice::Speaker { voice_id, speed }) => Ok(
             supertonic_args(engine, model_dir, text, voice_id, speed, output),
         ),
-        (TtsEngine::Vits { .. }, VoiceChoice::Speaker { voice_id, speed }) => {
-            Ok(vits_args(engine, model_dir, text, voice_id, speed, output))
-        }
-        (TtsEngine::Kitten { .. }, VoiceChoice::Speaker { voice_id, speed }) => Ok(kitten_args(
-            engine, model_dir, text, voice_id, speed, output,
+        (TtsEngine::Vits { .. }, VoiceChoice::Speaker { voice_id, speed }) => Ok(vits_args(
+            engine, model_dir, shared_dir, text, voice_id, speed, output,
         )),
-        (TtsEngine::Matcha { .. }, VoiceChoice::Speaker { speed, .. }) => {
-            Ok(matcha_args(engine, model_dir, text, speed, output))
-        }
+        (TtsEngine::Kitten { .. }, VoiceChoice::Speaker { voice_id, speed }) => Ok(kitten_args(
+            engine, model_dir, shared_dir, text, voice_id, speed, output,
+        )),
+        (TtsEngine::Matcha { .. }, VoiceChoice::Speaker { speed, .. }) => Ok(matcha_args(
+            engine, model_dir, shared_dir, text, speed, output,
+        )),
         (TtsEngine::PocketTts { .. }, VoiceChoice::Reference(reference)) => {
             Ok(pocket_args(engine, model_dir, text, reference, output))
         }
@@ -241,11 +242,16 @@ fn length_scale(speed: f32) -> f32 {
     1.0 / speed
 }
 
-/// The VITS argument list, for the Piper voices: one speaker, the length scale and the espeak-ng
-/// data folder.
+/// The path of a lexicon in the shared folder, where every model that reads it finds the one copy.
+fn shared_file(shared_dir: &Path, lexicon: Companion) -> String {
+    shared_dir.join(lexicon.file_name).display().to_string()
+}
+
+/// The VITS argument list, for the Piper voices: one speaker, the length scale and the shared lexicon.
 fn vits_args(
     engine: TtsEngine,
     model_dir: &Path,
+    shared_dir: &Path,
     text: &str,
     voice_id: u32,
     speed: f32,
@@ -255,7 +261,7 @@ fn vits_args(
     let TtsEngine::Vits {
         model,
         tokens,
-        data_dir,
+        lexicon,
     } = engine
     else {
         return Vec::new();
@@ -263,7 +269,7 @@ fn vits_args(
     vec![
         format!("--vits-model={}", file(model)),
         format!("--vits-tokens={}", file(tokens)),
-        format!("--vits-data-dir={}", file(data_dir)),
+        format!("--vits-lexicon={}", shared_file(shared_dir, lexicon)),
         format!("--num-threads={NUM_THREADS}"),
         format!("--sid={voice_id}"),
         format!("--vits-length-scale={}", length_scale(speed)),
@@ -273,10 +279,11 @@ fn vits_args(
 }
 
 /// The Matcha argument list: the acoustic model, the vocoder that is its own file, the tokens, the
-/// espeak-ng data folder and the length scale. Matcha has one voice, so no speaker id is passed.
+/// shared lexicon and the length scale. Matcha has one voice, so no speaker id is passed.
 fn matcha_args(
     engine: TtsEngine,
     model_dir: &Path,
+    shared_dir: &Path,
     text: &str,
     speed: f32,
     output: &Path,
@@ -286,7 +293,7 @@ fn matcha_args(
         acoustic_model,
         vocoder,
         tokens,
-        data_dir,
+        lexicon,
     } = engine
     else {
         return Vec::new();
@@ -295,7 +302,7 @@ fn matcha_args(
         format!("--matcha-acoustic-model={}", file(acoustic_model)),
         format!("--matcha-vocoder={}", file(vocoder.file_name)),
         format!("--matcha-tokens={}", file(tokens)),
-        format!("--matcha-data-dir={}", file(data_dir)),
+        format!("--matcha-lexicon={}", shared_file(shared_dir, lexicon)),
         format!("--num-threads={NUM_THREADS}"),
         format!("--matcha-length-scale={}", length_scale(speed)),
         format!("--output-filename={}", output.display()),
@@ -303,11 +310,13 @@ fn matcha_args(
     ]
 }
 
-/// The Kitten argument list: the model, the voice table, the tokens and the espeak-ng data folder,
-/// with one speaker and the length scale.
+/// The Kitten argument list: the model, the voice table, the tokens and the lexicon that is its own
+/// file, with one speaker and the length scale. sherpa-onnx 2.x ignores the espeak-ng data folder
+/// the older Kitten archive shipped, so it is not passed.
 fn kitten_args(
     engine: TtsEngine,
     model_dir: &Path,
+    shared_dir: &Path,
     text: &str,
     voice_id: u32,
     speed: f32,
@@ -318,7 +327,7 @@ fn kitten_args(
         model,
         voices,
         tokens,
-        data_dir,
+        lexicon,
     } = engine
     else {
         return Vec::new();
@@ -327,7 +336,7 @@ fn kitten_args(
         format!("--kitten-model={}", file(model)),
         format!("--kitten-voices={}", file(voices)),
         format!("--kitten-tokens={}", file(tokens)),
-        format!("--kitten-data-dir={}", file(data_dir)),
+        format!("--kitten-lexicon={}", shared_file(shared_dir, lexicon)),
         format!("--num-threads={NUM_THREADS}"),
         format!("--sid={voice_id}"),
         format!("--kitten-length-scale={}", length_scale(speed)),
@@ -474,6 +483,9 @@ mod tests {
             _ => panic!("{id} is not speech to text"),
         }
     }
+
+    /// The shared folder the lexicon is read from in these tests.
+    const SHARED: &str = r"C:\models\k2-fsa--sherpa-onnx";
 
     fn tts_engine(id: &str) -> TtsEngine {
         match find_recipe(id).expect("recipe").engine {
@@ -690,6 +702,7 @@ mod tests {
         let args = synthesize_args(
             tts_engine("kokoro-int8-multi-v1"),
             dir,
+            Path::new(SHARED),
             "Hello from LocalGenie.",
             VoiceChoice::Speaker {
                 voice_id: 3,
@@ -726,6 +739,7 @@ mod tests {
         let args = synthesize_args(
             tts_engine("pocket-tts-int8"),
             dir,
+            Path::new(SHARED),
             "Hello there.",
             VoiceChoice::Reference(reference),
             output,
@@ -760,6 +774,7 @@ mod tests {
         let args = synthesize_args(
             tts_engine("supertonic-3-int8"),
             dir,
+            Path::new(SHARED),
             "Good morning.",
             VoiceChoice::Speaker {
                 voice_id: 6,
@@ -808,6 +823,7 @@ mod tests {
         let args = synthesize_args(
             tts_engine("piper-libritts-r-medium"),
             dir,
+            Path::new(SHARED),
             "Hello there.",
             VoiceChoice::Speaker {
                 voice_id: 7,
@@ -817,12 +833,13 @@ mod tests {
         )
         .expect("vits args");
         let file = |name: &str| dir.join(name).display().to_string();
+        let shared = |name: &str| Path::new(SHARED).join(name).display().to_string();
         assert_eq!(
             args,
             vec![
                 format!("--vits-model={}", file("en_US-libritts_r-medium.onnx")),
                 format!("--vits-tokens={}", file("tokens.txt")),
-                format!("--vits-data-dir={}", file("espeak-ng-data")),
+                format!("--vits-lexicon={}", shared("lexicon-en-us.txt")),
                 "--num-threads=4".to_string(),
                 "--sid=7".to_string(),
                 "--vits-length-scale=0.8".to_string(),
@@ -838,6 +855,7 @@ mod tests {
         let args = synthesize_args(
             tts_engine("piper-glados"),
             dir,
+            Path::new(SHARED),
             "Test subject.",
             VoiceChoice::Speaker {
                 voice_id: 0,
@@ -858,6 +876,7 @@ mod tests {
         let args = synthesize_args(
             tts_engine("matcha-ljspeech"),
             dir,
+            Path::new(SHARED),
             "Good morning.",
             VoiceChoice::Speaker {
                 voice_id: 0,
@@ -867,13 +886,14 @@ mod tests {
         )
         .expect("matcha args");
         let file = |name: &str| dir.join(name).display().to_string();
+        let shared = |name: &str| Path::new(SHARED).join(name).display().to_string();
         assert_eq!(
             args,
             vec![
                 format!("--matcha-acoustic-model={}", file("model-steps-3.onnx")),
                 format!("--matcha-vocoder={}", file("vocos-22khz-univ.onnx")),
                 format!("--matcha-tokens={}", file("tokens.txt")),
-                format!("--matcha-data-dir={}", file("espeak-ng-data")),
+                format!("--matcha-lexicon={}", shared("lexicon-en-us.txt")),
                 "--num-threads=4".to_string(),
                 "--matcha-length-scale=1".to_string(),
                 format!("--output-filename={}", output.display()),
@@ -889,6 +909,7 @@ mod tests {
         let args = synthesize_args(
             tts_engine("kitten-nano-en-v0-2-fp16"),
             dir,
+            Path::new(SHARED),
             "Hello.",
             VoiceChoice::Speaker {
                 voice_id: 3,
@@ -898,13 +919,14 @@ mod tests {
         )
         .expect("kitten args");
         let file = |name: &str| dir.join(name).display().to_string();
+        let shared = |name: &str| Path::new(SHARED).join(name).display().to_string();
         assert_eq!(
             args,
             vec![
                 format!("--kitten-model={}", file("model.fp16.onnx")),
                 format!("--kitten-voices={}", file("voices.bin")),
                 format!("--kitten-tokens={}", file("tokens.txt")),
-                format!("--kitten-data-dir={}", file("espeak-ng-data")),
+                format!("--kitten-lexicon={}", shared("lexicon-en-us.txt")),
                 "--num-threads=4".to_string(),
                 "--sid=3".to_string(),
                 "--kitten-length-scale=1".to_string(),
@@ -912,6 +934,33 @@ mod tests {
                 "Hello.".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn kitten_passes_the_lexicon_and_never_the_ignored_data_dir() {
+        let dir = Path::new(r"C:\models\kitten-nano-en-v0-2-fp16");
+        let args = synthesize_args(
+            tts_engine("kitten-nano-en-v0-2-fp16"),
+            dir,
+            Path::new(SHARED),
+            "Hello.",
+            VoiceChoice::Speaker {
+                voice_id: 0,
+                speed: 2.0,
+            },
+            Path::new("o.wav"),
+        )
+        .expect("kitten args");
+        assert!(args.iter().all(|arg| !arg.contains("data-dir")), "{args:?}");
+        let lexicon = Path::new(SHARED)
+            .join("lexicon-en-us.txt")
+            .display()
+            .to_string();
+        assert!(
+            args.contains(&format!("--kitten-lexicon={lexicon}")),
+            "{args:?}"
+        );
+        assert!(args.contains(&"--kitten-length-scale=0.5".to_string()));
     }
 
     #[test]
@@ -924,7 +973,15 @@ mod tests {
             "kitten-nano-en-v0-2-fp16",
         ] {
             assert!(
-                synthesize_args(tts_engine(id), Path::new("m"), "a", reference, out).is_err(),
+                synthesize_args(
+                    tts_engine(id),
+                    Path::new("m"),
+                    Path::new(SHARED),
+                    "a",
+                    reference,
+                    out
+                )
+                .is_err(),
                 "{id}"
             );
         }
@@ -938,12 +995,30 @@ mod tests {
             speed: 1.0,
         };
         let pocket = tts_engine("pocket-tts-int8");
-        assert!(synthesize_args(pocket, Path::new("m"), "a", speaker, out).is_err());
+        assert!(
+            synthesize_args(pocket, Path::new("m"), Path::new(SHARED), "a", speaker, out).is_err()
+        );
         let kokoro = tts_engine("kokoro-int8-multi-v1");
         let reference = VoiceChoice::Reference(Path::new("r.wav"));
-        assert!(synthesize_args(kokoro, Path::new("m"), "a", reference, out).is_err());
+        assert!(synthesize_args(
+            kokoro,
+            Path::new("m"),
+            Path::new(SHARED),
+            "a",
+            reference,
+            out
+        )
+        .is_err());
         let supertonic = tts_engine("supertonic-3-int8");
-        assert!(synthesize_args(supertonic, Path::new("m"), "a", reference, out).is_err());
+        assert!(synthesize_args(
+            supertonic,
+            Path::new("m"),
+            Path::new(SHARED),
+            "a",
+            reference,
+            out
+        )
+        .is_err());
     }
 
     #[test]
@@ -972,6 +1047,7 @@ mod tests {
         let args = synthesize_args(
             tts_engine("kokoro-int8-multi-v1"),
             Path::new("m"),
+            Path::new(SHARED),
             "--help",
             VoiceChoice::Speaker {
                 voice_id: 0,

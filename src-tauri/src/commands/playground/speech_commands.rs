@@ -188,6 +188,7 @@ pub async fn playground_synthesize(
     let args = speech_args::synthesize_args(
         engine,
         &speech_catalog::model_dir(&models_root, recipe),
+        &speech_catalog::repo_dir(&models_root),
         &text,
         voice,
         &output,

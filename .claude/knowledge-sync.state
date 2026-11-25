@@ -1,3 +1,3 @@
-last_synced_commit=73a40a19d83e08103954c1acf1484b0c6da70445
-last_synced_date=2026-11-23
-note=Cursor moved to 73a40a1 (ChipRow filter-tab wrap). Working-tree changes reflected in codebase-map.md and known-issues.md, not yet confirmed in the app: device chipset re-read after GenieX runtime changes (utils/deviceChipset.ts), AI Hub picker Device unknown badge, chat audio attachment preview with the Playground waveform player. tasks.md, tasks-ordered.md and manual-checklist.md are local files and are not synced.
+last_synced_commit=30737b9
+last_synced_date=2026-11-25
+note=Cursor at 30737b9 (chipset refresh and audio waveform were already in the docs). Shared English lexicon for Kitten/Piper/Matcha, speech start failures shown as a toast only, and the attachment audio dialog width fix are in the docs. tasks.md, tasks-ordered.md and manual-checklist.md are local files and are not synced.

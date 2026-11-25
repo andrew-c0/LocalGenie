@@ -1,6 +1,6 @@
 import { Button, Textarea } from "@fluentui/react-components";
 import type { SpeechResult } from "../../../types";
-import { TRANSCRIBE_FAILED_MESSAGE, TRANSCRIBE_RESULT_TITLE } from "../../../utils/audioText";
+import { TRANSCRIBE_RESULT_TITLE } from "../../../utils/audioText";
 import { errorMessage } from "../../../utils/errorMessage";
 import { NO_SPEECH_MESSAGE, TRANSCRIPT_COPIED_TITLE } from "../../../utils/speechText";
 import { toast } from "../../../utils/toast";
@@ -26,7 +26,6 @@ export function TranscriptResult({ result }: TranscriptResultProps) {
     <AudioResultFrame
       title={TRANSCRIBE_RESULT_TITLE}
       result={result}
-      failedMessage={TRANSCRIBE_FAILED_MESSAGE}
       action={
         <Button appearance="secondary" onClick={copy} disabled={text === ""}>
           Copy

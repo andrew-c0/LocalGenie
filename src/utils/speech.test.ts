@@ -4,6 +4,7 @@ import type {
   SpeechForm,
   SpeechKind,
   SpeechModel,
+  SpeechResult,
   SpeechVoice,
 } from "../types";
 import {
@@ -18,6 +19,7 @@ import {
   keepSpeechSelection,
   recordingName,
   resolveVoiceId,
+  shownSpeechResult,
   sortVoices,
   speechModelsOfKind,
   speechResultOf,
@@ -404,6 +406,42 @@ describe("failedSpeechResult", () => {
       elapsedSeconds: null,
       error: "No runtime",
     });
+  });
+});
+
+describe("shownSpeechResult", () => {
+  const result = (status: SpeechResult["status"]): SpeechResult => ({
+    jobId: "job-5",
+    kind: "tts",
+    status,
+    text: null,
+    outputPath: status === "ok" ? "C:\\out\\speech.wav" : null,
+    outputs: [],
+    audioSeconds: null,
+    elapsedSeconds: null,
+    error: status === "error" ? "sherpa-onnx exited with code 1" : null,
+  });
+
+  it("shows a finished job's result", () => {
+    const finished = result("ok");
+    expect(shownSpeechResult(finished, false)).toBe(finished);
+  });
+
+  it("keeps a cancelled job's result, so its line is shown", () => {
+    const cancelled = result("cancelled");
+    expect(shownSpeechResult(cancelled, false)).toBe(cancelled);
+  });
+
+  it("hides a failed job's result, since its toast carries the reason", () => {
+    expect(shownSpeechResult(result("error"), false)).toBeNull();
+  });
+
+  it("shows nothing while a job runs, even with a previous result", () => {
+    expect(shownSpeechResult(result("ok"), true)).toBeNull();
+  });
+
+  it("shows nothing when there is no result", () => {
+    expect(shownSpeechResult(null, false)).toBeNull();
   });
 });
 

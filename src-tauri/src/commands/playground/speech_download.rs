@@ -1,14 +1,17 @@
 //! Downloads a speech model from its GitHub release, checks its size, and puts it in the model's
 //! folder: an archive is unpacked there, a single file is saved there as it is. A model with a
-//! companion file (a Matcha vocoder, from the vocoder release) fetches that file into its folder
-//! after the archive. Progress goes out as the same `playground-download-progress` events the image
+//! companion file (a Matcha vocoder, or a Kitten lexicon, each a separate release asset) fetches
+//! that file into its folder after the archive, and only the files that are missing are fetched.
+//! Progress goes out as the same `playground-download-progress` events the image
 //! models use. A cancelled download keeps its partial file, so the next attempt resumes it. An
 //! archive is deleted once it is unpacked.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use tauri::AppHandle;
+use tokio::sync::{Mutex, MutexGuard};
 
 use super::model_delete::partial_path;
 use super::model_download::{emit_progress, DownloadEnd, DownloadProgressEvent};
@@ -36,51 +39,162 @@ pub(super) async fn download_speech_model(
     if speech_catalog::is_downloaded(recipe, models_root) {
         return Ok(DownloadEnd::Finished);
     }
-    let companion = recipe.companion();
-    let count = if companion.is_some() { 2 } else { 1 };
-    let main = Asset {
-        url: speech_catalog::download_url(recipe),
-        file_name: recipe.asset_name(),
-        target: speech_catalog::download_target(models_root, recipe),
-        size_bytes: recipe.size_bytes,
-    };
-    if matches!(
-        fetch_asset(app, client, recipe, &main, cancel, (0, count)).await?,
-        DownloadEnd::Cancelled
-    ) {
-        return Ok(DownloadEnd::Cancelled);
-    }
+    let missing = missing_downloads(recipe, models_root);
+    let count = missing.count();
+    let mut position = 0;
+    let folder = speech_catalog::model_dir(models_root, recipe);
 
-    if let Delivery::Archive { .. } = recipe.delivery {
-        let folder = speech_catalog::model_dir(models_root, recipe);
-        unpack_model(&main.target, &folder).await?;
+    if missing.main {
+        let main = Asset {
+            url: speech_catalog::download_url(recipe),
+            file_name: recipe.asset_name(),
+            target: speech_catalog::download_target(models_root, recipe),
+            size_bytes: recipe.size_bytes,
+        };
+        if matches!(
+            fetch_asset(app, client, recipe, &main, cancel, (position, count)).await?,
+            DownloadEnd::Cancelled
+        ) {
+            return Ok(DownloadEnd::Cancelled);
+        }
+        position += 1;
+        if let Delivery::Archive { .. } = recipe.delivery {
+            unpack_model(&main.target, &folder).await?;
+        }
     }
-    if let Some(companion) = companion {
-        let target = speech_catalog::model_dir(models_root, recipe).join(companion.file_name);
-        // A file on disk has passed its size check, so only a missing one is fetched.
-        if !target.exists() {
-            let asset = Asset {
-                url: speech_catalog::companion_url(companion),
-                file_name: companion.file_name,
-                target,
-                size_bytes: companion.size_bytes,
-            };
-            if matches!(
-                fetch_asset(app, client, recipe, &asset, cancel, (1, count)).await?,
-                DownloadEnd::Cancelled
-            ) {
-                return Ok(DownloadEnd::Cancelled);
-            }
+    if let Some(companion) = recipe.companion().filter(|_| missing.companion) {
+        let asset = Asset {
+            url: speech_catalog::companion_url(companion),
+            file_name: companion.file_name,
+            target: folder.join(companion.file_name),
+            size_bytes: companion.size_bytes,
+        };
+        if matches!(
+            fetch_asset(app, client, recipe, &asset, cancel, (position, count)).await?,
+            DownloadEnd::Cancelled
+        ) {
+            return Ok(DownloadEnd::Cancelled);
+        }
+        position += 1;
+    }
+    if let Some(lexicon) = recipe.shared_lexicon().filter(|_| missing.lexicon) {
+        // The lexicon goes to the shared folder, so the other models that need it find it too.
+        if matches!(
+            fetch_shared_file(
+                app,
+                client,
+                recipe,
+                models_root,
+                lexicon,
+                cancel,
+                (position, count)
+            )
+            .await?,
+            DownloadEnd::Cancelled
+        ) {
+            return Ok(DownloadEnd::Cancelled);
         }
     }
     if !speech_catalog::is_downloaded(recipe, models_root) {
-        let _ = tokio::fs::remove_dir_all(speech_catalog::model_dir(models_root, recipe)).await;
+        let _ = tokio::fs::remove_dir_all(&folder).await;
         return Err(format!(
             "{} did not unpack the files the model needs.",
             recipe.asset_name()
         ));
     }
     Ok(DownloadEnd::Finished)
+}
+
+/// Serialises the fetches of shared files. Two models that need the same lexicon started together
+/// wait here, so only one of them writes the partial file at a time.
+static SHARED_FILE_LOCK: Mutex<()> = Mutex::const_new(());
+/// How often a model waiting for `SHARED_FILE_LOCK` checks whether it was cancelled meanwhile.
+const SHARED_LOCK_POLL: Duration = Duration::from_millis(100);
+
+/// Fetch a shared file into the shared folder, unless it is complete once this model holds the lock:
+/// then the model that held the lock before has fetched it already. Returns `Cancelled` when the
+/// cancel is set while waiting, or during the fetch; the partial file is kept, so whichever model
+/// fetches the file next resumes it.
+async fn fetch_shared_file(
+    app: &AppHandle,
+    client: &reqwest::Client,
+    recipe: &SpeechRecipe,
+    models_root: &Path,
+    shared: speech_catalog::Companion,
+    cancel: &AtomicBool,
+    position: (usize, usize),
+) -> Result<DownloadEnd, String> {
+    let Some(_guard) = wait_for_shared_lock(cancel).await else {
+        return Ok(DownloadEnd::Cancelled);
+    };
+    let target = speech_catalog::shared_file_path(models_root, shared);
+    let on_disk = tokio::fs::metadata(&target)
+        .await
+        .ok()
+        .filter(|meta| meta.is_file())
+        .map(|meta| meta.len());
+    if !needs_fetch(on_disk, shared.size_bytes) {
+        return Ok(DownloadEnd::Finished);
+    }
+    let asset = Asset {
+        url: speech_catalog::companion_url(shared),
+        file_name: shared.file_name,
+        target,
+        size_bytes: shared.size_bytes,
+    };
+    fetch_asset(app, client, recipe, &asset, cancel, position).await
+}
+
+/// Waits for `SHARED_FILE_LOCK`, checking `cancel` between tries. None when the cancel is set first.
+async fn wait_for_shared_lock(cancel: &AtomicBool) -> Option<MutexGuard<'static, ()>> {
+    loop {
+        if let Ok(guard) = SHARED_FILE_LOCK.try_lock() {
+            return Some(guard);
+        }
+        if cancel.load(Ordering::SeqCst) {
+            return None;
+        }
+        tokio::time::sleep(SHARED_LOCK_POLL).await;
+    }
+}
+
+/// True when a file must be fetched: it is not on disk (`on_disk` is None), or its size is not the
+/// catalogue's. A file of the right size is complete, because it is only renamed into place then.
+fn needs_fetch(on_disk: Option<u64>, expected_bytes: u64) -> bool {
+    on_disk != Some(expected_bytes)
+}
+
+/// Which of a model's downloads are still needed: the main asset, unless its files are on disk; the
+/// companion file in the model's folder, when that file is missing; and the shared lexicon, when it
+/// is missing from the shared folder. A model whose lexicon is the only thing missing fetches just
+/// that file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MissingDownloads {
+    main: bool,
+    companion: bool,
+    lexicon: bool,
+}
+
+impl MissingDownloads {
+    fn count(self) -> usize {
+        usize::from(self.main) + usize::from(self.companion) + usize::from(self.lexicon)
+    }
+}
+
+fn missing_downloads(recipe: &SpeechRecipe, models_root: &Path) -> MissingDownloads {
+    let companion_missing = recipe.companion().is_some_and(|companion| {
+        !speech_catalog::model_dir(models_root, recipe)
+            .join(companion.file_name)
+            .exists()
+    });
+    let lexicon_missing = recipe
+        .shared_lexicon()
+        .is_some_and(|lexicon| !speech_catalog::shared_file_path(models_root, lexicon).exists());
+    MissingDownloads {
+        main: !speech_catalog::main_files_on_disk(recipe, models_root),
+        companion: companion_missing,
+        lexicon: lexicon_missing,
+    }
 }
 
 /// Fetch one release asset through its partial file, then move it to its target once its size is
@@ -183,6 +297,10 @@ mod tests {
     use super::super::test_support::Scratch;
     use super::*;
 
+    fn kitten() -> &'static SpeechRecipe {
+        speech_catalog::find_recipe("kitten-nano-en-v0-2-fp16").expect("kitten")
+    }
+
     #[test]
     fn progress_is_for_the_archive_as_one_file() {
         let recipe = speech_catalog::find_recipe("whisper-tiny-en").expect("recipe");
@@ -236,6 +354,134 @@ mod tests {
         );
         assert_eq!(event.file_name, "vocos-22khz-univ.onnx");
         assert_eq!((event.file_index, event.file_count), (1, 2));
+    }
+
+    #[test]
+    fn a_kitten_model_with_only_its_lexicon_missing_fetches_just_the_lexicon() {
+        let scratch = Scratch::new("speech-kitten-missing");
+        let root = scratch.path();
+        let folder = speech_catalog::model_dir(root, kitten());
+        std::fs::create_dir_all(&folder).expect("folder");
+        for entry in ["model.fp16.onnx", "voices.bin", "tokens.txt"] {
+            std::fs::write(folder.join(entry), b"x").expect("file");
+        }
+        assert_eq!(
+            missing_downloads(kitten(), root),
+            MissingDownloads {
+                main: false,
+                companion: false,
+                lexicon: true,
+            },
+            "the model's files are there, only the shared lexicon is missing"
+        );
+
+        std::fs::create_dir_all(speech_catalog::repo_dir(root)).expect("repo");
+        let lexicon = kitten().shared_lexicon().expect("lexicon");
+        std::fs::write(speech_catalog::shared_file_path(root, lexicon), b"x").expect("lexicon");
+        assert!(speech_catalog::is_downloaded(kitten(), root));
+        assert_eq!(missing_downloads(kitten(), root).count(), 0);
+    }
+
+    #[test]
+    fn a_fresh_kitten_model_fetches_the_archive_and_the_lexicon() {
+        let scratch = Scratch::new("speech-missing-fresh");
+        let root = scratch.path();
+        let both = MissingDownloads {
+            main: true,
+            companion: false,
+            lexicon: true,
+        };
+        assert_eq!(missing_downloads(kitten(), root), both);
+        assert_eq!(missing_downloads(kitten(), root).count(), 2);
+    }
+
+    #[test]
+    fn a_fresh_matcha_model_fetches_the_archive_the_vocoder_and_the_lexicon() {
+        let scratch = Scratch::new("speech-matcha-fresh");
+        let matcha = speech_catalog::find_recipe("matcha-ljspeech").expect("matcha");
+        assert_eq!(
+            missing_downloads(matcha, scratch.path()),
+            MissingDownloads {
+                main: true,
+                companion: true,
+                lexicon: true,
+            }
+        );
+    }
+
+    #[test]
+    fn a_matcha_model_with_only_its_vocoder_missing_skips_the_archive() {
+        let scratch = Scratch::new("speech-matcha-missing");
+        let root = scratch.path();
+        let matcha = speech_catalog::find_recipe("matcha-ljspeech").expect("matcha");
+        let folder = speech_catalog::model_dir(root, matcha);
+        std::fs::create_dir_all(&folder).expect("folder");
+        for entry in ["model-steps-3.onnx", "tokens.txt"] {
+            std::fs::write(folder.join(entry), b"x").expect("file");
+        }
+        std::fs::create_dir_all(speech_catalog::repo_dir(root)).expect("repo");
+        let lexicon = matcha.shared_lexicon().expect("lexicon");
+        std::fs::write(speech_catalog::shared_file_path(root, lexicon), b"x").expect("lexicon");
+        assert_eq!(
+            missing_downloads(matcha, root),
+            MissingDownloads {
+                main: false,
+                companion: true,
+                lexicon: false,
+            }
+        );
+    }
+
+    #[test]
+    fn a_single_file_model_has_no_companion_or_lexicon_to_fetch() {
+        let scratch = Scratch::new("speech-missing-single");
+        let gtcrn = speech_catalog::find_recipe("gtcrn-simple").expect("gtcrn");
+        assert_eq!(
+            missing_downloads(gtcrn, scratch.path()),
+            MissingDownloads {
+                main: true,
+                companion: false,
+                lexicon: false,
+            }
+        );
+    }
+
+    #[test]
+    fn the_shared_lexicon_is_reported_as_the_last_of_the_files() {
+        let lexicon = kitten().shared_lexicon().expect("lexicon");
+        let event = progress_event(
+            kitten(),
+            lexicon.file_name,
+            (1, 2),
+            TransferProgress {
+                received: 1,
+                total: Some(lexicon.size_bytes),
+                speed_bps: 0,
+            },
+        );
+        assert_eq!(event.file_name, "lexicon-en-us.txt");
+        assert_eq!(event.total, 6_305_773);
+    }
+
+    #[test]
+    fn a_shared_file_is_fetched_only_when_it_is_missing_or_the_wrong_size() {
+        assert!(needs_fetch(None, 6_305_773), "missing");
+        assert!(needs_fetch(Some(5), 6_305_773), "a partial-sized file");
+        assert!(
+            !needs_fetch(Some(6_305_773), 6_305_773),
+            "complete after another model waited for the lock: skip"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_model_waiting_for_the_shared_lock_stops_when_cancelled() {
+        // One test holds and then frees the lock, so no other test contends for it.
+        let held = SHARED_FILE_LOCK.lock().await;
+        let cancel = AtomicBool::new(true);
+        assert!(wait_for_shared_lock(&cancel).await.is_none());
+        drop(held);
+        cancel.store(false, std::sync::atomic::Ordering::SeqCst);
+        assert!(wait_for_shared_lock(&cancel).await.is_some());
     }
 
     #[tokio::test]

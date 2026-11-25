@@ -1,12 +1,12 @@
 import { synthesizeSpeech } from "../../../services/playground";
 import { useSpeechStore } from "../../../stores/speechStore";
 import type { SpeechForm, SpeechModel } from "../../../types";
-import { errorMessage } from "../../../utils/errorMessage";
-import { buildSynthesizeRequest, failedSpeechResult } from "../../../utils/speech";
+import { buildSynthesizeRequest } from "../../../utils/speech";
+import { useSpeechStartFailure } from "./useSpeechStartFailure";
 
 /**
  * Start a speech synthesis. Progress and the saved file come from the `PlaygroundRuntime` listeners.
- * A failed start is recorded here as the job's result.
+ * A failed start is reported by `useSpeechStartFailure`.
  */
 export function useSynthesis(): {
   synthesize: (
@@ -17,7 +17,7 @@ export function useSynthesis(): {
   ) => void;
 } {
   const startJob = useSpeechStore((s) => s.startJob);
-  const finishJob = useSpeechStore((s) => s.finishJob);
+  const startFailed = useSpeechStartFailure();
 
   const synthesize = (
     model: SpeechModel,
@@ -40,9 +40,7 @@ export function useSynthesis(): {
       phase: "loading",
     });
     synthesizeSpeech(request).catch((err: unknown) => {
-      finishJob(
-        failedSpeechResult(request.jobId, "tts", errorMessage(err, "The speech could not start.")),
-      );
+      startFailed(request.jobId, "tts", err, "The speech could not start.");
     });
   };
 
